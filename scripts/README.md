@@ -223,10 +223,16 @@ human gate.
 
 ## cron fallback (instead of systemd)
 
-If you prefer cron over a systemd user timer:
+If you prefer cron over a systemd user timer. **`cron` does not run a login shell**, so it never sees a
+`SUPERAGENT_SCRIPTS` exported in some other shell (and crontab does not expand `~`) — set it as a
+crontab environment-assignment line, above the schedule line, to an absolute path:
 
 ```cron
-*/10 * * * * cd /mnt/data0/eugene/src/network-compose && \
+SUPERAGENT_SCRIPTS=/home/eugene/.claude/plugins/superagent/scripts   # adjust to wherever the superagent
+                                                                       # plugin is actually installed on
+                                                                       # this host
+
+*/10 * * * * cd /path/to/target/repo && \
   LOOP_FILE=/abs/path/to/loop-status/<date>-<slug>.md \
   $SUPERAGENT_SCRIPTS/superagent-tick.sh >> /tmp/superagent-cron.log 2>&1
 ```
