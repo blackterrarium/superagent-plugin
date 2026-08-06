@@ -190,9 +190,11 @@ Do not dump the full drafts to chat up front. The user's single checkpoint is th
 ## Commit and merge the vault docs — via PR (REQUIRED)
 
 Once the vault files are written, commit those bookkeeping docs and merge them to `main` via a pull
-request — **without asking the user for confirmation** (standing authorization, above). `main` is a
-**protected branch** (direct pushes are rejected), so this MUST go through a feature branch and a PR
-even though it is docs-only.
+request — **without asking the user for confirmation** (standing authorization, above). If
+`SUPER_PROTECTED_MAIN=true` (the shipped default), the default branch is a **protected branch** (direct
+pushes are rejected), so this MUST go through a feature branch and a PR — merged per
+`SUPER_MERGE_METHOD` (default `squash`) — even though it is docs-only. If `SUPER_PROTECTED_MAIN=false`,
+a direct commit to the default branch is permitted instead.
 
 **Scope of the commit: only the bookkeeping docs** written this run — the closeout report, new/revised
 `findings/` docs, the `<PLAN.md>` close-out note, and **every ancestor plan file** the completion-mode
@@ -217,11 +219,11 @@ git checkout main && git pull --ff-only
 
 Notes:
 - `--squash --delete-branch` keeps history clean and removes the feature branch after merge.
-- **Use plain `--squash`. Do NOT pass `--admin` by default** — on this repo `main` carries
-  `required_status_checks: null` and `required_approving_review_count: 0`, so a red `test` job leaves the
-  PR `UNSTABLE` (not blocked) and `--admin` has nothing to bypass, while reliably tripping the harness
-  security classifier. Full rationale in `superauthor` clause **A7**. Escalate only if a plain `--squash`
-  is actually refused, and say why in the Final Report.
+- **Merge per `SUPER_MERGE_METHOD` (default `squash`). Pass `gh pr merge --admin` only if
+  `SUPER_ADMIN_MERGE=true` — otherwise never.** Reaching for `--admin` when the key is unset or `false`
+  buys nothing on a repo whose branch protection doesn't require it, and reliably trips the harness
+  security classifier. Full rationale in `superauthor` clause **A7**. Escalate only if a plain merge
+  is actually refused (and `SUPER_ADMIN_MERGE=true` permits it), and say why in the Final Report.
 - **`--delete-branch` can exit 1 with `fatal: '<branch>' is already used by worktree` — the PR still
   merged.** That is the local delete step, not a rejection: confirm with
   `gh pr view <n> --json state,mergedAt`, then drop the remote ref with

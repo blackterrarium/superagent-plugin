@@ -52,12 +52,23 @@ source code, never execution output.
 | "I'll set up the worktree / branch for the planned work" | NO worktree and no branch for the *planned work*, and no source-code commits. (The artifacts are committed and merged via PR as the final step — that is the only commit.) |
 | "The user will obviously want this run, I'll get a head start" | NO. Produce and commit the artifact, report, exit. Wait to be asked before executing. |
 
+## Repo configuration (.superenv)
+
+Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
+use, highest wins: (1) a process environment variable of the same name, (2) the
+repo-root `.superenv` file, (3) the plugin default
+`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
+`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+
 ## A2 — Authoring standard (REQUIRED)
 
-**Author the plan yourself, directly, to the standard below.** This standard is the distilled,
-repo-corrected replacement for the former delegation to `superpowers:writing-plans` — that skill is
-**no longer invoked** by any superauthor-driven caller; in particular its local-test TDD step cycle,
-its `docs/superpowers/plans/` save location, and its "Execution Handoff" section do not apply here.
+**Author the plan yourself, directly, to the standard below.** This standard is the distilled
+replacement for delegating *authorship* to `superpowers:writing-plans` — that skill is **no longer
+invoked to produce the plan document itself** by any superauthor-driven caller; its
+`docs/superpowers/plans/` save location and its "Execution Handoff" section do not apply here. Whether
+the produced plan's own verification steps follow that skill's local-test TDD cycle or specify CI
+pushes instead is governed by `SUPER_TEST_EVIDENCE` (see the **Verification-steps mode** bullet below).
 
 Write for a skilled engineer with **zero context for this codebase**: name the exact files each task
 touches, show the actual code, and state how the work is verified. DRY. YAGNI.
@@ -95,12 +106,13 @@ touches, show the actual code, and state how the work is verified. DRY. YAGNI.
   types later tasks rely on (a task's implementer sees only their own task; this block is how
   neighboring tasks stay consistent); and checkbox (`- [ ]`) steps whose code steps contain real
   code blocks.
-- **Verification steps are CI pushes, never local runs.** This repo runs tests and builds on the CI
-  runner only. Where a generic plan would say "run the test locally", write the CI push instead:
-  the commit flag, the lane it routes to, and the pass criterion — following the CI-scheduling
-  rules the caller supplies (queue-all batches, monitor-parked waits). Never write
-  `pytest` / `./run.sh` / build commands to execute on the host, and never instruct poll-loop CI
-  waits in plan text.
+- **Verification-steps mode is keyed by `SUPER_TEST_EVIDENCE`.** If `SUPER_TEST_EVIDENCE=ci`: authored
+  plan steps specify CI pushes as the test evidence — the commit flag (if any), the lane it routes to,
+  and the run id + conclusion as the pass criterion — following the CI-scheduling rules the caller
+  supplies (queue-all batches, monitor-parked waits); never write `pytest` / `./run.sh` / build
+  commands to execute on the host, and never instruct poll-loop CI waits in plan text. If
+  `SUPER_TEST_EVIDENCE=local` (the shipped default): plan steps use the normal local test cycle per
+  `superpowers:writing-plans`.
 - **A mechanical gate belongs in a committed test, never in an unrun shell block.** If a plan step
   says "verify X before proceeding" and X is checkable by code, the plan's deliverable is **the test
   that checks X**, cited by name — not a snippet the executor is told to run and trust. A committed
@@ -207,8 +219,10 @@ artifacts and merge them to `main` via a pull request. **Merge the PR without as
 confirmation** — the user has granted standing authorization (A5), so never pause before writing or
 merging.
 
-`main` is a **protected branch** (direct pushes are rejected), so this MUST go through a feature branch
-and a PR even though it is docs-only.
+If `SUPER_PROTECTED_MAIN=true` (the shipped default), the default branch is a **protected branch**
+(direct pushes are rejected), so this MUST go through a feature branch and a PR — merged per
+`SUPER_MERGE_METHOD` (default `squash`) — even though it is docs-only. If `SUPER_PROTECTED_MAIN=false`,
+a direct commit to the default branch is permitted instead.
 
 **Scope of the commit: only the planning artifacts this run produced.** Add each with an explicit
 `git add <path>`; **never `git add -A`** (the working tree may hold unrelated changes that are not yours
@@ -233,15 +247,12 @@ git checkout main && git pull --ff-only
 
 Notes:
 - `--squash --delete-branch` keeps history clean and removes the feature branch after merge.
-- **Use plain `--squash`. Do NOT pass `--admin` by default.** On this repo `--admin` is not merely
-  unnecessary, it has nothing to bypass: `main`'s protection carries
-  **`required_status_checks: null`** and **`required_approving_review_count: 0`**
-  (`gh api repos/<owner>/<repo>/branches/main/protection`). The chronically-red `test` job is therefore
-  **not a required check**, so a PR sitting at `mergeStateStatus: UNSTABLE` merges normally — `UNSTABLE`
-  means "some check is failing", not "merging is blocked". Reaching for `--admin` on a repo like this
-  buys nothing and **trips the harness security classifier**, which reads merge-over-red as a privileged
-  override and denies it; that misfired twice on one goal and cost a session each time. Only escalate to
-  `--admin` if a plain `--squash` is actually refused, and then say in your report **why** it was refused.
+- **Merge per `SUPER_MERGE_METHOD` (default `squash`). Pass `gh pr merge --admin` only if
+  `SUPER_ADMIN_MERGE=true` — otherwise never.** Reaching for `--admin` when the key is unset or `false`
+  buys nothing on a repo whose branch protection doesn't require it, and reliably **trips the harness
+  security classifier**, which reads merge-over-red as a privileged override and denies it. If the plain
+  merge is actually refused, escalate to `--admin` only when `SUPER_ADMIN_MERGE=true` permits it, and
+  say in your report **why** it was refused.
 - **`--delete-branch` can exit 1 with `fatal: '<branch>' is already used by worktree` — the PR still
   merged.** That failure is the *local* branch-delete step, not a permission rejection. Confirm with
   `gh pr view <n> --json state,mergedAt`; if it merged, delete the remote ref directly with

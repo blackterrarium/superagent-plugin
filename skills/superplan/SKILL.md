@@ -129,20 +129,22 @@ actual content an engineer needs, and every A3 pattern ("TBD", prose-only code s
 Task N", references to undefined types, …) is a **plan failure**. Apply A3 while authoring and scan
 for it in self-review.
 
-## CI Scheduling in Authored Plans (two identical runners)
+## CI Scheduling in Authored Plans (keyed by SUPER_CI_*)
 
-The repo's CI runs on **two identical self-hosted runners sharing one job queue** — the next free
-runner picks up the next queued run. Apply these two rules whenever the plan's tasks trigger CI
-(they instantiate A2's "verification steps are CI pushes" rule for this repo), and enforce them in
-self-review:
+Apply these rules whenever the plan's tasks trigger CI (they instantiate the `SUPER_TEST_EVIDENCE=ci`
+branch of superauthor's verification-steps rule), and enforce them in self-review:
 
-- **Queue-all, don't stagger.** When the plan needs more than one independent long CI push (>10 min
-  each — e.g. a shardable stress lane split into per-shard pushes, or two unrelated long lanes),
-  write the pushes as **one queue-all batch**: push every shard back-to-back (each its own push with
-  exactly one `[test:...]` flag — the parser's one-flag-per-push rule is unchanged), then wait on
-  **all** resulting runs together. Serial "push B after A completes" ordering is allowed **only**
-  across a genuine procedural gate the plan names (e.g. `multi_motif_smoke` green before
-  `multi_motif`); runner contention is never a reason to serialize.
+- **Queue-all when there's more than one runner.** If `SUPER_CI_RUNNERS > 1` and the plan needs more
+  than one independent long CI push (>10 min each — e.g. a shardable stress lane split into per-shard
+  pushes, or two unrelated long lanes), write the pushes as **one queue-all batch**: push every shard
+  back-to-back, then wait on **all** resulting runs together. Serial "push B after A completes"
+  ordering is allowed **only** across a genuine procedural gate the plan names — worked example from
+  the originating repo: `multi_motif_smoke` green before `multi_motif` — runner contention is never a
+  reason to serialize.
+- **Commit flags.** If `SUPER_CI_FLAG_TEMPLATE` is set (e.g. `[test:%s]`), stamp each push's commit
+  message with it; if it is empty, the repo has no commit-flag system and plans just push. When
+  `SUPER_CI_ONE_FLAG_PER_PUSH=true` (the shipped default), use exactly one flag per push — never
+  combine flags in a single commit.
 - **Monitor-parked waits, never poll loops.** Write CI waits as "queue the pushes, then wait for all
   runs per `superrun` Step 3a (monitor-parked CI wait)". Never instruct `gh run watch`, sleep loops,
   or periodic re-polling in plan text.
@@ -174,10 +176,13 @@ knows:
    scope/analysis/decision sections (see **Seed or master plan → Placement** above). If it sits lower
    down, move it to the top. (Implementation plans are leaves with no table — this check is a no-op for
    them.)
-7. **CI-schedule check** — if the plan's tasks trigger CI: every set of independent long pushes is
-   written as a queue-all batch (see **CI Scheduling in Authored Plans** above), any serial push
-   ordering names its procedural gate, and every CI wait is monitor-parked (no `gh run watch` / sleep
-   / re-poll loops in plan text). Fix violations inline.
+7. **Verification-evidence check** — confirm the plan's verification steps match
+   `SUPER_TEST_EVIDENCE`: if `ci`, every set of independent long pushes is written as a queue-all
+   batch when `SUPER_CI_RUNNERS > 1` (see **CI Scheduling in Authored Plans** above), any serial push
+   ordering names its procedural gate, commit flags follow `SUPER_CI_FLAG_TEMPLATE` /
+   `SUPER_CI_ONE_FLAG_PER_PUSH`, and every CI wait is monitor-parked (no `gh run watch` / sleep /
+   re-poll loops in plan text); if `local` (default), steps use the normal local test cycle per
+   `superpowers:writing-plans` instead of CI pushes. Fix violations inline.
 
 If you find issues, fix them inline — no need to re-review the whole plan.
 
@@ -326,8 +331,10 @@ the goal folder (docs already written to the vault), commit those planning artif
 `main` via a pull request. **Merge the PR without asking the user for confirmation** — the user has granted
 standing authorization, so never pause before writing or merging.
 
-`main` is a **protected branch** (direct pushes are rejected), so this MUST go through a feature branch and
-a PR even though it is docs-only.
+If `SUPER_PROTECTED_MAIN=true` (the shipped default), the default branch is a **protected branch**
+(direct pushes are rejected), so this MUST go through a feature branch and a PR — merged per
+`SUPER_MERGE_METHOD` (default `squash`) — even though it is docs-only. If `SUPER_PROTECTED_MAIN=false`,
+a direct commit to the default branch is permitted instead.
 
 **Scope of the commit: only the planning artifacts** — the plan file, new/revised `findings/` docs, the
 immediate-parent progress-report update, and **every ancestor plan file** the planning-mode ascent
@@ -351,11 +358,11 @@ git checkout main && git pull --ff-only
 
 Notes:
 - `--squash --delete-branch` keeps history clean and removes the feature branch after merge.
-- **Use plain `--squash`. Do NOT pass `--admin` by default** — on this repo `main` carries
-  `required_status_checks: null` and `required_approving_review_count: 0`, so a red `test` job leaves the
-  PR `UNSTABLE` (not blocked) and `--admin` has nothing to bypass, while reliably tripping the harness
-  security classifier. Full rationale in `superauthor` clause **A7**. Escalate only if a plain `--squash`
-  is actually refused, and say why in the Final Report.
+- **Merge per `SUPER_MERGE_METHOD` (default `squash`). Pass `gh pr merge --admin` only if
+  `SUPER_ADMIN_MERGE=true` — otherwise never.** Reaching for `--admin` when the key is unset or `false`
+  buys nothing on a repo whose branch protection doesn't require it, and reliably trips the harness
+  security classifier. Full rationale in `superauthor` clause **A7**. Escalate only if a plain merge
+  is actually refused (and `SUPER_ADMIN_MERGE=true` permits it), and say why in the Final Report.
 - **`--delete-branch` can exit 1 with `fatal: '<branch>' is already used by worktree` — the PR still
   merged.** Confirm with `gh pr view <n> --json state,mergedAt`, then drop the remote ref with
   `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>`.
