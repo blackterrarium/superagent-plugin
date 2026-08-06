@@ -74,7 +74,10 @@ Invoke the `superagent:supertraverse` skill (Skill tool) and run its **DESCENT i
 
 Before any code work, enter a git worktree via the native `EnterWorktree` tool. This is a
 precondition of `subagent-driven-development`, required regardless of any host-repo policy on the
-question. Keep multi-batch execution isolated from the primary checkout.
+question. Keep multi-batch execution isolated from the primary checkout. The native tool can be
+unavailable in subagent/headless contexts (a pinned cwd it cannot change) — when it is, fall back to
+plain `git worktree add <path> <branch>` with absolute-path operations from there on, which
+preserves the same isolation in substance.
 
 ## Step 3 — Execute the plan (invoke `superpowers:subagent-driven-development`)
 
