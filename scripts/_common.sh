@@ -87,9 +87,9 @@ load_superenv() {
   local repo="${1:?load_superenv needs the repo root}"
   local plugin_root; plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   local snapshot; snapshot="$(mktemp)"
-  compgen -A variable | grep -E '^(SUPER_|TICK_)' | while read -r v; do
+  { compgen -A variable | grep -E '^(SUPER_|TICK_)' | while read -r v; do
     printf '%s=%q\n' "$v" "${!v}"
-  done >"$snapshot"
+  done ; } >"$snapshot" || true
   set -a
   [[ -f "$plugin_root/templates/superenv.default" ]] && . "$plugin_root/templates/superenv.default"
   [[ -f "$repo/.superenv" ]] && . "$repo/.superenv"

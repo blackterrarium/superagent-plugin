@@ -73,6 +73,11 @@ PROMPT="Invoke the superagent:superagent skill (Skill tool) and execute exactly 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 echo "=== $(ts) superagent-tick model=${TICK_MODEL} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
+# Not probed (no live check) — the prompt below invokes the superagent:superagent
+# skill by name, which only resolves if the superagent plugin is installed AND
+# enabled for this headless session. If the tick fails opaquely (e.g. "skill not
+# found" from the CLI), check that first.
+echo "    requires: superagent plugin installed+enabled for this session (invoked as superagent:superagent via Skill tool)" >>"$LOG_FILE"
 
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "superagent-tick: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
@@ -83,11 +88,11 @@ rc=0
 if [[ "$TICK_OUTPUT_FORMAT" == stream ]]; then
   # Live streaming (raw stream-json).
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-      --model "$TICK_MODEL" --allowedTools "Read,Edit,Bash,Task" --output-format stream-json --verbose ) \
+      --model "$TICK_MODEL" --allowedTools "Read,Edit,Bash,Task,Skill" --output-format stream-json --verbose ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
 else
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-      --model "$TICK_MODEL" --allowedTools "Read,Edit,Bash,Task" ) \
+      --model "$TICK_MODEL" --allowedTools "Read,Edit,Bash,Task,Skill" ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
 fi
 

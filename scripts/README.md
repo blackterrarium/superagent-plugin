@@ -8,6 +8,17 @@ headless CLI session, so context never accumulates and the loop runs straight to
 No loop logic lives here — these scripts only *launch* ticks. All loop state lives in the gitignored
 loop-status file the skills own.
 
+**Finding this plugin's `scripts/` dir.** Every runnable example below uses `$SUPERAGENT_SCRIPTS` for the
+absolute path to this installed plugin's `scripts/` directory — set it once per shell before pasting any
+example (`${CLAUDE_PLUGIN_ROOT}` is only defined *inside* a Claude Code tool-execution context, e.g. a
+running skill; it does not exist under cron, systemd, or a plain login shell, so examples cannot rely on
+it):
+
+```bash
+SUPERAGENT_SCRIPTS=~/.claude/plugins/superagent/scripts   # adjust to wherever the superagent plugin
+                                                            # is actually installed on this host
+```
+
 ## Two planes
 
 - **Driver plane** — a systemd user timer fires `superagent-tick.sh` on an interval; each run is one
@@ -47,6 +58,14 @@ right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPE
 
 ## Prerequisites
 
+- **The `superagent` plugin installed AND enabled for headless sessions in the target repo.** Every tick's
+  prompt invokes the loop skill by name (`superagent:superagent`, via the `Skill` tool) rather than reading
+  a `SKILL.md` path directly — `claude -p` only resolves that invocation if the plugin is installed and
+  enabled for the session it runs in. This wrapper does **not** probe for plugin presence (no live check);
+  if the plugin is missing or disabled, the tick fails opaquely (the skill invocation fails inside the CLI
+  child, not as a wrapper-level preflight error). The tick log header names this requirement as a hint —
+  check it first if a tick fails with no clear cause. Confirm the plugin is installed/enabled before
+  installing the timer.
 - The `claude` CLI installed. A systemd user
   service / cron runs with a minimal `PATH` that omits the common user bin dirs, so
   the wrapper prepends `~/.local/bin` and `/usr/local/bin` and **fails fast** if the binary is
@@ -60,7 +79,7 @@ right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPE
   it and exports it so the CLI child inherits it). If it is absent, the wrapper falls back to the
   `oauth_token` in `~/.config/gh/hosts.yml`; if `gh` still cannot authenticate, the tick **aborts loudly**
   (a failed preflight) rather than silently breaking every PR/CI step. Check current state any time with
-  `${CLAUDE_PLUGIN_ROOT}/scripts/status.sh` (the `gh auth:` line).
+  `$SUPERAGENT_SCRIPTS/status.sh` (the `gh auth:` line).
 - A goal **root** seed/master plan (`<PLAN.md>`) — the same file `superrun` traverses.
 - For a headless server: user lingering (so the timer runs without an active login) — `install-timer.sh`
   runs `loginctl enable-linger $USER` for you.
@@ -72,7 +91,7 @@ command — given only the root master plan it prepares the loop file and arms t
 in the background with no separate console:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/launch.sh vault/network-compose/<STAMP>-<slug>/master-plans/<seed>.md
+$SUPERAGENT_SCRIPTS/launch.sh vault/network-compose/<STAMP>-<slug>/master-plans/<seed>.md
 # optional: --interval 30m (default)
 ```
 
@@ -85,19 +104,19 @@ manual bootstrap + install-timer flow below remains available if you want the st
 ```bash
 # 1) Bootstrap the loop in external mode. Creates the loop-status file, prints the
 #    scheduler entry, runs the first tick, and prints a `LOOP_FILE=<abs path>` line.
-${CLAUDE_PLUGIN_ROOT}/scripts/bootstrap.sh vault/network-compose/<goal>/master-plans/<seed>.md
+$SUPERAGENT_SCRIPTS/bootstrap.sh vault/network-compose/<goal>/master-plans/<seed>.md
 
 # 2) Install + start the per-goal systemd user timer (paste the LOOP_FILE from step 1).
-${CLAUDE_PLUGIN_ROOT}/scripts/install-timer.sh <goal-slug> <LOOP_FILE> --interval 30m
+$SUPERAGENT_SCRIPTS/install-timer.sh <goal-slug> <LOOP_FILE> --interval 30m
 
 # 3) Monitor (any of these; start/stop freely).
-${CLAUDE_PLUGIN_ROOT}/scripts/console-watch.sh <LOOP_FILE>            # alerts on WAITING FOR INPUT / DONE
+$SUPERAGENT_SCRIPTS/console-watch.sh <LOOP_FILE>            # alerts on WAITING FOR INPUT / DONE
 journalctl --user -u superagent-tick@<goal-slug>.service -f # driver output (verbatim tick reports)
 tail -f /tmp/superagent-*.log                               # same, file log
 systemctl --user list-timers 'superagent-tick@<goal-slug>.timer'
 
 # 4) Stop on DONE (or to pause).
-${CLAUDE_PLUGIN_ROOT}/scripts/uninstall-timer.sh <goal-slug>          # add --purge to also drop the env file
+$SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to also drop the env file
 ```
 
 ## Files
@@ -141,9 +160,9 @@ actions (drain, hard-stop, uninstall a DONE loop, re-arm a stopped one). Invoke 
 on the loop host (e.g. "monitor my superagents").
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/status.sh              # one table across all loops
-${CLAUDE_PLUGIN_ROOT}/scripts/status.sh <slug>       # drill in: pending decision + log tails
-${CLAUDE_PLUGIN_ROOT}/scripts/status.sh --json       # machine-readable
+$SUPERAGENT_SCRIPTS/status.sh              # one table across all loops
+$SUPERAGENT_SCRIPTS/status.sh <slug>       # drill in: pending decision + log tails
+$SUPERAGENT_SCRIPTS/status.sh --json       # machine-readable
 ```
 
 ## Console output (live by default)
@@ -207,7 +226,7 @@ If you prefer cron over a systemd user timer:
 ```cron
 */10 * * * * cd /mnt/data0/eugene/src/network-compose && \
   LOOP_FILE=/abs/path/to/loop-status/<date>-<slug>.md \
-  ${CLAUDE_PLUGIN_ROOT}/scripts/superagent-tick.sh >> /tmp/superagent-cron.log 2>&1
+  $SUPERAGENT_SCRIPTS/superagent-tick.sh >> /tmp/superagent-cron.log 2>&1
 ```
 
 (Optionally add `TICK_TIMEOUT=<secs>` to cap a tick; unset means no cap.)

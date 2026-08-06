@@ -51,7 +51,7 @@ if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
   exit 3
 fi
 ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-    --allowedTools "Read,Edit,Bash,Task" )
+    --allowedTools "Read,Edit,Bash,Task,Skill" )
 
 echo
 echo "Next: capture the LOOP_FILE=... line above, then run:"
