@@ -168,7 +168,12 @@ When Step 3a governs (per the keying above), integrate the code PR with **no int
 merging only when the CI-green gate below — or its review-green fallback — is satisfied. This
 integration step is itself keyed by `SUPER_PROTECTED_MAIN` — the CI-gate keying in item 2 below still
 governs whether to wait for CI **first**, in both branches; only the merge mechanism at the end (item
-3) differs:
+3) differs. Both key states need the primary checkout's absolute path below — derive it once, before
+item 1, so it is defined for every use in either branch:
+
+```bash
+primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+```
 
 1. The leaf plan's own task steps already pushed to CI with the flag `SUPER_CI_FLAG_TEMPLATE`
    specifies, if any (see Step 3). Ensure the feature branch is pushed — if `SUPER_BRANCH_STYLE=flat`
@@ -251,8 +256,9 @@ governs whether to wait for CI **first**, in both branches; only the merge mecha
    (item 2) is satisfied:
 
    ```bash
-   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-   git -C "$primary_root" merge --no-ff <branch>   # or per SUPER_MERGE_METHOD, e.g. --squash
+   git -C "$primary_root" merge --no-ff <branch>   # or per SUPER_MERGE_METHOD, e.g. --squash — but
+                                                    # --squash stages without committing, so follow it with:
+                                                    # git -C "$primary_root" commit -m "<leaf-plan title>"
    git -C "$primary_root" push   # only if a remote exists — a repo with no remote simply keeps the merge local
    ```
 4. If `SUPER_GH_DISABLE_SANDBOX=true` (macOS hosts where `gh` needs keychain access to verify the
