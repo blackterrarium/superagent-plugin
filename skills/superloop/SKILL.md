@@ -68,13 +68,13 @@ The **goal folder** is derived from `<PLAN.md>` the same way `superplan` does it
 Identification* step): the directory that contains the `master-plans/` / `plans/` subfolders for this
 plan family — the **parent** of the `master-plans/` folder the seed sits in, **not** that
 `master-plans/` folder. Goal folders live under the repo's goal-folder root `<SUPER_GOAL_ROOT>`
-(worked example from the originating repo: `SUPER_GOAL_ROOT=vault`), so the loop file lands at
+(worked example from the originating repo: `SUPER_GOAL_ROOT=vault/network-compose`), so the loop file lands at
 `<SUPER_GOAL_ROOT>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/<date>-<slug>.md` — a sibling of that goal's
 `master-plans/`, `plans/`, `reports/`, `findings/`.
 
 The `<SUPER_LOOP_STATUS_DIRNAME>/` directory is **gitignored** (pattern
 `<SUPER_GOAL_ROOT>/**/<SUPER_LOOP_STATUS_DIRNAME>/` — worked example from the originating repo:
-`vault/**/loop-status/`). It is **local-only state** — never commit it, never open a PR for it, just
+`vault/network-compose/**/loop-status/`). It is **local-only state** — never commit it, never open a PR for it, just
 Write it with the Write tool. Being gitignored, it survives `superplan`/`superrun`'s `git checkout -b …
 / checkout main / pull` dance untouched and can never be swept into one of their explicit-`git add`
 docs commits.

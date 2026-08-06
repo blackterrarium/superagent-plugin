@@ -1,7 +1,7 @@
 # Superagent external loop — CLI driver
 
 Run the superagent:superagent autonomy loop skill (built on the
-[`superloop`](../../.claude/skills/superloop/SKILL.md) chassis) unattended from a CLI, driven by an OS
+[`superloop`](../skills/superloop/SKILL.md) chassis) unattended from a CLI, driven by an OS
 scheduler. This is the **`external` driver** (superloop L2, Driver B): each tick fires in a fresh
 headless CLI session, so context never accumulates and the loop runs straight to `DONE` with no restart.
 
@@ -93,7 +93,7 @@ command — given only the root master plan it prepares the loop file and arms t
 in the background with no separate console:
 
 ```bash
-$SUPERAGENT_SCRIPTS/launch.sh vault/network-compose/<STAMP>-<slug>/master-plans/<seed>.md
+$SUPERAGENT_SCRIPTS/launch.sh vault/<STAMP>-<slug>/master-plans/<seed>.md
 # optional: --interval 30m (default)
 ```
 
@@ -106,7 +106,7 @@ manual bootstrap + install-timer flow below remains available if you want the st
 ```bash
 # 1) Bootstrap the loop in external mode. Creates the loop-status file, prints the
 #    scheduler entry, runs the first tick, and prints a `LOOP_FILE=<abs path>` line.
-$SUPERAGENT_SCRIPTS/bootstrap.sh vault/network-compose/<goal>/master-plans/<seed>.md
+$SUPERAGENT_SCRIPTS/bootstrap.sh vault/<goal>/master-plans/<seed>.md
 
 # 2) Install + start the per-goal systemd user timer (paste the LOOP_FILE from step 1).
 $SUPERAGENT_SCRIPTS/install-timer.sh <goal-slug> <LOOP_FILE> --interval 30m
@@ -156,7 +156,7 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 ## Monitoring multiple concurrent loops
 
 `status.sh` is the deterministic, multi-instance enumerator; the `superagent-monitor` skill
-(`.claude/skills/superagent-monitor/`) is the interactive control plane on top of it — it lists every
+(`../skills/superagent-monitor/`) is the interactive control plane on top of it — it lists every
 concurrent loop, walks you through answering a `WAITING FOR INPUT` decision, and performs lifecycle
 actions (drain, hard-stop, uninstall a DONE loop, re-arm a stopped one). Invoke it from any CLI session
 on the loop host (e.g. "monitor my superagents").
@@ -231,9 +231,7 @@ crontab environment-assignment line, above the schedule line, to an absolute pat
 # adjust to wherever the superagent plugin is actually installed on this host
 SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/superagent/scripts
 
-*/10 * * * * cd /path/to/target/repo && \
-  LOOP_FILE=/abs/path/to/loop-status/<date>-<slug>.md \
-  $SUPERAGENT_SCRIPTS/superagent-tick.sh >> /tmp/superagent-cron.log 2>&1
+*/10 * * * * cd /path/to/target/repo && LOOP_FILE=/abs/path/to/loop-status/<date>-<slug>.md $SUPERAGENT_SCRIPTS/superagent-tick.sh >> /tmp/superagent-cron.log 2>&1
 ```
 
 (Optionally add `TICK_TIMEOUT=<secs>` to cap a tick; unset means no cap.)

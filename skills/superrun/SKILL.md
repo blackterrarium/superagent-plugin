@@ -116,10 +116,11 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    `SUPER_MODEL_FIX_APPLIER` fix-applier). A value of `inherit` means omit the model override. An
    unrecognized value is a hard error — fail the dispatch loudly; never silently substitute a cheaper
    tier.
-4. **Reviewer labels.** Reviewers report **every** finding with a severity **and a confidence
-   label**; the controller filters to high-confidence findings before acting on or surfacing them.
-   Never instruct a reviewer to report only high-confidence issues — Claude 5-family reviewers
-   apply that filter silently and drop real findings.
+4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
+   the only supported value).** Reviewers report **every** finding with a severity **and a
+   confidence label**; the controller filters to high-confidence findings before acting on or
+   surfacing them. Never instruct a reviewer to report only high-confidence issues — Claude
+   5-family reviewers apply that filter silently and drop real findings.
 5. **Finishing handoff is keyed by `SUPER_SKIP_FINISHING_HANDOFF`.** If `true`: skip
    `superpowers:finishing-a-development-branch` entirely — its interactive completion menu cannot be
    answered by an unattended caller, it leaves the code PR open for a manual merge, and it runs tests
