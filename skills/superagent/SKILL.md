@@ -198,8 +198,10 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 2. **Arm the resume signal — by driver:**
    - **cron (in-session):** arm **one `Monitor`** (`persistent: true`) that `curl`s
      `https://api.github.com/repos/<owner>/<repo>/actions/runs/<id>` for **each** id in `ci_wait.runs`
-     (auth: `TOK=$(gh auth token)` captured before arming — `gh` itself cannot run *inside* a Monitor:
-     no sandbox override, keychain TLS; `curl` to `api.github.com` works in-sandbox) and fires the
+     (auth: `TOK=$(gh auth token)` captured before arming — prefer `curl` for polling inside a Monitor:
+     on hosts where `SUPER_GH_DISABLE_SANDBOX=true`, `gh` cannot run *inside* the Monitor at all (it
+     needs keychain access), so `curl` to `api.github.com` is the only option there; where
+     `SUPER_GH_DISABLE_SANDBOX=false`, `curl` is still preferred for consistency) and fires the
      first time **every** run is `status: completed`, emitting each `id: conclusion` pair. It MUST
      emit on **any** terminal state (success / failure / cancelled / timed_out) — a success-only
      filter is silent through a crash, and silence looks like "still running". Then **suspend the
@@ -217,13 +219,16 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 1. Entry points: the **Monitor fired** (cron — harness re-invokes the session), or an **external
    `WAITING FOR CI` tick's one batched curl** found every run `completed`, or a **form-(B) RESUME**
    found `status: WAITING FOR CI` (see below). `acquire_lock()` if not already held this tick.
-2. Verify the conclusions independently (one `gh run view <id>` per run, or the same batched curl) —
-   never advance on the Monitor's report alone.
+2. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
+   `SUPER_GH_DISABLE_SANDBOX=true` — or the same batched curl) — never advance on the Monitor's report
+   alone.
 3. **Resume `superagent:superrun`:** if `ci_wait.subagent` is still reachable (same session — the cron/Monitor
    path), `SendMessage` it **once**: "CI run(s) <ids> terminal: <id: conclusion, …>. Finish the leaf
    now — Step 3a terminal-state branch, then closeout; return your Final Report." If it is not
    reachable (external fresh session; or `SendMessage` fails), dispatch a **fresh** general-purpose
-   subagent (`run_in_background: false` — synchronous, like every heavy dispatch) instructed to invoke
+   subagent (`run_in_background: false` — synchronous, like every heavy dispatch; pass `model:` from
+   the resolved value of `SUPER_MODEL_EXECUTOR` unless the value is `inherit`, in which case omit the
+   model parameter) instructed to invoke
    `superagent:superrun` with the full `ci_wait` packet + conclusions via its
    **Resume entry — post-CI**. Either way the subagent returns the real Final Report.
 4. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
@@ -282,8 +287,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
 - **cron:** strict no-op — the Monitor owns the wait. Read status, `release_lock()`, exit. No `gh`,
   no `curl`, no subagent. (Normally no cron tick even fires here — the driver was suspended at
   parking; this covers a straggler tick or a manual `--tick`.)
-- **external:** run **one batched `curl`** over all ids in `ci_wait.runs` (auth `gh auth token`;
-  this is the only network call this tick).
+- **external:** run **one batched `curl`** over all ids in `ci_wait.runs` (auth `gh auth token` — with
+  the sandbox override if `SUPER_GH_DISABLE_SANDBOX=true`; this is the only network call this tick).
   - Any run still not `completed` → `release_lock()`, exit. Nothing else this tick.
   - All terminal → run the **Resuming** flow (CI wait — monitor-parked) this tick: verify, dispatch
     the resume subagent, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
@@ -293,7 +298,9 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    this tick.
 2. Set `status: PLANNING`, write the loop file.
 3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**).
+   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Pass
+   `model:` from the resolved value of `SUPER_MODEL_PLANNER` unless the value is `inherit`, in which
+   case omit the model parameter.
    Instruct the subagent to invoke the `superagent:superplan` skill (Skill tool) with
    `<PLAN.md> = master_plan`, **no `<TOPIC>`** — its `supertraverse` descent finds the next deepest
    unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final
@@ -322,7 +329,9 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
 3. **Dispatch `superagent:superrun` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**).
+   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Pass
+   `model:` from the resolved value of `SUPER_MODEL_EXECUTOR` unless the value is `inherit`, in which
+   case omit the model parameter.
    Instruct the subagent to invoke the `superagent:superrun` skill (Skill tool) with
    `<PLAN.md> = master_plan` (the root) and to **return superrun's complete Final Report verbatim as its
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
@@ -350,7 +359,9 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
      - else → `status: WAITING FOR PLAN` (steps remain to be planned).
    - **BLOCKED** (a task could not complete) **or code PR CI-red** → **do not terminate.** Run the
      **Decision-escalation ladder** (below) on the blocker. If the panel converges → apply it (retry
-     `superagent:superrun` with guidance, route to `WAITING FOR PLAN` for a re-plan, or mark the step declined),
+     `superagent:superrun` with guidance — per **Subagent dispatch**, passing `model:` from the resolved
+     value of `SUPER_MODEL_EXECUTOR` unless the value is `inherit`, in which case omit the model
+     parameter — route to `WAITING FOR PLAN` for a re-plan, or mark the step declined),
      log the decision, continue. If the panel cannot converge → escalate via `WAITING FOR INPUT`.
      Never silently spin on a blocked plan.
 6. Append an iteration-log entry (skill, result, code PR + closeout PR URLs). Go to **Step 2**.
@@ -387,9 +398,12 @@ The two drivers (Driver A `cron`, Driver B `external`), the context model, the o
 `/superagent --tick <loop-file>` as its tick prompt (`<consumer>` = `superagent`).
 
 **Running from the Claude CLI.** For `external` mode the tick fires
-in a fresh headless `claude -p` session per interval; because print mode cannot run slash commands, the
-scheduler drives it by asking the CLI to *invoke the `superagent:superagent` skill (Skill tool) and run
-exactly one `--tick`* (superloop L2, Driver B). `${CLAUDE_PLUGIN_ROOT}/scripts/` packages the whole
+in a fresh headless `claude -p` session per interval; because print mode cannot run slash commands, and
+Skill-tool semantics for a disable-model-invocation skill in headless print mode are unverified, the
+scheduler drives it by asking the CLI to *read `skills/superagent/SKILL.md` directly (at the plugin's
+installed location) and run exactly one `--tick`* (superloop L2, Driver B). The loop's own internal
+`superagent:superplan` / `superagent:superrun` dispatches still go through the Skill tool once the
+session is running. `${CLAUDE_PLUGIN_ROOT}/scripts/` packages the whole
 thing (the tick wrapper, a per-goal systemd user timer, and
 bootstrap/install/uninstall/console-watch/status helpers); the runbook is
 [scripts/README.md](../../scripts/README.md), which documents the `SUPERAGENT_SCRIPTS` convention

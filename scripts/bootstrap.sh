@@ -14,6 +14,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 [[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 
@@ -44,14 +45,22 @@ fi
 ensure_claude_bin || exit 5
 ensure_gh_auth || exit 4
 
-PROMPT="Invoke the superagent:superagent skill (Skill tool) and run superagent in form (B) with <PLAN.md>=${PLAN} and --driver=external. If no loop-status file exists yet, create it (FRESH START); print the exact scheduler entry to create; then run the first tick. Finally, on a line by itself, print: LOOP_FILE=<absolute path to the loop-status file you created or found>."
+# Slash commands are unavailable in headless print mode, so open the skill file
+# directly (superloop L2, Driver B) rather than invoking it by name — Skill-tool
+# semantics for a disable-model-invocation skill in headless print mode are
+# unverified, so the proven file-read entry point is used instead (matches
+# superagent-tick.sh). The loop's own internal superagent:superplan /
+# superagent:superrun dispatches still go through the Skill tool once the
+# session is running, so the superagent plugin must still be installed AND
+# enabled for this headless session.
+PROMPT="Read ${PLUGIN_ROOT}/skills/superagent/SKILL.md and run superagent in form (B) with <PLAN.md>=${PLAN} and --driver=external. If no loop-status file exists yet, create it (FRESH START); print the exact scheduler entry to create; then run the first tick. Finally, on a line by itself, print: LOOP_FILE=<absolute path to the loop-status file you created or found>."
 
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "bootstrap: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
   exit 3
 fi
 ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-    --allowedTools "Read,Edit,Bash,Task,Skill" )
+    --allowedTools "Read,Edit,Write,Bash,Task,Skill" )
 
 echo
 echo "Next: capture the LOOP_FILE=... line above, then run:"

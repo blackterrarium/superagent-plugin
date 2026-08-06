@@ -280,20 +280,27 @@ interval, each in a **fresh session = clean context**.
   - **Schedule:** e.g. every 10 minutes. (Desktop checks each minute *while the app is open*; the
     computer must be awake; one catch-up run for misses within 7 days.)
 - **Headless OS cron / launchd / systemd timer** (no Desktop app): the CLI print mode **cannot run
-  slash commands**, so invoke the skill by its plugin-qualified name via the Skill tool instead of
-  `/<consumer>`. The tick runs via `claude -p` in a **fresh session per tick** and **must never
+  slash commands**, and Skill-tool semantics for a disable-model-invocation skill in headless print mode
+  are unverified, so open the skill file directly instead of invoking it by name or via `/<consumer>` —
+  derive the plugin root from the script's own location (`PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"`)
+  and read `${PLUGIN_ROOT}/skills/<consumer>/SKILL.md`. The loop's own internal per-tick dispatches
+  (e.g. superagent's `superagent:superplan` / `superagent:superrun`) still go through the Skill tool
+  once the session is running, so the plugin must still be installed AND enabled for this headless
+  session. The tick runs via `claude -p` in a **fresh session per tick** and **must never
   `--resume`/`--continue`** (a fresh process per tick is what bounds context — L4 is a no-op in
   `external` mode, so the loop runs straight to `DONE` with no handoff).
   ```
   # Run uncapped so long CI-push ticks are not killed; an optional cap via
   # --max-turns / --max-budget-usd (or an OS `timeout`).
-  cd <repo> && ANTHROPIC_API_KEY=... claude -p "Invoke the <plugin>:<consumer> skill (Skill tool) and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop." \
-    --allowedTools "Read,Edit,Bash,Task,Skill" >> /tmp/<consumer>.log 2>&1
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  cd <repo> && ANTHROPIC_API_KEY=... claude -p "Read ${PLUGIN_ROOT}/skills/<consumer>/SKILL.md and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop." \
+    --allowedTools "Read,Edit,Write,Bash,Task,Skill" >> /tmp/<consumer>.log 2>&1
   ```
   Schedule with cron/launchd/systemd; auth via `ANTHROPIC_API_KEY` in the scheduler env (a headless
   scheduler can't do interactive OAuth). For superagent, `${CLAUDE_PLUGIN_ROOT}/scripts/` packages this
-  (worked example from the originating repo — `superagent-tick.sh`'s actual prompt is `Invoke the
-  superagent:superagent skill (Skill tool) and execute exactly ONE --tick on loop file ${LOOP_FILE},
+  (worked example from the originating repo — `superagent-tick.sh`'s actual prompt is `Read
+  ${PLUGIN_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE},
   in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the
   user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill.
   Then stop.`): the `superagent-tick.sh` wrapper, a per-goal systemd user timer, and

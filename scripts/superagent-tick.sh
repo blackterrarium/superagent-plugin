@@ -17,6 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 [[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 
@@ -65,19 +66,26 @@ load_superenv "$REPO"
 TICK_MODEL="${TICK_MODEL:-${SUPER_MODEL_SUPERVISOR:-opus}}"
 [[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL="opus"
 
-# Slash commands are unavailable in headless print mode, so drive via the skill
-# file directly (superloop L2, Driver B). Non-interactive: the tick must never
-# block on a question.
-PROMPT="Invoke the superagent:superagent skill (Skill tool) and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
+# Slash commands are unavailable in headless print mode, so open the skill file
+# directly (superloop L2, Driver B) rather than invoking it by name — Skill-tool
+# semantics for a disable-model-invocation skill in headless print mode are
+# unverified, so the proven file-read entry point is used instead. The loop's own
+# internal superagent:superplan / superagent:superrun dispatches still go through
+# the Skill tool once the session is running, so the superagent plugin must still
+# be installed AND enabled for this headless session. Non-interactive: the tick
+# must never block on a question.
+PROMPT="Read ${PLUGIN_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 echo "=== $(ts) superagent-tick model=${TICK_MODEL} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
-# Not probed (no live check) — the prompt below invokes the superagent:superagent
-# skill by name, which only resolves if the superagent plugin is installed AND
-# enabled for this headless session. If the tick fails opaquely (e.g. "skill not
-# found" from the CLI), check that first.
-echo "    requires: superagent plugin installed+enabled for this session (invoked as superagent:superagent via Skill tool)" >>"$LOG_FILE"
+# Not probed (no live check) — the prompt below reads skills/superagent/SKILL.md
+# directly at PLUGIN_ROOT. The loop's own internal superagent:superplan /
+# superagent:superrun dispatches still go through the Skill tool once running, so
+# the superagent plugin must still be installed AND enabled for this headless
+# session. If the tick fails opaquely, check both: the file exists at
+# PLUGIN_ROOT, and the plugin is enabled.
+echo "    requires: superagent plugin installed+enabled for this session (tick entry reads skills/superagent/SKILL.md directly at ${PLUGIN_ROOT}; superagent:superplan / superagent:superrun still resolved via Skill tool)" >>"$LOG_FILE"
 
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "superagent-tick: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
@@ -88,11 +96,11 @@ rc=0
 if [[ "$TICK_OUTPUT_FORMAT" == stream ]]; then
   # Live streaming (raw stream-json).
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-      --model "$TICK_MODEL" --allowedTools "Read,Edit,Bash,Task,Skill" --output-format stream-json --verbose ) \
+      --model "$TICK_MODEL" --allowedTools "Read,Edit,Write,Bash,Task,Skill" --output-format stream-json --verbose ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
 else
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-      --model "$TICK_MODEL" --allowedTools "Read,Edit,Bash,Task,Skill" ) \
+      --model "$TICK_MODEL" --allowedTools "Read,Edit,Write,Bash,Task,Skill" ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
 fi
 
