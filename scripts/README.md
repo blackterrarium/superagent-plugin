@@ -228,9 +228,8 @@ If you prefer cron over a systemd user timer. **`cron` does not run a login shel
 crontab environment-assignment line, above the schedule line, to an absolute path:
 
 ```cron
-SUPERAGENT_SCRIPTS=/home/eugene/.claude/plugins/superagent/scripts   # adjust to wherever the superagent
-                                                                       # plugin is actually installed on
-                                                                       # this host
+# adjust to wherever the superagent plugin is actually installed on this host
+SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/superagent/scripts
 
 */10 * * * * cd /path/to/target/repo && \
   LOOP_FILE=/abs/path/to/loop-status/<date>-<slug>.md \
