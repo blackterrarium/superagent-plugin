@@ -15,8 +15,11 @@ running skill; it does not exist under cron, systemd, or a plain login shell, so
 it):
 
 ```bash
-SUPERAGENT_SCRIPTS=~/.claude/plugins/superagent/scripts   # adjust to wherever the superagent plugin
-                                                            # is actually installed on this host
+SUPERAGENT_SCRIPTS=~/.claude/plugins/cache/<marketplace-name>/superagent/<version>/scripts
+                                                            # that is the real cache shape a plugin
+                                                            # marketplace install produces — check the
+                                                            # actual path on this host with:
+                                                            # ls ~/.claude/plugins/cache/*/superagent/*/scripts
 ```
 
 ## Two planes
@@ -228,8 +231,10 @@ If you prefer cron over a systemd user timer. **`cron` does not run a login shel
 crontab environment-assignment line, above the schedule line, to an absolute path:
 
 ```cron
-# adjust to wherever the superagent plugin is actually installed on this host
-SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/superagent/scripts
+# adjust to wherever the superagent plugin is actually installed on this host — that is the real
+# cache shape a plugin marketplace install produces; check the actual path with:
+#   ls ~/.claude/plugins/cache/*/superagent/*/scripts
+SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/cache/<marketplace-name>/superagent/<version>/scripts
 
 */10 * * * * cd /path/to/target/repo && LOOP_FILE=/abs/path/to/loop-status/<date>-<slug>.md $SUPERAGENT_SCRIPTS/superagent-tick.sh >> /tmp/superagent-cron.log 2>&1
 ```

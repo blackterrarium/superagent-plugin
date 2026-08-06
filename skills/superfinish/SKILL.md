@@ -64,14 +64,14 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## Goal Identification
 
 Identify the **goal folder**: the top-level initiative directory that contains the `plans/`,
 `master-plans/`, `findings/`, and `reports/` subfolders. It is the parent of the `plans/` folder the
-input plan sits in (e.g. `<SUPER_GOAL_ROOT>/2026-05-20-graphgen-grammar-first-redesign/`). All
+input plan sits in (worked example from the originating repo: `<SUPER_GOAL_ROOT>/2026-05-20-graphgen-grammar-first-redesign/`). All
 output is written under this goal folder.
 
 **Read `goal-directives.md` at the goal-folder root FIRST, if it exists.** It is the authoritative map
@@ -126,7 +126,7 @@ named `reports/YYYY-MM-DD-hh_mm-<topic>.md` (today's date and the current UTC ho
 
 Open with the standard header block (`# Title`, `**Date:**`, `**Type:** Sub-PR closeout`,
 `**Status:**`, `**Related:**`). When CI evidence exists, cite the source CI run id(s) and verify the
-artifact dates postdate the commits ([[feedback_ci_artifact_dates]]). Close the loop both ways — the
+artifact dates postdate the commits. Close the loop both ways — the
 report links back to the plan/seed it grades.
 
 ### 3. Update Plan
@@ -194,7 +194,8 @@ request — **without asking the user for confirmation** (standing authorization
 `SUPER_PROTECTED_MAIN=true` (the shipped default), the default branch is a **protected branch** (direct
 pushes are rejected), so this MUST go through a feature branch and a PR — merged per
 `SUPER_MERGE_METHOD` (default `squash`) — even though it is docs-only. If `SUPER_PROTECTED_MAIN=false`,
-a direct commit to the default branch is permitted instead.
+a direct commit to the default branch is permitted instead — see `superauthor` clause **A7**'s
+`SUPER_PROTECTED_MAIN=false` worked example for the exact recipe (no feature branch, no PR, no `gh`).
 
 **Scope of the commit: only the bookkeeping docs** written this run — the closeout report, new/revised
 `findings/` docs, the `<PLAN.md>` close-out note, and **every ancestor plan file** the completion-mode
@@ -231,6 +232,9 @@ Notes:
 - Capture the resulting **PR URL** (from `gh pr create` / `gh pr view --json url`) — report it in the Final
   Report below.
 - Do **not** commit Anthropic/Claude attribution or `Co-Authored-By` trailers (repo policy).
+- If `SUPER_GH_DISABLE_SANDBOX=true` (macOS hosts where `gh` needs keychain access to verify the
+  TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped
+  default), run `gh` normally.
 
 ## Final Report — then exit
 

@@ -1,6 +1,6 @@
 ---
 name: superloop
-description: Shared autonomy-loop chassis — the gitignored loop-status state file, the cron/external driver, the overlap lock, the context-handoff (session skill-budget) gate, the sync gate, the PR-merge discipline, and the 3-subagent escalation ladder. A clause library (L1–L7) invoked via the Skill tool by autonomy-driver skills (superagent today, grammar-improve next) to avoid re-implementing the loop machinery.
+description: Shared autonomy-loop chassis — the gitignored loop-status state file, the cron/external driver, the overlap lock, the context-handoff (session skill-budget) gate, the sync gate, the PR-merge discipline, and the 3-subagent escalation ladder. A clause library (L1–L7) invoked via the Skill tool by autonomy-driver skills (superagent today) to avoid re-implementing the loop machinery.
 license: all rights reserved
 ---
 
@@ -25,8 +25,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## Subroutine contract — read before applying the clauses
 
@@ -276,7 +276,7 @@ interval, each in a **fresh session = clean context**.
 - **Desktop scheduled task** (fresh local session per fire; full file/tool/slash access, so `--tick`
   works as a slash command). Create it in the Desktop app → **Routines → New routine → Local**:
   - **Instructions:** `/<consumer> --tick <ABSOLUTE loop-file path>`
-  - **Working folder:** the repo root (worked example from the originating repo: `/Users/eugene/src/network-compose`)
+  - **Working folder:** the repo root (worked example from the originating repo: `/path/to/originating-repo`)
   - **Schedule:** e.g. every 10 minutes. (Desktop checks each minute *while the app is open*; the
     computer must be awake; one catch-up run for misses within 7 days.)
 - **Headless OS cron / launchd / systemd timer** (no Desktop app): the CLI print mode **cannot run
@@ -502,7 +502,7 @@ duplicate that skeleton — apply A7's.
 **superagent's subset.** superagent does **not** itself open/merge work PRs — `superplan`/`superrun`
 do that inside their own flows. superagent therefore applies only **L6.1's CI-red → L7 escalation
 trigger** and **L6.3's post-merge sync+be-sure** (around each `superplan`/`superrun` dispatch). A
-consumer whose per-tick body opens its own PRs (e.g. `grammar-improve`) applies the full clause.
+consumer whose per-tick body opens its own PRs applies the full clause.
 
 ---
 

@@ -1,7 +1,7 @@
 # Project Knowledge Vault — Root
 
-Index of goals and lessons for this repository. Maintained by the
-superagent plugin (supergoal creates goal folders here; superfinish appends results).
+A human-maintained index of this repository's goals and lessons; goal folders are
+created alongside it by `superagent:supergoal`.
 
 ## Active goals
 

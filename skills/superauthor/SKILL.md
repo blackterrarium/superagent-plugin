@@ -58,8 +58,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## A2 — Authoring standard (REQUIRED)
 
@@ -259,6 +259,23 @@ Notes:
   `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` rather than re-running the merge.
 - Capture the resulting **PR URL** (from `gh pr create` / `gh pr view --json url`) — report it in A8.
 - Do **not** commit Anthropic/Claude attribution or `Co-Authored-By` trailers (repo policy).
+- If `SUPER_GH_DISABLE_SANDBOX=true` (macOS hosts where `gh` needs keychain access to verify the
+  TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped
+  default), run `gh` normally.
+
+**`SUPER_PROTECTED_MAIN=false` — shipped-default variants.** The skeleton above is the
+`SUPER_PROTECTED_MAIN=true` (shipped-default) path. When `SUPER_PROTECTED_MAIN=false`, skip the
+branch/PR machinery entirely and commit straight to the default branch — no `gh` calls at all:
+
+```bash
+# from the repo root, with the artifact/findings files already written
+git add <file> [<file> ...]                       # caller-supplied explicit paths only — never git add -A
+git commit -m "<caller-commit-subject> [skip ci]"
+git push                                           # only if a remote exists
+```
+
+A repo with no remote simply keeps the commit local — `git push` has nothing to push to and that is
+not an error; skip it rather than forcing a remote into existence.
 
 ## A8 — Final Report, then exit (caller-parameterized)
 

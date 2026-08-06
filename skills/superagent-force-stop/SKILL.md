@@ -20,8 +20,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 Everything here runs on the **host that runs the loops** (the primary checkout
 holding the gitignored `<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the
@@ -33,7 +33,8 @@ from `primary_root`:
 
 ```
 primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-SUPERAGENT_SCRIPTS=~/.claude/plugins/superagent/scripts   # adjust to this host's install
+SUPERAGENT_SCRIPTS="${CLAUDE_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
+# for cron/systemd use the absolute install path — see scripts/README.md
 ```
 
 ## When to use this (vs superagent-stop)

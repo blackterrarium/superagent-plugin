@@ -42,6 +42,27 @@ gitignore entry. It is idempotent — safe to re-run — and never overwrites an
 prepares files, it never commits, so review and commit `.superenv` / the vault seed / `.gitignore`
 yourself (through a PR, if the repo protects its default branch).
 
+### First goal
+
+With the repo bootstrapped, start a new initiative with `superagent:supergoal` and a goal description:
+
+```
+superagent:supergoal Build an ingest pipeline for CSV uploads
+```
+
+That produces a goal folder with a root master plan. To drive it yourself, one step at a time, invoke
+`superagent:superplan` / `superagent:superrun` / `superagent:superfinish` directly. To drive it
+end-to-end, attended, start the loop by typing the full namespaced invocation explicitly:
+
+```
+superagent:superagent <PLAN.md>
+```
+
+`superagent` carries `disable-model-invocation`, so it will **never auto-trigger** from a plain-English
+request — it must be invoked by name, exactly like `superagent:init` above. For an unattended loop
+(no console session babysitting it), use `superagent:superagent-external` instead, which wraps the
+same supervisor with a systemd-timer-driven external driver.
+
 ## Prerequisites
 
 - **The `superpowers` plugin, for execution.** Planning skills (`supergoal`, `superplan`) work without
@@ -162,7 +183,8 @@ directory: [`scripts/README.md`](scripts/README.md).
 - **`superfinish`** — post-execution bookkeeping: findings, a closeout report, and ancestor
   progress-report rows flipped complete on the way up the tree.
 - **`superagent`** — the autonomy supervisor: drives a goal's root plan to completion unattended, one
-  `superplan`/`superrun` dispatch per tick, via either driver.
+  `superplan`/`superrun` dispatch per tick, via either driver. Carries `disable-model-invocation`, so it
+  never auto-triggers — invoke it explicitly by its full name, `superagent:superagent <PLAN.md>`.
 - **`superloop`** — shared clause library the supervisor is built on: the loop-status file, the
   cron/external drivers, the overlap lock, the context-handoff gate, the sync gate, PR-merge discipline,
   and the 3-subagent escalation ladder.

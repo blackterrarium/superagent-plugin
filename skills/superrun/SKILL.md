@@ -20,8 +20,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## Prerequisite — superpowers
 
@@ -165,13 +165,18 @@ owns integration end-to-end with no interactive prompt. If `false` and a human i
 when it does not.
 
 When Step 3a governs (per the keying above), integrate the code PR with **no interactive prompt**,
-merging only when the CI-green gate below — or its review-green fallback — is satisfied:
+merging only when the CI-green gate below — or its review-green fallback — is satisfied. This
+integration step is itself keyed by `SUPER_PROTECTED_MAIN` — the CI-gate keying in item 2 below still
+governs whether to wait for CI **first**, in both branches; only the merge mechanism at the end (item
+3) differs:
 
 1. The leaf plan's own task steps already pushed to CI with the flag `SUPER_CI_FLAG_TEMPLATE`
    specifies, if any (see Step 3). Ensure the feature branch is pushed — if `SUPER_BRANCH_STYLE=flat`
    (the shipped default), use a flat branch name with no slashes (a slashed name can miss CI's branch
-   glob); if `SUPER_BRANCH_STYLE` is anything else, follow that style instead — and open the code PR
-   with `gh pr create`.
+   glob); if `SUPER_BRANCH_STYLE` is anything else, follow that style instead. If
+   `SUPER_PROTECTED_MAIN=true` (the shipped default), also open the code PR with `gh pr create`. If
+   `SUPER_PROTECTED_MAIN=false`, skip `gh pr create` — there is no PR in this branch, only the pushed
+   feature branch (still pushed so CI, if any, has something to run against).
 2. **CI-green gate — monitor-parked, never polled — keyed by `SUPER_TEST_EVIDENCE` three ways:**
    - **`SUPER_TEST_EVIDENCE=ci`:** collect the run id of **every** CI run this leaf queued (`gh run
      list --branch <branch>` — one run per push; a sharded batch has several, see **CI scheduling**
@@ -212,7 +217,7 @@ merging only when the CI-green gate below — or its review-green fallback — i
          **Root:** <full path to <PLAN.md>>
          **Worktree:** <absolute path — left in place>
          **Branch:** <branch name>
-         **Code PR:** <url> (open — awaiting CI)
+         **Code PR:** <url> (open — awaiting CI) — or `N/A (SUPER_PROTECTED_MAIN=false)` if there is no PR
          **CI runs:** <every queued run id, comma-separated>
          **Remaining:** CI-green gate verdict (Step 3a) → superfinish closeout (Step 4) → worktree exit (Step 5)
 
@@ -226,16 +231,24 @@ merging only when the CI-green gate below — or its review-green fallback — i
      none** → **do NOT merge.** Leave the PR open, capture the failing run URL(s), and declare the
      step **BLOCKED** in the Final Report. (When a `superagent` loop drives superrun, its escalation
      ladder decides what happens next; a human caller sees the blocker plainly.)
-3. **Merge per `SUPER_MERGE_METHOD` (default `squash`). Pass `gh pr merge --admin` only if
-   `SUPER_ADMIN_MERGE=true` — otherwise never.** Reaching for `--admin` when the key is unset or
-   `false` buys nothing on a repo whose branch protection doesn't require it, and reliably **trips
-   the harness security classifier**, which reads merge-over-red as a privileged override and denies
-   it. If the plain merge is actually refused, escalate to `--admin` only when `SUPER_ADMIN_MERGE=true`
-   permits it, and report why. Full rationale in `superauthor` clause **A7**. Note that
-   `--delete-branch` can exit 1 with `fatal: '<branch>' is already used by worktree` **after a
-   successful merge** — that is the local delete step, not a rejection; confirm with
-   `gh pr view <n> --json state,mergedAt` and drop the remote ref via
+3. **If `SUPER_PROTECTED_MAIN=true` (the shipped default): merge per `SUPER_MERGE_METHOD` (default
+   `squash`). Pass `gh pr merge --admin` only if `SUPER_ADMIN_MERGE=true` — otherwise never.**
+   Reaching for `--admin` when the key is unset or `false` buys nothing on a repo whose branch
+   protection doesn't require it, and reliably **trips the harness security classifier**, which reads
+   merge-over-red as a privileged override and denies it. If the plain merge is actually refused,
+   escalate to `--admin` only when `SUPER_ADMIN_MERGE=true` permits it, and report why. Full rationale
+   in `superauthor` clause **A7**. Note that `--delete-branch` can exit 1 with `fatal: '<branch>' is
+   already used by worktree` **after a successful merge** — that is the local delete step, not a
+   rejection; confirm with `gh pr view <n> --json state,mergedAt` and drop the remote ref via
    `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` rather than re-running the merge.
+
+   **If `SUPER_PROTECTED_MAIN=false`: no PR, no `gh` — merge the worktree branch into the default
+   branch directly and locally**, once the CI-gate above (item 2) is satisfied:
+
+   ```bash
+   git checkout <default-branch> && git merge --no-ff <branch>   # or per SUPER_MERGE_METHOD, e.g. --squash
+   git push   # only if a remote exists — a repo with no remote simply keeps the merge local
+   ```
 4. If `SUPER_GH_DISABLE_SANDBOX=true` (macOS hosts where `gh` needs keychain access to verify the
    TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped
    default), run `gh` normally. Do **not** add Anthropic/Claude attribution or `Co-Authored-By`

@@ -1,6 +1,7 @@
 ---
 name: init
 description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent, and add the loop-status gitignore entry. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
+license: all rights reserved
 ---
 
 # superagent:init — repo bootstrap
@@ -19,8 +20,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults —
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults —
 which is exactly the case Step 2 below fixes by creating one.
 
 ## Step 1 — Prerequisite checks
@@ -79,11 +80,13 @@ worked example from the originating repo sets it to `vault/network-compose`). Th
   `${CLAUDE_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`.
 - the directory exists but has no `root.md`: seed `root.md` from the same template.
   Writing a file that is currently absent is not an overwrite, so the intro's
-  never-overwrite invariant still holds. Leaving it unseeded would silently violate
-  `supergoal`'s precondition that the goal root already carries a `root.md`, and because
-  this case only re-checks "does the directory exist," a later re-run of init would never
-  heal it — seeding on every run when `root.md` is specifically missing is what makes
-  this case actually idempotent-and-self-healing rather than idempotent-and-stuck.
+  never-overwrite invariant still holds. `root.md` is not a precondition any skill
+  requires — it exists so the goal root has a human-maintained, navigable index of goals
+  and lessons from the moment it exists. Leaving it unseeded would silently leave that
+  index missing, and because this case only re-checks "does the directory exist," a later
+  re-run of init would never heal it — seeding on every run when `root.md` is specifically
+  missing is what makes this case actually idempotent-and-self-healing rather than
+  idempotent-and-stuck.
 - the directory exists and already has a `root.md`: touch nothing.
 
 Report which of the three happened in the summary table — `created` / `seeded root.md
@@ -92,17 +95,30 @@ into either of the other two rows.
 
 ## Step 4 — Gitignore
 
+Before appending anything in this step, ensure `<repo-root>/.gitignore` (if it already
+exists and is non-empty) ends with a newline — if its last byte is not `\n`, run
+`printf '\n' >> .gitignore` first, so an append below never fuses onto the file's last
+existing line.
+
 Resolve `SUPER_LOOP_STATUS_DIRNAME` per the resolution order above (shipped default
 `loop-status`). Append the line `<SUPER_GOAL_ROOT>/**/<SUPER_LOOP_STATUS_DIRNAME>/` to
 `<repo-root>/.gitignore` unless an identical line is already present (create
 `.gitignore` if absent). This is the exact pattern `superloop`'s L1 clause documents as
-gitignored local-only state (worked example: `vault/**/loop-status/`) — every loop-status
+gitignored local-only state (worked example from the originating repo: `vault/**/loop-status/`) — every loop-status
 file `superagent`/`superagent-external` write must never be tracked or swept into a
 docs-only PR commit.
+
+Also append the line `.env` to `<repo-root>/.gitignore` unless an identical line is
+already present (same idempotent check, same newline guard). External (unattended) mode
+directs `ANTHROPIC_API_KEY`/`GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
+Prerequisites), and that file must never be committed.
 
 ## Step 5 — Landing
 
 init only prepares files — it never commits. Tell the user what to commit
-(`.superenv`, the vault seed, `.gitignore`) and remind them to follow the repo's own
-change discipline: if `SUPER_PROTECTED_MAIN=true` (the shipped default), that means a
-feature branch + PR, same as every `superauthor`-driven skill's own A7 commit step.
+(`.superenv`, the vault seed, `.gitignore` — now covering both the loop-status pattern
+and `.env`) and remind them to follow the repo's own change discipline: if
+`SUPER_PROTECTED_MAIN=true` (the shipped default), that means a feature branch + PR, same
+as every `superauthor`-driven skill's own A7 commit step. `.env` itself (holding
+`ANTHROPIC_API_KEY`/`GH_TOKEN`) stays gitignored and is never committed — only the
+`.gitignore` entry that excludes it is.

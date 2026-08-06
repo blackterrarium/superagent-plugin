@@ -22,8 +22,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 Everything here runs on the **host that runs the loops** (the primary checkout holding
 the gitignored `<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating
@@ -35,7 +35,8 @@ repo: `SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks)
 ```
 primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 cd "$primary_root"
-SUPERAGENT_SCRIPTS=~/.claude/plugins/superagent/scripts   # adjust to this host's install
+SUPERAGENT_SCRIPTS="${CLAUDE_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
+# for cron/systemd use the absolute install path — see scripts/README.md
 ```
 
 Run every `$SUPERAGENT_SCRIPTS/*.sh` helper from `primary_root` (so each script's own
@@ -137,7 +138,8 @@ user before any stop / uninstall / purge.**
 - **Uninstall a DONE loop:** `$SUPERAGENT_SCRIPTS/uninstall-timer.sh <slug>` (add `--purge` to also drop
   `<slug>.env`) — confirm `--purge`.
 - **Re-arm a stopped loop:** `$SUPERAGENT_SCRIPTS/install-timer.sh <slug> <LOOP_FILE>`
-  (values from `<slug>.env`). No `bootstrap.sh` needed when the loop file still exists.
+  (re-pass `--interval`/`--timeout`/`--model` — `install-timer.sh` rewrites the env file and drop-in
+  from scratch). No `bootstrap.sh` needed when the loop file still exists.
 - **Tail output:** `journalctl --user -u superagent-tick@<slug>.service -f` or
   `tail -f /tmp/superagent-<loop-basename>.log`. Verbatim per-tick reports land here.
 

@@ -62,8 +62,8 @@ Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at poi
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
 `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' .superenv "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first). A repo with no `.superenv` runs on the shipped defaults.
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## Workflow
 
@@ -74,7 +74,7 @@ If `<GOAL>` is not provided → respond with exactly `I need a goal description`
 ### 2. Derive identifiers
 
 - **`<slug>`** — a concise, stable, descriptive kebab-case slug summarizing the goal (mirror the style of
-  existing goal folders, e.g. `graphgen-grammar-first-redesign`).
+  existing goal folders — worked example from the originating repo: `graphgen-grammar-first-redesign`).
 - **`<STAMP>`** — today's date plus the current UTC hour and minute (`date -u +%Y-%m-%d-%H_%M`), e.g.
   `2026-06-14-09_30`. This is the dated prefix for the goal folder and the dated files written into it.
 - **`<DATE>`** — today's date (`date +%Y-%m-%d`); used **only** for the git branch name (step 9).
