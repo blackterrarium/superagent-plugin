@@ -37,10 +37,14 @@ When these are absent, DO NOT pass them — default graceful drain, env kept.
 ## Steps
 
 1. **Resolve the repo root** (run from the primary checkout; if invoked from a
-   worktree, resolve `primary_root`):
-   `primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"`.
-   Also set `$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory —
-   see [scripts/README.md](../../scripts/README.md) for the convention.
+   worktree, resolve `primary_root`), and set `$SUPERAGENT_SCRIPTS` to this plugin's
+   installed `scripts/` directory — see [scripts/README.md](../../scripts/README.md)
+   for the convention:
+
+   ```
+   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   SUPERAGENT_SCRIPTS=~/.claude/plugins/superagent/scripts   # adjust to this host's install
+   ```
 2. **Invoke the stopper** with the parsed arguments, from `primary_root`:
 
    ```

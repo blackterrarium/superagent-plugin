@@ -27,10 +27,10 @@ repo-root `.superenv` file, (3) the plugin default
 
 - **`<PLAN.md>` — required.** The goal's **root** seed/master plan (the same file
   `superrun` traverses / `superplan` descends), living under this repo's goal-folder
-  root `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/master-plans/<seed>.md` (worked example from
-  the originating repo: `SUPER_GOAL_ROOT=vault`, giving
-  `vault/network-compose/<STAMP>-<slug>/master-plans/<seed>.md`). This is the only
-  compulsory argument.
+  root `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/master-plans/<seed>.md` (shipped default:
+  `SUPER_GOAL_ROOT=vault`, giving `vault/<STAMP>-<slug>/master-plans/<seed>.md`;
+  worked example from the originating repo, where
+  `SUPER_GOAL_ROOT=vault/network-compose`). This is the only compulsory argument.
 - **`--interval <systemd time>` — optional**, default `SUPER_TICK_INTERVAL` (default
   `30m`) (e.g. `5min`, `15min`).
 - (Also optional: `--timeout <secs>` per-tick cap, default **none/unlimited** so long
@@ -48,11 +48,15 @@ the flag — let `launch.sh` apply its defaults.
 ## Steps
 
 1. **Resolve the repo root** (run from the primary checkout; if invoked from a
-   worktree, resolve `primary_root`):
-   `primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"`.
-   Also set `$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory —
-   see [scripts/README.md](../../scripts/README.md) for the convention (adjust to
-   wherever the plugin is actually installed on this host).
+   worktree, resolve `primary_root`), and set `$SUPERAGENT_SCRIPTS` to this plugin's
+   installed `scripts/` directory — see [scripts/README.md](../../scripts/README.md)
+   for the convention (adjust to wherever the plugin is actually installed on this
+   host):
+
+   ```
+   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   SUPERAGENT_SCRIPTS=~/.claude/plugins/superagent/scripts   # adjust to this host's install
+   ```
 2. **Invoke the launcher** with the parsed arguments, from `primary_root`:
 
    ```
@@ -71,7 +75,14 @@ the flag — let `launch.sh` apply its defaults.
 
 ## Notes
 
-- **Prerequisites** (see [scripts/README.md](../../scripts/README.md)): the `claude`
+- **Prerequisites** (see [scripts/README.md](../../scripts/README.md)): **the
+  `superagent` plugin installed AND enabled for headless sessions in the target
+  repo** — the tick reads the skill file directly rather than invoking it by name,
+  but the loop's internal `superagent:superplan` / `superagent:superrun` dispatches
+  still go through the `Skill` tool, so the plugin must still be installed/enabled
+  for those to resolve; `launch.sh` does **not** preflight this (only the `claude`
+  binary and `gh` auth are fail-fast), so a missing/disabled plugin arms a timer
+  whose ticks then fail opaquely — confirm it before launching. Also: the `claude`
   CLI installed, `ANTHROPIC_API_KEY` and ideally `GH_TOKEN` in `.env`, and — for a
   headless server — user lingering (the installer enables it). If `launch.sh`
   reports a gh-auth or claude-binary failure, fix that and re-invoke; it armed

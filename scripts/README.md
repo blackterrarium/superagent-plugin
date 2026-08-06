@@ -58,14 +58,16 @@ right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPE
 
 ## Prerequisites
 
-- **The `superagent` plugin installed AND enabled for headless sessions in the target repo.** Every tick's
-  prompt invokes the loop skill by name (`superagent:superagent`, via the `Skill` tool) rather than reading
-  a `SKILL.md` path directly — `claude -p` only resolves that invocation if the plugin is installed and
-  enabled for the session it runs in. This wrapper does **not** probe for plugin presence (no live check);
-  if the plugin is missing or disabled, the tick fails opaquely (the skill invocation fails inside the CLI
-  child, not as a wrapper-level preflight error). The tick log header names this requirement as a hint —
-  check it first if a tick fails with no clear cause. Confirm the plugin is installed/enabled before
-  installing the timer.
+- **The `superagent` plugin installed AND enabled for headless sessions in the target repo.** Slash
+  commands and Skill-tool semantics for a disable-model-invocation skill are unverified in headless print
+  mode, so the tick's prompt `Read`s `${PLUGIN_ROOT}/skills/superagent/SKILL.md` directly (`PLUGIN_ROOT`
+  derived from the wrapper script's own location) rather than invoking the skill by name — but the loop's
+  own internal `superagent:superplan` / `superagent:superrun` dispatches still go through the `Skill` tool
+  once the session is running, so the plugin must still be installed and enabled for that to resolve. This
+  wrapper does **not** probe for plugin presence (no live check); if the plugin is missing or disabled,
+  those in-session dispatches fail opaquely deep inside the tick, not as a wrapper-level preflight error.
+  The tick log header names this requirement as a hint — check it first if a tick fails with no clear
+  cause. Confirm the plugin is installed/enabled before installing the timer.
 - The `claude` CLI installed. A systemd user
   service / cron runs with a minimal `PATH` that omits the common user bin dirs, so
   the wrapper prepends `~/.local/bin` and `/usr/local/bin` and **fails fast** if the binary is

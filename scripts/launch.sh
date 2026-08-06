@@ -58,7 +58,7 @@ esac
 
 # Goal folder = parent of the master-plans/ dir holding the plan (superloop L1).
 GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd)"
-LOOP_DIR="$GOAL_FOLDER/loop-status"
+LOOP_DIR="$GOAL_FOLDER/${SUPER_LOOP_STATUS_DIRNAME:-loop-status}"
 
 # Default slug = goal-folder basename with a leading YYYY-MM-DD-hh_mm- stamp stripped.
 if [[ -z "$SLUG" ]]; then
