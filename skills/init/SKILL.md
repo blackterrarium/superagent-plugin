@@ -25,8 +25,23 @@ which is exactly the case Step 2 below fixes by creating one.
 
 ## Step 1 — Prerequisite checks
 
-1. `git rev-parse --show-toplevel` succeeds — else ABORT: "init must run inside a git
-   repository."
+1. `git rev-parse --path-format=absolute --git-common-dir` succeeds — else ABORT: "init
+   must run inside a git repository." Derive `<repo-root>` as the `dirname` of that path
+   — the same `primary_root()` formula `skills/superloop/SKILL.md`'s L1 clause uses:
+   `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`. In the primary
+   checkout, `--git-dir` == `--git-common-dir` (both `.git`); in a linked worktree they
+   differ (`--git-dir` → `<primary>/.git/worktrees/<name>`, `--git-common-dir` →
+   `<primary>/.git`), so `dirname` of the common dir is the primary checkout root —
+   regardless of the primary's current branch. **Never** use `git rev-parse
+   --show-toplevel` for this: inside a linked worktree (e.g. one `EnterWorktree` created
+   for plan execution) it returns the *worktree* root, and init would bootstrap a
+   throwaway checkout instead of the primary repo every other superagent skill actually
+   reads `.superenv`/`SUPER_GOAL_ROOT` from. `cd` to `<repo-root>` (or prefix every
+   relative read in Steps 2-4 with it) before continuing — the `.superenv` resolver above
+   greps a bare `.superenv` relative to the current directory, so without this, invoking
+   init from a subdirectory (of either the primary checkout or a worktree) would silently
+   read the wrong file, or none, and fall through to plugin defaults instead of the
+   repo's actual config.
 2. The `superpowers` plugin is resolvable (its skills, e.g. `superpowers:writing-plans`,
    appear in the available-skills list). If not: WARN with install instructions
    (`/plugin marketplace add obra/superpowers-marketplace`, `/plugin install superpowers`)
@@ -58,12 +73,22 @@ falls through to the plugin default per the resolution order above.
 ## Step 3 — Vault
 
 Resolve `SUPER_GOAL_ROOT` per the resolution order above (shipped default `vault`; a
-worked example from the originating repo sets it to `vault/network-compose`). If
-`<repo-root>/<SUPER_GOAL_ROOT>` does not exist: create it and copy
-`${CLAUDE_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`. If the
-directory exists (with or without a `root.md`), touch nothing — `supergoal` creates goal
-folders under it and expects the root to already be in place, which is exactly what this
-step guarantees once.
+worked example from the originating repo sets it to `vault/network-compose`). Three cases:
+
+- `<repo-root>/<SUPER_GOAL_ROOT>` does not exist: create it and copy
+  `${CLAUDE_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`.
+- the directory exists but has no `root.md`: seed `root.md` from the same template.
+  Writing a file that is currently absent is not an overwrite, so the intro's
+  never-overwrite invariant still holds. Leaving it unseeded would silently violate
+  `supergoal`'s precondition that the goal root already carries a `root.md`, and because
+  this case only re-checks "does the directory exist," a later re-run of init would never
+  heal it — seeding on every run when `root.md` is specifically missing is what makes
+  this case actually idempotent-and-self-healing rather than idempotent-and-stuck.
+- the directory exists and already has a `root.md`: touch nothing.
+
+Report which of the three happened in the summary table — `created` / `seeded root.md
+into existing goal root` / `already present` — rather than collapsing the middle case
+into either of the other two rows.
 
 ## Step 4 — Gitignore
 
