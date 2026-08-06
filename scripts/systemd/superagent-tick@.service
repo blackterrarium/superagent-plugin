@@ -1,0 +1,21 @@
+[Unit]
+Description=Superagent external-loop tick (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Per-goal knobs: REPO, SUPERAGENT_SCRIPT_DIR, LOOP_FILE, TICK_TIMEOUT (written by
+# install-timer.sh).
+EnvironmentFile=%h/.config/superagent/%i.env
+# superagent-tick.sh lives in the plugin's own scripts/ dir, not in $REPO (the
+# target repo checkout) — SUPERAGENT_SCRIPT_DIR is recorded at install time since
+# $CLAUDE_PLUGIN_ROOT is not in this unit's environment. $REPO and
+# $SUPERAGENT_SCRIPT_DIR are expanded by bash from the service environment
+# (EnvironmentFile above); the script reads LOOP_FILE / TICK_TIMEOUT from the same
+# environment.
+ExecStart=/bin/bash -c 'exec "$SUPERAGENT_SCRIPT_DIR/superagent-tick.sh"'
+# No systemd wall-clock ceiling: ticks run to completion (CI-push ticks can far
+# exceed any fixed cap). The optional script-side `timeout` (TICK_TIMEOUT, unset
+# by default) is the ONLY cap; overlap is prevented by the L3 lock + oneshot type.
+TimeoutStartSec=infinity

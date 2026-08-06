@@ -1,0 +1,16 @@
+[Unit]
+Description=Superagent external-loop timer (%i)
+
+[Timer]
+# First tick shortly after boot/enable, then every OnUnitActiveSec. install-timer.sh
+# drops a per-instance override (superagent-tick@<slug>.timer.d/interval.conf) to
+# tune the interval per goal. A long-running tick is safe: the overlap lock (L3)
+# no-ops any fire that lands while a tick is still in flight.
+OnBootSec=2min
+OnUnitActiveSec=30min
+AccuracySec=1min
+Persistent=true
+Unit=superagent-tick@%i.service
+
+[Install]
+WantedBy=timers.target
