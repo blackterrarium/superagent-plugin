@@ -98,7 +98,7 @@ This block is the single, consolidated statement of where this repo's `.superenv
 skill's defaults. Carry it into every dispatch the skill's task loop makes:
 
 1. **Test evidence is keyed by `SUPER_TEST_EVIDENCE`.** If `SUPER_TEST_EVIDENCE=ci`: implementers
-   never run tests or builds locally — no `pytest`, no `./run.sh`, no build scripts. A task's test
+   never run tests or builds locally — no test runners, no build scripts. A task's test
    evidence is the CI push its plan step specifies: the run id and conclusion. The skill's TDD
    RED/GREEN local-output contract does not apply; reviewers judge the code plus the reported CI
    results and never execute anything themselves. If `SUPER_TEST_EVIDENCE=local` (the shipped
@@ -156,31 +156,48 @@ it just gets no benefit from parallel pickup. If the plan text stages pushes ser
 procedural gate under `SUPER_CI_RUNNERS > 1` (a leftover of single-runner-era authoring), queue them
 concurrently anyway and note the deviation in the Final Report.
 
-## Step 3a — Autonomous code-PR integration (REQUIRED — no interactive finishing)
+## Step 3a — Autonomous code-PR integration (keyed by `SUPER_SKIP_FINISHING_HANDOFF`)
 
-After all tasks are implemented and reviewed in the worktree, integrate the code PR with **no
-interactive prompt** and **no merge without green CI**:
+If `SUPER_SKIP_FINISHING_HANDOFF=true`, or the caller is unattended (a `superagent` loop), Step 3a
+owns integration end-to-end with no interactive prompt. If `false` and a human is driving,
+`superpowers:finishing-a-development-branch`'s menu may take over integration; Step 3a governs only
+when it does not.
+
+When Step 3a governs (per the keying above), integrate the code PR with **no interactive prompt**,
+merging only when the CI-green gate below — or its review-green fallback — is satisfied:
 
 1. The leaf plan's own task steps already pushed to CI with the flag `SUPER_CI_FLAG_TEMPLATE`
    specifies, if any (see Step 3). Ensure the feature branch is pushed — if `SUPER_BRANCH_STYLE=flat`
    (the shipped default), use a flat branch name with no slashes (a slashed name can miss CI's branch
    glob); if `SUPER_BRANCH_STYLE` is anything else, follow that style instead — and open the code PR
    with `gh pr create`.
-2. **CI-green gate — monitor-parked, never polled.** Collect the run id of **every** CI run this
-   leaf queued (`gh run list --branch <branch>` — one run per push; a sharded batch has several, see
-   **CI scheduling** in Step 3). Never wait with `gh run watch`, foreground sleeps, or backgrounded
-   re-poll loops — every poll iteration re-enters your context and a long lane (60–120 min) burns it
-   for nothing. Instead:
+2. **CI-green gate — monitor-parked, never polled — keyed by `SUPER_TEST_EVIDENCE` three ways:**
+   - **`SUPER_TEST_EVIDENCE=ci`:** collect the run id of **every** CI run this leaf queued (`gh run
+     list --branch <branch>` — one run per push; a sharded batch has several, see **CI scheduling**
+     in Step 3), then wait for all of them (wait mechanics below). If the plan expected a run and
+     `gh run list` finds none, that is **BLOCKED** — do not merge.
+   - **`SUPER_TEST_EVIDENCE=local`** (the shipped default) **and `gh run list --branch <branch>`
+     returns runs** — the repo has CI wired even though evidence is local: wait for those runs to be
+     green before merging (same wait mechanics as the `ci` branch).
+   - **`SUPER_TEST_EVIDENCE=local` and no runs exist:** CI evidence is not expected for this repo.
+     Skip the wait entirely and merge on review-green alone — the task reviews and final
+     whole-branch review already completed in Step 3 are the evidence. State this explicitly in the
+     Final Report (e.g. "no CI configured for this repo; merged on review-green").
+
+   When a wait is needed (either of the first two branches above), never wait with `gh run watch`,
+   foreground sleeps, or backgrounded re-poll loops — every poll iteration re-enters your context and
+   a long lane (60–120 min) burns it for nothing. Instead:
    - **Standalone (superrun is the top-level session's task):** arm **one `Monitor`**
      (`persistent: true`) whose check `curl`s
      `https://api.github.com/repos/<owner>/<repo>/actions/runs/<id>` for **each** pending run id
-     (auth: `TOK=$(gh auth token)` captured before arming; `gh` itself cannot run *inside* the
-     Monitor — it has no sandbox override and needs the keychain, while `curl` to `api.github.com`
-     works in-sandbox) and fires the first time **every** run reports `status: completed`, emitting
-     each run's `id: conclusion` pair. It MUST emit on **any** terminal state — success, failure,
-     cancelled, timed_out — never only on success (a success-only filter is silent through a crash,
-     and silence is indistinguishable from "still running"). Then **end the turn**; the harness
-     re-invokes you when the Monitor fires.
+     (auth: `TOK=$(gh auth token)` captured before arming). Prefer `curl` for polling inside a
+     Monitor — on hosts where `SUPER_GH_DISABLE_SANDBOX=true`, `gh` cannot run *inside* the Monitor
+     at all (it needs keychain access), so `curl` to `api.github.com` is the only option there; where
+     `SUPER_GH_DISABLE_SANDBOX=false`, `curl` is still preferred for consistency. Fire the Monitor the
+     first time **every** run reports `status: completed`, emitting each run's `id: conclusion` pair.
+     It MUST emit on **any** terminal state — success, failure, cancelled, timed_out — never only on
+     success (a success-only filter is silent through a crash, and silence is indistinguishable from
+     "still running"). Then **end the turn**; the harness re-invokes you when the Monitor fires.
    - **Dispatched as a subagent (e.g. by a `superagent` loop):** do NOT arm the wait yourself
      (a Monitor cannot resume a subagent whose turn has ended) and do NOT emit interim
      "still waiting" notifications. Return a **CI-PENDING report** (format below) as your final
@@ -198,15 +215,16 @@ interactive prompt** and **no merge without green CI**:
          **CI runs:** <every queued run id, comma-separated>
          **Remaining:** CI-green gate verdict (Step 3a) → superfinish closeout (Step 4) → worktree exit (Step 5)
 
-   On the terminal state (Monitor fired, or the supervisor resumed you):
-   - **ALL runs GREEN** → merge per `SUPER_MERGE_METHOD` (default `squash`) — e.g.
-     `gh pr merge --squash --delete-branch` for the shipped default (plain merge — **not** `--admin`
-     unless `SUPER_ADMIN_MERGE=true` permits it; see item 3) — then
+   On the terminal state (Monitor fired, or the supervisor resumed you) — or immediately, when no
+   wait was needed (`SUPER_TEST_EVIDENCE=local` with no runs found):
+   - **ALL runs GREEN, or no CI wait was needed** → merge per `SUPER_MERGE_METHOD` (default
+     `squash`) — e.g. `gh pr merge --squash --delete-branch` for the shipped default (plain merge —
+     **not** `--admin` unless `SUPER_ADMIN_MERGE=true` permits it; see item 3) — then
      `git checkout main && git pull --ff-only`.
-   - **ANY run RED / cancelled / timed_out, or no run found** → **do NOT merge.** Leave the PR open,
-     capture the failing run URL(s), and declare the step **BLOCKED** in the Final Report. (When a
-     `superagent` loop drives superrun, its escalation ladder decides what happens next; a human
-     caller sees the blocker plainly.)
+   - **ANY run RED / cancelled / timed_out, or `SUPER_TEST_EVIDENCE=ci` expected a run and found
+     none** → **do NOT merge.** Leave the PR open, capture the failing run URL(s), and declare the
+     step **BLOCKED** in the Final Report. (When a `superagent` loop drives superrun, its escalation
+     ladder decides what happens next; a human caller sees the blocker plainly.)
 3. **Merge per `SUPER_MERGE_METHOD` (default `squash`). Pass `gh pr merge --admin` only if
    `SUPER_ADMIN_MERGE=true` — otherwise never.** Reaching for `--admin` when the key is unset or
    `false` buys nothing on a repo whose branch protection doesn't require it, and reliably **trips
