@@ -1,0 +1,7 @@
+{
+  "name": "superagent-marketplace",
+  "owner": { "name": "Eugene Chai" },
+  "plugins": [
+    { "name": "superagent", "source": "./", "description": "Plan-tree + autonomy-loop skills with external driver" }
+  ]
+}
