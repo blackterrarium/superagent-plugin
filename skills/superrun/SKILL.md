@@ -227,7 +227,7 @@ governs whether to wait for CI **first**, in both branches; only the merge mecha
      default) merge per `SUPER_MERGE_METHOD` (default `squash`) — e.g.
      `gh pr merge --squash --delete-branch` (plain merge — **not** `--admin` unless
      `SUPER_ADMIN_MERGE=true` permits it; see item 3) — then
-     `git checkout <default-branch> && git pull --ff-only`. When `SUPER_PROTECTED_MAIN=false`,
+     `git -C "$primary_root" pull --ff-only`. When `SUPER_PROTECTED_MAIN=false`,
      integrate via item 3's direct-merge recipe instead — no PR, no `gh`.
    - **ANY run RED / cancelled / timed_out, or `SUPER_TEST_EVIDENCE=ci` expected a run and found
      none** → **do NOT merge.** Leave the PR open, capture the failing run URL(s), and declare the
