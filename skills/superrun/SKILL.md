@@ -223,10 +223,12 @@ governs whether to wait for CI **first**, in both branches; only the merge mecha
 
    On the terminal state (Monitor fired, or the supervisor resumed you) — or immediately, when no
    wait was needed (`SUPER_TEST_EVIDENCE=local` with no runs found):
-   - **ALL runs GREEN, or no CI wait was needed** → merge per `SUPER_MERGE_METHOD` (default
-     `squash`) — e.g. `gh pr merge --squash --delete-branch` for the shipped default (plain merge —
-     **not** `--admin` unless `SUPER_ADMIN_MERGE=true` permits it; see item 3) — then
-     `git checkout main && git pull --ff-only`.
+   - **ALL runs GREEN, or no CI wait was needed** → (`SUPER_PROTECTED_MAIN=true`, the shipped
+     default) merge per `SUPER_MERGE_METHOD` (default `squash`) — e.g.
+     `gh pr merge --squash --delete-branch` (plain merge — **not** `--admin` unless
+     `SUPER_ADMIN_MERGE=true` permits it; see item 3) — then
+     `git checkout <default-branch> && git pull --ff-only`. When `SUPER_PROTECTED_MAIN=false`,
+     integrate via item 3's direct-merge recipe instead — no PR, no `gh`.
    - **ANY run RED / cancelled / timed_out, or `SUPER_TEST_EVIDENCE=ci` expected a run and found
      none** → **do NOT merge.** Leave the PR open, capture the failing run URL(s), and declare the
      step **BLOCKED** in the Final Report. (When a `superagent` loop drives superrun, its escalation
@@ -243,11 +245,15 @@ governs whether to wait for CI **first**, in both branches; only the merge mecha
    `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` rather than re-running the merge.
 
    **If `SUPER_PROTECTED_MAIN=false`: no PR, no `gh` — merge the worktree branch into the default
-   branch directly and locally**, once the CI-gate above (item 2) is satisfied:
+   branch directly and locally, from the primary checkout** (the worktree stays on its feature
+   branch throughout — `git checkout <default-branch>` is invalid there, since Step 2's linked
+   worktree already has the default branch checked out at the primary), once the CI-gate above
+   (item 2) is satisfied:
 
    ```bash
-   git checkout <default-branch> && git merge --no-ff <branch>   # or per SUPER_MERGE_METHOD, e.g. --squash
-   git push   # only if a remote exists — a repo with no remote simply keeps the merge local
+   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   git -C "$primary_root" merge --no-ff <branch>   # or per SUPER_MERGE_METHOD, e.g. --squash
+   git -C "$primary_root" push   # only if a remote exists — a repo with no remote simply keeps the merge local
    ```
 4. If `SUPER_GH_DISABLE_SANDBOX=true` (macOS hosts where `gh` needs keychain access to verify the
    TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped

@@ -263,7 +263,7 @@ Notes:
   TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped
   default), run `gh` normally.
 
-**`SUPER_PROTECTED_MAIN=false` — shipped-default variants.** The skeleton above is the
+**`SUPER_PROTECTED_MAIN=false` — direct-commit variant.** The skeleton above is the
 `SUPER_PROTECTED_MAIN=true` (shipped-default) path. When `SUPER_PROTECTED_MAIN=false`, skip the
 branch/PR machinery entirely and commit straight to the default branch — no `gh` calls at all:
 

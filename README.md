@@ -42,6 +42,9 @@ gitignore entry. It is idempotent — safe to re-run — and never overwrites an
 prepares files, it never commits, so review and commit `.superenv` / the vault seed / `.gitignore`
 yourself (through a PR, if the repo protects its default branch).
 
+This repository is private and ships no LICENSE by choice; the skills' `all rights reserved`
+frontmatter is accurate — contact the owner before redistribution.
+
 ### First goal
 
 With the repo bootstrapped, start a new initiative with `superagent:supergoal` and a goal description:
