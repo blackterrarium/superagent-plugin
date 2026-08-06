@@ -478,8 +478,11 @@ divergent tree is a **safety stop**, not something to guess past or force.
 
 ## L6 — PR integration discipline
 
-An autonomy loop that opens and merges its own PRs MUST follow the same protected-`main` discipline the
-rest of the `super*` family uses. This clause is the autonomy-loop view of it; the **canonical merge
+An autonomy loop that opens and merges its own PRs MUST follow the same `SUPER_PROTECTED_MAIN`-gated
+discipline the rest of the `super*` family uses (if `SUPER_PROTECTED_MAIN=true`, the shipped default,
+the default branch is a protected branch and this MUST go through a feature branch and a PR; if
+`SUPER_PROTECTED_MAIN=false`, a direct commit to the default branch is permitted instead). This
+clause is the autonomy-loop view of it; the **canonical merge
 skeleton lives in `superauthor` clause A7** (merge per `SUPER_MERGE_METHOD`, default `squash`; pass
 `gh pr merge --admin` only if `SUPER_ADMIN_MERGE=true`, otherwise never — reaching for it unprompted on
 a repo whose branch protection doesn't require it trips the harness security classifier). Do not
@@ -489,7 +492,9 @@ duplicate that skeleton — apply A7's.
    names the lane). If CI is **red**, do **not** merge — route to the escalation ladder (L7) with the
    failure as the decision packet.
 2. **Merge via A7.** Apply `superauthor` A7's merge — per `SUPER_MERGE_METHOD` (default `squash`), never
-   `--admin` unless `SUPER_ADMIN_MERGE=true` permits it. `main` is protected; never direct-push.
+   `--admin` unless `SUPER_ADMIN_MERGE=true` permits it. If `SUPER_PROTECTED_MAIN=true` (the shipped
+   default), the default branch is protected; never direct-push. If `SUPER_PROTECTED_MAIN=false`, a
+   direct commit to the default branch is permitted instead.
    Commit/PR text carries no AI-attribution / `Co-Authored-By` trailers (repo policy).
 3. **Post-merge sync + be-sure (L5).** Immediately run `sync_main()` and the Be-sure verification so the
    primary checkout reflects the merge before the next tick reads the tree.
