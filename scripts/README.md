@@ -24,14 +24,15 @@ SUPERAGENT_SCRIPTS=~/.claude/plugins/cache/<marketplace-name>/superagent/<versio
 
 ## Two planes
 
-- **Driver plane** — a systemd user timer fires `superagent-tick.sh` on an interval; each run is one
+- **Driver plane** — an OS scheduler entry (systemd user timer on Linux, launchd LaunchAgent on macOS)
+  fires `superagent-tick.sh` on an interval; each run is one
   fresh, unattended tick that advances the state machine. This is the only thing that makes progress.
 - **Console plane** — an optional interactive CLI session a human uses to *monitor* the loop and to
   *answer* decisions the loop parks on. It can be started and stopped at any time with no effect on the
   driver, because all state is in the loop file.
 
 ```
-scheduler (systemd/cron) ──> superagent-tick.sh ──> claude -p (ONE --tick, fresh ctx)
+scheduler (systemd/launchd/cron) ──> superagent-tick.sh ──> claude -p (ONE --tick, fresh ctx)
                                                           │
                                                           ▼
                                    loop-status/<date>-<slug>.md  (local, gitignored)
@@ -71,23 +72,26 @@ right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPE
   those in-session dispatches fail opaquely deep inside the tick, not as a wrapper-level preflight error.
   The tick log header names this requirement as a hint — check it first if a tick fails with no clear
   cause. Confirm the plugin is installed/enabled before installing the timer.
-- The `claude` CLI installed. A systemd user
-  service / cron runs with a minimal `PATH` that omits the common user bin dirs, so
-  the wrapper prepends `~/.local/bin` and `/usr/local/bin` and **fails fast** if the binary is
+- The `claude` CLI installed. A systemd user service, launchd job, or cron runs with a minimal `PATH`
+  that omits the common user bin dirs, so the wrapper prepends `~/.local/bin`, `/opt/homebrew/bin`, and
+  `/usr/local/bin` and **fails fast** if the binary is
   still not found. If your `claude` lives elsewhere, add its directory to `PATH` in the scheduler env.
-- `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only).
-  The wrapper sources `.env`.
+- `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only; the wrapper
+  sources `.env`) — **or** a `claude` CLI already logged in (subscription/OAuth hosts): when no key is
+  set the tick logs a note and relies on the CLI's own stored login instead of aborting.
 - **`gh` authenticated in the tick.** `superplan`/`superrun` use `gh` for CI/PR operations
   (`gh pr create` / `gh run watch` / `gh pr merge --admin`). The CLI runs each tick in a tool sandbox
   that blocks `gh` from reading its own config/keyring, so `gh` authenticates only via **`GH_TOKEN` in
   the environment**. Put `GH_TOKEN=<token>` in `.env` (canonical, repo-policy path — the wrapper sources
   it and exports it so the CLI child inherits it). If it is absent, the wrapper falls back to the
-  `oauth_token` in `~/.config/gh/hosts.yml`; if `gh` still cannot authenticate, the tick **aborts loudly**
+  `oauth_token` in `~/.config/gh/hosts.yml`, then to `gh auth token` (hosts where gh stores the token
+  in the OS keyring, e.g. the macOS keychain); if `gh` still cannot authenticate, the tick **aborts loudly**
   (a failed preflight) rather than silently breaking every PR/CI step. Check current state any time with
   `$SUPERAGENT_SCRIPTS/status.sh` (the `gh auth:` line).
 - A goal **root** seed/master plan (`<PLAN.md>`) — the same file `superrun` traverses.
-- For a headless server: user lingering (so the timer runs without an active login) — `install-timer.sh`
-  runs `loginctl enable-linger $USER` for you.
+- For a headless server (Linux): user lingering (so the timer runs without an active login) —
+  `install-timer.sh` runs `loginctl enable-linger $USER` for you. macOS has no linger equivalent: a
+  LaunchAgent fires only while the user is logged in **and the Mac is awake** (see the launchd section).
 
 ## One-step launch (recommended)
 
@@ -111,14 +115,16 @@ manual bootstrap + install-timer flow below remains available if you want the st
 #    scheduler entry, runs the first tick, and prints a `LOOP_FILE=<abs path>` line.
 $SUPERAGENT_SCRIPTS/bootstrap.sh vault/<goal>/master-plans/<seed>.md
 
-# 2) Install + start the per-goal systemd user timer (paste the LOOP_FILE from step 1).
+# 2) Install + start the per-goal scheduler entry (paste the LOOP_FILE from step 1).
+#    Auto-detects the OS: systemd user timer on Linux, launchd LaunchAgent on macOS.
 $SUPERAGENT_SCRIPTS/install-timer.sh <goal-slug> <LOOP_FILE> --interval 30m
 
 # 3) Monitor (any of these; start/stop freely).
 $SUPERAGENT_SCRIPTS/console-watch.sh <LOOP_FILE>            # alerts on WAITING FOR INPUT / DONE
-journalctl --user -u superagent-tick@<goal-slug>.service -f # driver output (verbatim tick reports)
-tail -f /tmp/superagent-*.log                               # same, file log
-systemctl --user list-timers 'superagent-tick@<goal-slug>.timer'
+tail -f /tmp/superagent-*.log                               # tick body, all schedulers
+journalctl --user -u superagent-tick@<goal-slug>.service -f # Linux: service lifecycle + preflight errors
+systemctl --user list-timers 'superagent-tick@<goal-slug>.timer'   # Linux
+launchctl print gui/$(id -u)/com.superagent.tick.<goal-slug>       # macOS
 
 # 4) Stop on DONE (or to pause).
 $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to also drop the env file
@@ -138,8 +144,12 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `bootstrap.sh <PLAN.md>` — one-time `--driver=external` bootstrap; prints the `LOOP_FILE=` path.
 - `systemd/superagent-tick@.service` / `systemd/superagent-tick@.timer` — templated user units
   (instance `%i` = goal slug); read `~/.config/superagent/<slug>.env`.
+- `launchd/com.superagent.tick.plist.template` — the macOS equivalent; `install-timer.sh` renders it
+  per goal (launchd has no template units) into `~/Library/LaunchAgents/com.superagent.tick.<slug>.plist`,
+  sourcing the same `~/.config/superagent/<slug>.env`.
 - `install-timer.sh <goal-slug> <LOOP_FILE> [--interval ..] [--timeout ..] [--output stream|text] [--model <slug>]`
-  — writes the per-goal env file, installs the units, enables lingering, starts the timer.
+  — writes the per-goal env file, then arms the OS-appropriate scheduler entry: on Linux installs the
+  units, enables lingering, starts the timer; on macOS renders + bootstraps the LaunchAgent.
 - `uninstall-timer.sh <goal-slug> [--purge]` — the external `stop_driver()` (by slug).
 - `stop.sh <PLAN.md> [--hard] [--purge] [--slug ..] [--dry-run]` — one-step stopper by master plan (what
   the `superagent-stop` skill invokes): finds the installed loop from the plan, drains the timer
@@ -223,6 +233,38 @@ write, commit, and merge on its own, but it means the repo norm "seek permission
 deletes host files" cannot be honored by an interactive prompt in driver mode. Bound the blast radius
 with the CLI's sandbox / permission deny-lists rather than relying on a
 human gate.
+
+## launchd (macOS)
+
+On Darwin every lifecycle script auto-dispatches to launchd — same commands, same flags, same
+`~/.config/superagent/<slug>.env` registry (which is what lets `stop.sh`/`status.sh` find the loop; a
+hand-rolled plist that skips the env file is invisible to them). Per goal, `install-timer.sh` renders
+`launchd/com.superagent.tick.plist.template` into
+`~/Library/LaunchAgents/com.superagent.tick.<slug>.plist` and loads it with
+`launchctl bootstrap gui/$(id -u)`.
+
+Differences from the systemd driver worth knowing:
+
+- **One job is both timer and service.** systemd separates the `.timer` (schedule) from the `.service`
+  (running tick); launchd has a single job with a `StartInterval`. Consequences: a plist change needs a
+  `bootout` + `bootstrap` reload, which would kill a tick in flight — so `install-timer.sh` refuses to
+  reload while a tick is running, and `uninstall-timer.sh` (the graceful drain) **waits** for an
+  in-flight tick to finish before unloading (Ctrl-C is safe; or halt the tick first with
+  `stop.sh --hard` / `force-stop.sh`).
+- **Halting a tick**: `stop.sh --hard` / `force-stop.sh` use `launchctl kill SIGTERM`; launchd then
+  reaps the remaining process group (the claude child included) — the analog of systemd's cgroup stop.
+- **Logged-in + awake only.** There is no `enable-linger` equivalent: a LaunchAgent fires only while
+  the user has an active GUI login and the Mac is awake. For an always-on loop host keep the Mac awake
+  (`caffeinate -s`, or Energy Saver/`pmset` settings). `StartInterval` fires once on wake if the
+  interval elapsed during sleep, but there is no `Persistent=true`-style catch-up across reboots.
+- **Interval fires on a fixed clock** (every N seconds since load), not N-after-last-finish like
+  `OnUnitActiveSec`. Harmless: the L3 lock no-ops any fire that lands while a tick is in flight.
+- **No next-fire timestamp.** `status.sh` shows the configured interval (`every 600s`) instead of an
+  absolute next-fire time.
+- **Logs**: the tick body streams to `/tmp/superagent-<loop-basename>.log` exactly as on Linux; the
+  journalctl analog (preflight/loader errors) is `/tmp/superagent-launchd-<slug>.log`, and
+  `launchctl print gui/$(id -u)/com.superagent.tick.<slug>` shows job state (`state = running` while a
+  tick executes).
 
 ## cron fallback (instead of systemd)
 

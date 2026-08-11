@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- macOS equivalent of systemd/superagent-tick@.{service,timer}: launchd has
+       no template units, so install-timer.sh renders this per goal, substituting
+       @SLUG@ / @INTERVAL_SECS@ / @ENV_FILE@. One job is both timer and service:
+       StartInterval fires the tick, and launchd will not start a second instance
+       while one is still running; the superloop L3 lock is the backstop.
+
+       launchd expands nothing in ProgramArguments, so /bin/bash -c sources the
+       same per-goal env file the systemd unit reads via EnvironmentFile= and
+       exec's the tick from $SUPERAGENT_SCRIPT_DIR recorded there. PATH is the
+       minimal launchd default; the tick's own preflight prepends the user bin
+       dirs (~/.local/bin, /opt/homebrew/bin, /usr/local/bin).
+
+       AbandonProcessGroup is deliberately left at its default (false): when the
+       tick's main process exits or is signalled, launchd reaps the remaining
+       process group — the claude child included. That is the launchd analog of
+       the systemd cgroup reaping stop.sh --hard / force-stop.sh rely on. -->
+  <key>Label</key>
+  <string>com.superagent.tick.@SLUG@</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>set -a; . "@ENV_FILE@"; set +a; exec "$SUPERAGENT_SCRIPT_DIR/superagent-tick.sh"</string>
+  </array>
+
+  <key>StartInterval</key>
+  <integer>@INTERVAL_SECS@</integer>
+
+  <!-- First tick is kicked explicitly (launchctl kickstart) by launch.sh /
+       install-timer.sh, not on load — mirrors the systemd OnBootSec+enable flow
+       without a surprise tick at every login. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- Job-level stdout/stderr: preflight errors that occur BEFORE the tick's own
+       redirection into LOG_FILE (the journalctl analog). The tick body streams to
+       /tmp/superagent-<loop-basename>.log as on every other scheduler. -->
+  <key>StandardOutPath</key>
+  <string>/tmp/superagent-launchd-@SLUG@.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/superagent-launchd-@SLUG@.log</string>
+</dict>
+</plist>

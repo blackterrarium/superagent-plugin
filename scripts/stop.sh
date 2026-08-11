@@ -20,6 +20,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 [[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
+# shellcheck source=_common.sh
+. "$SCRIPT_DIR/_common.sh"
 
 usage() { echo "usage: stop.sh <PLAN.md> [--hard] [--purge] [--slug <goal-slug>] [--dry-run]" >&2; exit 2; }
 
@@ -65,9 +67,21 @@ if [[ -z "$SLUG" ]]; then
 fi
 
 have_env=0; [[ -f "$CONF_DIR/$SLUG.env" ]] && have_env=1
-timer_enabled="$(systemctl --user is-enabled "superagent-tick@$SLUG.timer" 2>/dev/null || true)"
-timer_active="$(systemctl --user is-active "superagent-tick@$SLUG.timer" 2>/dev/null || true)"
-tick_active="$(systemctl --user is-active "superagent-tick@$SLUG.service" 2>/dev/null || true)"
+SCHEDULER="$(superagent_scheduler)"
+if [[ "$SCHEDULER" == launchd ]]; then
+  # One launchd job is both timer and service: an installed plist ~ enabled,
+  # loaded (any state) ~ timer active, state == running ~ tick in flight. These
+  # MUST be probed for real here — treating a missing scheduler as "not installed"
+  # is exactly the false-negative that lets a loop keep firing after a "stop".
+  ld_state="$(superagent_launchd_state "$SLUG")"
+  timer_enabled="$([[ -f "$(superagent_launchd_plist "$SLUG")" ]] && echo enabled || true)"
+  timer_active="$([[ -n "$ld_state" ]] && echo active || true)"
+  tick_active="$([[ "$ld_state" == running ]] && echo active || true)"
+else
+  timer_enabled="$(systemctl --user is-enabled "superagent-tick@$SLUG.timer" 2>/dev/null || true)"
+  timer_active="$(systemctl --user is-active "superagent-tick@$SLUG.timer" 2>/dev/null || true)"
+  tick_active="$(systemctl --user is-active "superagent-tick@$SLUG.service" 2>/dev/null || true)"
+fi
 
 if [[ $have_env -eq 0 && "$timer_active" != "active" && "$timer_enabled" != "enabled" ]]; then
   echo "No superagent loop found for slug '$SLUG' (plan: $PLAN_REL). Nothing to stop."
@@ -87,8 +101,17 @@ if [[ "$DRY" == 1 ]]; then
 fi
 
 if [[ "$HARD" == 1 && "$tick_active" == "active" ]]; then
-  echo "Hard stop: halting in-flight tick (superagent-tick@$SLUG.service)…"
-  systemctl --user stop "superagent-tick@$SLUG.service" 2>/dev/null || true
+  if [[ "$SCHEDULER" == launchd ]]; then
+    # SIGTERM the job's main process; launchd then reaps the remaining process
+    # group (claude child included) — the analog of systemd's cgroup stop. Like
+    # the systemd path, this can orphan the L3 lock; force-stop.sh is the
+    # lock-reaping recovery if a relaunch shouldn't wait out the steal window.
+    echo "Hard stop: halting in-flight tick ($(superagent_launchd_label "$SLUG"))…"
+    launchctl kill SIGTERM "$(superagent_launchd_domain)/$(superagent_launchd_label "$SLUG")" 2>/dev/null || true
+  else
+    echo "Hard stop: halting in-flight tick (superagent-tick@$SLUG.service)…"
+    systemctl --user stop "superagent-tick@$SLUG.service" 2>/dev/null || true
+  fi
 fi
 
 if [[ "$PURGE" == 1 ]]; then

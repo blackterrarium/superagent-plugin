@@ -1,6 +1,6 @@
 ---
 name: superagent-external
-description: Use to launch a superagent EXTERNAL (unattended) loop for a goal in one step — given only the goal's root master plan (PLAN.md), it prepares the loop-status file and arms the per-goal systemd user timer so the loop runs in the background with no separate console. Optional interval; defaults are used when omitted.
+description: Use to launch a superagent EXTERNAL (unattended) loop for a goal in one step — given only the goal's root master plan (PLAN.md), it prepares the loop-status file and arms the per-goal scheduler entry (systemd user timer on Linux, launchd LaunchAgent on macOS) so the loop runs in the background with no separate console. Optional interval; defaults are used when omitted.
 argument-hint: "<PLAN.md> [--interval 30min]"
 license: all rights reserved
 related skills: superagent, superloop, superagent-monitor
@@ -10,7 +10,8 @@ related skills: superagent, superloop, superagent-monitor
 
 One-step launcher for an unattended superagent loop. It wraps the deterministic
 `${CLAUDE_PLUGIN_ROOT}/scripts/launch.sh`, which prepares the loop-status file and arms the
-per-goal **systemd user timer** — so the loop runs in the background driven by the
+per-goal **scheduler entry** (systemd user timer on Linux, launchd LaunchAgent on macOS —
+auto-detected) — so the loop runs in the background driven by the
 scheduler, not by a console you have to keep open. For monitoring/answering/stopping
 afterward, use the `superagent:superagent-monitor` skill.
 
@@ -35,7 +36,7 @@ repo-root `.superenv` file, (3) the plugin default
   `30m`) (e.g. `5min`, `15min`).
 - (Also optional: `--timeout <secs>` per-tick cap, default **none/unlimited** so long
   CI-push ticks are never killed; `--slug <name>`
-  to override the derived systemd instance label; `--output stream|text`, default
+  to override the derived scheduler instance label; `--output stream|text`, default
   `stream` — live incremental console output in the per-tick log, or final-only;
   `--model <slug>` — the tick model, always passed explicitly so it is used
   regardless of the CLI's default. Resolution order: `TICK_MODEL` env var (if set) >

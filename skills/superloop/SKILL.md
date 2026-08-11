@@ -303,7 +303,8 @@ interval, each in a **fresh session = clean context**.
   ${PLUGIN_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE},
   in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the
   user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill.
-  Then stop.`): the `superagent-tick.sh` wrapper, a per-goal systemd user timer, and
+  Then stop.`): the `superagent-tick.sh` wrapper, a per-goal scheduler entry (systemd user
+  timer on Linux, launchd LaunchAgent on macOS — auto-detected by the scripts), and
   `bootstrap.sh` / `install-timer.sh` / `uninstall-timer.sh` — see [scripts/README.md](../../scripts/README.md),
   which documents the `SUPERAGENT_SCRIPTS` convention runnable examples use to locate this plugin's
   installed `scripts/` directory (`${CLAUDE_PLUGIN_ROOT}` is only defined inside a live tool-execution

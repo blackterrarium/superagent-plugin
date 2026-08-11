@@ -9,7 +9,8 @@ related skills: superagent, superloop
 # Superagent monitor
 
 The **console / control plane** for superagent external loops (the driver plane is this
-plugin's `scripts/` directory + the systemd user timer — see
+plugin's `scripts/` directory + the per-goal scheduler entry, a systemd user timer on
+Linux or a launchd LaunchAgent on macOS — see
 [scripts/README.md](../../scripts/README.md)). This skill is read-first and
 start/stop-independent of the driver: it reads the same gitignored loop-status files the
 drivers own and never blocks their ticks. It is **multi-instance by default** — the

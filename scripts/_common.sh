@@ -14,12 +14,18 @@
 #   2. GITHUB_TOKEN
 #   3. the oauth_token in gh's config file (fallback for hosts where gh config is
 #      readable by the wrapper but not by the sandboxed tick)
+#   4. `gh auth token` (hosts where gh stores the token in the OS keyring — e.g.
+#      the macOS keychain — which the wrapper context can read but hosts.yml
+#      doesn't contain; the sandboxed tick child still can't, hence the export)
 _superagent_load_gh_token() {
   if [[ -n "${GH_TOKEN:-}" ]]; then return 0; fi
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then export GH_TOKEN="$GITHUB_TOKEN"; return 0; fi
   local cfg="${GH_CONFIG_DIR:-$HOME/.config/gh}/hosts.yml" tok=""
   if [[ -f "$cfg" ]]; then
     tok="$(sed -n 's/^[[:space:]]*oauth_token:[[:space:]]*//p' "$cfg" | head -1)"
+  fi
+  if [[ -z "$tok" ]] && command -v gh >/dev/null 2>&1; then
+    tok="$(gh auth token 2>/dev/null || true)"
   fi
   [[ -n "$tok" ]] && export GH_TOKEN="$tok"
   return 0
@@ -41,12 +47,14 @@ ensure_gh_auth() {
   return 0
 }
 
-# Ensure the claude binary is findable. A systemd user service (and cron) runs
-# with a minimal PATH that does NOT include the common user bin dirs, so a bare
-# `claude` invocation fails with exit 127 ("No such file or directory"). Prepend
-# the common user bin dirs so the CLI is found under any scheduler.
+# Ensure the claude binary is findable. A systemd user service, launchd job, and
+# cron all run with a minimal PATH that does NOT include the common user bin dirs,
+# so a bare `claude` invocation fails with exit 127 ("No such file or directory").
+# Prepend the common user bin dirs (incl. /opt/homebrew/bin for Apple Silicon
+# Homebrew, where gh and claude commonly live) so the CLI is found under any
+# scheduler.
 _superagent_augment_path() {
-  local extra="$HOME/.local/bin:/usr/local/bin"
+  local extra="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin"
   case ":$PATH:" in
     *":$HOME/.local/bin:"*) ;;               # already present
     *) export PATH="$extra:$PATH" ;;
@@ -76,6 +84,49 @@ gh_auth_state() {
     echo "ok${acct:+:$acct}"
   else
     echo "unauth"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Scheduler dispatch — systemd user timers on Linux, launchd LaunchAgents on
+# macOS. Every lifecycle script (install/uninstall/launch/stop/force-stop/status)
+# branches on superagent_scheduler(); the tick script itself is scheduler-agnostic.
+# ---------------------------------------------------------------------------
+
+superagent_scheduler() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then echo launchd; else echo systemd; fi
+}
+
+superagent_launchd_domain() { echo "gui/$(id -u)"; }
+superagent_launchd_label()  { echo "com.superagent.tick.${1:?slug}"; }
+superagent_launchd_plist()  { echo "$HOME/Library/LaunchAgents/com.superagent.tick.${1:?slug}.plist"; }
+
+# Job state as launchd reports it: "running" while a tick process is executing,
+# another value (e.g. "waiting") while loaded but idle, empty when not loaded.
+# This is the launchd analog of systemctl is-active on BOTH units: non-empty ~
+# timer active (job loaded), == running ~ service active (tick in flight).
+superagent_launchd_state() {
+  # launchctl exits 113 for a not-loaded job — swallow it inside the pipeline so
+  # callers under `set -euo pipefail` see an empty string, not a fatal rc.
+  { launchctl print "$(superagent_launchd_domain)/$(superagent_launchd_label "${1:?slug}")" 2>/dev/null || true; } \
+    | sed -n 's/^[[:space:]]*state = //p' | head -1
+}
+
+# superagent_interval_secs <span> — systemd-style span (600, 90s, 30m, 15min, 2h)
+# -> integer seconds, for launchd's StartInterval (which takes seconds only).
+superagent_interval_secs() {
+  local v="${1:?interval}" n unit
+  if [[ "$v" =~ ^([0-9]+)[[:space:]]*(s|sec|seconds?|m|min|minutes?|h|hr|hours?|d|days?)?$ ]]; then
+    n="${BASH_REMATCH[1]}"; unit="${BASH_REMATCH[2]:-s}"
+    case "$unit" in
+      s|sec|second|seconds) echo "$n" ;;
+      m|min|minute|minutes) echo $((n * 60)) ;;
+      h|hr|hour|hours)      echo $((n * 3600)) ;;
+      d|day|days)           echo $((n * 86400)) ;;
+    esac
+  else
+    echo "superagent: cannot parse interval '$v' (want e.g. 600, 90s, 30m, 15min, 2h)" >&2
+    return 1
   fi
 }
 

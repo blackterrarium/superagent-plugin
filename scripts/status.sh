@@ -52,15 +52,31 @@ _collect() {
     [[ "$status" == "WAITING FOR INPUT" ]] && pending=1
     [[ "$status" == "DONE" ]] && done_=1
   fi
-  timer_active="$(systemctl --user is-active "superagent-tick@$slug.timer" 2>/dev/null || true)"
-  tick_running="$(systemctl --user is-active "superagent-tick@$slug.service" 2>/dev/null || true)"
+  if [[ "$(superagent_scheduler)" == launchd ]]; then
+    # One launchd job is both timer and service: loaded (any state) ~ timer
+    # active; state == running ~ tick in flight.
+    local ld_state; ld_state="$(superagent_launchd_state "$slug")"
+    timer_active="$([[ -n "$ld_state" ]] && echo active || echo inactive)"
+    tick_running="$([[ "$ld_state" == running ]] && echo active || echo inactive)"
+    # launchd exposes no next-fire timestamp; report the configured interval.
+    next_fire="$({ launchctl print "$(superagent_launchd_domain)/$(superagent_launchd_label "$slug")" 2>/dev/null || true; } \
+      | sed -n 's/.*run interval = \([0-9]*\) seconds.*/every \1s/p' | head -1)"
+    [[ -z "$next_fire" ]] && next_fire="-"
+  else
+    timer_active="$(systemctl --user is-active "superagent-tick@$slug.timer" 2>/dev/null || true)"
+    tick_running="$(systemctl --user is-active "superagent-tick@$slug.service" 2>/dev/null || true)"
+    next_fire="$(systemctl --user show -p NextElapseUSecRealtime --value "superagent-tick@$slug.timer" 2>/dev/null || true)"
+    [[ -z "$next_fire" || "$next_fire" == "0" ]] && next_fire="-"
+  fi
   lock_held=0
   if [[ -n "$LOOP_FILE" ]]; then
     local d b; d="$(dirname "$LOOP_FILE")"; b="$(basename "$LOOP_FILE")"
     [[ -d "$d/.$b.lockd" ]] && lock_held=1
   fi
-  next_fire="$(systemctl --user show -p NextElapseUSecRealtime --value "superagent-tick@$slug.timer" 2>/dev/null || true)"
-  [[ -z "$next_fire" || "$next_fire" == "0" ]] && next_fire="-"
+  # Explicit success: under set -e a trailing `[[ ... ]] && ...` guard that
+  # evaluates false would otherwise become the function's (failing) return value
+  # and silently kill the whole script.
+  return 0
 }
 
 # Slug list.
@@ -115,7 +131,7 @@ if [[ -n "$ONE" ]]; then
   if [[ $exists == 1 ]]; then
     echo
     echo "=== last iteration-log lines ==="
-    awk '/^## Iteration log/{f=1;next} f' "$LOOP_FILE" | grep -v '^[[:space:]]*$' | tail -5
+    awk '/^## Iteration log/{f=1;next} f' "$LOOP_FILE" | grep -v '^[[:space:]]*$' | tail -5 || true
   fi
   log="/tmp/superagent-$(basename "${LOOP_FILE:-x}" .md).log"
   if [[ -f "$log" ]]; then
