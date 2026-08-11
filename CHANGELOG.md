@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+`SUPER_MODEL_*` keys now accept full model IDs (`claude-<family>-<version>`, e.g. `claude-fable-5`;
+no date stamp needed) alongside the tier names and `inherit`. The Agent tool's `model:` parameter is
+tier-enum-only (verified empirically on this build — a full ID fails schema validation), so for the
+nine subagent role keys the pin rides a per-role agent definition (`.claude/agents/super-<role>.md`,
+`model:` frontmatter — verified to accept undated full IDs via a headless smoke test) that a new
+`superagent:init` Step 3 generates, refreshes, and removes as derived artifacts. Dispatch rules
+updated in `superagent` (canonical **Model resolution** block under Subagent dispatch), `superrun`
+(SDD model policy), and `superloop` (L7 panel). `SUPER_MODEL_SUPERVISOR` needs no definition — the
+tick already passes it verbatim to `claude --model`.
+
 ## 0.2.0 — 2026-08-11
 
 launchd (macOS) support for the external driver: every lifecycle script auto-dispatches by OS

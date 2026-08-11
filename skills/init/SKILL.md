@@ -38,7 +38,7 @@ which is exactly the case Step 2 below fixes by creating one.
    for plan execution) it returns the *worktree* root, and init would bootstrap a
    throwaway checkout instead of the primary repo every other superagent skill actually
    reads `.superenv`/`SUPER_GOAL_ROOT` from. `cd` to `<repo-root>` (or prefix every
-   relative read in Steps 2-4 with it) before continuing — the `.superenv` resolver above
+   relative read in Steps 2-5 with it) before continuing — the `.superenv` resolver above
    greps a bare `.superenv` relative to the current directory, so without this, invoking
    init from a subdirectory (of either the primary checkout or a worktree) would silently
    read the wrong file, or none, and fall through to plugin defaults instead of the
@@ -71,7 +71,52 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-## Step 3 — Vault
+## Step 3 — Role agents (full model IDs only)
+
+Nine `SUPER_MODEL_*` role keys dispatch through the Agent tool — all but
+`SUPER_MODEL_SUPERVISOR`, which the tick passes straight to `claude --model`. The
+Agent tool's `model:` parameter accepts only tier names, so a role whose resolved
+value is a **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) is pinned
+via a generated per-role agent definition instead — the definition's `model:`
+frontmatter accepts full IDs.
+
+Resolve each key below per the resolution order above:
+
+| Key | Generated definition |
+|---|---|
+| SUPER_MODEL_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_EXECUTOR | `.claude/agents/super-executor.md` |
+| SUPER_MODEL_PANEL | `.claude/agents/super-panel.md` |
+| SUPER_MODEL_IMPLEMENTER | `.claude/agents/super-implementer.md` |
+| SUPER_MODEL_FIX_APPLIER | `.claude/agents/super-fix-applier.md` |
+| SUPER_MODEL_TASK_REVIEWER | `.claude/agents/super-task-reviewer.md` |
+| SUPER_MODEL_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
+| SUPER_MODEL_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
+| SUPER_MODEL_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+
+- **Value is a full model ID:** render
+  `${CLAUDE_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
+  `.claude/agents/` if needed), substituting `<role>` (the path's `super-` suffix,
+  e.g. `planner`), `<KEY>`, and `<model-id>`. These files are **derived artifacts
+  owned by init** — the `generated-by: superagent:init` marker line says so — and
+  rewriting one whose model drifted from `.superenv` is the point of this step, not
+  an overwrite violation. Never touch a file at these paths that lacks the marker:
+  report it as `conflict` and leave it.
+- **Value is a tier name or `inherit`, but the listed path exists with the marker:**
+  delete it (a stale derived artifact) and report `removed (stale)`.
+- **Value is a tier name or `inherit`, no file present:** nothing to do.
+
+Agent definitions load at session start, so files written here take effect from the
+next tick/session, not the current one. Report per-key results (`generated` /
+`regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
+row.
+
+Note: permission layers commonly treat `.claude/` as protected — in a headless or
+auto-accept session the write may be auto-denied even when other edits sail through.
+init is an attended bootstrap step; if the write prompts, it needs a human approval,
+and if it is denied, report the role as blocked rather than retrying.
+
+## Step 4 — Vault
 
 Resolve `SUPER_GOAL_ROOT` per the resolution order above (shipped default `vault`; a
 worked example from the originating repo sets it to `vault/network-compose`). Three cases:
@@ -93,7 +138,7 @@ Report which of the three happened in the summary table — `created` / `seeded 
 into existing goal root` / `already present` — rather than collapsing the middle case
 into either of the other two rows.
 
-## Step 4 — Gitignore
+## Step 5 — Gitignore
 
 Before appending anything in this step, ensure `<repo-root>/.gitignore` (if it already
 exists and is non-empty) ends with a newline — if its last byte is not `\n`, run
@@ -113,10 +158,11 @@ already present (same idempotent check, same newline guard). External (unattende
 directs `ANTHROPIC_API_KEY`/`GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
 Prerequisites), and that file must never be committed.
 
-## Step 5 — Landing
+## Step 6 — Landing
 
 init only prepares files — it never commits. Tell the user what to commit
-(`.superenv`, the vault seed, `.gitignore` — now covering both the loop-status pattern
+(`.superenv`, the vault seed, any generated `.claude/agents/super-*.md` role
+definitions, `.gitignore` — now covering both the loop-status pattern
 and `.env`) and remind them to follow the repo's own change discipline: if
 `SUPER_PROTECTED_MAIN=true` (the shipped default), that means a feature branch + PR, same
 as every `superauthor`-driven skill's own A7 commit step. `.env` itself (holding
