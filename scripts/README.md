@@ -47,8 +47,10 @@ CLI's own configured default. Resolution order: `TICK_MODEL` env var (if set) > 
 (from the `.superenv` layer below) > `opus`. A headless tick has no session to inherit from, so a
 `SUPER_MODEL_SUPERVISOR` value of `inherit` also resolves to `opus`.
 Override with `--model <slug>` on `launch.sh` / `install-timer.sh`
-(stored per goal as `TICK_MODEL`) or the `TICK_MODEL` env var. The header line in the tick log records the
-model in use (`model=...`).
+(stored per goal as `TICK_MODEL`) or the `TICK_MODEL` env var. The value passes verbatim to
+`claude --model`, so a tier name (`opus`) and a full model ID (`claude-fable-5`) both work — no
+generated agent definition is involved at this layer, unlike the subagent role keys. The header
+line in the tick log records the model in use (`model=...`).
 
 ### `.superenv` layer
 

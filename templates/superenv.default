@@ -1,7 +1,11 @@
 # .superenv — superagent plugin defaults
 # Precedence: env var > repo-root .superenv > this plugin default.
-# Model values are Claude Code Agent-tool tier names: sonnet | opus | haiku | inherit.
-# "inherit" = omit the model override; the subagent runs on the session model.
+# Model values: an Agent-tool tier name (sonnet | opus | haiku | fable), "inherit",
+# or a full model ID (claude-<family>-<version>, e.g. claude-fable-5 — no date stamp
+# needed). "inherit" = omit the model override; the subagent runs on the session model.
+# A full ID on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent
+# definition in .claude/agents/ — re-run superagent:init after setting one.
+# (SUPER_MODEL_SUPERVISOR goes straight to `claude --model`, which takes any form.)
 
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=inherit          # the superagent tick itself (headless tick: opus)

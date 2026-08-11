@@ -149,6 +149,18 @@ tools — and `run_in_background: false`; see **Synchronous dispatch** below). I
    long CI returns a **CI-PENDING report** instead and stays resumable — that is a valid yield, not a
    failure; see **CI wait — monitor-parked**.)
 
+**Model resolution — every heavy-skill dispatch site passes a model per its `.superenv` role key**
+(`SUPER_MODEL_PLANNER` for `superplan`, `SUPER_MODEL_EXECUTOR` for `superrun` — including the
+ci-resume's fresh subagent and escalation-ladder retries):
+
+- `inherit` → omit the `model:` parameter (the subagent runs on the session model).
+- A tier name (`sonnet` | `opus` | `haiku` | `fable`) → pass it as `model:`.
+- A **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) → the Agent tool's `model:`
+  parameter is tier-enum-only and rejects it; instead dispatch with `subagent_type: super-planner` /
+  `super-executor` — the per-role agent definition `superagent:init` generates in `.claude/agents/`,
+  whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
+  that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
+
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and
 invites `TaskOutput`/`TaskList` status checks while the work runs — for a long `superplan`/`superrun`
@@ -226,9 +238,8 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    path), `SendMessage` it **once**: "CI run(s) <ids> terminal: <id: conclusion, …>. Finish the leaf
    now — Step 3a terminal-state branch, then closeout; return your Final Report." If it is not
    reachable (external fresh session; or `SendMessage` fails), dispatch a **fresh** general-purpose
-   subagent (`run_in_background: false` — synchronous, like every heavy dispatch; pass `model:` from
-   the resolved value of `SUPER_MODEL_EXECUTOR` unless the value is `inherit`, in which case omit the
-   model parameter) instructed to invoke
+   subagent (`run_in_background: false` — synchronous, like every heavy dispatch; model per
+   **Model resolution** under **Subagent dispatch**, from `SUPER_MODEL_EXECUTOR`) instructed to invoke
    `superagent:superrun` with the full `ci_wait` packet + conclusions via its
    **Resume entry — post-CI**. Either way the subagent returns the real Final Report.
 4. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
@@ -298,9 +309,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    this tick.
 2. Set `status: PLANNING`, write the loop file.
 3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Pass
-   `model:` from the resolved value of `SUPER_MODEL_PLANNER` unless the value is `inherit`, in which
-   case omit the model parameter.
+   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Model
+   per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_PLANNER`.
    Instruct the subagent to invoke the `superagent:superplan` skill (Skill tool) with
    `<PLAN.md> = master_plan`, **no `<TOPIC>`** — its `supertraverse` descent finds the next deepest
    unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final
@@ -329,9 +339,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
 3. **Dispatch `superagent:superrun` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Pass
-   `model:` from the resolved value of `SUPER_MODEL_EXECUTOR` unless the value is `inherit`, in which
-   case omit the model parameter.
+   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Model
+   per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_EXECUTOR`.
    Instruct the subagent to invoke the `superagent:superrun` skill (Skill tool) with
    `<PLAN.md> = master_plan` (the root) and to **return superrun's complete Final Report verbatim as its
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
@@ -359,9 +368,9 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
      - else → `status: WAITING FOR PLAN` (steps remain to be planned).
    - **BLOCKED** (a task could not complete) **or code PR CI-red** → **do not terminate.** Run the
      **Decision-escalation ladder** (below) on the blocker. If the panel converges → apply it (retry
-     `superagent:superrun` with guidance — per **Subagent dispatch**, passing `model:` from the resolved
-     value of `SUPER_MODEL_EXECUTOR` unless the value is `inherit`, in which case omit the model
-     parameter — route to `WAITING FOR PLAN` for a re-plan, or mark the step declined),
+     `superagent:superrun` with guidance — per **Subagent dispatch**, model per its **Model
+     resolution** from `SUPER_MODEL_EXECUTOR` — route to `WAITING FOR PLAN` for a re-plan, or mark
+     the step declined),
      log the decision, continue. If the panel cannot converge → escalate via `WAITING FOR INPUT`.
      Never silently spin on a blocked plan.
 6. Append an iteration-log entry (skill, result, code PR + closeout PR URLs). Go to **Step 2**.

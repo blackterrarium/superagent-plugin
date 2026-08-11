@@ -91,6 +91,14 @@ same name, then the repo-root `.superenv` file, then this plugin's shipped defau
 (`templates/superenv.default`). A repo with no `.superenv` runs entirely on the defaults below —
 `superagent:init` creates one by copying this file so the repo can edit knobs in place.
 
+`SUPER_MODEL_*` keys accept a tier name (`sonnet` | `opus` | `haiku` | `fable`), `inherit` (run on
+the session model), or a **full model ID** (`claude-<family>-<version>`, e.g. `claude-fable-5` — no
+date stamp needed). The Agent tool's `model:` parameter is tier-enum-only, so a full ID on any role
+key except `SUPER_MODEL_SUPERVISOR` is applied via a per-role agent definition
+(`.claude/agents/super-<role>.md`, `model:` frontmatter) that `superagent:init` generates — re-run
+init after setting or changing a full-ID value. `SUPER_MODEL_SUPERVISOR` needs no definition: the
+tick passes it straight to `claude --model`, which accepts every form.
+
 | Key | Default | Meaning |
 |---|---|---|
 | SUPER_MODEL_SUPERVISOR | `inherit` | Model for the superagent tick itself (a headless tick has no session to inherit from, so `inherit` resolves to `opus` there). |

@@ -116,9 +116,14 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    `SUPER_MODEL_FIX_APPLIER`, task reviewer: `SUPER_MODEL_TASK_REVIEWER`, re-reviewer:
    `SUPER_MODEL_RE_REVIEWER`, final whole-branch reviewer: `SUPER_MODEL_BRANCH_REVIEWER`, fix rounds
    4–5 fix-planner: `SUPER_MODEL_FIX_PLANNER` (then hand the mechanical edit to a
-   `SUPER_MODEL_FIX_APPLIER` fix-applier). A value of `inherit` means omit the model override. An
-   unrecognized value is a hard error — fail the dispatch loudly; never silently substitute a cheaper
-   tier.
+   `SUPER_MODEL_FIX_APPLIER` fix-applier). A value of `inherit` means omit the model override. A tier
+   name (`sonnet` | `opus` | `haiku` | `fable`) is passed as the Task call's `model:` parameter. A
+   **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) cannot go through `model:` — the
+   parameter is tier-enum-only — so dispatch that role with `subagent_type: super-<role>` (e.g.
+   `super-implementer`, `super-task-reviewer`), the per-role agent definition `superagent:init`
+   generates in `.claude/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
+   other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
+   case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or

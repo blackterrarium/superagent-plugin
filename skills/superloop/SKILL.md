@@ -526,7 +526,11 @@ instead.
 ### Rung 1 — Subagent panel (resolve autonomously)
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
-`model: SUPER_MODEL_PANEL` — each with **`run_in_background: false`**, so the turn **waits** for all three
+`model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
+`claude-fable-5`) the Agent tool's tier-enum `model:` parameter rejects it — dispatch with
+`subagent_type: super-panel` instead (the definition `superagent:init` generates in `.claude/agents/`,
+overriding `SUPER_PANEL_AGENT_TYPE`) and omit `model:`; missing definition = hard error, re-run
+`superagent:init` — each with **`run_in_background: false`**, so the turn **waits** for all three
 verdicts to arrive as tool results; never dispatch the panel in the background and poll
 `TaskOutput`/`TaskList` for it). Give each the **same packet**: the decision/blocker statement, the relevant plan +
 report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
