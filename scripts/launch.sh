@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # launch.sh — one-shot launcher for a superagent EXTERNAL loop. Given only a root
-# master plan, it prepares the loop-status file and arms the per-goal systemd user
-# timer, so the loop runs unattended in the background with no separate console.
+# master plan, it prepares the loop-status file and arms the per-goal scheduler
+# entry (systemd user timer on Linux, launchd LaunchAgent on macOS), so the loop
+# runs unattended in the background with no separate console.
 #
 #   launch.sh <PLAN.md> [--interval 30m]
 #             [--timeout <secs>] [--slug <goal-slug>]
@@ -91,7 +92,11 @@ if [[ "$DRY" == 1 ]]; then
   else
     echo "  loop file:  $LOOP_DIR/$(date +%Y-%m-%d)-$SLUG.md  (would create)"
   fi
-  echo "  timer:      superagent-tick@$SLUG.timer  (would enable --now, interval $INTERVAL)"
+  if [[ "$(superagent_scheduler)" == launchd ]]; then
+    echo "  scheduler:  $(superagent_launchd_label "$SLUG")  (would bootstrap + kickstart, interval $INTERVAL)"
+  else
+    echo "  scheduler:  superagent-tick@$SLUG.timer  (would enable --now, interval $INTERVAL)"
+  fi
   echo "[dry-run] nothing created or armed."
   exit 0
 fi
@@ -134,7 +139,11 @@ install_args=(--interval "$INTERVAL" --output "$OUTPUT_FORMAT")
 
 # Kick the first tick now (non-blocking) so the loop starts immediately instead of
 # waiting for the timer's first interval.
-systemctl --user start --no-block "superagent-tick@$SLUG.service" 2>/dev/null || true
+if [[ "$(superagent_scheduler)" == launchd ]]; then
+  launchctl kickstart "$(superagent_launchd_domain)/$(superagent_launchd_label "$SLUG")" 2>/dev/null || true
+else
+  systemctl --user start --no-block "superagent-tick@$SLUG.service" 2>/dev/null || true
+fi
 
 echo
 echo "Launched superagent external loop:"
@@ -143,5 +152,9 @@ echo "  model:      $MODEL_SHOWN"
 echo "  interval:   $INTERVAL   timeout: ${TICK_TIMEOUT:-none}   output: $OUTPUT_FORMAT"
 echo "  plan:       $PLAN_REL"
 echo "  loop file:  $LOOP_FILE"
-echo "  monitor:    $SCRIPT_DIR/status.sh $SLUG   |   journalctl --user -u superagent-tick@$SLUG.service -f"
+if [[ "$(superagent_scheduler)" == launchd ]]; then
+  echo "  monitor:    $SCRIPT_DIR/status.sh $SLUG   |   tail -f /tmp/superagent-launchd-$SLUG.log /tmp/superagent-*.log"
+else
+  echo "  monitor:    $SCRIPT_DIR/status.sh $SLUG   |   journalctl --user -u superagent-tick@$SLUG.service -f"
+fi
 echo "  stop:       $SCRIPT_DIR/uninstall-timer.sh $SLUG"

@@ -404,7 +404,8 @@ scheduler drives it by asking the CLI to *read `skills/superagent/SKILL.md` dire
 installed location) and run exactly one `--tick`* (superloop L2, Driver B). The loop's own internal
 `superagent:superplan` / `superagent:superrun` dispatches still go through the Skill tool once the
 session is running. `${CLAUDE_PLUGIN_ROOT}/scripts/` packages the whole
-thing (the tick wrapper, a per-goal systemd user timer, and
+thing (the tick wrapper, a per-goal scheduler entry — systemd user timer on Linux, launchd
+LaunchAgent on macOS — and
 bootstrap/install/uninstall/console-watch/status helpers); the runbook is
 [scripts/README.md](../../scripts/README.md), which documents the `SUPERAGENT_SCRIPTS` convention
 runnable examples use to locate this plugin's installed `scripts/` directory. Monitor and control

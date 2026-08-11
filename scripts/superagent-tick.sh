@@ -87,9 +87,12 @@ echo "=== $(ts) superagent-tick model=${TICK_MODEL} output=${TICK_OUTPUT_FORMAT}
 # PLUGIN_ROOT, and the plugin is enabled.
 echo "    requires: superagent plugin installed+enabled for this session (tick entry reads skills/superagent/SKILL.md directly at ${PLUGIN_ROOT}; superagent:superplan / superagent:superrun still resolved via Skill tool)" >>"$LOG_FILE"
 
+# API auth: an ANTHROPIC_API_KEY in $REPO/.env (repo policy) when present;
+# otherwise fall through to the claude CLI's own stored login (subscription/OAuth
+# hosts have no separate key). If neither exists the CLI itself fails with a
+# clear auth error, logged below — so warn, don't abort.
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-  echo "superagent-tick: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
-  exit 3
+  echo "    note: ANTHROPIC_API_KEY not set (no $REPO/.env entry); relying on the claude CLI's own stored login" >>"$LOG_FILE"
 fi
 
 rc=0

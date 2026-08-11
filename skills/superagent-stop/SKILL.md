@@ -11,7 +11,7 @@ related skills: superagent-external, superagent-monitor, superagent-force-stop, 
 One-step stopper for an unattended superagent loop — the complement of
 `superagent-external`. It wraps the deterministic `${CLAUDE_PLUGIN_ROOT}/scripts/stop.sh`,
 which identifies the installed loop from the master plan and disarms its per-goal
-systemd user timer.
+scheduler entry (systemd user timer on Linux, launchd LaunchAgent on macOS).
 
 ## Repo configuration (.superenv)
 

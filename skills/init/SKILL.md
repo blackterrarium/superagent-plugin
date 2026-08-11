@@ -55,11 +55,11 @@ which is exactly the case Step 2 below fixes by creating one.
    access the tool sandbox blocks — see `SUPER_GH_DISABLE_SANDBOX` in
    `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. If the check fails on macOS, note
    that possibility rather than reporting a bare WARN.
-4. Informational: external (unattended) mode needs a Linux host with systemd user timers
-   (crontab fallback documented in
+4. Informational: external (unattended) mode runs on Linux (systemd user timers) and
+   macOS (launchd LaunchAgents — logged-in + awake only; crontab fallback documented in
    [scripts/README.md](../../scripts/README.md#cron-fallback-instead-of-systemd)). Run
-   `uname -s` and say which this host is — planning-only usage (`supergoal`/`superplan`)
-   is host-independent; only `superagent-external`'s systemd path is Linux-specific.
+   `uname -s` and say which scheduler this host would use — planning-only usage
+   (`supergoal`/`superplan`) is host-independent.
 
 ## Step 2 — Config
 

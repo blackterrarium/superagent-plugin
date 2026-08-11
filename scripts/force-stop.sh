@@ -77,8 +77,17 @@ if [[ -f "$LOOP_FILE" ]]; then
   status="$(sed -n 's/^status:[[:space:]]*//p' "$LOOP_FILE" | head -1)"
   iteration="$(sed -n 's/^iteration:[[:space:]]*//p' "$LOOP_FILE" | head -1)"
 fi
-tick_active="$(systemctl --user is-active "superagent-tick@$SLUG.service" 2>/dev/null || true)"
-timer_active="$(systemctl --user is-active "superagent-tick@$SLUG.timer" 2>/dev/null || true)"
+SCHEDULER="$(superagent_scheduler)"
+if [[ "$SCHEDULER" == launchd ]]; then
+  # One launchd job is both timer and service: loaded (any state) ~ timer active,
+  # state == running ~ tick in flight.
+  ld_state="$(superagent_launchd_state "$SLUG")"
+  tick_active="$([[ "$ld_state" == running ]] && echo active || true)"
+  timer_active="$([[ -n "$ld_state" ]] && echo active || true)"
+else
+  tick_active="$(systemctl --user is-active "superagent-tick@$SLUG.service" 2>/dev/null || true)"
+  timer_active="$(systemctl --user is-active "superagent-tick@$SLUG.timer" 2>/dev/null || true)"
+fi
 
 LOCK_DIR="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").lockd"
 lock_held=0; lock_age="-"
@@ -124,11 +133,25 @@ if [[ "$APPLY" != 1 ]]; then
 fi
 
 echo
-# 1) Halt the in-flight tick. systemctl stop reaps the whole service cgroup,
-#    including the wrapped claude child — precise, no blind pkill.
+# 1) Halt the in-flight tick. systemd: systemctl stop reaps the whole service
+#    cgroup, including the wrapped claude child — precise, no blind pkill.
+#    launchd: SIGTERM the job's main process; launchd then reaps the remaining
+#    process group (claude child included; AbandonProcessGroup is unset/false in
+#    the shipped plist).
 if [[ "$tick_active" == "active" || "$tick_active" == "activating" ]]; then
-  echo "Halting in-flight tick (superagent-tick@$SLUG.service)…"
-  systemctl --user stop "superagent-tick@$SLUG.service" 2>/dev/null || true
+  if [[ "$SCHEDULER" == launchd ]]; then
+    echo "Halting in-flight tick ($(superagent_launchd_label "$SLUG"))…"
+    launchctl kill SIGTERM "$(superagent_launchd_domain)/$(superagent_launchd_label "$SLUG")" 2>/dev/null || true
+    # Give launchd a moment to reap the group before the lock is removed, so a
+    # dying tick can't recreate/hold it.
+    for _ in 1 2 3 4 5 6; do
+      [[ "$(superagent_launchd_state "$SLUG")" == running ]] || break
+      sleep 5
+    done
+  else
+    echo "Halting in-flight tick (superagent-tick@$SLUG.service)…"
+    systemctl --user stop "superagent-tick@$SLUG.service" 2>/dev/null || true
+  fi
 else
   echo "No active tick service (already exited / orphaned lock case)."
 fi
@@ -147,7 +170,11 @@ if [[ "$DRAIN" == 1 ]]; then
   "$SCRIPT_DIR/uninstall-timer.sh" "$SLUG"
 elif [[ "$KICK" == 1 ]]; then
   echo "Kicking a fresh recovery tick (crash-recovery resets ${status:-RUNNING} → WAITING FOR RUN)…"
-  systemctl --user start --no-block "superagent-tick@$SLUG.service" 2>/dev/null || true
+  if [[ "$SCHEDULER" == launchd ]]; then
+    launchctl kickstart "$(superagent_launchd_domain)/$(superagent_launchd_label "$SLUG")" 2>/dev/null || true
+  else
+    systemctl --user start --no-block "superagent-tick@$SLUG.service" 2>/dev/null || true
+  fi
 fi
 
 echo

@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# install-timer.sh — install and start a per-goal systemd USER timer that drives
-# a superagent external loop, one fresh tick per interval.
+# install-timer.sh — install and start the per-goal scheduler entry that drives
+# a superagent external loop, one fresh tick per interval: a systemd USER timer
+# on Linux, a launchd LaunchAgent on macOS.
 #
 #   install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>]
 #
 # --timeout is an OPTIONAL per-tick cap; omit it (the default) for no cap so long
 # CI-push ticks are never killed. Writes ~/.config/superagent/<goal-slug>.env
-# (REPO, LOOP_FILE, and TICK_TIMEOUT only when a cap is given), installs
-# the template units, enables user lingering (so ticks
-# fire without an active login session), and starts the timer.
+# (REPO, LOOP_FILE, and TICK_TIMEOUT only when a cap is given) — that env file is
+# the loop REGISTRY that stop.sh/status.sh discover loops through, on every
+# scheduler — then installs the scheduler entry and arms it. On systemd it also
+# enables user lingering (so ticks fire without an active login session); launchd
+# has no linger equivalent — a LaunchAgent fires only while the user is logged in
+# and the Mac is awake.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,9 +51,16 @@ if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then
 fi
 LOOP_FILE="$(cd "$(dirname "$LOOP_FILE_IN")" && pwd)/$(basename "$LOOP_FILE_IN")"
 
+SCHEDULER="$(superagent_scheduler)"
+# Validate the interval up front on launchd (StartInterval takes seconds only),
+# before any state is written.
+INTERVAL_SECS=""
+if [[ "$SCHEDULER" == launchd ]]; then
+  INTERVAL_SECS="$(superagent_interval_secs "$INTERVAL")" || exit 2
+fi
+
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
-UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-mkdir -p "$CONF_DIR" "$UNIT_DIR"
+mkdir -p "$CONF_DIR"
 
 {
   echo "REPO=$REPO"
@@ -67,26 +78,68 @@ mkdir -p "$CONF_DIR" "$UNIT_DIR"
   [[ -n "$MODEL" ]] && echo "TICK_MODEL=$MODEL"
 } >"$CONF_DIR/$SLUG.env"
 
-install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.service" "$UNIT_DIR/superagent-tick@.service"
-install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.timer"   "$UNIT_DIR/superagent-tick@.timer"
+if [[ "$SCHEDULER" == launchd ]]; then
+  LABEL="$(superagent_launchd_label "$SLUG")"
+  PLIST="$(superagent_launchd_plist "$SLUG")"
+  DOMAIN="$(superagent_launchd_domain)"
+  mkdir -p "$(dirname "$PLIST")"
 
-# Per-instance interval override.
-DROPIN_DIR="$UNIT_DIR/superagent-tick@$SLUG.timer.d"
-mkdir -p "$DROPIN_DIR"
-cat >"$DROPIN_DIR/interval.conf" <<EOF
+  NEW_PLIST="$(mktemp)"
+  sed -e "s|@SLUG@|$SLUG|g" \
+      -e "s|@INTERVAL_SECS@|$INTERVAL_SECS|g" \
+      -e "s|@ENV_FILE@|$CONF_DIR/$SLUG.env|g" \
+      "$SCRIPT_DIR/launchd/com.superagent.tick.plist.template" >"$NEW_PLIST"
+
+  if [[ -f "$PLIST" ]] && cmp -s "$NEW_PLIST" "$PLIST" && [[ -n "$(superagent_launchd_state "$SLUG")" ]]; then
+    # Idempotent re-arm: identical plist already loaded — nothing to reload.
+    rm -f "$NEW_PLIST"
+    echo "Already installed and loaded: $LABEL (plist unchanged)."
+  else
+    # Applying a plist change needs bootout+bootstrap, and bootout KILLS a tick
+    # in flight (one launchd job is both timer and service, unlike systemd where
+    # reloading the timer leaves the running service alone). Refuse rather than
+    # silently kill work.
+    if [[ "$(superagent_launchd_state "$SLUG")" == running ]]; then
+      rm -f "$NEW_PLIST"
+      echo "superagent: a tick for '$SLUG' is in flight; re-run when it finishes (watch: $SCRIPT_DIR/status.sh $SLUG), or stop it first with $SCRIPT_DIR/stop.sh <PLAN.md> --hard" >&2
+      exit 1
+    fi
+    launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+    install -m 0644 "$NEW_PLIST" "$PLIST"; rm -f "$NEW_PLIST"
+    launchctl bootstrap "$DOMAIN" "$PLIST"
+    launchctl enable "$DOMAIN/$LABEL" 2>/dev/null || true   # clear any stale disable override
+  fi
+
+  echo "Installed $LABEL (interval=$INTERVAL/${INTERVAL_SECS}s timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default})."
+  echo "  note:    LaunchAgents fire only while $USER is logged in and the Mac is awake (no linger equivalent)."
+  echo "  config:  $CONF_DIR/$SLUG.env"
+  echo "  status:  launchctl print $DOMAIN/$LABEL   (or $SCRIPT_DIR/status.sh $SLUG)"
+  echo "  logs:    tail -f /tmp/superagent-launchd-$SLUG.log /tmp/superagent-*.log"
+  echo "  stop:    $SCRIPT_DIR/uninstall-timer.sh $SLUG"
+else
+  UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  mkdir -p "$UNIT_DIR"
+  install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.service" "$UNIT_DIR/superagent-tick@.service"
+  install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.timer"   "$UNIT_DIR/superagent-tick@.timer"
+
+  # Per-instance interval override.
+  DROPIN_DIR="$UNIT_DIR/superagent-tick@$SLUG.timer.d"
+  mkdir -p "$DROPIN_DIR"
+  cat >"$DROPIN_DIR/interval.conf" <<EOF
 [Timer]
 OnUnitActiveSec=$INTERVAL
 EOF
 
-# Let user services run without an active login session (headless servers).
-loginctl enable-linger "$USER" 2>/dev/null || \
-  echo "warning: could not enable-linger for $USER; ticks may pause when you log out" >&2
+  # Let user services run without an active login session (headless servers).
+  loginctl enable-linger "$USER" 2>/dev/null || \
+    echo "warning: could not enable-linger for $USER; ticks may pause when you log out" >&2
 
-systemctl --user daemon-reload
-systemctl --user enable --now "superagent-tick@$SLUG.timer"
+  systemctl --user daemon-reload
+  systemctl --user enable --now "superagent-tick@$SLUG.timer"
 
-echo "Installed superagent-tick@$SLUG.timer (interval=$INTERVAL timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default})."
-echo "  config:  $CONF_DIR/$SLUG.env"
-echo "  status:  systemctl --user list-timers 'superagent-tick@$SLUG.timer'"
-echo "  logs:    journalctl --user -u superagent-tick@$SLUG.service -f   (or /tmp/superagent-*.log)"
-echo "  stop:    $SCRIPT_DIR/uninstall-timer.sh $SLUG"
+  echo "Installed superagent-tick@$SLUG.timer (interval=$INTERVAL timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default})."
+  echo "  config:  $CONF_DIR/$SLUG.env"
+  echo "  status:  systemctl --user list-timers 'superagent-tick@$SLUG.timer'"
+  echo "  logs:    journalctl --user -u superagent-tick@$SLUG.service -f   (or /tmp/superagent-*.log)"
+  echo "  stop:    $SCRIPT_DIR/uninstall-timer.sh $SLUG"
+fi
