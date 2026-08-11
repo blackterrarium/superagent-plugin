@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-08-11
 
 `SUPER_MODEL_*` keys now accept full model IDs (`claude-<family>-<version>`, e.g. `claude-fable-5`;
 no date stamp needed) alongside the tier names and `inherit`. The Agent tool's `model:` parameter is
