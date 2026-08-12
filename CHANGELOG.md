@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-08-12
 
 Experimental Cursor support (stage 1 — packaging + smoke test; not yet validated on a Cursor host):
 
