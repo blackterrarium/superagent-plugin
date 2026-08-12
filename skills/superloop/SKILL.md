@@ -582,7 +582,8 @@ instead.
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
 `model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
-`claude-fable-5`) the Agent tool's tier-enum `model:` parameter rejects it — dispatch with
+`claude-fable-5`) **or `SUPER_EFFORT_PANEL` is non-`inherit`** (the Agent tool has no effort
+parameter; the pin rides the definition) — dispatch with
 `subagent_type: super-panel` instead (the definition `superagent:init` generates in `.claude/agents/`,
 overriding `SUPER_PANEL_AGENT_TYPE`) and omit `model:`; missing definition = hard error, re-run
 `superagent:init` — each with **`run_in_background: false`**, so the turn **waits** for all three

@@ -111,32 +111,40 @@ NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
 cursor-only:end -->
 
-Resolve each key below per the resolution order above:
+Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`) per the resolution order above:
 
-| Key | Generated definition |
-|---|---|
-| SUPER_MODEL_PLANNER | `.claude/agents/super-planner.md` |
-| SUPER_MODEL_EXECUTOR | `.claude/agents/super-executor.md` |
-| SUPER_MODEL_PANEL | `.claude/agents/super-panel.md` |
-| SUPER_MODEL_IMPLEMENTER | `.claude/agents/super-implementer.md` |
-| SUPER_MODEL_FIX_APPLIER | `.claude/agents/super-fix-applier.md` |
-| SUPER_MODEL_TASK_REVIEWER | `.claude/agents/super-task-reviewer.md` |
-| SUPER_MODEL_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
-| SUPER_MODEL_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
-| SUPER_MODEL_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+| Model key | Effort key | Generated definition |
+|---|---|---|
+| SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.claude/agents/super-executor.md` |
+| SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.claude/agents/super-panel.md` |
+| SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.claude/agents/super-implementer.md` |
+| SUPER_MODEL_FIX_APPLIER | SUPER_EFFORT_FIX_APPLIER | `.claude/agents/super-fix-applier.md` |
+| SUPER_MODEL_TASK_REVIEWER | SUPER_EFFORT_TASK_REVIEWER | `.claude/agents/super-task-reviewer.md` |
+| SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
+| SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
+| SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
 
 <!-- cc-only:start -->
-- **Value is a full model ID:** render
+- **Generate when:** the model value is a **full model ID** (`^claude-`), OR the
+  effort value is non-`inherit` (a tier-name model alone rides the Task call's
+  `model:` parameter and needs no file). Render
   `${CLAUDE_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
   `.claude/agents/` if needed), substituting `<role>` (the path's `super-` suffix,
-  e.g. `planner`), `<KEY>`, and `<model-id>`. These files are **derived artifacts
-  owned by init** — the `generated-by: superagent:init` marker line says so — and
-  rewriting one whose model drifted from `.superenv` is the point of this step, not
-  an overwrite violation. Never touch a file at these paths that lacks the marker:
-  report it as `conflict` and leave it.
-- **Value is a tier name or `inherit`, but the listed path exists with the marker:**
+  e.g. `planner`), `<KEY>` (both keys, comma-separated, when both pin), and:
+  - the `model:` line — keep it only when the model value is non-`inherit`
+    (tier names AND full IDs are both valid frontmatter `model:` values; an
+    effort-only definition drops the line entirely);
+  - the `effort:` line — keep it only when the effort value is non-`inherit`
+    (claude domain: `low|medium|high|xhigh|max`).
+  These files are **derived artifacts owned by init** — the
+  `generated-by: superagent:init` marker line says so — and rewriting one whose
+  pins drifted from `.superenv` is the point of this step, not an overwrite
+  violation. Never touch a file at these paths that lacks the marker: report it
+  as `conflict` and leave it.
+- **Neither key requires a file, but the listed path exists with the marker:**
   delete it (a stale derived artifact) and report `removed (stale)`.
-- **Value is a tier name or `inherit`, no file present:** nothing to do.
+- **Neither key requires a file, no file present:** nothing to do.
 <!-- cc-only:end -->
 <!-- cursor-only:start
 - **Value is a model name (anything valid other than `inherit`):** render
@@ -151,6 +159,7 @@ Resolve each key below per the resolution order above:
   exists with the marker:** delete it (a stale derived artifact) and report
   `removed (stale)`.
 - **Value is `inherit`, no file present:** nothing to do.
+Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
 cursor-only:end -->
 
 Agent definitions load at session start, so files written here take effect from the

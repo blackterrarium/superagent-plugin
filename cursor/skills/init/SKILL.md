@@ -112,19 +112,19 @@ names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`) 
 NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
 
-Resolve each key below per the resolution order above:
+Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`) per the resolution order above:
 
-| Key | Generated definition |
-|---|---|
-| SUPER_MODEL_PLANNER | `.cursor/agents/super-planner.md` |
-| SUPER_MODEL_EXECUTOR | `.cursor/agents/super-executor.md` |
-| SUPER_MODEL_PANEL | `.cursor/agents/super-panel.md` |
-| SUPER_MODEL_IMPLEMENTER | `.cursor/agents/super-implementer.md` |
-| SUPER_MODEL_FIX_APPLIER | `.cursor/agents/super-fix-applier.md` |
-| SUPER_MODEL_TASK_REVIEWER | `.cursor/agents/super-task-reviewer.md` |
-| SUPER_MODEL_RE_REVIEWER | `.cursor/agents/super-re-reviewer.md` |
-| SUPER_MODEL_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
-| SUPER_MODEL_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
+| Model key | Effort key | Generated definition |
+|---|---|---|
+| SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.cursor/agents/super-planner.md` |
+| SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.cursor/agents/super-executor.md` |
+| SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.cursor/agents/super-panel.md` |
+| SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.cursor/agents/super-implementer.md` |
+| SUPER_MODEL_FIX_APPLIER | SUPER_EFFORT_FIX_APPLIER | `.cursor/agents/super-fix-applier.md` |
+| SUPER_MODEL_TASK_REVIEWER | SUPER_EFFORT_TASK_REVIEWER | `.cursor/agents/super-task-reviewer.md` |
+| SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.cursor/agents/super-re-reviewer.md` |
+| SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
+| SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
 
 - **Value is a model name (anything valid other than `inherit`):** render
   `${SUPER_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
@@ -138,6 +138,7 @@ Resolve each key below per the resolution order above:
   exists with the marker:** delete it (a stale derived artifact) and report
   `removed (stale)`.
 - **Value is `inherit`, no file present:** nothing to do.
+Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
 
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one. Report per-key results (`generated` /

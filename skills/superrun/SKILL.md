@@ -127,6 +127,12 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    generates in `.claude/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
+   **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
+   model keys). `inherit` = no override. A non-`inherit` effort can only ride the
+   generated per-role agent definition (the Task tool has no effort parameter) — dispatch
+   that role with `subagent_type: super-<role>` and omit `model:` (the definition carries
+   both pins). A missing definition for a non-`inherit` effort key is the same hard error
+   as the full-ID case: fail loudly and instruct a `superagent:init` re-run.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or
