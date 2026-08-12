@@ -24,7 +24,7 @@ REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 load_superenv "$REPO"
 
 usage() {
-  echo "usage: launch.sh <PLAN.md> [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor] [--dry-run]" >&2
+  echo "usage: launch.sh <PLAN.md> [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex] [--dry-run]" >&2
   exit 2
 }
 
@@ -47,10 +47,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
-case "$HARNESS" in claude|cursor) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor)" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|cursor|codex) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor|codex)" >&2; exit 2 ;; esac
 export SUPER_HARNESS="$HARNESS"
 # Effective model shown in reports (the wrapper's default when unset).
 if [[ -n "$MODEL" ]]; then MODEL_SHOWN="$MODEL"
+elif [[ "$HARNESS" == codex ]]; then MODEL_SHOWN="config default"
 elif [[ "$HARNESS" == cursor ]]; then MODEL_SHOWN="auto (default)"
 else MODEL_SHOWN="opus (default)"; fi
 

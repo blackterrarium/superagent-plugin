@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-08-12
 
 Experimental Cursor support (stage 1 — packaging + smoke test; not yet validated on a Cursor host):
 
@@ -36,6 +36,53 @@ Experimental Cursor support (stage 1 — packaging + smoke test; not yet validat
   `superagent_harness` / `ensure_cursor_bin` / `ensure_cli_bin`; `superagent-tick.sh` and
   `bootstrap.sh` branch per harness.
 - **Known gap** (recorded in `cursor/README.md`): no end-to-end multi-tick loop run on Cursor yet.
+
+Experimental Codex support (stage 1 — packaging + smoke test; **smoke-validated 8/8 on
+2026-08-12**, codex CLI 0.147.0 on macOS: marketplace manifest moved to
+`.agents/plugins/marketplace.json` with `source.source="local"` + `AVAILABLE`/`ON_INSTALL` policy
+enums per the CLI's real schema; templates moved inside `plugins/superagent/` because
+`codex plugin add` copies only `source.path` into the install cache; a root-level
+`.agents/plugins/marketplace.json` now makes the repo itself installable as a marketplace;
+`spawn_agent` confirmed available in plain `codex exec`; README reframed as a
+Claude Code + Cursor + Codex plugin with per-harness install instructions),
+plus per-role reasoning effort for every harness:
+
+- **`SUPER_HARNESS=codex` driver.** `superagent-tick.sh` gains a third harness branch alongside
+  `claude`/`cursor`: fires `codex exec <prompt>` per tick against the generated Codex
+  plugin-marketplace build (skills load via the *installed* plugin — `codex plugin marketplace add
+  <repo>/codex && codex plugin add superagent@superagent` — not `--plugin-dir`). Auth:
+  `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's own stored `codex login`.
+  `_common.sh` gains `ensure_codex_bin`; `superagent_harness` now accepts `claude|cursor|codex`;
+  `--harness codex` works on `launch.sh`/`install-timer.sh`.
+- **`SUPER_CODEX_SANDBOX`.** New `.superenv` knob (codex harness only): `workspace-write` (default
+  — `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) or
+  `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`). An out-of-domain value now
+  aborts the tick with a new exit code, 8, rather than silently picking a posture.
+- **`SUPER_EFFORT_*` keys.** Ten new per-role reasoning-effort keys (mirroring the `SUPER_MODEL_*`
+  role table) resolved the same three-layer way (env > `.superenv` > plugin default). Domain is
+  harness-native: claude `low|medium|high|xhigh|max`, codex `none|minimal|low|medium|high|xhigh`
+  (no `max`); the Cursor CLI has no effort control (any non-`inherit` value WARNs and falls back to
+  `inherit`). Every shipped build defaults the four dispatch-only roles
+  (supervisor/planner/executor/panel) to `inherit` and the SDD worker roles to a nonzero effort
+  (`medium` implementer/fix-applier, `high` reviewers/fix-planner, `xhigh` branch-reviewer).
+- **`--effort` on claude ticks.** `superagent-tick.sh` now passes `--effort <value>` to `claude -p`
+  whenever `SUPER_EFFORT_SUPERVISOR` (or `TICK_EFFORT`) resolves non-`inherit`. The driver never
+  sets `CLAUDE_CODE_EFFORT_LEVEL` itself (it outranks both `--effort` and per-role agent-definition
+  effort pins) and warns if the scheduler environment already carries it.
+- **`.superenv` validation pass.** `superagent:init` Step 2 now lints the resolved configuration
+  (unknown `SUPER_*`/`TICK_*` keys, enum/boolean/numeric domains, and model/effort key domains per
+  harness) and reports one WARN + effective-fallback row per finding — report-only, never rewrites
+  the user's `.superenv`.
+- **Codex build + smoke harness.** `scripts/build-codex-skills.sh` derives a generated Codex
+  plugin-marketplace tree (`codex/`) from the canonical skills, reusing the Cursor build's
+  conditional-marker mechanism plus a new `codex-only` marker (content inert as an HTML comment in
+  the canonical files, activated only in this build); `--check` mode diffs a fresh rebuild against
+  the committed tree and exits 1 if stale. `scripts/codex-smoke.sh` runs T1–T6 against a live Codex
+  CLI (headless exec, marketplace + plugin install, skill enumeration, a generated
+  `codex-smoke-probe` skill, `spawn_agent` availability, the real tick file-read entry + hard gate,
+  and effort-flag pass-through), always exits 0, and writes `codex-smoke-report.md`.
+- **Known gap** (recorded in `codex/README.md`): no end-to-end multi-tick loop run on Codex yet;
+  `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4b).
 
 ## 0.3.0 — 2026-08-11
 

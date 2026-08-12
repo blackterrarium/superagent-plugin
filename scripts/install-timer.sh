@@ -23,7 +23,7 @@ REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 load_superenv "$REPO"
 
 usage() {
-  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor]" >&2
+  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex]" >&2
   exit 2
 }
 
@@ -45,7 +45,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
-case "$HARNESS" in claude|cursor) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor)" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|cursor|codex) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor|codex)" >&2; exit 2 ;; esac
 
 # Resolve LOOP_FILE to an absolute path (its dir must already exist).
 if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then

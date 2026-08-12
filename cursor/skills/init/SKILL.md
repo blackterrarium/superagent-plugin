@@ -101,7 +101,38 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-## Step 3 — Role agents (full model IDs only)
+### .superenv validation (lint — WARN + fallback, never abort)
+
+Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
+using it. For each finding emit one WARN row in the summary; the effective value used
+by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
+report-only.
+
+1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
+   also exist in `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
+   "probable typo (ignored)". (Exception: a harness-specific key that belongs to another
+   build's template — e.g. `SUPER_CODEX_SANDBOX` on a build whose template drops it — is
+   a legitimate key in a portable `.superenv`: report it as `ignored (other-harness
+   key)`, not as a typo.)
+2. **Enums** (out-of-domain → WARN, fall back to the template default):
+   `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
+   workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
+   `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
+   `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller.
+3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
+   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
+   `SUPER_GH_DISABLE_SANDBOX`.
+4. **Numerics** (positive integer, else WARN + template default):
+   `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
+   `SUPER_TICK_INTERVAL` must parse as an interval span (e.g. `600`, `90s`, `30m`, `2h`).
+5. **Model keys** (each `SUPER_MODEL_*`):
+   valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
+   and `claude-*` IDs not in that list → WARN, treat as `inherit`.
+6. **Effort keys** (each `SUPER_EFFORT_*`):
+   effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
+
+## Step 3 — Role agents (model/effort pins)
 
 Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `agent --model`.
@@ -112,19 +143,19 @@ names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`) 
 NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
 
-Resolve each key below per the resolution order above:
+Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
-| Key | Generated definition |
-|---|---|
-| SUPER_MODEL_PLANNER | `.cursor/agents/super-planner.md` |
-| SUPER_MODEL_EXECUTOR | `.cursor/agents/super-executor.md` |
-| SUPER_MODEL_PANEL | `.cursor/agents/super-panel.md` |
-| SUPER_MODEL_IMPLEMENTER | `.cursor/agents/super-implementer.md` |
-| SUPER_MODEL_FIX_APPLIER | `.cursor/agents/super-fix-applier.md` |
-| SUPER_MODEL_TASK_REVIEWER | `.cursor/agents/super-task-reviewer.md` |
-| SUPER_MODEL_RE_REVIEWER | `.cursor/agents/super-re-reviewer.md` |
-| SUPER_MODEL_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
-| SUPER_MODEL_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
+| Model key | Effort key | Generated definition |
+|---|---|---|
+| SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.cursor/agents/super-planner.md` |
+| SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.cursor/agents/super-executor.md` |
+| SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.cursor/agents/super-panel.md` |
+| SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.cursor/agents/super-implementer.md` |
+| SUPER_MODEL_FIX_APPLIER | SUPER_EFFORT_FIX_APPLIER | `.cursor/agents/super-fix-applier.md` |
+| SUPER_MODEL_TASK_REVIEWER | SUPER_EFFORT_TASK_REVIEWER | `.cursor/agents/super-task-reviewer.md` |
+| SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.cursor/agents/super-re-reviewer.md` |
+| SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
+| SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
 
 - **Value is a model name (anything valid other than `inherit`):** render
   `${SUPER_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
@@ -138,9 +169,11 @@ Resolve each key below per the resolution order above:
   exists with the marker:** delete it (a stale derived artifact) and report
   `removed (stale)`.
 - **Value is `inherit`, no file present:** nothing to do.
+Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
 
 Agent definitions load at session start, so files written here take effect from the
-next tick/session, not the current one. Report per-key results (`generated` /
+next tick/session, not the current one.
+Report per-key results (`generated` /
 `regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
 row.
 

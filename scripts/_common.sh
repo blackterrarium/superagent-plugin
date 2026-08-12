@@ -77,14 +77,15 @@ ensure_claude_bin() {
 # Harness dispatch — which agent CLI the external driver fires per tick.
 #   SUPER_HARNESS=claude (default) -> the Claude CLI (`claude`)
 #   SUPER_HARNESS=cursor           -> the Cursor CLI (`agent`, older `cursor-agent`)
+#   SUPER_HARNESS=codex            -> the OpenAI Codex CLI (`codex`)
 # Resolution: process env > <repo>/.superenv > plugin default (via load_superenv).
 # ---------------------------------------------------------------------------
 
 superagent_harness() {
   local h="${SUPER_HARNESS:-claude}"
   case "$h" in
-    claude|cursor) echo "$h" ;;
-    *) echo "superagent: bad SUPER_HARNESS '$h' (want claude|cursor)" >&2; return 1 ;;
+    claude|cursor|codex) echo "$h" ;;
+    *) echo "superagent: bad SUPER_HARNESS '$h' (want claude|cursor|codex)" >&2; return 1 ;;
   esac
 }
 
@@ -103,10 +104,24 @@ ensure_cursor_bin() {
   return 1
 }
 
+# Fatal check: ensure the OpenAI Codex CLI binary (`codex`) is findable.
+ensure_codex_bin() {
+  _superagent_augment_path
+  if ! command -v codex >/dev/null 2>&1; then
+    echo "superagent: Codex CLI not found on PATH (tried: codex; checked incl. ~/.local/bin, /usr/local/bin). Install it (npm install -g @openai/codex, or brew install codex) or add its directory to PATH in the scheduler env; aborting." >&2
+    return 1
+  fi
+  return 0
+}
+
 # Fatal check for whichever CLI the resolved harness needs.
 ensure_cli_bin() {
   local h; h="$(superagent_harness)" || return 1
-  if [[ "$h" == cursor ]]; then ensure_cursor_bin; else ensure_claude_bin; fi
+  case "$h" in
+    cursor) ensure_cursor_bin ;;
+    codex)  ensure_codex_bin ;;
+    *)      ensure_claude_bin ;;
+  esac
 }
 
 # Non-fatal report: echoes "ok:<account>" (or "ok" if the account can't be parsed)

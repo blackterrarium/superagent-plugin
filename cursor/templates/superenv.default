@@ -19,6 +19,20 @@ SUPER_MODEL_BRANCH_REVIEWER=inherit        # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=inherit            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 
+# ── Reasoning effort per agent role (NOT SUPPORTED on Cursor) ─────
+# The Cursor CLI has no reasoning-effort control. Keys are kept for cross-harness
+# .superenv portability; any non-inherit value is warned and treated as inherit.
+SUPER_EFFORT_SUPERVISOR=inherit         # the superagent tick itself
+SUPER_EFFORT_PLANNER=inherit            # superplan / supergoal dispatch subagent
+SUPER_EFFORT_EXECUTOR=inherit           # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_PANEL=inherit              # L7 escalation panel (3 read-only agents)
+SUPER_EFFORT_IMPLEMENTER=inherit
+SUPER_EFFORT_FIX_APPLIER=inherit
+SUPER_EFFORT_TASK_REVIEWER=inherit
+SUPER_EFFORT_RE_REVIEWER=inherit
+SUPER_EFFORT_BRANCH_REVIEWER=inherit      # final whole-branch reviewer
+SUPER_EFFORT_FIX_PLANNER=inherit           # fix rounds 4-5: diagnose, then hand to fix-applier
+
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=cursor                    # this is the Cursor build — the external driver fires the Cursor CLI (`agent`)
 

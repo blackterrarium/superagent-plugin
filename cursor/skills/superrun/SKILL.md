@@ -146,6 +146,11 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    generates in `.cursor/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
+   **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
+   model keys). `inherit` = no override.
+   Effort is not supported in this build: a non-`inherit` `SUPER_EFFORT_<ROLE>` value →
+   WARN, treat it as `inherit`, and dispatch the role normally — never a hard error and
+   never a definition requirement.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or

@@ -32,6 +32,16 @@ only one build of this plugin is loaded at a time (if Cursor's "Include third-pa
 Skills, and other configs" setting is loading the Claude Code build alongside this one, disable
 that for this plugin — the two inits collide).
 cursor-only:end -->
+<!-- codex-only:start
+**Harness check (belt-and-suspenders).** This is the **Codex** build of the superagent plugin
+(generated — see the banner above). If you are running under Claude Code — e.g. the
+`CLAUDE_PLUGIN_ROOT` environment variable is defined in your tool environment — STOP and report:
+the wrong harness build is loaded; install the Claude Code plugin from the repository root
+instead. Confirm this host can actually drive the loop: the `codex` CLI is on PATH
+(`codex --version` succeeds) — else WARN with an install hint (`npm install -g @openai/codex`,
+or `brew install codex`). Also make sure only one build of this plugin is loaded at a time —
+two builds' inits collide.
+codex-only:end -->
 
 ## Repo configuration (.superenv)
 
@@ -90,7 +100,60 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-## Step 3 — Role agents (full model IDs only)
+### .superenv validation (lint — WARN + fallback, never abort)
+
+Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
+using it. For each finding emit one WARN row in the summary; the effective value used
+by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
+report-only.
+
+1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
+   also exist in `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
+   "probable typo (ignored)". (Exception: a harness-specific key that belongs to another
+   build's template — e.g. `SUPER_CODEX_SANDBOX` on a build whose template drops it — is
+   a legitimate key in a portable `.superenv`: report it as `ignored (other-harness
+   key)`, not as a typo.)
+2. **Enums** (out-of-domain → WARN, fall back to the template default):
+   `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
+   workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
+   `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
+   `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller.
+3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
+   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
+   `SUPER_GH_DISABLE_SANDBOX`.
+4. **Numerics** (positive integer, else WARN + template default):
+   `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
+   `SUPER_TICK_INTERVAL` must parse as an interval span (e.g. `600`, `90s`, `30m`, `2h`).
+5. **Model keys** (each `SUPER_MODEL_*`):
+<!-- cc-only:start -->
+   valid = a tier name (`sonnet|opus|haiku|fable`), `inherit`, or a full Claude model
+   ID (`^claude-`). Anything else → WARN, treat as `inherit` (catches typos like
+   `sonet` before they become an agent definition that fails at spawn time).
+<!-- cc-only:end -->
+<!-- cursor-only:start
+   valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
+   and `claude-*` IDs not in that list → WARN, treat as `inherit`.
+cursor-only:end -->
+<!-- codex-only:start
+   valid = a Codex model name or `inherit`. A Claude tier name
+   (`sonnet|opus|haiku|fable`) or Claude model ID (`^claude-`) → WARN, treat as
+   `inherit` (a hand-trimmed `.superenv` can let the claude-flavored plugin default
+   leak through).
+codex-only:end -->
+6. **Effort keys** (each `SUPER_EFFORT_*`):
+<!-- cc-only:start -->
+   valid = `low|medium|high|xhigh|max|inherit`; else WARN, treat as `inherit`.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+   effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
+cursor-only:end -->
+<!-- codex-only:start
+   valid = `none|minimal|low|medium|high|xhigh|inherit`; else WARN (note: claude's
+   `max` is NOT a Codex effort), treat as `inherit`.
+codex-only:end -->
+
+## Step 3 — Role agents (model/effort pins)
 
 <!-- cc-only:start -->
 Nine `SUPER_MODEL_*` role keys dispatch through the Agent tool — all but
@@ -110,33 +173,51 @@ names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`) 
 NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
 cursor-only:end -->
+<!-- codex-only:start
+Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
+`SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `codex exec -m`.
+On Codex there are **no generated agent-definition files at all**: role pins dispatch
+at runtime as `spawn_agent` parameters — `SUPER_MODEL_<ROLE>` → `model`,
+`SUPER_EFFORT_<ROLE>` → `reasoning_effort`, `inherit` = omit the parameter. This step
+therefore **generates nothing**; per the design spec it resolves the effective
+model/effort per role and REPORTS them, so a misconfigured pin surfaces here instead
+of at spawn time.
+codex-only:end -->
 
-Resolve each key below per the resolution order above:
+Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
-| Key | Generated definition |
-|---|---|
-| SUPER_MODEL_PLANNER | `.claude/agents/super-planner.md` |
-| SUPER_MODEL_EXECUTOR | `.claude/agents/super-executor.md` |
-| SUPER_MODEL_PANEL | `.claude/agents/super-panel.md` |
-| SUPER_MODEL_IMPLEMENTER | `.claude/agents/super-implementer.md` |
-| SUPER_MODEL_FIX_APPLIER | `.claude/agents/super-fix-applier.md` |
-| SUPER_MODEL_TASK_REVIEWER | `.claude/agents/super-task-reviewer.md` |
-| SUPER_MODEL_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
-| SUPER_MODEL_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
-| SUPER_MODEL_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+| Model key | Effort key | Generated definition |
+|---|---|---|
+| SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.claude/agents/super-executor.md` |
+| SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.claude/agents/super-panel.md` |
+| SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.claude/agents/super-implementer.md` |
+| SUPER_MODEL_FIX_APPLIER | SUPER_EFFORT_FIX_APPLIER | `.claude/agents/super-fix-applier.md` |
+| SUPER_MODEL_TASK_REVIEWER | SUPER_EFFORT_TASK_REVIEWER | `.claude/agents/super-task-reviewer.md` |
+| SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
+| SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
+| SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
 
 <!-- cc-only:start -->
-- **Value is a full model ID:** render
+- **Generate when:** the model value is a **full model ID** (`^claude-`), OR the
+  effort value is non-`inherit` (a tier-name model alone rides the Task call's
+  `model:` parameter and needs no file). Render
   `${CLAUDE_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
   `.claude/agents/` if needed), substituting `<role>` (the path's `super-` suffix,
-  e.g. `planner`), `<KEY>`, and `<model-id>`. These files are **derived artifacts
-  owned by init** — the `generated-by: superagent:init` marker line says so — and
-  rewriting one whose model drifted from `.superenv` is the point of this step, not
-  an overwrite violation. Never touch a file at these paths that lacks the marker:
-  report it as `conflict` and leave it.
-- **Value is a tier name or `inherit`, but the listed path exists with the marker:**
+  e.g. `planner`), `<KEY>` (both keys, comma-separated, when both pin), and:
+  - the `model:` line — keep it only when the model value is non-`inherit`
+    (tier names AND full IDs are both valid frontmatter `model:` values; an
+    effort-only definition drops the line entirely);
+  - the `effort:` line — keep it only when the effort value is non-`inherit`
+    (claude domain: `low|medium|high|xhigh|max`).
+  These files are **derived artifacts owned by init** — the
+  `generated-by: superagent:init` marker line says so — and rewriting one whose
+  pins drifted from `.superenv` is the point of this step, not an overwrite
+  violation. Never touch a file at these paths that lacks the marker: report it
+  as `conflict` and leave it.
+- **Neither key requires a file, but the listed path exists with the marker:**
   delete it (a stale derived artifact) and report `removed (stale)`.
-- **Value is a tier name or `inherit`, no file present:** nothing to do.
+- **Neither key requires a file, no file present:** nothing to do.
 <!-- cc-only:end -->
 <!-- cursor-only:start
 - **Value is a model name (anything valid other than `inherit`):** render
@@ -151,17 +232,44 @@ Resolve each key below per the resolution order above:
   exists with the marker:** delete it (a stale derived artifact) and report
   `removed (stale)`.
 - **Value is `inherit`, no file present:** nothing to do.
+Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
 cursor-only:end -->
+<!-- codex-only:start
+- **No files are generated or removed on Codex.** The table's "Generated definition"
+  column names the Claude Code artifact and is inapplicable in this build. For each
+  role, resolve both keys (using the validated values above) and record the effective
+  pair in the summary — e.g. `planner: model=gpt-5.1-codex, effort=inherit — n/a
+  (spawn-parameter pins)`. At runtime the loop passes these as the `spawn_agent`
+  call's `model` / `reasoning_effort` parameters; `inherit` = omit the parameter.
+- A leftover `.claude/agents/super-*.md` file from a Claude Code init of the same
+  repo belongs to that harness's build: leave it untouched and do not report it as
+  stale.
+codex-only:end -->
 
+<!-- cc-only:start -->
 Agent definitions load at session start, so files written here take effect from the
-next tick/session, not the current one. Report per-key results (`generated` /
+next tick/session, not the current one.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+Agent definitions load at session start, so files written here take effect from the
+next tick/session, not the current one.
+cursor-only:end -->
+Report per-key results (`generated` /
 `regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
 row.
 
+<!-- cc-only:start -->
 Note: permission layers commonly treat `.claude/` as protected — in a headless or
 auto-accept session the write may be auto-denied even when other edits sail through.
 init is an attended bootstrap step; if the write prompts, it needs a human approval,
 and if it is denied, report the role as blocked rather than retrying.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+Note: permission layers commonly treat `.claude/` as protected — in a headless or
+auto-accept session the write may be auto-denied even when other edits sail through.
+init is an attended bootstrap step; if the write prompts, it needs a human approval,
+and if it is denied, report the role as blocked rather than retrying.
+cursor-only:end -->
 
 ## Step 4 — Vault
 
