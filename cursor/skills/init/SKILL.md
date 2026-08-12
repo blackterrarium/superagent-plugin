@@ -4,6 +4,22 @@ description: Bootstrap a repository for the superagent plugin — verify prerequ
 license: all rights reserved
 ---
 
+<!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
+
+> **Cursor build notes.**
+> - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
+>   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat
+>   any residual mention of them as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
+>   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
+>   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   not available — use an OS scheduler.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
+>   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
+>   path wherever it appears.
+
 # superagent:init — repo bootstrap
 
 Prepare the current repository to run the superagent skill family. Every step is
@@ -14,16 +30,6 @@ Invoke this skill explicitly as `superagent:init` — a built-in `init` skill (C
 authoring) ships unscoped in most sessions, so the bare name `init` is ambiguous the
 moment both are available.
 
-<!-- cc-only:start -->
-**Harness check (belt-and-suspenders).** This is the **Claude Code** build of the superagent
-plugin. If `${CLAUDE_PLUGIN_ROOT}` is not defined in your tool environment — i.e. you are not
-running as a Claude Code plugin skill — STOP and report: the wrong harness build is loaded. On
-Cursor, install the plugin's native Cursor build (the `cursor/` package in this repository)
-instead, and make sure only one build of this plugin is loaded at a time (e.g. Cursor's
-"Include third-party Plugins, Skills, and other configs" setting must not load the Claude Code
-build alongside the native one — the two inits collide).
-<!-- cc-only:end -->
-<!-- cursor-only:start
 **Harness check (belt-and-suspenders).** This is the **Cursor** build of the superagent plugin
 (generated — see the banner above). If you are running under Claude Code — e.g. the
 `CLAUDE_PLUGIN_ROOT` environment variable is defined in your tool environment — STOP and report: the wrong harness
@@ -31,15 +37,14 @@ build is loaded; install the Claude Code plugin from the repository root instead
 only one build of this plugin is loaded at a time (if Cursor's "Include third-party Plugins,
 Skills, and other configs" setting is loading the Claude Code build alongside this one, disable
 that for this plugin — the two inits collide).
-cursor-only:end -->
 
 ## Repo configuration (.superenv)
 
 Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults —
 which is exactly the case Step 2 below fixes by creating one.
 
@@ -72,7 +77,7 @@ which is exactly the case Step 2 below fixes by creating one.
    operation in `superplan`/`superrun` need it). On a macOS host, a sandboxed `gh auth
    status` can fail even when `gh` is actually authenticated, because `gh` needs keychain
    access the tool sandbox blocks — see `SUPER_GH_DISABLE_SANDBOX` in
-   `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. If the check fails on macOS, note
+   `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. If the check fails on macOS, note
    that possibility rather than reporting a bare WARN.
 4. Informational: external (unattended) mode runs on Linux (systemd user timers) and
    macOS (launchd LaunchAgents — logged-in + awake only; crontab fallback documented in
@@ -83,7 +88,7 @@ which is exactly the case Step 2 below fixes by creating one.
 ## Step 2 — Config
 
 If `<repo-root>/.superenv` does not exist, copy
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default` to `<repo-root>/.superenv` (keep the
+`${SUPER_PLUGIN_ROOT}/templates/superenv.default` to `<repo-root>/.superenv` (keep the
 comments — the repo edits knobs in place). If it exists, leave it untouched and report
 any `SUPER_*` keys the shipped default defines that the existing file lacks — diff the
 key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines, since
@@ -92,15 +97,6 @@ falls through to the plugin default per the resolution order above.
 
 ## Step 3 — Role agents (full model IDs only)
 
-<!-- cc-only:start -->
-Nine `SUPER_MODEL_*` role keys dispatch through the Agent tool — all but
-`SUPER_MODEL_SUPERVISOR`, which the tick passes straight to `claude --model`. The
-Agent tool's `model:` parameter accepts only tier names, so a role whose resolved
-value is a **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) is pinned
-via a generated per-role agent definition instead — the definition's `model:`
-frontmatter accepts full IDs.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `agent --model`.
 On Cursor, valid model values are Cursor model names (see `agent --list-models`) or
@@ -109,38 +105,23 @@ definition — the definition's `model:` frontmatter carries the name. Claude Co
 names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`) are
 NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
-cursor-only:end -->
 
 Resolve each key below per the resolution order above:
 
 | Key | Generated definition |
 |---|---|
-| SUPER_MODEL_PLANNER | `.claude/agents/super-planner.md` |
-| SUPER_MODEL_EXECUTOR | `.claude/agents/super-executor.md` |
-| SUPER_MODEL_PANEL | `.claude/agents/super-panel.md` |
-| SUPER_MODEL_IMPLEMENTER | `.claude/agents/super-implementer.md` |
-| SUPER_MODEL_FIX_APPLIER | `.claude/agents/super-fix-applier.md` |
-| SUPER_MODEL_TASK_REVIEWER | `.claude/agents/super-task-reviewer.md` |
-| SUPER_MODEL_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
-| SUPER_MODEL_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
-| SUPER_MODEL_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+| SUPER_MODEL_PLANNER | `.cursor/agents/super-planner.md` |
+| SUPER_MODEL_EXECUTOR | `.cursor/agents/super-executor.md` |
+| SUPER_MODEL_PANEL | `.cursor/agents/super-panel.md` |
+| SUPER_MODEL_IMPLEMENTER | `.cursor/agents/super-implementer.md` |
+| SUPER_MODEL_FIX_APPLIER | `.cursor/agents/super-fix-applier.md` |
+| SUPER_MODEL_TASK_REVIEWER | `.cursor/agents/super-task-reviewer.md` |
+| SUPER_MODEL_RE_REVIEWER | `.cursor/agents/super-re-reviewer.md` |
+| SUPER_MODEL_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
+| SUPER_MODEL_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
 
-<!-- cc-only:start -->
-- **Value is a full model ID:** render
-  `${CLAUDE_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
-  `.claude/agents/` if needed), substituting `<role>` (the path's `super-` suffix,
-  e.g. `planner`), `<KEY>`, and `<model-id>`. These files are **derived artifacts
-  owned by init** — the `generated-by: superagent:init` marker line says so — and
-  rewriting one whose model drifted from `.superenv` is the point of this step, not
-  an overwrite violation. Never touch a file at these paths that lacks the marker:
-  report it as `conflict` and leave it.
-- **Value is a tier name or `inherit`, but the listed path exists with the marker:**
-  delete it (a stale derived artifact) and report `removed (stale)`.
-- **Value is a tier name or `inherit`, no file present:** nothing to do.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 - **Value is a model name (anything valid other than `inherit`):** render
-  `${CLAUDE_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
+  `${SUPER_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
   the agents directory if needed), substituting `<role>` (the path's `super-` suffix,
   e.g. `planner`), `<KEY>`, and `<model-id>`. These files are **derived artifacts
   owned by init** — the `generated-by: superagent:init` marker line says so — and
@@ -151,14 +132,13 @@ Resolve each key below per the resolution order above:
   exists with the marker:** delete it (a stale derived artifact) and report
   `removed (stale)`.
 - **Value is `inherit`, no file present:** nothing to do.
-cursor-only:end -->
 
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one. Report per-key results (`generated` /
 `regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
 row.
 
-Note: permission layers commonly treat `.claude/` as protected — in a headless or
+Note: permission layers commonly treat `.cursor/` as protected — in a headless or
 auto-accept session the write may be auto-denied even when other edits sail through.
 init is an attended bootstrap step; if the write prompts, it needs a human approval,
 and if it is denied, report the role as blocked rather than retrying.
@@ -169,7 +149,7 @@ Resolve `SUPER_GOAL_ROOT` per the resolution order above (shipped default `vault
 worked example from the originating repo sets it to `vault/network-compose`). Three cases:
 
 - `<repo-root>/<SUPER_GOAL_ROOT>` does not exist: create it and copy
-  `${CLAUDE_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`.
+  `${SUPER_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`.
 - the directory exists but has no `root.md`: seed `root.md` from the same template.
   Writing a file that is currently absent is not an overwrite, so the intro's
   never-overwrite invariant still holds. `root.md` is not a precondition any skill
@@ -202,16 +182,16 @@ docs-only PR commit.
 
 Also append the line `.env` to `<repo-root>/.gitignore` unless an identical line is
 already present (same idempotent check, same newline guard). External (unattended) mode
-directs `ANTHROPIC_API_KEY`/`GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
+directs `CURSOR_API_KEY`/`GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
 Prerequisites), and that file must never be committed.
 
 ## Step 6 — Landing
 
 init only prepares files — it never commits. Tell the user what to commit
-(`.superenv`, the vault seed, any generated `.claude/agents/super-*.md` role
+(`.superenv`, the vault seed, any generated `.cursor/agents/super-*.md` role
 definitions, `.gitignore` — now covering both the loop-status pattern
 and `.env`) and remind them to follow the repo's own change discipline: if
 `SUPER_PROTECTED_MAIN=true` (the shipped default), that means a feature branch + PR, same
 as every `superauthor`-driven skill's own A7 commit step. `.env` itself (holding
-`ANTHROPIC_API_KEY`/`GH_TOKEN`) stays gitignored and is never committed — only the
+`CURSOR_API_KEY`/`GH_TOKEN`) stays gitignored and is never committed — only the
 `.gitignore` entry that excludes it is.

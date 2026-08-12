@@ -7,6 +7,22 @@ license: all rights reserved
 related skills: superloop, superplan, superrun, supertraverse, superfinish
 ---
 
+<!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
+
+> **Cursor build notes.**
+> - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
+>   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat
+>   any residual mention of them as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
+>   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
+>   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   not available — use an OS scheduler.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
+>   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
+>   path wherever it appears.
+
 # Superagent
 
 The **autonomy supervisor** for the `super*` plan-tree lifecycle. Given a goal's **root** seed/master
@@ -43,21 +59,13 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 | "I'll plan this step and then run it in the same tick while I'm here" | NO. **One skill per tick.** Set the next status and let the next cron tick run it. superplan and superrun contexts must never intermix. |
 | "I'll just invoke `superplan`/`superrun` via the Skill tool here — it's simpler" | NO. **Every `superplan`/`superrun` invocation runs in its own `general-purpose` subagent** (see **Subagent dispatch**). superagent's own context ingests only the returned Final Report (which it then relays verbatim to the caller), never the full skill execution — that is what keeps the supervisor lean and the per-session threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6) meaningful. |
 | "I'll detect the next step / execute the plan myself" | NO. superagent never traverses, plans, or executes. It dispatches `superplan` / `superrun` (each in its own subagent) and reacts to their Final Reports. |
-| "/superagent was run again — I'll start the loop" | NO. Check first. `cron` mode: `CronList` — a live job + non-terminal status = already looping, report and exit. `external` mode: a non-terminal loop file = the Desktop routine / cron entry is already the driver; report state and re-print setup, don't arm anything. Never start a second loop. | <!-- cc-only -->
-<!-- cursor-only:start
 | "/superagent was run again — I'll start the loop" | NO. Check first. A non-terminal loop file = the scheduler entry is already the driver; report state and re-print setup, don't arm anything. Never start a second loop. |
-cursor-only:end -->
 | "A fresh/empty context means I lost the loop state" | NO. All state is in the loop file. A `--tick` works identically in a clean context (external driver) or an accumulating one (cron). Acquire the lock, read the file, run one tick. |
 | "A skill raised a question — I'll just ask the user" | NO. First run the **subagent panel** (Decision-escalation ladder). Ask the user only if the panel cannot converge. |
 | "The work is blocked — terminate the loop" | NO. Run the panel on the blocker first (retry / re-plan / decline / escalate). Stop the driver only when DONE or an escalation pauses the loop. |
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
-| "Context is getting low but I'll squeeze one more `superplan`/`superrun` in while I'm here" | NO. **Run the Session skill-budget gate (Step 0.5) before every iteration.** After `SUPER_HEAVY_STEP_LIMIT` heavy skills (default 6) in one cron session → persist, stop the cron driver, and hand off; tell the user to `/clear` and re-run `/superagent`. A skill that dies mid-run with the window blown leaves no clean resume. | <!-- cc-only -->
-| "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, arm the completion **Monitor**, release the lock, end the tick. The harness re-invokes you exactly once, when ALL runs are terminal. Per-tick / in-context polling is the context waste the parked state exists to eliminate. | <!-- cc-only -->
-| "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | cron: NO — strict no-op (the Monitor owns the wait; read status, release lock, exit — no `gh`, no `curl`, no subagent). external: ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. | <!-- cc-only -->
-<!-- cursor-only:start
 | "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, release the lock, end the tick. Each later scheduled tick does ONE batched `curl` over the recorded run ids and exits unless every run is terminal. Per-tick heavy polling is the context waste the parked state exists to eliminate. |
 | "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. |
-cursor-only:end -->
 | "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false`): the blocked Agent call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
 
 ## Hard gate — `<PLAN.md>` is required
@@ -77,8 +85,8 @@ and **exit**. Do not guess a plan from the working directory.
 Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ---
@@ -122,16 +130,8 @@ resume branching, and the read-`master_plan`/`status`/…-before-Step-1 step. Af
 
 ## Step 0.5 — Session skill-budget gate (check BEFORE every iteration)
 
-<!-- cc-only:start -->
-Run **superloop L4** (`check_session_budget()`) before every iteration — after reading the loop file
-(Step 0) and after the `DONE` no-op, but before the Step 1 dispatch. superagent's **heavy step** is one
-`superplan` or `superrun` invocation (incremented in Step 2); the handoff **threshold** is `SUPER_HEAVY_STEP_LIMIT` (default 6). If L4 hands
-off, this tick ends there; otherwise go to **Step 1**.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 A structural no-op in this build (superloop L4): the external driver is the only driver and every tick
 runs in a fresh context. Go straight to **Step 1**.
-cursor-only:end -->
 
 ---
 
@@ -170,7 +170,7 @@ ci-resume's fresh subagent and escalation-ladder retries):
 - A tier name (`sonnet` | `opus` | `haiku` | `fable`) → pass it as `model:`.
 - A **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) → the Agent tool's `model:`
   parameter is tier-enum-only and rejects it; instead dispatch with `subagent_type: super-planner` /
-  `super-executor` — the per-role agent definition `superagent:init` generates in `.claude/agents/`,
+  `super-executor` — the per-role agent definition `superagent:init` generates in `.cursor/agents/`,
   whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
   that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
 
@@ -221,20 +221,6 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    `leaf:`, `worktree:`, `subagent:` (the dispatched superrun subagent's id/name, for the
    `SendMessage` resume), `since: <timestamp>`. Set `status: WAITING FOR CI`.
 2. **Arm the resume signal — by driver:**
-<!-- cc-only:start -->
-   - **cron (in-session):** arm **one `Monitor`** (`persistent: true`) that `curl`s
-     `https://api.github.com/repos/<owner>/<repo>/actions/runs/<id>` for **each** id in `ci_wait.runs`
-     (auth: `TOK=$(gh auth token)` captured before arming — prefer `curl` for polling inside a Monitor:
-     on hosts where `SUPER_GH_DISABLE_SANDBOX=true`, `gh` cannot run *inside* the Monitor at all (it
-     needs keychain access), so `curl` to `api.github.com` is the only option there; where
-     `SUPER_GH_DISABLE_SANDBOX=false`, `curl` is still preferred for consistency) and fires the
-     first time **every** run is `status: completed`, emitting each `id: conclusion` pair. It MUST
-     emit on **any** terminal state (success / failure / cancelled / timed_out) — a success-only
-     filter is silent through a crash, and silence looks like "still running". Then **suspend the
-     tick cadence for the wait**: `CronDelete cron_id`, clear `cron_id`, and log `parked on CI —
-     cron driver suspended, Monitor armed`. No ticks fire while parked; the Monitor's fire is the
-     only resume signal.
-<!-- cc-only:end -->
    - **external:** the tick is a fresh headless session — a Monitor cannot outlive it, and the
      scheduler is user-managed (never touched). The scheduler keeps firing ticks; the `WAITING FOR
      CI` tick branch (Step 1) is the cheap check.
@@ -259,25 +245,14 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    **Resume entry — post-CI**. Either way the subagent returns the real Final Report.
 4. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
    next state, iteration log). Clear the `ci_wait:` block.
-   **cron:** re-arm the driver (`CronCreate`, record the new `cron_id`) so ticks resume. <!-- cc-only -->
 5. The heavy-skill count for this leaf was already incremented on the tick that dispatched
    `superrun` (Step 2); the park and resume ticks increment `iteration` but **not**
    `session_skill_count` again.
 
-<!-- cc-only:start -->
-**RESUME / restart while parked (form B, or a fresh cron session):** a persisted `WAITING FOR CI`
-whose Monitor died with its session is recovered on the standard RESUME path — check the recorded
-runs once (batched curl or `gh run view`): all terminal → run the resume flow above this tick; any
-still running → re-arm the **Monitor** (cron — but do **not** `CronCreate` a driver while parked; the
-Monitor is the sole resume signal, and the driver is re-armed on ci-resume) or just report the parked
-state (external — the scheduler's ticks keep checking) and exit.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 **RESUME / restart while parked (form B):** a persisted `WAITING FOR CI` is recovered on the standard
 RESUME path — check the recorded runs once (batched curl or `gh run view`): all terminal → run the
 resume flow above this tick; any still running → report the parked state (the scheduler's ticks keep
 checking) and exit.
-cursor-only:end -->
 
 ---
 
@@ -299,7 +274,7 @@ block.
     answer, proceed as above. If it genuinely can't be answered, **pause** (`stop_driver()`),
     `release_lock()` — a later `/superagent <PLAN.md>` resumes.
   - **Non-interactive scheduled tick (external Desktop/headless CLI, fresh session — no one to
-    prompt):** do **not** block on `AskUserQuestion` (in a headless `claude -p` tick
+    prompt):** do **not** block on `AskUserQuestion` (in a headless `agent -p` tick
     there is no TTY to answer, so it would stall the one-shot session). Ensure `## Pending decision`
     holds the question + an explicit *"write your choice as `answer: <option>` under this block"*
     instruction, `release_lock()`, and exit. The **scheduler keeps firing `--tick`**, which **polls**
@@ -318,11 +293,6 @@ own branch.)
 
 ### `WAITING FOR CI` (parked — the cheap branch)
 The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-parked**).
-<!-- cc-only:start -->
-- **cron:** strict no-op — the Monitor owns the wait. Read status, `release_lock()`, exit. No `gh`,
-  no `curl`, no subagent. (Normally no cron tick even fires here — the driver was suspended at
-  parking; this covers a straggler tick or a manual `--tick`.)
-<!-- cc-only:end -->
 - **external:** run **one batched `curl`** over all ids in `ci_wait.runs` (auth `gh auth token` — with
   the sandbox override if `SUPER_GH_DISABLE_SANDBOX=true`; this is the only network call this tick).
   - Any run still not `completed` → `release_lock()`, exit. Nothing else this tick.
@@ -412,12 +382,7 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    Write — no commit, no PR (the file is gitignored).
 2. **Terminal** (`DONE`, hard error, or `WAITING FOR INPUT` unanswered in an unattended run): print a
    final summary (plus the pending question + resume instructions for the input case) and
-<!-- cc-only:start -->
-   `stop_driver()` (cron → `CronDelete`; external → instruct the user to disable the routine). No more
-<!-- cc-only:end -->
-<!-- cursor-only:start
    `stop_driver()` (instruct the user to disable the scheduler entry). No more
-cursor-only:end -->
    ticks fire.
 3. **Otherwise**: do nothing to the driver — the next `--tick <loop-file>` fires on its own (the
    in-session `cron` job, or the external Desktop routine / OS-cron entry, depending on `driver`).
@@ -436,36 +401,16 @@ The two drivers (Driver A `cron`, Driver B `external`), the context model, the o
 (`acquire_lock()` / `release_lock()`), and `stop_driver()` are **superloop L2 + L3**. superagent arms
 `/superagent --tick <loop-file>` as its tick prompt (`<consumer>` = `superagent`).
 
-<!-- cc-only:start -->
-**Running from the Claude CLI.** For `external` mode the tick fires
-in a fresh headless `claude -p` session per interval; because print mode cannot run slash commands, and
-Skill-tool semantics for a disable-model-invocation skill in headless print mode are unverified, the
-scheduler drives it by asking the CLI to *read `skills/superagent/SKILL.md` directly (at the plugin's
-installed location) and run exactly one `--tick`* (superloop L2, Driver B). The loop's own internal
-`superagent:superplan` / `superagent:superrun` dispatches still go through the Skill tool once the
-session is running. `${CLAUDE_PLUGIN_ROOT}/scripts/` packages the whole
-thing (the tick wrapper, a per-goal scheduler entry — systemd user timer on Linux, launchd
-LaunchAgent on macOS — and
-bootstrap/install/uninstall/console-watch/status helpers); the runbook is
-[scripts/README.md](../../scripts/README.md), which documents the `SUPERAGENT_SCRIPTS` convention
-runnable examples use to locate this plugin's installed `scripts/` directory. Monitor and control
-running loops (multi-instance: list state, answer `WAITING FOR INPUT`, drain/stop/uninstall/re-arm) with
-the `superagent-monitor` skill. The driver must never `--resume` (fresh
-context per tick — L4 is a no-op in `external` mode, so the loop runs straight to `DONE`); an
-interactive monitoring/answering console is a separate plane that can be started/stopped independently.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 **Running from the Cursor CLI.** For `external` mode the tick fires in a fresh headless `agent -p`
 session per interval; the scheduler drives it by asking the CLI to *read `skills/superagent/SKILL.md`
 directly (at the plugin's installed location) and run exactly one `--tick`* (superloop L2, Driver B).
 The loop's own internal `superagent:superplan` / `superagent:superrun` dispatches still go through the
 skill mechanism once the session is running, so the plugin must be installed and enabled for headless
 sessions (or passed via `--plugin-dir`). **Port status:** the shipped `scripts/` wrappers still invoke
-the Claude CLI — until they are ported, schedule the Driver B `agent -p` recipe directly. The driver
+the Cursor CLI — until they are ported, schedule the Driver B `agent -p` recipe directly. The driver
 must never `--resume` (fresh context per tick — L4 is a no-op in `external` mode, so the loop runs
 straight to `DONE`); an interactive monitoring/answering console is a separate plane that can be
 started/stopped independently.
-cursor-only:end -->
 
 ---
 
@@ -517,12 +462,6 @@ tick, even one the loop already resolved itself.
     (interactive prompt, or `answer:` in the loop file for a scheduled loop)>
 
 On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
-<!-- cc-only:start -->
-and confirmation the driver was stopped — `cron` → `CronDelete`d; `external` → the user reminded to
-disable the Desktop routine / scheduler entry. Include the final tick's verbatim **Delegated skill
-<!-- cc-only:end -->
-<!-- cursor-only:start
 and confirmation the user was reminded to disable the scheduler entry. Include the final tick's
 verbatim **Delegated skill
-cursor-only:end -->
 report** and any still-open `Findings & issues`.

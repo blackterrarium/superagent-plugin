@@ -1,0 +1,51 @@
+# .superenv — superagent plugin defaults
+# Precedence: env var > repo-root .superenv > this plugin default.
+# Model values (Cursor build): a Cursor model name (see `agent --list-models`) or
+# "inherit". "inherit" = omit the model override; the subagent runs on the session
+# model. Any non-inherit value needs the per-role agent definition in .cursor/agents/
+# — re-run superagent:init after changing one.
+# (SUPER_MODEL_SUPERVISOR goes straight to `agent --model`, which takes any listed name.)
+
+# ── Model per agent role ──────────────────────────────────────────
+SUPER_MODEL_SUPERVISOR=inherit          # the superagent tick itself (headless tick: the CLI default model)
+SUPER_MODEL_PLANNER=inherit             # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
+SUPER_MODEL_PANEL=inherit               # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_IMPLEMENTER=inherit
+SUPER_MODEL_FIX_APPLIER=inherit
+SUPER_MODEL_TASK_REVIEWER=inherit
+SUPER_MODEL_RE_REVIEWER=inherit
+SUPER_MODEL_BRANCH_REVIEWER=inherit        # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=inherit            # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
+
+# ── Paths ─────────────────────────────────────────────────────────
+SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/
+SUPER_LOOP_STATUS_DIRNAME=loop-status   # gitignored; sibling of the goal's master-plans/
+
+# ── Loop tuning ───────────────────────────────────────────────────
+SUPER_HEAVY_STEP_LIMIT=6                # heavy skills per session before context handoff
+SUPER_LOCK_STEAL_MIN=90                 # stale-lock steal window, minutes
+SUPER_TICK_INTERVAL=30m                 # external-driver default when --interval omitted
+
+# ── CI / test-evidence policy ─────────────────────────────────────
+SUPER_TEST_EVIDENCE=local               # local = SDD's native TDD contract; ci = evidence is CI run ids only
+SUPER_CI_FLAG_TEMPLATE=                 # commit-message flag grammar, e.g. "[test:%s]"; empty = none
+SUPER_CI_ONE_FLAG_PER_PUSH=true
+SUPER_CI_RUNNERS=1                      # >1 = queue independent long pushes back-to-back
+SUPER_BRANCH_STYLE=flat                 # flat = no slashes in branch names
+
+# ── Review protocol ───────────────────────────────────────────────
+SUPER_REVIEW_CONFIDENCE_FILTER=controller  # reviewers report ALL findings with severity+confidence;
+                                           # the controller filters. Never push the filter into the
+                                           # reviewer prompt (Claude 5 reviewers silently drop findings).
+
+# ── Git / PR policy ───────────────────────────────────────────────
+SUPER_MERGE_METHOD=squash
+SUPER_PROTECTED_MAIN=true               # all changes via PR from a feature branch
+SUPER_ADMIN_MERGE=false                 # true only with session-scoped authorization
+SUPER_SKIP_FINISHING_HANDOFF=false      # true = bypass superpowers:finishing-a-development-branch
+SUPER_GH_DISABLE_SANDBOX=false          # true on macOS hosts where gh needs keychain access
+
+# ── Escape hatch ──────────────────────────────────────────────────
+SUPER_REPO_NOTES=                       # optional path to a repo doc the executor reads pre-run
