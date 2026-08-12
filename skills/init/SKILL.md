@@ -90,6 +90,56 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
+### .superenv validation (lint — WARN + fallback, never abort)
+
+Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
+using it. For each finding emit one WARN row in the summary; the effective value used
+by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
+report-only.
+
+1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
+   also exist in `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
+   "probable typo (ignored)".
+2. **Enums** (out-of-domain → WARN, fall back to the template default):
+   `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
+   workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
+   `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
+   `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller.
+3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
+   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
+   `SUPER_GH_DISABLE_SANDBOX`.
+4. **Numerics** (positive integer, else WARN + template default):
+   `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
+   `SUPER_TICK_INTERVAL` must parse as an interval span (e.g. `600`, `90s`, `30m`, `2h`).
+5. **Model keys** (each `SUPER_MODEL_*`):
+<!-- cc-only:start -->
+   valid = a tier name (`sonnet|opus|haiku|fable`), `inherit`, or a full Claude model
+   ID (`^claude-`). Anything else → WARN, treat as `inherit` (catches typos like
+   `sonet` before they become an agent definition that fails at spawn time).
+<!-- cc-only:end -->
+<!-- cursor-only:start
+   valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
+   and `claude-*` IDs not in that list → WARN, treat as `inherit`.
+cursor-only:end -->
+<!-- codex-only:start
+   valid = a Codex model name or `inherit`. A Claude tier name
+   (`sonnet|opus|haiku|fable`) or Claude model ID (`^claude-`) → WARN, treat as
+   `inherit` (a hand-trimmed `.superenv` can let the claude-flavored plugin default
+   leak through).
+codex-only:end -->
+6. **Effort keys** (each `SUPER_EFFORT_*`):
+<!-- cc-only:start -->
+   valid = `low|medium|high|xhigh|max|inherit`; else WARN, treat as `inherit`.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+   effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
+cursor-only:end -->
+<!-- codex-only:start
+   valid = `none|minimal|low|medium|high|xhigh|inherit`; else WARN (note: claude's
+   `max` is NOT a Codex effort), treat as `inherit`.
+codex-only:end -->
+
 ## Step 3 — Role agents (full model IDs only)
 
 <!-- cc-only:start -->
@@ -111,7 +161,7 @@ NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
 cursor-only:end -->
 
-Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`) per the resolution order above:
+Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
 | Model key | Effort key | Generated definition |
 |---|---|---|
