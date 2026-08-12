@@ -185,6 +185,13 @@ codex/README.md                                     install notes + validated/kn
     (`$skill-name` mention); names are plugin-scoped — verify actual naming in the
     smoke run (the Cursor port found names unprefixed; Codex may differ).
   - `CronCreate`/`CronList`/`CronDelete`/`Monitor` → do not exist; never attempt.
+- Model-name guard in the generated `init` skill, mirroring the cursor build's:
+  when a resolved `SUPER_MODEL_*` value is a Claude tier name
+  (`sonnet|opus|haiku|fable`) or a Claude model ID (`claude-*`), WARN and treat
+  it as `inherit` — protects a codex-harness repo whose hand-edited `.superenv`
+  drops a key and lets the claude-flavored plugin default leak through. Same
+  guard for `SUPER_EFFORT_*` values outside the Codex effort domain (e.g.
+  `max`).
 - `--check` mode: rebuild to a temp dir and diff against `codex/`, exit 1 if stale
   (CI / pre-release guard) — same contract as `build-cursor-skills.sh --check`.
 
