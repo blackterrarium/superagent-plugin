@@ -99,6 +99,16 @@ key except `SUPER_MODEL_SUPERVISOR` is applied via a per-role agent definition
 init after setting or changing a full-ID value. `SUPER_MODEL_SUPERVISOR` needs no definition: the
 tick passes it straight to `claude --model`, which accepts every form.
 
+`SUPER_EFFORT_*` keys set per-role reasoning effort independently of the model pin, resolved the
+same three-layer way. The valid domain is harness-native: on Claude Code, `low | medium | high |
+xhigh | max | inherit`; on the Codex harness, `none | minimal | low | medium | high | xhigh |
+inherit` (no `max`); the Cursor CLI has no effort control at all, so any non-`inherit` value there
+is a no-op — `superagent:init`'s validation pass and the tick itself both WARN and fall back to
+`inherit`. `inherit` means no effort flag is passed, so the CLI's own default applies. Every
+shipped build defaults the four dispatch-only roles (supervisor/planner/executor/panel) to
+`inherit` and the SDD worker roles to a nonzero effort (`medium` for implementer/fix-applier,
+`high` for the reviewers and fix-planner, `xhigh` for the branch reviewer) — see the table below.
+
 | Key | Default | Meaning |
 |---|---|---|
 | SUPER_MODEL_SUPERVISOR | `inherit` | Model for the superagent tick itself (a headless tick has no session to inherit from, so `inherit` resolves to `opus` there). |
@@ -111,6 +121,17 @@ tick passes it straight to `claude --model`, which accepts every form.
 | SUPER_MODEL_RE_REVIEWER | `opus` | Model for the SDD re-reviewer (post-fix). |
 | SUPER_MODEL_BRANCH_REVIEWER | `opus` | Model for the final whole-branch reviewer. |
 | SUPER_MODEL_FIX_PLANNER | `opus` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
+| SUPER_EFFORT_SUPERVISOR | `inherit` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; `inherit` passes no effort flag). |
+| SUPER_EFFORT_PLANNER | `inherit` | Reasoning effort for the `superplan` / `supergoal` dispatch subagent. |
+| SUPER_EFFORT_EXECUTOR | `inherit` | Reasoning effort for the `superrun` dispatch subagent (the SDD controller). |
+| SUPER_EFFORT_PANEL | `inherit` | Reasoning effort for the L7 escalation panel. |
+| SUPER_EFFORT_IMPLEMENTER | `medium` | Reasoning effort for SDD implementer tasks. |
+| SUPER_EFFORT_FIX_APPLIER | `medium` | Reasoning effort for SDD fix-applier tasks. |
+| SUPER_EFFORT_TASK_REVIEWER | `high` | Reasoning effort for the per-task SDD reviewer. |
+| SUPER_EFFORT_RE_REVIEWER | `high` | Reasoning effort for the SDD re-reviewer (post-fix). |
+| SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Reasoning effort for the final whole-branch reviewer. |
+| SUPER_EFFORT_FIX_PLANNER | `high` | Reasoning effort for fix rounds 4–5. |
+| SUPER_CODEX_SANDBOX | `workspace-write` | Codex-harness-only sandbox posture: `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) or `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`). Out-of-domain values abort the tick. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Subagent type used for the L7 panel (or `Explore`). |
 | SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory name; a sibling of each goal's `master-plans/`. |
@@ -231,6 +252,35 @@ bash scripts/cursor-smoke.sh
 then send the generated `cursor-smoke-report.md` back to the session driving the port. Known gaps
 before the report comes back: the external-driver shell scripts still invoke the Claude CLI, and
 superpowers-under-Cursor (required by `superrun`) is unverified — see `cursor/README.md`.
+
+## Codex (experimental)
+
+A generated Codex build of the plugin lives in [`codex/`](codex/README.md) — external (unattended)
+driver only, in the shape of a Codex plugin-marketplace tree (`codex plugin marketplace add
+<repo>/codex && codex plugin add superagent@superagent`; the skills load via the *installed* plugin,
+not a `--plugin-dir` flag). `scripts/build-codex-skills.sh` derives it from the same conditional
+markers as the Cursor build (single source of truth; `--check` verifies the committed tree is
+fresh) — plus a `codex-only` marker for content inert in the Claude Code and Cursor builds.
+
+Auth is `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's own stored login (`codex
+login`). Sandbox posture is a separate `.superenv` knob, `SUPER_CODEX_SANDBOX`: `workspace-write`
+(default — `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) or
+`danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`). Model keys (`SUPER_MODEL_*`)
+take Codex model names (e.g. `gpt-5.1-codex`) or `inherit`; effort keys (`SUPER_EFFORT_*`) take
+`none | minimal | low | medium | high | xhigh | inherit` — see Configuration above for the shared
+defaults table (same role keys as Claude Code; there is no `.claude/agents/`-style definition file
+on Codex, role pins ride `spawn_agent`'s `model`/`reasoning_effort` parameters instead).
+
+**Status: unvalidated.** To smoke-test it on a machine with the Codex CLI installed:
+
+```
+git clone https://github.com/blackterrarium/superagent-plugin && cd superagent-plugin
+bash scripts/codex-smoke.sh
+```
+
+then send the generated `codex-smoke-report.md` back to the session driving the port. Known gaps
+before the report comes back: `spawn_agent` availability in plain `codex exec` sessions is
+unverified, and no end-to-end multi-tick loop has been run on Codex yet — see `codex/README.md`.
 
 ## Cutting over an existing repo
 

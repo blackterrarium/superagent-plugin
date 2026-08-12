@@ -52,17 +52,46 @@ Override with `--model <slug>` on `launch.sh` / `install-timer.sh`
 generated agent definition is involved at this layer, unlike the subagent role keys. The header
 line in the tick log records the model in use (`model=...`).
 
-## Harness (Claude CLI vs Cursor CLI)
+## Effort
+
+Per-role reasoning effort rides alongside the model pin, resolved the same way: `TICK_EFFORT` env
+var (if set) > `SUPER_EFFORT_SUPERVISOR` (from the `.superenv` layer below) > `inherit` (no effort
+flag passed — the CLI's own default applies). On the `claude` harness the tick passes `--effort
+<value>` only when non-`inherit`; on `codex`, `-c model_reasoning_effort=<value>`. Domain is
+harness-native: claude accepts `low|medium|high|xhigh|max`, codex accepts
+`none|minimal|low|medium|high|xhigh` (no `max`). The Cursor CLI has no effort control at all — any
+non-`inherit` `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` is logged as a warning and dropped, never
+passed through.
+
+`CLAUDE_CODE_EFFORT_LEVEL` (a `claude` CLI env var) outranks both `--effort` and any per-role agent
+frontmatter effort pin, so the tick never sets it itself; if the scheduler environment already
+carries it, the tick logs a warning rather than silently letting it shadow the configured effort.
+
+## Harness (Claude CLI vs Cursor CLI vs Codex CLI)
 
 Every tick fires one agent-CLI session; **which** CLI is the harness: `SUPER_HARNESS=claude`
-(default — `claude -p`) or `SUPER_HARNESS=cursor` (the Cursor CLI: `agent -p --trust --force
---plugin-dir <plugin-repo>/cursor`, reading the generated Cursor build of the skills). Set it via
-`--harness claude|cursor` on `launch.sh` / `install-timer.sh` (pinned into the per-goal
-`~/.config/superagent/<slug>.env` at install time), the target repo's `.superenv`, or the
-environment. On `cursor`: auth is the CLI's stored login or `CURSOR_API_KEY` in the target repo's
-`.env`; model values are Cursor model names (`agent --list-models`), with `inherit` resolving to
-the CLI's own default (`auto`) rather than `opus`; the `cursor/` build must exist in the plugin
-repo (`scripts/build-cursor-skills.sh`).
+(default — `claude -p`), `SUPER_HARNESS=cursor` (the Cursor CLI: `agent -p --trust --force
+--plugin-dir <plugin-repo>/cursor`, reading the generated Cursor build of the skills), or
+`SUPER_HARNESS=codex` (the OpenAI Codex CLI: `codex exec <prompt>`, reading the generated Codex
+plugin-marketplace build under `<plugin-repo>/codex`). Set it via `--harness claude|cursor|codex`
+on `launch.sh` / `install-timer.sh` (pinned into the per-goal `~/.config/superagent/<slug>.env` at
+install time), the target repo's `.superenv`, or the environment.
+
+- **cursor:** auth is the CLI's stored login or `CURSOR_API_KEY` in the target repo's `.env`; model
+  values are Cursor model names (`agent --list-models`), with `inherit` resolving to the CLI's own
+  default (`auto`) rather than `opus`; the `cursor/` build must exist in the plugin repo
+  (`scripts/build-cursor-skills.sh`).
+- **codex:** skills load via the *installed* Codex plugin, not a `--plugin-dir` flag — install once
+  with `codex plugin marketplace add <plugin-repo>/codex && codex plugin add
+  superagent@superagent`; the tick's own file-read prompt still needs the build tree on disk at
+  `<plugin-repo>/codex` (`scripts/build-codex-skills.sh`). Auth is `OPENAI_API_KEY` in the target
+  repo's `.env`, else the CLI's own stored login (`codex login`). Model values are Codex model
+  names (e.g. `gpt-5.1-codex`), with `inherit` omitting `-m` (the CLI's `config.toml` default
+  applies). Sandbox posture is the separate `SUPER_CODEX_SANDBOX` knob (default `workspace-write`,
+  mapping to `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; the
+  alternative `danger-full-access` maps to `--dangerously-bypass-approvals-and-sandbox`) — an
+  out-of-domain value aborts the tick (exit 8; see Exit codes below) rather than silently picking a
+  posture.
 
 ### `.superenv` layer
 
@@ -106,6 +135,21 @@ right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPE
 - For a headless server (Linux): user lingering (so the timer runs without an active login) —
   `install-timer.sh` runs `loginctl enable-linger $USER` for you. macOS has no linger equivalent: a
   LaunchAgent fires only while the user is logged in **and the Mac is awake** (see the launchd section).
+
+## Exit codes (`superagent-tick.sh`)
+
+| Code | Meaning |
+|---|---|
+| 1 | `REPO` unset and the wrapper isn't running inside a git repo. |
+| 2 | `LOOP_FILE` not provided (env or `$1`). |
+| 4 | `gh` preflight failed — not authenticated (see Prerequisites above). |
+| 5 | The harness's agent CLI binary (`claude` / `agent` / `codex`) not found on `PATH`. |
+| 6 | `SUPER_HARNESS` is set to something other than `claude`/`cursor`/`codex`. |
+| 7 | The harness's generated build tree is missing (`cursor/` or `codex/` — run the matching `scripts/build-*-skills.sh`). |
+| 8 | `SUPER_CODEX_SANDBOX` (codex harness only) is set to something other than `workspace-write`/`danger-full-access`. |
+| *other* | Propagated verbatim from the underlying CLI's (`claude`/`agent`/`codex`) own exit status. |
+
+Codes 3 and 9+ are unused.
 
 ## One-step launch (recommended)
 
@@ -179,6 +223,14 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   `DONE`.
 - `status.sh [--json] [<slug>]` — enumerate **all** registered loops (from `~/.config/superagent/*.env`)
   with their live status/timer/tick/lock/input state; drill into one with `<slug>`.
+- `build-codex-skills.sh [--check]` — derives the committed `codex/` Codex plugin-marketplace build
+  from the canonical skills (single source of truth; `--check` rebuilds to a temp dir and diffs
+  against the committed tree, exit 1 if stale — for CI / pre-release).
+- `codex-smoke.sh` — smoke-tests the `codex/` build against a live Codex CLI (T1–T6: headless exec,
+  marketplace + plugin install, skill enumeration, the generated probe skill, `spawn_agent`
+  availability, the real tick file-read entry + hard gate, and effort-flag pass-through); always
+  exits 0 and writes `codex-smoke-report.md` at the repo root — failures are the data, not a script
+  bug.
 
 ## Monitoring multiple concurrent loops
 
