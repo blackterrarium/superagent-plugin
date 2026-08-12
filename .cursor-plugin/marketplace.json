@@ -1,0 +1,14 @@
+{
+  "name": "superagent-marketplace",
+  "owner": { "name": "Eugene Chai", "email": "eugene.chai@gmail.com" },
+  "metadata": {
+    "description": "superagent — plan-tree authoring and autonomy-loop execution (Cursor build)"
+  },
+  "plugins": [
+    {
+      "name": "superagent",
+      "source": "cursor",
+      "description": "Plan-tree authoring (supergoal/superplan) and autonomy-loop execution (superagent/superrun) skills — Cursor build (external unattended driver only)"
+    }
+  ]
+}

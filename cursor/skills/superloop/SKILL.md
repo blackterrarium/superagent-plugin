@@ -4,6 +4,22 @@ description: Shared autonomy-loop chassis — the gitignored loop-status state f
 license: all rights reserved
 ---
 
+<!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
+
+> **Cursor build notes.**
+> - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
+>   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat
+>   any residual mention of them as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
+>   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
+>   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   not available — use an OS scheduler.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
+>   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
+>   path wherever it appears.
+
 # Superloop
 
 The single source of truth for the **autonomy-loop chassis** — the driver-agnostic machinery a `super*`-style
@@ -24,8 +40,8 @@ work-model-specific specifics.
 Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## Subroutine contract — read before applying the clauses
@@ -106,8 +122,8 @@ master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # repo-relative p
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
 plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's two-signal DONE; other consumers add their own work-model fields here
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
-driver: cron                      # cron (attended, in-session) | external (Desktop routine / OS cron — fresh context per tick)
-cron_id:                          # CronCreate job id (cron driver only; empty in external mode)
+driver: external                  # the only driver in this build (external scheduler — fresh context per tick)
+cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty
 created: <today>
 iteration: 0
 session_skill_count: 0            # heavy skills run in the CURRENT cron session; reset to 0 at each cron session start; drives the L4 handoff (cron only)
@@ -199,17 +215,9 @@ and on every early-exit/escalation path.
 
 1. **Hard gate.** If no required bootstrap input and no existing loop file can be located → print the
    caller's hard-gate message (above) and exit.
-<!-- cc-only:start -->
-2. **Driver.** Parse `--driver=` → `cron` (default; alias of in-session) or `external` (the value
-   `desktop`, `external`, or `headless` all select the external mode). If an existing loop file is
-   found, its `driver:` wins (don't switch a running loop's mode silently); a bare re-run just reports
-   state in the loop's own mode.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 2. **Driver.** Only the `external` driver exists in this build. Treat any `--driver=` value as
    `external`; if `--driver=cron` was explicitly requested, say that the in-session cron driver is
    Claude Code-only before continuing. An existing loop file's `driver:` must be `external`.
-cursor-only:end -->
 3. **Locate state.** Derive the goal folder from the required input (the `superplan`
    Goal-Identification rule — parent of the `master-plans/` folder), then **root it at
    `primary_root()`** (see **L1**) — so the lookup and the lazy first-write target are in the primary
@@ -219,26 +227,11 @@ cursor-only:end -->
    global scan. The `<SUPER_LOOP_STATUS_DIRNAME>/` subdir is created lazily on first write (no `mkdir`).
 4. **Guard / bootstrap / resume — branch on `driver`:**
 
-<!-- cc-only:start -->
-   **`cron` mode:**
-   - Call `CronList`. **A live job for this loop file** (its `cron_id` is in `CronList`, or a job whose
-     prompt names this loop file) **and** non-terminal `status` → **already looping.** Report `status`,
-     `iteration`, last log line; do **NOT** create a second job; exit.
-   - **`status: DONE` but a job lingers** → stale: `CronDelete` it, clear `cron_id`, report "already
-     complete"; exit.
-   - **No live job + loop file exists, non-terminal** → **RESUME**: log a resume note, **reset
-     `session_skill_count` to 0** (a fresh context begins), `CronCreate` a fresh driver
-     (**Driver A**), record `cron_id`, continue to the caller's per-tick body.
-   - **No loop file** → **FRESH START**: create the loop file (`driver: cron`, the ready `status`,
-     `iteration: 0`, `session_skill_count: 0`, `created: <today>`, plus the caller's work-model fields),
-     `CronCreate` the driver, record `cron_id`, continue to the caller's per-tick body.
-
-<!-- cc-only:end -->
    **`external` mode** (Desktop routine / OS cron — **no `CronCreate`, no `CronList`**; the scheduler is
    user-managed):
    - **No loop file** → **FRESH START**: create the loop file (`driver: external`, the ready `status`,
      …, `cron_id:` empty, `session_skill_count: 0`), **print the exact scheduler entry to create**
-     (Desktop routine or headless `claude -p` recipe from **Driver B**, with this loop file's absolute
+     (Desktop routine or headless `agent -p` recipe from **Driver B**, with this loop file's absolute
      path), then continue to the caller's per-tick body to run the first iteration now. Subsequent ticks
      come from the external scheduler.
    - **Loop file exists, non-terminal** → report `status`/`iteration`/last log line and **re-print the
@@ -263,75 +256,17 @@ state means a crashed prior tick (which also left a stale lock that `acquire_loc
 ready state** (the caller supplies the transient→ready mapping for its own status values — superagent:
 `PLANNING → WAITING FOR PLAN`, `RUNNING → WAITING FOR RUN`), and fall through to that branch this tick.
 
-<!-- cc-only:start -->
-### Driver A — `cron` (attended, in-session) — DEFAULT
-
-`/<consumer> <bootstrap-input>` (or `… --driver=cron`) arms a **`CronCreate`** recurring job whose prompt
-is `/<consumer> --tick <loop-file>` — `durable: true`, `recurring: true`, default interval
-`*/10 * * * *`.
-- Fires the next tick **between turns of the same session** → context **accumulates**.
-- `durable: true` persists the job to `.claude/scheduled_tasks.json` so it **survives `--resume`** — but
-  it only fires **while a Claude Code session is live and idle**. It is **not** a background daemon:
-  close the session and ticks pause until you start/`--resume` one. (Recurring jobs auto-expire after 7
-  days → a long goal pauses; the next `/<consumer> <bootstrap-input>` re-arms and resumes.)
-- Duplicate guard: `CronList` — a live job for this loop file + a non-terminal `status` ⇒ already
-  looping. `cron_id` holds the job id. Best when you are watching the loop in an open session.
-
-<!-- cc-only:end -->
-<!-- cursor-only:start
 ### Driver A — `cron` (Claude Code only — NOT available in this build)
 
 The in-session cron driver requires Claude Code's CronCreate/CronList/CronDelete tools and does not
 exist on Cursor. Driver B below is the only driver.
 
-cursor-only:end -->
 ### Driver B — `external` (Desktop scheduled task, or headless OS cron) — CLEAN CONTEXT
 
 `/<consumer> <bootstrap-input> --driver=desktop` (aliases `--driver=external` / `--driver=headless`)
 bootstraps the loop file with `driver: external`, **arms NO `CronCreate` job**, and **prints the exact
 scheduler entry to create**. An external scheduler then fires `/<consumer> --tick <loop-file>` on its
 interval, each in a **fresh session = clean context**.
-<!-- cc-only:start -->
-- **Desktop scheduled task** (fresh local session per fire; full file/tool/slash access, so `--tick`
-  works as a slash command). Create it in the Desktop app → **Routines → New routine → Local**:
-  - **Instructions:** `/<consumer> --tick <ABSOLUTE loop-file path>`
-  - **Working folder:** the repo root (worked example from the originating repo: `/path/to/originating-repo`)
-  - **Schedule:** e.g. every 10 minutes. (Desktop checks each minute *while the app is open*; the
-    computer must be awake; one catch-up run for misses within 7 days.)
-<!-- cc-only:end -->
-<!-- cc-only:start -->
-- **Headless OS cron / launchd / systemd timer** (no Desktop app): the CLI print mode **cannot run
-  slash commands**, and Skill-tool semantics for a disable-model-invocation skill in headless print mode
-  are unverified, so open the skill file directly instead of invoking it by name or via `/<consumer>` —
-  derive the plugin root from the script's own location (`PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"`)
-  and read `${PLUGIN_ROOT}/skills/<consumer>/SKILL.md`. The loop's own internal per-tick dispatches
-  (e.g. superagent's `superagent:superplan` / `superagent:superrun`) still go through the Skill tool
-  once the session is running, so the plugin must still be installed AND enabled for this headless
-  session. The tick runs via `claude -p` in a **fresh session per tick** and **must never
-  `--resume`/`--continue`** (a fresh process per tick is what bounds context — L4 is a no-op in
-  `external` mode, so the loop runs straight to `DONE` with no handoff).
-  ```
-  # Run uncapped so long CI-push ticks are not killed; an optional cap via
-  # --max-turns / --max-budget-usd (or an OS `timeout`).
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  cd <repo> && ANTHROPIC_API_KEY=... claude -p "Read ${PLUGIN_ROOT}/skills/<consumer>/SKILL.md and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop." \
-    --allowedTools "Read,Edit,Write,Bash,Task,Skill" >> /tmp/<consumer>.log 2>&1
-  ```
-  Schedule with cron/launchd/systemd; auth via `ANTHROPIC_API_KEY` in the scheduler env (a headless
-  scheduler can't do interactive OAuth). For superagent, `${CLAUDE_PLUGIN_ROOT}/scripts/` packages this
-  (worked example from the originating repo — `superagent-tick.sh`'s actual prompt is `Read
-  ${PLUGIN_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE},
-  in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the
-  user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill.
-  Then stop.`): the `superagent-tick.sh` wrapper, a per-goal scheduler entry (systemd user
-  timer on Linux, launchd LaunchAgent on macOS — auto-detected by the scripts), and
-  `bootstrap.sh` / `install-timer.sh` / `uninstall-timer.sh` — see [scripts/README.md](../../scripts/README.md),
-  which documents the `SUPERAGENT_SCRIPTS` convention runnable examples use to locate this plugin's
-  installed `scripts/` directory (`${CLAUDE_PLUGIN_ROOT}` is only defined inside a live tool-execution
-  context, not under cron/systemd/a login shell).
-<!-- cc-only:end -->
-<!-- cursor-only:start
 - **Headless OS cron / launchd / systemd timer**: the tick's prompt is a **file read**, not a skill
   invocation by name — the scheduler asks the CLI to read this plugin's `skills/<consumer>/SKILL.md`
   directly and run exactly one `--tick`. The loop's own internal per-tick dispatches (e.g. superagent's
@@ -348,9 +283,8 @@ interval, each in a **fresh session = clean context**.
   ```
   Schedule with cron/launchd/systemd; auth via `CURSOR_API_KEY` in the scheduler env (a headless
   scheduler can't do interactive OAuth). **Port status:** the shipped `scripts/` wrappers
-  (`superagent-tick.sh`, `bootstrap.sh`, `install-timer.sh`, …) still invoke the Claude CLI — until
+  (`superagent-tick.sh`, `bootstrap.sh`, `install-timer.sh`, …) still invoke the Cursor CLI — until
   they are ported, schedule the `agent -p` recipe above directly.
-cursor-only:end -->
 - Duplicate guard: **not** `CronList` (each fresh session's `CronList` is empty). The **lock (L3)**
   prevents overlap; "is a loop already set up?" is answered by the loop-file `status` plus the fact that
   the *Desktop routine / scheduler entry* is what the user manages.
@@ -364,22 +298,13 @@ cursor-only:end -->
   ticks; an interactive console may `--resume` freely).
 
 ### `stop_driver()` — used wherever the loop completes or pauses
-- **cron:** `CronDelete cron_id`; clear `cron_id`. <!-- cc-only -->
 - **external:** the Desktop routine / scheduler entry is **user-managed** — the skill cannot delete it.
   Leave the terminal/paused status in the loop file (further `--tick` fires no-op on `DONE`, or re-asks
   on `WAITING FOR INPUT`) and **print a clear instruction to disable the Desktop routine (or remove the
   cron/launchd entry)** for this loop file.
 
-<!-- cc-only:start -->
-Stop a loop manually: cron → `CronDelete` (id in `cron_id` or via `CronList`) or `Esc` on a live tick;
-external → disable the Desktop routine / remove the scheduler entry. Either way, re-running
-`/<consumer> <bootstrap-input>` reports current state and (cron) re-arms or (external) re-prints the
-setup.
-<!-- cc-only:end -->
-<!-- cursor-only:start
 Stop a loop manually: disable/remove the scheduler entry for this loop file. Re-running
 `/<consumer> <bootstrap-input>` reports current state and re-prints the scheduler setup.
-cursor-only:end -->
 
 ---
 
@@ -404,74 +329,9 @@ loop-status dir so two ticks never run concurrently:
 
 ## L4 — Context-handoff gate — `check_session_budget()` (check BEFORE every iteration)
 
-<!-- cursor-only:start
 In this build the external driver is the only driver, and every tick runs in a fresh context — nothing
 accumulates, so `check_session_budget()` is a structural no-op: always proceed straight to the caller's
 per-tick body. (`session_skill_count` is never consulted.)
-cursor-only:end -->
-<!-- cc-only:start -->
-Run this at the **start of every tick**, *after* reading the loop file (L2 Step 0) and *after* the
-`DONE` no-op, but *before* the caller's per-tick body — i.e. **before invoking any skill**. It is what
-keeps a long-running `cron` loop from dying mid-heavy-step (each heavy step reads plans, dispatches a
-3-agent panel, and chews CI logs) with the context window blown and no clean resume.
-
-**Why the iteration boundary is the safe place to bail:** the prior tick ended *past* its post-sync
-gate, so the tree is already synced + committed and `status` is a durable ready `WAITING …` state.
-**All** state a fresh supervisor needs is already in the loop file — the gate adds *only* handoff
-bookkeeping and changes **no** work-model state.
-
-**Scope:** meaningful only for the `cron` driver (in-session, context accumulates across ticks). In
-`external` mode every tick already runs in a fresh, clean context, so the gate is a genuine no-op
-there.
-
-> **Do not try to read a "remaining context %".** The model has no reliable view of it — Claude Code
-> surfaces **no** live per-turn remaining-context number to the assistant, exposes **no** tool to query
-> it, and the `/context` meter is user-facing only. Earlier versions of this gate keyed on an estimated
-> remaining-% and, being unable to read one, fell back to "treat as LOW and hand off" — which fired on
-> essentially every accumulating cron tick and caused premature handoffs (a real run bailed at ~75%
-> remaining). Instead, gate on a value the model **can** observe deterministically: how many heavy
-> skills this cron session has already run, tracked in `session_skill_count`.
-
-A **heavy step** is caller-defined — the caller increments `session_skill_count` once per heavy step in
-its persist phase (superagent: one `superplan` or `superrun` invocation).
-
-### `check_session_budget()`
-1. **`external` driver → no-op.** Each tick is a fresh context, so nothing accumulates; proceed to the
-   caller's per-tick body normally. (`session_skill_count` is never consulted in `external` mode.)
-2. **`cron` driver:** read `session_skill_count` from the loop file (it is **0** at the start of each
-   cron session — reset on FRESH START / RESUME — and incremented once per heavy step in the persist
-   phase).
-   - **`session_skill_count < THRESHOLD`** (caller-supplied — this plugin's callers resolve it from `SUPER_HEAVY_STEP_LIMIT`; default 6) → proceed to the caller's
-     per-tick body normally.
-   - **`session_skill_count >= THRESHOLD`** → **hand off for a fresh context — do NOT invoke any heavy
-     step this tick.** Do only the handoff bookkeeping:
-     - Append an `## Iteration log` entry: `iteration #, session skill-budget reached (THRESHOLD) — no
-       skill run, cron handed off for fresh context`. **Leave `status` unchanged** — it is already a
-       durable ready WAITING state (and a persisted transient state is fine; the next session's
-       crash-recovery self-heals it). Increment `iteration`; **plain Write** the loop file (no commit —
-       it is gitignored).
-     - `stop_driver()` (`CronDelete cron_id`; clear `cron_id`) so this about-to-be-cleared session
-       stops firing ticks. `release_lock()`. Print the **handoff message** (below) and **exit the
-       tick**.
-
-The fresh resume is automatic and reuses existing machinery: after `/clear`, `/<consumer>
-<bootstrap-input>` hits form (B)'s cron branch → `CronList` shows **no live job** + a **non-terminal**
-loop file → the existing **RESUME** path re-arms the cron driver (resetting `session_skill_count` to 0)
-and continues from the persisted `status` in a clean context.
-
-### Handoff message (cron)
-
-    ## Context handoff (tick <iteration>)
-
-    Ran THRESHOLD skills this session (per-session budget reached). Stopped the in-session driver and
-    persisted all state to the loop file; no skill ran this tick.
-
-    To continue: run `/clear`, then `/<consumer> <bootstrap-input>`.
-    A fresh supervisor re-arms the cron driver (RESUME path) and continues from `status: <status>`.
-
-    **Loop file:** <loop-file path>
-    **Status:** <status> (resumable)
-<!-- cc-only:end -->
 
 ---
 
@@ -583,7 +443,7 @@ Dispatch **3 independent subagents in parallel** (single message, multiple `Agen
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
 `model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
 `claude-fable-5`) the Agent tool's tier-enum `model:` parameter rejects it — dispatch with
-`subagent_type: super-panel` instead (the definition `superagent:init` generates in `.claude/agents/`,
+`subagent_type: super-panel` instead (the definition `superagent:init` generates in `.cursor/agents/`,
 overriding `SUPER_PANEL_AGENT_TYPE`) and omit `model:`; missing definition = hard error, re-run
 `superagent:init` — each with **`run_in_background: false`**, so the turn **waits** for all three
 verdicts to arrive as tool results; never dispatch the panel in the background and poll

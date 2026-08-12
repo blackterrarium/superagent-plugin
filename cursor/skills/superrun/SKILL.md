@@ -5,6 +5,22 @@ license: all rights reserved
 related skills: supertraverse, superfinish, superplan
 ---
 
+<!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
+
+> **Cursor build notes.**
+> - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
+>   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat
+>   any residual mention of them as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
+>   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
+>   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   not available — use an OS scheduler.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
+>   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
+>   path wherever it appears.
+
 # Superrun
 
 The **execution** leg of the plan-tree lifecycle. The `super*` family covers the rest of the
@@ -19,8 +35,8 @@ to `superfinish`.
 Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
 use, highest wins: (1) a process environment variable of the same name, (2) the
 repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
+`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
+`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
 ## Prerequisite — superpowers
@@ -47,10 +63,7 @@ closeout by hand: each phase is owned by an existing skill, and superrun must in
 | "I'll pause before each CI push to confirm" | NO. Run fully autonomously — let subagent-driven-development run end-to-end per its no-check-in-between-tasks rule. |
 | "I found the target, I'll execute the next one too while I'm here" | NO. One leaf per invocation. After closeout, report and exit. |
 | "A long CI push is queued — I'll wait for it to finish before pushing the next one" | NO. If `SUPER_CI_RUNNERS > 1`, queue every independent long push back-to-back (**CI scheduling**, Step 3) — the next free runner picks up the next job; serialize only across a named procedural gate. If `SUPER_CI_RUNNERS=1`, there is no runner contention to exploit, but a shardable batch's pushes still queue together and wait together. |
-| "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **monitor-parked** (Step 3a): standalone → arm one Monitor over all run ids and end the turn; under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. | <!-- cc-only -->
-<!-- cursor-only:start
 | "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **parked** (Step 3a): standalone → report the queued run ids and end the turn (resume later via **Resume entry — post-CI**); under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. |
-cursor-only:end -->
 
 ## Input — `<PLAN.md>` (Gate 1)
 
@@ -124,7 +137,7 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) cannot go through `model:` — the
    parameter is tier-enum-only — so dispatch that role with `subagent_type: super-<role>` (e.g.
    `super-implementer`, `super-task-reviewer`), the per-role agent definition `superagent:init`
-   generates in `.claude/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
+   generates in `.cursor/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
@@ -209,26 +222,11 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
    When a wait is needed (either of the first two branches above), never wait with `gh run watch`,
    foreground sleeps, or backgrounded re-poll loops — every poll iteration re-enters your context and
    a long lane (60–120 min) burns it for nothing. Instead:
-<!-- cc-only:start -->
-   - **Standalone (superrun is the top-level session's task):** arm **one `Monitor`**
-     (`persistent: true`) whose check `curl`s
-     `https://api.github.com/repos/<owner>/<repo>/actions/runs/<id>` for **each** pending run id
-     (auth: `TOK=$(gh auth token)` captured before arming). Prefer `curl` for polling inside a
-     Monitor — on hosts where `SUPER_GH_DISABLE_SANDBOX=true`, `gh` cannot run *inside* the Monitor
-     at all (it needs keychain access), so `curl` to `api.github.com` is the only option there; where
-     `SUPER_GH_DISABLE_SANDBOX=false`, `curl` is still preferred for consistency. Fire the Monitor the
-     first time **every** run reports `status: completed`, emitting each run's `id: conclusion` pair.
-     It MUST emit on **any** terminal state — success, failure, cancelled, timed_out — never only on
-     success (a success-only filter is silent through a crash, and silence is indistinguishable from
-     "still running"). Then **end the turn**; the harness re-invokes you when the Monitor fires.
-<!-- cc-only:end -->
-<!-- cursor-only:start
    - **Standalone (superrun is the top-level session's task):** there is no Monitor tool in this
      build, so do not wait in-session at all. Report the queued run ids, the worktree/branch/PR
      packet, and how to check the runs (`gh run list --branch <branch>`), then **end the turn**.
      Once every run is terminal, re-invoke superrun via its **Resume entry — post-CI** with that
      packet and the conclusions to finish the leaf.
-cursor-only:end -->
    - **Dispatched as a subagent (e.g. by a `superagent` loop):** do NOT arm the wait yourself
      (a Monitor cannot resume a subagent whose turn has ended) and do NOT emit interim
      "still waiting" notifications. Return a **CI-PENDING report** (format below) as your final

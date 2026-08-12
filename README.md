@@ -212,6 +212,26 @@ directory: [`scripts/README.md`](scripts/README.md).
 - **`superagent-monitor`** — the console/control plane across every concurrent loop on a host: status,
   answering `WAITING FOR INPUT`, drain/hard-stop/uninstall/re-arm.
 
+## Cursor (experimental)
+
+A generated Cursor build of the plugin lives in [`cursor/`](cursor/README.md) — external
+(unattended) driver only, with the Claude Code in-session machinery stripped at build time.
+`scripts/build-cursor-skills.sh` derives it from conditional markers in the canonical skills
+(single source of truth; `--check` verifies the committed tree is fresh). Install on Cursor via
+its marketplace flow (this repo's root `.cursor-plugin/marketplace.json` points at `cursor/`) or
+locally with `agent --plugin-dir <repo>/cursor`.
+
+**Status: unvalidated.** To smoke-test it on a machine with the Cursor CLI installed:
+
+```
+git clone https://github.com/blackterrarium/superagent-plugin && cd superagent-plugin
+bash scripts/cursor-smoke.sh
+```
+
+then send the generated `cursor-smoke-report.md` back to the session driving the port. Known gaps
+before the report comes back: the external-driver shell scripts still invoke the Claude CLI, and
+superpowers-under-Cursor (required by `superrun`) is unverified — see `cursor/README.md`.
+
 ## Cutting over an existing repo
 
 If a repo already carries its own in-tree copies of these skills and driver scripts (predating this
