@@ -89,6 +89,14 @@ if [ -z "$BIN" ]; then
   exit 0
 fi
 
+# T3–T5 run in a NEUTRAL, EMPTY workspace — never the repo. With the repo as the workspace the
+# agent can pass every test by simply reading the skill files off disk, which proves nothing about
+# the plugin mechanism (this bit v1 of this script). In an empty workspace, --plugin-dir is the
+# ONLY way the agent can see these skills.
+NEUTRAL="$(mktemp -d)"
+trap 'rm -rf "$NEUTRAL"' EXIT
+echo "cursor-smoke neutral workspace — intentionally empty" >"$NEUTRAL/README.txt"
+
 # T1 — CLI sanity: headless print mode + auth work at all.
 run_test "T1 headless sanity" "SMOKE-OK" \
   "$BIN" -p --output-format text "Reply with exactly: SMOKE-OK"
@@ -97,20 +105,23 @@ run_test "T1 headless sanity" "SMOKE-OK" \
 run_test "T2 model list" "" \
   "$BIN" --list-models
 
-# T3 — plugin loads: are the super* skills visible with --plugin-dir?
-run_test "T3 plugin skill discovery" "supergoal" \
-  "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$ROOT" \
-  "List the names of all skills available to you that contain the word 'super'. Output only the names, one per line. If none, output NONE."
+# T3 — skill enumeration (INFORMATIONAL — no expected substring: some harnesses load skills
+# without enumerating them; T4/T5 are the load-bearing tests).
+run_test "T3 skill enumeration (informational)" "" \
+  "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$NEUTRAL" \
+  "List the names of ALL skills available to you, including plugin-provided ones. Output only the names, one per line. If none, output NONE."
 
 # T4 — model-invoked skill + relative file access: the probe skill reports plugin-root facts.
-run_test "T4 probe skill" "PROBE-BEGIN" \
-  "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$ROOT" \
-  "Run the cursor smoke probe skill (cursor-smoke-probe) and output its report."
+# In the neutral workspace this can only succeed through the plugin mechanism.
+run_test "T4 probe skill (neutral workspace)" "PROBE-BEGIN" \
+  "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$NEUTRAL" \
+  "Run the cursor smoke probe skill (cursor-smoke-probe) and output its report. If you cannot find any such skill, output exactly: NO-SUCH-SKILL"
 
 # T5 — explicitly-invoked disable-model-invocation skill: superagent's hard gate must fire.
-run_test "T5 superagent hard gate" "requires a master plan" \
-  "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$ROOT" \
-  "Invoke the skill named 'superagent' (superagent:superagent) with no arguments and show its response."
+# The exact gate message exists only inside the skill file, unreachable from this workspace.
+run_test "T5 superagent hard gate (neutral workspace)" "requires a master plan" \
+  "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$NEUTRAL" \
+  "Invoke the skill named 'superagent' (superagent:superagent) with no arguments and show its response. If you cannot find any such skill, output exactly: NO-SUCH-SKILL"
 
 {
   echo "## Summary"
