@@ -28,9 +28,17 @@ marketplace (the root `.cursor-plugin/marketplace.json` points at this directory
 - The superpowers plugin's skills load under Cursor (unprefixed, e.g.
   `subagent-driven-development`) on a host with it configured — `superrun`'s dependency resolves.
 
+## Driving a loop with the Cursor CLI
+
+The external-driver scripts are harness-aware: `SUPER_HARNESS=cursor` (in the environment, the
+target repo's `.superenv` — this build's `templates/superenv.default` already sets it — or
+`--harness cursor` on `launch.sh` / `install-timer.sh`) makes every tick fire the Cursor CLI
+(`agent -p --trust --force --plugin-dir <repo>/cursor`) instead of `claude -p`. Auth: the CLI's
+stored login, or `CURSOR_API_KEY` in the target repo's `.env`. Model: `SUPER_MODEL_SUPERVISOR`
+(a Cursor model name; `inherit` = the CLI's `auto`).
+
 ## Known gaps
 
-- The external-driver shell scripts (`scripts/superagent-tick.sh`, `bootstrap.sh`,
-  `install-timer.sh`, …) still invoke the **Claude** CLI. Until they are ported, schedule the
-  `agent -p` tick recipe from `skills/superloop/SKILL.md` (Driver B) directly.
-- No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised yet.
+- No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised on
+  Cursor yet — the tick invocation itself is smoke-validated (T5), the full multi-tick loop is
+  not.

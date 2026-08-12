@@ -24,7 +24,7 @@ REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 load_superenv "$REPO"
 
 usage() {
-  echo "usage: launch.sh <PLAN.md> [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--dry-run]" >&2
+  echo "usage: launch.sh <PLAN.md> [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor] [--dry-run]" >&2
   exit 2
 }
 
@@ -33,6 +33,7 @@ PLAN="${1:-}"
 shift
 
 INTERVAL="${SUPER_TICK_INTERVAL:-30m}"; TICK_TIMEOUT=""; SLUG=""; OUTPUT_FORMAT="stream"; MODEL=""; DRY=0
+HARNESS="$(superagent_harness)" || exit 2
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --interval) INTERVAL="${2:?--interval needs a value}"; shift 2 ;;
@@ -40,13 +41,18 @@ while [[ $# -gt 0 ]]; do
     --slug)     SLUG="${2:?--slug needs a value}"; shift 2 ;;
     --output)   OUTPUT_FORMAT="${2:?--output needs a value}"; shift 2 ;;
     --model)    MODEL="${2:?--model needs a value}"; shift 2 ;;
+    --harness)  HARNESS="${2:?--harness needs a value}"; shift 2 ;;
     --dry-run)  DRY=1; shift ;;
     *) echo "unknown arg: $1" >&2; usage ;;
   esac
 done
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|cursor) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor)" >&2; exit 2 ;; esac
+export SUPER_HARNESS="$HARNESS"
 # Effective model shown in reports (the wrapper's default when unset).
-if [[ -n "$MODEL" ]]; then MODEL_SHOWN="$MODEL"; else MODEL_SHOWN="opus (default)"; fi
+if [[ -n "$MODEL" ]]; then MODEL_SHOWN="$MODEL"
+elif [[ "$HARNESS" == cursor ]]; then MODEL_SHOWN="auto (default)"
+else MODEL_SHOWN="opus (default)"; fi
 
 # Resolve the plan to an absolute path, then to a repo-relative path (superloop
 # stores master_plan repo-relative).
@@ -66,9 +72,9 @@ if [[ -z "$SLUG" ]]; then
   SLUG="$(basename "$GOAL_FOLDER" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9]{2}-//')"
 fi
 
-# Fail fast on missing claude binary / gh auth BEFORE creating or arming anything.
+# Fail fast on missing agent-CLI binary / gh auth BEFORE creating or arming anything.
 set -a; [[ -f "$REPO/.env" ]] && . "$REPO/.env"; set +a
-ensure_claude_bin
+ensure_cli_bin
 ensure_gh_auth
 
 # Find an existing loop file for this master plan (idempotent re-arm / resume).
@@ -84,6 +90,7 @@ fi
 if [[ "$DRY" == 1 ]]; then
   echo "[dry-run] would launch superagent external loop:"
   echo "  goal slug:  $SLUG"
+  echo "  harness:    $HARNESS"
   echo "  model:      $MODEL_SHOWN"
   echo "  interval:   $INTERVAL   timeout: ${TICK_TIMEOUT:-none}   output: $OUTPUT_FORMAT"
   echo "  plan:       $PLAN_REL"
@@ -132,7 +139,7 @@ fi
 
 # Arm the per-goal systemd user timer. Only forward --timeout when a cap was given;
 # passing --timeout "" would trip install-timer's ${2:?} null-check and abort.
-install_args=(--interval "$INTERVAL" --output "$OUTPUT_FORMAT")
+install_args=(--interval "$INTERVAL" --output "$OUTPUT_FORMAT" --harness "$HARNESS")
 [[ -n "$TICK_TIMEOUT" ]] && install_args+=(--timeout "$TICK_TIMEOUT")
 [[ -n "$MODEL" ]] && install_args+=(--model "$MODEL")
 "$SCRIPT_DIR/install-timer.sh" "$SLUG" "$LOOP_FILE" "${install_args[@]}"
@@ -148,6 +155,7 @@ fi
 echo
 echo "Launched superagent external loop:"
 echo "  goal slug:  $SLUG"
+echo "  harness:    $HARNESS"
 echo "  model:      $MODEL_SHOWN"
 echo "  interval:   $INTERVAL   timeout: ${TICK_TIMEOUT:-none}   output: $OUTPUT_FORMAT"
 echo "  plan:       $PLAN_REL"

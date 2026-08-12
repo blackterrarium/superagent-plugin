@@ -20,6 +20,9 @@ SUPER_MODEL_BRANCH_REVIEWER=opus        # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=opus            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 
+# ── Harness ───────────────────────────────────────────────────────
+SUPER_HARNESS=claude                    # claude | cursor — which agent CLI the external driver fires per tick
+
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/
 SUPER_LOOP_STATUS_DIRNAME=loop-status   # gitignored; sibling of the goal's master-plans/

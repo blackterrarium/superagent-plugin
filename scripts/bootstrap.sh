@@ -42,25 +42,46 @@ fi
 # first tick opens/merges a PR, so abort loudly if gh cannot authenticate.
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-ensure_claude_bin || exit 5
+load_superenv "$REPO"
+HARNESS="$(superagent_harness)" || exit 6
+ensure_cli_bin || exit 5
 ensure_gh_auth || exit 4
 
-# Slash commands are unavailable in headless print mode, so open the skill file
-# directly (superloop L2, Driver B) rather than invoking it by name — Skill-tool
-# semantics for a disable-model-invocation skill in headless print mode are
-# unverified, so the proven file-read entry point is used instead (matches
-# superagent-tick.sh). The loop's own internal superagent:superplan /
-# superagent:superrun dispatches still go through the Skill tool once the
-# session is running, so the superagent plugin must still be installed AND
-# enabled for this headless session.
-PROMPT="Read ${PLUGIN_ROOT}/skills/superagent/SKILL.md and run superagent in form (B) with <PLAN.md>=${PLAN} and --driver=external. If no loop-status file exists yet, create it (FRESH START); print the exact scheduler entry to create; then run the first tick. Finally, on a line by itself, print: LOOP_FILE=<absolute path to the loop-status file you created or found>."
-
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-  echo "bootstrap: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
-  exit 3
+if [[ "$HARNESS" == cursor ]]; then
+  SKILLS_ROOT="$PLUGIN_ROOT/cursor"
+  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+    echo "bootstrap: Cursor build missing at $SKILLS_ROOT (run scripts/build-cursor-skills.sh)" >&2
+    exit 7
+  fi
+else
+  SKILLS_ROOT="$PLUGIN_ROOT"
 fi
-( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
-    --allowedTools "Read,Edit,Write,Bash,Task,Skill" )
+
+# Slash commands are unavailable in headless print mode, so open the skill file
+# directly (superloop L2, Driver B) rather than invoking it by name — on Cursor a
+# disable-model-invocation skill is invisible to model-driven lookup (verified),
+# and on Claude Code the Skill-tool semantics in headless print mode are
+# unverified, so the proven file-read entry point is used on both (matches
+# superagent-tick.sh). The loop's own internal superagent:superplan /
+# superagent:superrun dispatches still go through the skill mechanism once the
+# session is running, so the plugin must still be installed AND enabled (claude)
+# or passed via --plugin-dir (cursor) for this headless session.
+PROMPT="Read ${SKILLS_ROOT}/skills/superagent/SKILL.md and run superagent in form (B) with <PLAN.md>=${PLAN} and --driver=external. If no loop-status file exists yet, create it (FRESH START); print the exact scheduler entry to create; then run the first tick. Finally, on a line by itself, print: LOOP_FILE=<absolute path to the loop-status file you created or found>."
+
+if [[ "$HARNESS" == cursor ]]; then
+  if [[ -z "${CURSOR_API_KEY:-}" ]]; then
+    echo "bootstrap: note: CURSOR_API_KEY not set (no $REPO/.env entry); relying on the Cursor CLI's own stored login" >&2
+  fi
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" "$SUPERAGENT_CURSOR_BIN" -p "$PROMPT" \
+      --trust --force --plugin-dir "$SKILLS_ROOT" --output-format text )
+else
+  if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "bootstrap: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
+    exit 3
+  fi
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
+      --allowedTools "Read,Edit,Write,Bash,Task,Skill" )
+fi
 
 echo
 echo "Next: capture the LOOP_FILE=... line above, then run:"

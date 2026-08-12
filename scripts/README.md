@@ -52,6 +52,18 @@ Override with `--model <slug>` on `launch.sh` / `install-timer.sh`
 generated agent definition is involved at this layer, unlike the subagent role keys. The header
 line in the tick log records the model in use (`model=...`).
 
+## Harness (Claude CLI vs Cursor CLI)
+
+Every tick fires one agent-CLI session; **which** CLI is the harness: `SUPER_HARNESS=claude`
+(default — `claude -p`) or `SUPER_HARNESS=cursor` (the Cursor CLI: `agent -p --trust --force
+--plugin-dir <plugin-repo>/cursor`, reading the generated Cursor build of the skills). Set it via
+`--harness claude|cursor` on `launch.sh` / `install-timer.sh` (pinned into the per-goal
+`~/.config/superagent/<slug>.env` at install time), the target repo's `.superenv`, or the
+environment. On `cursor`: auth is the CLI's stored login or `CURSOR_API_KEY` in the target repo's
+`.env`; model values are Cursor model names (`agent --list-models`), with `inherit` resolving to
+the CLI's own default (`auto`) rather than `opus`; the `cursor/` build must exist in the plugin
+repo (`scripts/build-cursor-skills.sh`).
+
 ### `.superenv` layer
 
 `_common.sh`'s `load_superenv <repo-root>` resolves every `SUPER_*`/`TICK_*` variable in three layers,
