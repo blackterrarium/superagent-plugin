@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — 2026-08-12
+
+- **Default tick interval 30m → 10m** in the `.superenv` default templates (canonical
+  `templates/superenv.default` plus the generated Codex and Cursor copies). Script-level
+  fallbacks when no `.superenv` is present (`launch.sh` / `install-timer.sh`) remain 30m.
+
 ## 0.4.0 — 2026-08-12
 
 Experimental Cursor support (stage 1 — packaging + smoke test; not yet validated on a Cursor host):
