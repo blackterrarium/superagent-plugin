@@ -126,18 +126,8 @@ report-only.
 5. **Model keys** (each `SUPER_MODEL_*`):
    valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
    and `claude-*` IDs not in that list → WARN, treat as `inherit`.
-<!-- codex-only:start
-   valid = a Codex model name or `inherit`. A Claude tier name
-   (`sonnet|opus|haiku|fable`) or Claude model ID (`^claude-`) → WARN, treat as
-   `inherit` (a hand-trimmed `.superenv` can let the claude-flavored plugin default
-   leak through).
-codex-only:end -->
 6. **Effort keys** (each `SUPER_EFFORT_*`):
    effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
-<!-- codex-only:start
-   valid = `none|minimal|low|medium|high|xhigh|inherit`; else WARN (note: claude's
-   `max` is NOT a Codex effort), treat as `inherit`.
-codex-only:end -->
 
 ## Step 3 — Role agents (full model IDs only)
 

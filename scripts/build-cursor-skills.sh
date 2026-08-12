@@ -11,6 +11,8 @@
 #   <!-- cursor-only:start                             block is an inert HTML comment in the
 #     ...content...                                    canonical file; here the wrapper lines are
 #   cursor-only:end -->                                dropped and the content is ACTIVATED
+#   <!-- codex-only:start --> ... <!-- codex-only:end --> block kept in the Codex build, DROPPED
+#                                                      here (wrapper AND content, like cc-only)
 #
 # After marker filtering, harness-specific text substitutions are applied (see seds below), and a
 # generated-file banner is inserted after each SKILL.md's frontmatter.
@@ -46,6 +48,9 @@ filter_markers() {
     /<!-- cc-only:end -->/    { drop=0; next }
     drop                      { next }
     /<!-- cc-only -->/        { next }
+    /^[[:space:]]*<!-- codex-only:start[[:space:]]*$/ { cdrop=1; next }
+    /^[[:space:]]*codex-only:end -->[[:space:]]*$/    { cdrop=0; next }
+    cdrop                     { next }
     /^[[:space:]]*<!-- cursor-only:start[[:space:]]*$/ { next }
     /^[[:space:]]*cursor-only:end -->[[:space:]]*$/    { next }
     { print }
@@ -169,6 +174,18 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   inhdr && /^# \(SUPER_MODEL_SUPERVISOR/ { inhdr=0; next }
   inhdr && /^#/ { next }
   { inhdr=0 }
+  # Replace the Reasoning-effort header block (from "# ── Reasoning effort per agent role"
+  # through the "# NOTE (claude): ... leave it unset in scheduler environments." continuation
+  # line) with the Cursor wording.
+  /^# ── Reasoning effort per agent role/ { inefh=1
+    print "# ── Reasoning effort per agent role (NOT SUPPORTED on Cursor) ─────"
+    print "# The Cursor CLI has no reasoning-effort control. Keys are kept for cross-harness"
+    print "# .superenv portability; any non-inherit value is warned and treated as inherit."
+    next }
+  inefh && /^# NOTE \(claude\):/ { inefh=2; next }
+  inefh==2 && /^#/ { inefh=0; next }
+  inefh==1 && /^#/ { next }
+  { inefh=0 }
   { print }
 ' | sed \
   -e 's/^SUPER_MODEL_IMPLEMENTER=sonnet/SUPER_MODEL_IMPLEMENTER=inherit/' \
@@ -179,6 +196,13 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=inherit/' \
   -e 's/(headless tick: opus)/(headless tick: the CLI default model)/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=cursor\1# this is the Cursor build — the external driver fires the Cursor CLI (`agent`)/' \
+  -e 's/^SUPER_EFFORT_IMPLEMENTER=medium/SUPER_EFFORT_IMPLEMENTER=inherit/' \
+  -e 's/^SUPER_EFFORT_FIX_APPLIER=medium/SUPER_EFFORT_FIX_APPLIER=inherit/' \
+  -e 's/^SUPER_EFFORT_TASK_REVIEWER=high/SUPER_EFFORT_TASK_REVIEWER=inherit/' \
+  -e 's/^SUPER_EFFORT_RE_REVIEWER=high/SUPER_EFFORT_RE_REVIEWER=inherit/' \
+  -e 's/^SUPER_EFFORT_BRANCH_REVIEWER=xhigh/SUPER_EFFORT_BRANCH_REVIEWER=inherit/' \
+  -e 's/^SUPER_EFFORT_FIX_PLANNER=high/SUPER_EFFORT_FIX_PLANNER=inherit/' \
+  -e '/^SUPER_CODEX_SANDBOX=/d' \
   >"$TMP/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
