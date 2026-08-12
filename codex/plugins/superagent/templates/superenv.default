@@ -1,6 +1,6 @@
 # .superenv — superagent plugin defaults
 # Precedence: env var > repo-root .superenv > this plugin default.
-# Model values (Codex build): a Codex model name (e.g. gpt-5.1-codex) or "inherit".
+# Model values (Codex build): a Codex model name (e.g. gpt-5.6-sol) or "inherit".
 # "inherit" = omit the model override; the CLI's config.toml default applies.
 # Role pins dispatch as spawn_agent parameters — no agent-definition files on Codex.
 # (SUPER_MODEL_SUPERVISOR goes straight to `codex exec -m`.)
@@ -10,12 +10,12 @@ SUPER_MODEL_SUPERVISOR=inherit          # the superagent tick itself (headless t
 SUPER_MODEL_PLANNER=inherit             # superplan / supergoal dispatch subagent
 SUPER_MODEL_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
 SUPER_MODEL_PANEL=inherit               # L7 escalation panel (3 read-only agents)
-SUPER_MODEL_IMPLEMENTER=inherit
-SUPER_MODEL_FIX_APPLIER=inherit
-SUPER_MODEL_TASK_REVIEWER=inherit
-SUPER_MODEL_RE_REVIEWER=inherit
-SUPER_MODEL_BRANCH_REVIEWER=inherit        # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=inherit            # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_IMPLEMENTER=gpt-5.6-terra
+SUPER_MODEL_FIX_APPLIER=gpt-5.6-terra
+SUPER_MODEL_TASK_REVIEWER=gpt-5.6-sol
+SUPER_MODEL_RE_REVIEWER=gpt-5.6-sol
+SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol        # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 
 # ── Reasoning effort per agent role ───────────────────────────────

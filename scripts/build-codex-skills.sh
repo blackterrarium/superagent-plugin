@@ -180,7 +180,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   # Replace the Claude model-values header block (lines from "# Model values:" through the
   # "(SUPER_MODEL_SUPERVISOR ..." comment line) with the Codex wording.
   /^# Model values:/ { inhdr=1
-    print "# Model values (Codex build): a Codex model name (e.g. gpt-5.1-codex) or \"inherit\"."
+    print "# Model values (Codex build): a Codex model name (e.g. gpt-5.6-sol) or \"inherit\"."
     print "# \"inherit\" = omit the model override; the CLI'"'"'s config.toml default applies."
     print "# Role pins dispatch as spawn_agent parameters — no agent-definition files on Codex."
     print "# (SUPER_MODEL_SUPERVISOR goes straight to `codex exec -m`.)"
@@ -206,12 +206,12 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   { inefh=0 }
   { print }
 ' | sed \
-  -e 's/^SUPER_MODEL_IMPLEMENTER=sonnet/SUPER_MODEL_IMPLEMENTER=inherit/' \
-  -e 's/^SUPER_MODEL_FIX_APPLIER=sonnet/SUPER_MODEL_FIX_APPLIER=inherit/' \
-  -e 's/^SUPER_MODEL_TASK_REVIEWER=opus/SUPER_MODEL_TASK_REVIEWER=inherit/' \
-  -e 's/^SUPER_MODEL_RE_REVIEWER=opus/SUPER_MODEL_RE_REVIEWER=inherit/' \
-  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=opus/SUPER_MODEL_BRANCH_REVIEWER=inherit/' \
-  -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_IMPLEMENTER=sonnet/SUPER_MODEL_IMPLEMENTER=gpt-5.6-terra/' \
+  -e 's/^SUPER_MODEL_FIX_APPLIER=sonnet/SUPER_MODEL_FIX_APPLIER=gpt-5.6-terra/' \
+  -e 's/^SUPER_MODEL_TASK_REVIEWER=opus/SUPER_MODEL_TASK_REVIEWER=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_RE_REVIEWER=opus/SUPER_MODEL_RE_REVIEWER=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=opus/SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol/' \
   -e 's/(headless tick: opus)/(headless tick: the CLI default model)/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
   >"$TMP/plugins/superagent/templates/superenv.default"
