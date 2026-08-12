@@ -3,7 +3,8 @@
 **Date:** 2026-08-12
 **Status:** approved (user), pending implementation plan
 **Scope decision:** per-loop harness selection now; per-role model mixing is a later,
-separate goal — this design only leaves the seam for it.
+separate goal — this design only leaves the seam for it. Amended 2026-08-12: adds
+per-role reasoning-effort configuration (`SUPER_EFFORT_*`) across harnesses.
 
 ## Goal
 
@@ -43,6 +44,24 @@ Verified against current Codex docs (context7, /openai/codex):
   `model`, `agent_type`, `reasoning_effort` overrides. Availability inside plain
   `codex exec` sessions may be feature-gated — a smoke-test assertion, not an
   assumption.
+- Reasoning effort is a separate knob from the model name:
+  `model_reasoning_effort` config (`none|minimal|low|medium|high|xhigh`; each
+  model advertises its supported subset), settable per invocation via
+  `-c model_reasoning_effort=<v>`.
+
+## Claude Code facts this design relies on (reasoning effort)
+
+Verified against current Claude Code docs (claude-code-guide):
+
+- `claude -p` accepts `--effort <low|medium|high|xhigh|max>` per invocation.
+- Agent definitions (`.claude/agents/*.md`) accept an `effort:` frontmatter field,
+  same value set minus session-only forms; it overrides the session effort for
+  that subagent. Unsupported levels on a model fall back to the highest supported
+  level ≤ requested; models without effort support ignore it.
+- `CLAUDE_CODE_EFFORT_LEVEL` (env) has the HIGHEST precedence — it overrides both
+  the `--effort` flag and per-role frontmatter. The driver therefore never sets
+  it, and warns in the log when it is already present in the scheduler
+  environment (it would silently flatten per-role effort).
 
 ## 1. Architecture
 
@@ -75,6 +94,9 @@ New `codex` branch, parallel to the `cursor` branch:
   ("run scripts/build-codex-skills.sh").
 - Model: `TICK_MODEL > SUPER_MODEL_SUPERVISOR`; values are Codex model names;
   `inherit` → empty → omit `-m` (the CLI's configured default applies).
+- Effort: `TICK_EFFORT > SUPER_EFFORT_SUPERVISOR`; values are Codex effort names
+  (`none|minimal|low|medium|high|xhigh`); non-`inherit` values append
+  `-c model_reasoning_effort=<v>`; `inherit` (default) omits the override.
 - Prompt: same file-read entry point (read the supervisor SKILL.md path, execute
   exactly ONE --tick, unattended wording: never ask the user; on a needed decision
   write `## Pending decision`, set WAITING FOR INPUT, exit). Codex phrasing —
@@ -93,6 +115,22 @@ New `codex` branch, parallel to the `cursor` branch:
   cursor/claude branches.
 - The `gh` preflight (`ensure_gh_auth` + exported `GH_TOKEN`) is unchanged and
   runs for all harnesses.
+
+### Reasoning effort (touches the existing claude branch too)
+
+Supervisor effort resolves as `TICK_EFFORT > SUPER_EFFORT_SUPERVISOR > inherit`
+in all harness branches; `inherit` = pass nothing.
+
+- claude branch: non-`inherit` appends `--effort <v>`
+  (`low|medium|high|xhigh|max`). The driver never sets `CLAUDE_CODE_EFFORT_LEVEL`;
+  if that variable is already present in the tick's environment, log a warning
+  note (it overrides both the flag and per-role frontmatter).
+- codex branch: non-`inherit` appends `-c model_reasoning_effort=<v>` (see above).
+- cursor branch: no known effort control in the Cursor CLI — a non-`inherit`
+  value logs a warning and is ignored (treated as `inherit`).
+
+Values are harness-native names passed through unvalidated, exactly like the
+model keys; a bad value fails loudly in the CLI's own error output.
 
 ### `launch.sh` / `install-timer.sh`
 
@@ -140,7 +178,9 @@ codex/README.md                                     install notes + validated/kn
   cron_id line → unused.
 - Generated banner after each SKILL.md frontmatter, with the tool mapping:
   - "Agent tool / spawn a subagent" → `spawn_agent` (multi-agent v2); wait for the
-    child's result.
+    child's result. Role model/effort pins map to `spawn_agent`'s `model` and
+    `reasoning_effort` parameters (resolved from the `SUPER_MODEL_*` /
+    `SUPER_EFFORT_*` keys; `inherit` = omit the parameter).
   - "Skill tool / invoke skill X" → reference the skill by name in the message
     (`$skill-name` mention); names are plugin-scoped — verify actual naming in the
     smoke run (the Cursor port found names unprefixed; Codex may differ).
@@ -151,10 +191,10 @@ codex/README.md                                     install notes + validated/kn
 ### Subagent mapping (and the per-role seam)
 
 Skills that dispatch subagents (superrun's SDD roles, the L7 panel) map to
-`spawn_agent` calls. For now the role model keys resolve exactly as on the other
-harnesses (values must be Codex model names when the harness is codex; `inherit`
-= don't override the child's model). No new routing logic — but this is the seam
-where per-role Claude/Codex mixing would later plug in.
+`spawn_agent` calls. For now the role model and effort keys resolve exactly as on
+the other harnesses (values must be Codex model / effort names when the harness
+is codex; `inherit` = don't override the child). No new routing logic — but this
+is the seam where per-role Claude/Codex mixing would later plug in.
 
 ## 4. Config & docs
 
@@ -162,6 +202,31 @@ where per-role Claude/Codex mixing would later plug in.
   - `SUPER_HARNESS` comment: `claude | cursor | codex`.
   - New key: `SUPER_CODEX_SANDBOX=workspace-write`
     (`workspace-write | danger-full-access`; ignored by other harnesses).
+  - New effort block mirroring the model block: `SUPER_EFFORT_<ROLE>=inherit`
+    for the supervisor plus the nine role keys (`SUPERVISOR`, `PLANNER`,
+    `EXECUTOR`, `PANEL`, `IMPLEMENTER`, `FIX_APPLIER`, `TASK_REVIEWER`,
+    `RE_REVIEWER`, `BRANCH_REVIEWER`, `FIX_PLANNER`). Values are harness-native
+    effort names — claude: `low|medium|high|xhigh|max`; codex:
+    `none|minimal|low|medium|high|xhigh`; cursor: unsupported (warned, treated
+    as `inherit`). `inherit` = the CLI/model default.
+
+### Role agent definitions (`superagent:init` + template)
+
+Per-role effort on the claude harness pins through the same generated
+`.claude/agents/super-<role>.md` files that pin full model IDs:
+
+- `templates/super-role-agent.md` gains an optional `effort: <effort>`
+  frontmatter line, rendered only when the role's `SUPER_EFFORT_*` key is
+  non-`inherit`.
+- `superagent:init`'s generation rule widens: a role definition is generated
+  when the model value requires one (full ID on claude; any non-`inherit` on
+  cursor) **or** the role's effort key is non-`inherit`; it is stale-deleted
+  only when neither requires it. Marker/conflict semantics are unchanged.
+- Effort-only definitions omit `model:` (frontmatter carries only what is
+  pinned); on cursor, effort keys never trigger generation.
+- On codex, role pins do not use agent-definition files at all — they map to
+  `spawn_agent` parameters (§3), so init's codex flavor records the resolved
+  values but generates nothing for them.
 - `codex/templates/superenv.default` (generated): `SUPER_HARNESS=codex`, model-key
   comment says Codex model names, includes `SUPER_CODEX_SANDBOX`.
 - `README.md`: codex harness section (install, auth, sandbox knob).
@@ -182,6 +247,9 @@ skill, numbered T-assertions):
 - T5: one real tick fires end-to-end on a throwaway loop file via
   `superagent-tick.sh` with `SUPER_HARNESS=codex` (tick-style assertion, as in the
   cursor smoke v2).
+- T6: `codex exec` accepts `-c model_reasoning_effort=<v>` alongside `-m`
+  (trivial prompt, exit 0) — the effort pass-through works on the installed CLI
+  version.
 
 Failure of T2 or T4 is a design-input change (skill delivery or subagent mapping
 would need rework) — stop and reassess rather than patch around it.
