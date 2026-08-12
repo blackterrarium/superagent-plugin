@@ -46,7 +46,7 @@ SUPER_LOOP_STATUS_DIRNAME=loop-status   # gitignored; sibling of the goal's mast
 # ── Loop tuning ───────────────────────────────────────────────────
 SUPER_HEAVY_STEP_LIMIT=6                # heavy skills per session before context handoff
 SUPER_LOCK_STEAL_MIN=90                 # stale-lock steal window, minutes
-SUPER_TICK_INTERVAL=30m                 # external-driver default when --interval omitted
+SUPER_TICK_INTERVAL=10m                 # external-driver default when --interval omitted
 
 # ── CI / test-evidence policy ─────────────────────────────────────
 SUPER_TEST_EVIDENCE=local               # local = SDD's native TDD contract; ci = evidence is CI run ids only
