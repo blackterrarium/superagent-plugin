@@ -1,0 +1,13 @@
+{
+  "name": "superagent",
+  "metadata": { "description": "superagent plugin marketplace (Codex build)", "version": "0.3.0" },
+  "plugins": [
+    {
+      "name": "superagent",
+      "source": { "source": "path", "path": "./plugins/superagent" },
+      "description": "Plan-tree authoring and autonomy-loop execution skills — Codex build",
+      "category": "workflows",
+      "policy": { "installation": "manual", "authentication": "none" }
+    }
+  ]
+}
