@@ -130,7 +130,9 @@ in all harness branches; `inherit` = pass nothing.
   value logs a warning and is ignored (treated as `inherit`).
 
 Values are harness-native names passed through unvalidated, exactly like the
-model keys; a bad value fails loudly in the CLI's own error output.
+model keys; a bad value fails loudly in the CLI's own error output. The lint
+that catches these *before* they become recurring scheduled failures is
+`superagent:init`'s validation pass (§4).
 
 ### `launch.sh` / `install-timer.sh`
 
@@ -230,6 +232,41 @@ is the seam where per-role Claude/Codex mixing would later plug in.
     claude harness generates effort-pinning role definitions out of the box
     (six files). This is the designed mechanism — the files are derived
     artifacts owned by init.
+
+### `.superenv` validation pass (`superagent:init`)
+
+`init` (the canonical skill, so all three builds inherit it via markers) gains a
+validation step that lints the resolved configuration and reports per-key
+results in its existing summary style. WARN + safe fallback, never abort —
+`init` stays an idempotent bootstrap; the tick's own fail-loud checks
+(`SUPER_HARNESS`, `SUPER_CODEX_SANDBOX`) remain the runtime backstop.
+
+Checks:
+
+- **Unknown keys:** any `SUPER_*`/`TICK_*` key in the repo `.superenv` that does
+  not exist in the shipped template → WARN as a probable typo (today a
+  misspelled key silently falls back to the default).
+- **Enum keys:** `SUPER_HARNESS` (`claude|cursor|codex`), `SUPER_CODEX_SANDBOX`
+  (`workspace-write|danger-full-access`), `SUPER_TEST_EVIDENCE` (`local|ci`),
+  `SUPER_MERGE_METHOD`, `SUPER_BRANCH_STYLE`, `SUPER_PANEL_AGENT_TYPE`, and the
+  boolean keys (`SUPER_PROTECTED_MAIN`, `SUPER_ADMIN_MERGE`,
+  `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
+  `SUPER_GH_DISABLE_SANDBOX` — `true|false`) → out-of-domain values WARN and
+  fall back to the template default.
+- **Numeric keys:** `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`,
+  `SUPER_CI_RUNNERS` must be positive integers; `SUPER_TICK_INTERVAL` must
+  parse as an interval span → WARN + template default otherwise.
+- **Model keys, per build:** claude — a value must be a tier name
+  (`sonnet|opus|haiku|fable`), `inherit`, or a `claude-*` full ID; anything else
+  WARNs and is treated as `inherit` (this catches the `sonet` typo before it
+  becomes a generated agent definition that fails at spawn time). cursor —
+  existing `agent --list-models` guard. codex — the Claude-name guard above.
+- **Effort keys, per build:** claude — `low|medium|high|xhigh|max|inherit`;
+  codex — `none|minimal|low|medium|high|xhigh|inherit`; cursor — anything but
+  `inherit` WARNs (unsupported). Out-of-domain → WARN, treated as `inherit`.
+
+A fallback applied by validation is report-only: `init` never rewrites the
+user's `.superenv`, it just resolves the effective value and says so.
 
 ### Role agent definitions (`superagent:init` + template)
 
