@@ -8,7 +8,7 @@ description: Use when asked to run the codex smoke probe (or "superagent codex p
 Perform these checks with your file/shell tools, then output ONLY the report block below —
 no extra prose before or after it.
 
-1. Determine this skill file's own location and derive `plugin_root` = the directory three levels
+1. Determine this skill file's own location and derive `plugin_root` = the directory four levels
    above it (the directory containing `plugins/` and `templates/`). If you cannot determine the
    file's location, report `unknown`.
 2. Check whether `<plugin_root>/templates/superenv.default` is readable; capture its first line.
