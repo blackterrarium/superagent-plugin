@@ -22,13 +22,13 @@
 #
 # Output layout (committed to the repo; re-run this script after editing skills/), laid out as a
 # Codex plugin-marketplace root:
-#   codex/marketplace.json                              Codex plugin-marketplace manifest
+#   codex/.agents/plugins/marketplace.json              Codex plugin-marketplace manifest
 #   codex/plugins/superagent/.codex-plugin/plugin.json   Codex plugin manifest
 #   codex/plugins/superagent/skills/<name>/SKILL.md      stripped + substituted skills
 #   codex/plugins/superagent/skills/codex-smoke-probe/   smoke-test probe skill (generated here,
 #                                                         no canonical copy)
-#   codex/templates/                                     templates (superenv.default specialized
-#                                                         for Codex)
+#   codex/plugins/superagent/templates/                  templates (superenv.default specialized
+#                                                         for Codex; inside the plugin so installs ship them)
 #   codex/README.md                                      install notes + known gaps
 #
 # Usage:
@@ -68,7 +68,6 @@ filter_markers() {
 substitute() {
   sed \
     -e 's/\${CLAUDE_PLUGIN_ROOT}/\${SUPER_PLUGIN_ROOT}/g' \
-    -e 's|\${SUPER_PLUGIN_ROOT}/skills/|\${SUPER_PLUGIN_ROOT}/plugins/superagent/skills/|g' \
     -e 's/claude -p/codex exec/g' \
     -e 's/claude --model/codex exec -m/g' \
     -e 's/ANTHROPIC_API_KEY/OPENAI_API_KEY/g' \
@@ -97,13 +96,13 @@ cat >"$banner_file" <<'EOF'
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed marketplace root (the
->   directory containing `plugins/` and `templates/`; skills live under
->   `plugins/superagent/skills/`, four levels above each SKILL.md). Substitute its absolute path
->   wherever it appears. Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`,
->   `launch.sh`, …) are not packaged inside this marketplace root — they live in the plugin
->   source repository, whose `codex/` directory is this root when installed from a repo checkout.
->   Read `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
+>   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
+>   install that is the plugin cache copy; in the source repository it is
+>   `<repo>/codex/plugins/superagent`). Substitute its absolute path wherever it appears.
+>   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
+>   not packaged inside the plugin — they live in the plugin source repository. Read
+>   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
 >   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -145,11 +144,11 @@ description: Use when asked to run the codex smoke probe (or "superagent codex p
 Perform these checks with your file/shell tools, then output ONLY the report block below —
 no extra prose before or after it.
 
-1. Determine this skill file's own location and derive `plugin_root` = the directory four levels
-   above it (the directory containing `plugins/` and `templates/`). If you cannot determine the
+1. Determine this skill file's own location and derive `plugin_root` = the directory two levels
+   above it (the directory containing `skills/` and `templates/`). If you cannot determine the
    file's location, report `unknown`.
 2. Check whether `<plugin_root>/templates/superenv.default` is readable; capture its first line.
-3. Check `<plugin_root>/plugins/superagent/skills/superloop/SKILL.md`: does it exist; does it
+3. Check `<plugin_root>/skills/superloop/SKILL.md`: does it exist; does it
    contain the string "GENERATED FILE — Codex build" (a correct Codex build MUST); does it
    contain the string "cc-only" OR the string "cursor-only" (a correct Codex build must NOT —
    either would be marker leakage from the build).
@@ -169,9 +168,12 @@ Report block (fill every value):
 EOF
 
 # ── Templates ────────────────────────────────────────────────────────────────
-mkdir -p "$TMP/templates"
-cp "$ROOT/templates/super-role-agent.md" "$TMP/templates/"
-cp "$ROOT/templates/vault-root.md" "$TMP/templates/"
+# Inside the plugin directory (NOT the marketplace root): `codex plugin add` copies only
+# source.path (./plugins/superagent) into the install cache, so anything outside it —
+# including a root-level templates/ — would not ship (verified against codex CLI 0.147.0).
+mkdir -p "$TMP/plugins/superagent/templates"
+cp "$ROOT/templates/super-role-agent.md" "$TMP/plugins/superagent/templates/"
+cp "$ROOT/templates/vault-root.md" "$TMP/plugins/superagent/templates/"
 
 # superenv.default: same seds as skills, then Codex-specific header + model defaults.
 substitute <"$ROOT/templates/superenv.default" | awk '
@@ -212,7 +214,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=inherit/' \
   -e 's/(headless tick: opus)/(headless tick: the CLI default model)/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
-  >"$TMP/templates/superenv.default"
+  >"$TMP/plugins/superagent/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
 version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -1)"
@@ -228,17 +230,23 @@ cat >"$TMP/plugins/superagent/.codex-plugin/plugin.json" <<EOF
 }
 EOF
 
-cat >"$TMP/marketplace.json" <<EOF
+# Manifest location + schema per codex-rs/core-plugins/src/marketplace.rs (verified against
+# codex CLI 0.147.0, smoke run 2026-08-12): the CLI only discovers a marketplace manifest at
+# .agents/plugins/marketplace.json (or the .claude-plugin/.cursor-plugin variants) under the
+# root — NEVER a root-level marketplace.json. source.source is "local" and the policy enums
+# are SCREAMING_CASE ("AVAILABLE" / "ON_INSTALL").
+mkdir -p "$TMP/.agents/plugins"
+cat >"$TMP/.agents/plugins/marketplace.json" <<EOF
 {
   "name": "superagent",
-  "metadata": { "description": "superagent plugin marketplace (Codex build)", "version": "${version}" },
+  "interface": { "displayName": "superagent (Codex build)" },
   "plugins": [
     {
       "name": "superagent",
-      "source": { "source": "path", "path": "./plugins/superagent" },
+      "source": { "source": "local", "path": "./plugins/superagent" },
       "description": "Plan-tree authoring and autonomy-loop execution skills — Codex build",
-      "category": "workflows",
-      "policy": { "installation": "manual", "authentication": "none" }
+      "category": "Productivity",
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }
     }
   ]
 }
@@ -274,15 +282,33 @@ login`).
 Sandbox: `SUPER_CODEX_SANDBOX` in `.superenv` — `workspace-write` (default: repo + /tmp writable,
 network on) or `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`).
 
-## Validated
+## Validated (smoke run, 2026-08-12, codex CLI 0.147.0 on macOS)
 
-Nothing is validated yet — run `scripts/codex-smoke.sh` and update this section from the report.
+- Headless mode (`codex exec`), the marketplace install path, and `-c model_reasoning_effort=<v>`
+  all work (T1/T2/T2b/T6).
+- Plugin skills are enumerable and model-invocable from a neutral workspace; the probe skill
+  resolves its installed plugin root (the cache copy under `~/.codex/plugins/cache/…`) and reads
+  bundled templates by relative path (T3/T4a). `codex plugin add` copies ONLY the plugin
+  directory (`source.path`) into the cache — which is why `templates/` lives inside
+  `plugins/superagent/`, not at the marketplace root.
+- `spawn_agent` (multi-agent v2) IS available in plain `codex exec` sessions and returns child
+  results (T4b) — the subagent mapping in the banner is exercisable.
+- The external-tick entry point works: a file-read prompt drives the supervisor skill, and its
+  no-plan hard gate fires with the expected message (T5).
+- Marketplace manifest facts learned from the CLI (encoded in this build): the manifest must live
+  at `.agents/plugins/marketplace.json` under the marketplace root (a root-level
+  `marketplace.json` is NOT discovered), `source.source` is `"local"`, and the policy enums are
+  `"AVAILABLE"` / `"ON_INSTALL"`.
+- Codex CLI defaults observed: `codex exec` runs sandbox `read-only`, approval `never`, and the
+  configured default model at reasoning effort `low` — pinning `SUPER_MODEL_SUPERVISOR` /
+  `SUPER_EFFORT_SUPERVISOR` in `.superenv` is recommended for real loops.
 
 ## Known gaps
 
-- `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4b).
 - No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised on Codex
-  yet — no full multi-tick loop has been exercised.
+  yet — the tick invocation itself is smoke-validated (T5), the full multi-tick loop is not.
+- The `superagent-monitor` attended-tick recipe still shows canonical paths and a Claude-only
+  flag (pre-existing in both generated builds; tracked for follow-up).
 EOF
 
 # ── Emit or check ────────────────────────────────────────────────────────────

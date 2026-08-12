@@ -26,12 +26,30 @@ login`).
 Sandbox: `SUPER_CODEX_SANDBOX` in `.superenv` — `workspace-write` (default: repo + /tmp writable,
 network on) or `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`).
 
-## Validated
+## Validated (smoke run, 2026-08-12, codex CLI 0.147.0 on macOS)
 
-Nothing is validated yet — run `scripts/codex-smoke.sh` and update this section from the report.
+- Headless mode (`codex exec`), the marketplace install path, and `-c model_reasoning_effort=<v>`
+  all work (T1/T2/T2b/T6).
+- Plugin skills are enumerable and model-invocable from a neutral workspace; the probe skill
+  resolves its installed plugin root (the cache copy under `~/.codex/plugins/cache/…`) and reads
+  bundled templates by relative path (T3/T4a). `codex plugin add` copies ONLY the plugin
+  directory (`source.path`) into the cache — which is why `templates/` lives inside
+  `plugins/superagent/`, not at the marketplace root.
+- `spawn_agent` (multi-agent v2) IS available in plain `codex exec` sessions and returns child
+  results (T4b) — the subagent mapping in the banner is exercisable.
+- The external-tick entry point works: a file-read prompt drives the supervisor skill, and its
+  no-plan hard gate fires with the expected message (T5).
+- Marketplace manifest facts learned from the CLI (encoded in this build): the manifest must live
+  at `.agents/plugins/marketplace.json` under the marketplace root (a root-level
+  `marketplace.json` is NOT discovered), `source.source` is `"local"`, and the policy enums are
+  `"AVAILABLE"` / `"ON_INSTALL"`.
+- Codex CLI defaults observed: `codex exec` runs sandbox `read-only`, approval `never`, and the
+  configured default model at reasoning effort `low` — pinning `SUPER_MODEL_SUPERVISOR` /
+  `SUPER_EFFORT_SUPERVISOR` in `.superenv` is recommended for real loops.
 
 ## Known gaps
 
-- `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4b).
 - No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised on Codex
-  yet — no full multi-tick loop has been exercised.
+  yet — the tick invocation itself is smoke-validated (T5), the full multi-tick loop is not.
+- The `superagent-monitor` attended-tick recipe still shows canonical paths and a Claude-only
+  flag (pre-existing in both generated builds; tracked for follow-up).

@@ -1,0 +1,13 @@
+{
+  "name": "superagent",
+  "interface": { "displayName": "superagent (Codex build)" },
+  "plugins": [
+    {
+      "name": "superagent",
+      "source": { "source": "local", "path": "./plugins/superagent" },
+      "description": "Plan-tree authoring and autonomy-loop execution skills — Codex build",
+      "category": "Productivity",
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }
+    }
+  ]
+}

@@ -100,6 +100,12 @@ echo "codex-smoke neutral workspace — intentionally empty" >"$NEUTRAL/README.t
 run_test "T1 headless sanity" "SMOKE-OK" \
   "$BIN" exec --skip-git-repo-check -C "$NEUTRAL" "Reply with exactly: SMOKE-OK"
 
+# Idempotency pre-clean: a previous run (or manual install) leaves the marketplace/plugin
+# registered, which would make T2 fail spuriously on re-add. Removal failures are fine
+# (nothing was installed); output is not part of the test record.
+"$BIN" plugin remove superagent@superagent >/dev/null 2>&1 || true
+"$BIN" plugin marketplace remove superagent >/dev/null 2>&1 || true
+
 # T2 — marketplace + plugin install (the skill-delivery mechanism; failure = design-input change).
 run_test "T2 marketplace add" "" \
   "$BIN" plugin marketplace add "$PLUGIN"
