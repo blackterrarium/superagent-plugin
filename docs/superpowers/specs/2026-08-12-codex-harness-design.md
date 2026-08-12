@@ -202,13 +202,27 @@ is the seam where per-role Claude/Codex mixing would later plug in.
   - `SUPER_HARNESS` comment: `claude | cursor | codex`.
   - New key: `SUPER_CODEX_SANDBOX=workspace-write`
     (`workspace-write | danger-full-access`; ignored by other harnesses).
-  - New effort block mirroring the model block: `SUPER_EFFORT_<ROLE>=inherit`
-    for the supervisor plus the nine role keys (`SUPERVISOR`, `PLANNER`,
-    `EXECUTOR`, `PANEL`, `IMPLEMENTER`, `FIX_APPLIER`, `TASK_REVIEWER`,
-    `RE_REVIEWER`, `BRANCH_REVIEWER`, `FIX_PLANNER`). Values are harness-native
-    effort names — claude: `low|medium|high|xhigh|max`; codex:
+  - New effort block mirroring the model block: `SUPER_EFFORT_<ROLE>` for the
+    supervisor plus the nine role keys (`SUPERVISOR`, `PLANNER`, `EXECUTOR`,
+    `PANEL`, `IMPLEMENTER`, `FIX_APPLIER`, `TASK_REVIEWER`, `RE_REVIEWER`,
+    `BRANCH_REVIEWER`, `FIX_PLANNER`). Values are harness-native effort names —
+    claude: `low|medium|high|xhigh|max`; codex:
     `none|minimal|low|medium|high|xhigh`; cursor: unsupported (warned, treated
     as `inherit`). `inherit` = the CLI/model default.
+  - Default set (claude template, `templates/superenv.default` — ALREADY
+    APPLIED on the branch): dispatch roles (`SUPERVISOR`, `PLANNER`,
+    `EXECUTOR`, `PANEL`) `inherit`; `IMPLEMENTER`/`FIX_APPLIER` `medium`;
+    `TASK_REVIEWER`/`RE_REVIEWER`/`FIX_PLANNER` `high`; `BRANCH_REVIEWER`
+    `xhigh` — the same explicit-for-workers / inherit-for-dispatch shape as the
+    model block.
+  - Default set (codex, generated `codex/templates/superenv.default`): same
+    values — every default above is also a valid Codex effort name — with the
+    comment block rewritten to the Codex value domain and knobs. Only the value
+    domains differ between the two sets, not the shipped defaults.
+  - Consequence: with non-`inherit` worker defaults, `superagent:init` on the
+    claude harness generates effort-pinning role definitions out of the box
+    (six files). This is the designed mechanism — the files are derived
+    artifacts owned by init.
 
 ### Role agent definitions (`superagent:init` + template)
 
