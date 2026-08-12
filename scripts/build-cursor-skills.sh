@@ -85,6 +85,12 @@ cat >"$banner_file" <<'EOF'
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
+> - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
+>   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
+>   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
+>   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
+>   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
+>   invoked by name.
 EOF
 
 insert_banner() {
@@ -208,16 +214,24 @@ This build differs from the Claude Code plugin:
 Install (local): `agent --plugin-dir <repo>/cursor …` — or add the repository as a Cursor
 marketplace (the root `.cursor-plugin/marketplace.json` points at this directory).
 
-## Known gaps (pending smoke-test validation)
+## Validated (smoke runs 1–2, 2026-08-12, agent 2026.08.11 on Linux)
+
+- Headless print mode (`agent -p`) and `--plugin-dir` loading work; plugin skills are enumerable
+  and invocable from a neutral workspace; skills can resolve the plugin root and read bundled
+  templates by relative path.
+- Skill names are **unprefixed** on Cursor (`superplan`, not `superagent:superplan`) — the
+  generated banner maps this. `disable-model-invocation` skills (the `superagent` supervisor) are
+  invisible to model-driven lookup, which is fine: the external tick drives it by a file-read
+  prompt, never by name.
+- The superpowers plugin's skills load under Cursor (unprefixed, e.g.
+  `subagent-driven-development`) on a host with it configured — `superrun`'s dependency resolves.
+
+## Known gaps
 
 - The external-driver shell scripts (`scripts/superagent-tick.sh`, `bootstrap.sh`,
   `install-timer.sh`, …) still invoke the **Claude** CLI. Until they are ported, schedule the
   `agent -p` tick recipe from `skills/superloop/SKILL.md` (Driver B) directly.
-- `superrun` requires `superpowers:subagent-driven-development`; whether the superpowers plugin
-  loads under Cursor is unverified. Planning skills (`supergoal`/`superplan`) work without it.
-- Headless skill-invocation semantics under `agent -p` are unverified — run
-  `scripts/cursor-smoke.sh` (from the repository root, on a machine with the Cursor CLI) and
-  report the generated `cursor-smoke-report.md` back.
+- No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised yet.
 EOF
 
 # ── Emit or check ────────────────────────────────────────────────────────────

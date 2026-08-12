@@ -117,11 +117,14 @@ run_test "T4 probe skill (neutral workspace)" "PROBE-BEGIN" \
   "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$NEUTRAL" \
   "Run the cursor smoke probe skill (cursor-smoke-probe) and output its report. If you cannot find any such skill, output exactly: NO-SUCH-SKILL"
 
-# T5 — explicitly-invoked disable-model-invocation skill: superagent's hard gate must fire.
-# The exact gate message exists only inside the skill file, unreachable from this workspace.
-run_test "T5 superagent hard gate (neutral workspace)" "requires a master plan" \
+# T5 — the REAL external-tick mechanism: a file-read prompt, exactly like the production driver.
+# `superagent` carries disable-model-invocation, which on Cursor makes it invisible to model-driven
+# skill lookup (verified in smoke run 2) — the external tick therefore never invokes it by name;
+# it asks the session to read the SKILL.md directly. With no PLAN.md and no loop file, the skill's
+# hard gate must fire, and its exact message exists only inside that file.
+run_test "T5 tick file-read + superagent hard gate" "requires a master plan" \
   "$BIN" -p --trust --plugin-dir "$PLUGIN" --output-format text --workspace "$NEUTRAL" \
-  "Invoke the skill named 'superagent' (superagent:superagent) with no arguments and show its response. If you cannot find any such skill, output exactly: NO-SUCH-SKILL"
+  "Read the file $PLUGIN/skills/superagent/SKILL.md and follow it: execute exactly ONE tick with no arguments (no PLAN.md, no loop file), in unattended/non-interactive mode. Show the skill's response. If you cannot read that file, output exactly: CANNOT-READ."
 
 {
   echo "## Summary"
