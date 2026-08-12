@@ -20,8 +20,14 @@ license: all rights reserved
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the
->   one containing `skills/` and `templates/`). Substitute its absolute path wherever it appears.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed marketplace root (the
+>   directory containing `plugins/` and `templates/`; skills live under
+>   `plugins/superagent/skills/`, four levels above each SKILL.md). Substitute its absolute path
+>   wherever it appears. Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`,
+>   `launch.sh`, …) are not packaged inside this marketplace root — they live in the plugin
+>   source repository, whose `codex/` directory is this root when installed from a repo checkout.
+>   Read `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.

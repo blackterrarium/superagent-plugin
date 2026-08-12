@@ -21,8 +21,14 @@ related skills: supertraverse, superfinish, superplan
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the
->   one containing `skills/` and `templates/`). Substitute its absolute path wherever it appears.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed marketplace root (the
+>   directory containing `plugins/` and `templates/`; skills live under
+>   `plugins/superagent/skills/`, four levels above each SKILL.md). Substitute its absolute path
+>   wherever it appears. Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`,
+>   `launch.sh`, …) are not packaged inside this marketplace root — they live in the plugin
+>   source repository, whose `codex/` directory is this root when installed from a repo checkout.
+>   Read `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -69,6 +75,7 @@ closeout by hand: each phase is owned by an existing skill, and superrun must in
 | "I'll pause before each CI push to confirm" | NO. Run fully autonomously — let subagent-driven-development run end-to-end per its no-check-in-between-tasks rule. |
 | "I found the target, I'll execute the next one too while I'm here" | NO. One leaf per invocation. After closeout, report and exit. |
 | "A long CI push is queued — I'll wait for it to finish before pushing the next one" | NO. If `SUPER_CI_RUNNERS > 1`, queue every independent long push back-to-back (**CI scheduling**, Step 3) — the next free runner picks up the next job; serialize only across a named procedural gate. If `SUPER_CI_RUNNERS=1`, there is no runner contention to exploit, but a shardable batch's pushes still queue together and wait together. |
+| "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **parked** (Step 3a): standalone → report the queued run ids and end the turn (resume later via **Resume entry — post-CI**); under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. |
 
 ## Input — `<PLAN.md>` (Gate 1)
 
@@ -146,11 +153,12 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
-   model keys). `inherit` = no override. A non-`inherit` effort can only ride the
-   generated per-role agent definition (the Task tool has no effort parameter) — dispatch
-   that role with `subagent_type: super-<role>` and omit `model:` (the definition carries
-   both pins). A missing definition for a non-`inherit` effort key is the same hard error
-   as the full-ID case: fail loudly and instruct a `superagent:init` re-run.
+   model keys). `inherit` = no override.
+   In this build the effort pin dispatches at spawn time: pass the role's resolved value
+   as the spawn call's `reasoning_effort` parameter (`inherit` = omit it), alongside the
+   role's model key as `model`. There are no per-role definition files on Codex and
+   nothing for `superagent:init` to generate — a bad effort value fails in the spawn
+   call itself.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or
@@ -233,6 +241,11 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
    When a wait is needed (either of the first two branches above), never wait with `gh run watch`,
    foreground sleeps, or backgrounded re-poll loops — every poll iteration re-enters your context and
    a long lane (60–120 min) burns it for nothing. Instead:
+   - **Standalone (superrun is the top-level session's task):** there is no Monitor tool in this
+     build, so do not wait in-session at all. Report the queued run ids, the worktree/branch/PR
+     packet, and how to check the runs (`gh run list --branch <branch>`), then **end the turn**.
+     Once every run is terminal, re-invoke superrun via its **Resume entry — post-CI** with that
+     packet and the conclusions to finish the leaf.
    - **Dispatched as a subagent (e.g. by a `superagent` loop):** do NOT arm the wait yourself
      (a Monitor cannot resume a subagent whose turn has ended) and do NOT emit interim
      "still waiting" notifications. Return a **CI-PENDING report** (format below) as your final

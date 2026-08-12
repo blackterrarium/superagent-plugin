@@ -51,6 +51,9 @@ closeout by hand: each phase is owned by an existing skill, and superrun must in
 <!-- cursor-only:start
 | "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **parked** (Step 3a): standalone → report the queued run ids and end the turn (resume later via **Resume entry — post-CI**); under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. |
 cursor-only:end -->
+<!-- codex-only:start
+| "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **parked** (Step 3a): standalone → report the queued run ids and end the turn (resume later via **Resume entry — post-CI**); under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. |
+codex-only:end -->
 
 ## Input — `<PLAN.md>` (Gate 1)
 
@@ -128,11 +131,26 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
-   model keys). `inherit` = no override. A non-`inherit` effort can only ride the
+   model keys). `inherit` = no override.
+<!-- cc-only:start -->
+   A non-`inherit` effort can only ride the
    generated per-role agent definition (the Task tool has no effort parameter) — dispatch
    that role with `subagent_type: super-<role>` and omit `model:` (the definition carries
    both pins). A missing definition for a non-`inherit` effort key is the same hard error
    as the full-ID case: fail loudly and instruct a `superagent:init` re-run.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+   Effort is not supported in this build: a non-`inherit` `SUPER_EFFORT_<ROLE>` value →
+   WARN, treat it as `inherit`, and dispatch the role normally — never a hard error and
+   never a definition requirement.
+cursor-only:end -->
+<!-- codex-only:start
+   In this build the effort pin dispatches at spawn time: pass the role's resolved value
+   as the spawn call's `reasoning_effort` parameter (`inherit` = omit it), alongside the
+   role's model key as `model`. There are no per-role definition files on Codex and
+   nothing for `superagent:init` to generate — a bad effort value fails in the spawn
+   call itself.
+codex-only:end -->
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or
@@ -235,6 +253,13 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
      Once every run is terminal, re-invoke superrun via its **Resume entry — post-CI** with that
      packet and the conclusions to finish the leaf.
 cursor-only:end -->
+<!-- codex-only:start
+   - **Standalone (superrun is the top-level session's task):** there is no Monitor tool in this
+     build, so do not wait in-session at all. Report the queued run ids, the worktree/branch/PR
+     packet, and how to check the runs (`gh run list --branch <branch>`), then **end the turn**.
+     Once every run is terminal, re-invoke superrun via its **Resume entry — post-CI** with that
+     packet and the conclusions to finish the leaf.
+codex-only:end -->
    - **Dispatched as a subagent (e.g. by a `superagent` loop):** do NOT arm the wait yourself
      (a Monitor cannot resume a subagent whose turn has ended) and do NOT emit interim
      "still waiting" notifications. Return a **CI-PENDING report** (format below) as your final

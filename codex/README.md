@@ -32,6 +32,6 @@ Nothing is validated yet — run `scripts/codex-smoke.sh` and update this sectio
 
 ## Known gaps
 
-- `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4).
+- `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4b).
 - No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised on Codex
   yet — no full multi-tick loop has been exercised.

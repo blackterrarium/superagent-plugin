@@ -110,7 +110,10 @@ report-only.
 
 1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
    also exist in `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
-   "probable typo (ignored)".
+   "probable typo (ignored)". (Exception: a harness-specific key that belongs to another
+   build's template — e.g. `SUPER_CODEX_SANDBOX` on a build whose template drops it — is
+   a legitimate key in a portable `.superenv`: report it as `ignored (other-harness
+   key)`, not as a typo.)
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
    `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
@@ -129,7 +132,7 @@ report-only.
 6. **Effort keys** (each `SUPER_EFFORT_*`):
    effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
 
-## Step 3 — Role agents (full model IDs only)
+## Step 3 — Role agents (model/effort pins)
 
 Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `agent --model`.
@@ -169,7 +172,8 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
 
 Agent definitions load at session start, so files written here take effect from the
-next tick/session, not the current one. Report per-key results (`generated` /
+next tick/session, not the current one.
+Report per-key results (`generated` /
 `regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
 row.
 

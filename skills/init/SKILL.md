@@ -32,6 +32,16 @@ only one build of this plugin is loaded at a time (if Cursor's "Include third-pa
 Skills, and other configs" setting is loading the Claude Code build alongside this one, disable
 that for this plugin — the two inits collide).
 cursor-only:end -->
+<!-- codex-only:start
+**Harness check (belt-and-suspenders).** This is the **Codex** build of the superagent plugin
+(generated — see the banner above). If you are running under Claude Code — e.g. the
+`CLAUDE_PLUGIN_ROOT` environment variable is defined in your tool environment — STOP and report:
+the wrong harness build is loaded; install the Claude Code plugin from the repository root
+instead. Confirm this host can actually drive the loop: the `codex` CLI is on PATH
+(`codex --version` succeeds) — else WARN with an install hint (`npm install -g @openai/codex`,
+or `brew install codex`). Also make sure only one build of this plugin is loaded at a time —
+two builds' inits collide.
+codex-only:end -->
 
 ## Repo configuration (.superenv)
 
@@ -99,7 +109,10 @@ report-only.
 
 1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
    also exist in `${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
-   "probable typo (ignored)".
+   "probable typo (ignored)". (Exception: a harness-specific key that belongs to another
+   build's template — e.g. `SUPER_CODEX_SANDBOX` on a build whose template drops it — is
+   a legitimate key in a portable `.superenv`: report it as `ignored (other-harness
+   key)`, not as a typo.)
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
    `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
@@ -140,7 +153,7 @@ cursor-only:end -->
    `max` is NOT a Codex effort), treat as `inherit`.
 codex-only:end -->
 
-## Step 3 — Role agents (full model IDs only)
+## Step 3 — Role agents (model/effort pins)
 
 <!-- cc-only:start -->
 Nine `SUPER_MODEL_*` role keys dispatch through the Agent tool — all but
@@ -160,6 +173,16 @@ names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`) 
 NOT valid Cursor model names unless they appear in `agent --list-models`: if a
 resolved value is one of these and not listed there, WARN and treat it as `inherit`.
 cursor-only:end -->
+<!-- codex-only:start
+Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
+`SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `codex exec -m`.
+On Codex there are **no generated agent-definition files at all**: role pins dispatch
+at runtime as `spawn_agent` parameters — `SUPER_MODEL_<ROLE>` → `model`,
+`SUPER_EFFORT_<ROLE>` → `reasoning_effort`, `inherit` = omit the parameter. This step
+therefore **generates nothing**; per the design spec it resolves the effective
+model/effort per role and REPORTS them, so a misconfigured pin surfaces here instead
+of at spawn time.
+codex-only:end -->
 
 Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
@@ -211,16 +234,42 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 - **Value is `inherit`, no file present:** nothing to do.
 Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
 cursor-only:end -->
+<!-- codex-only:start
+- **No files are generated or removed on Codex.** The table's "Generated definition"
+  column names the Claude Code artifact and is inapplicable in this build. For each
+  role, resolve both keys (using the validated values above) and record the effective
+  pair in the summary — e.g. `planner: model=gpt-5.1-codex, effort=inherit — n/a
+  (spawn-parameter pins)`. At runtime the loop passes these as the `spawn_agent`
+  call's `model` / `reasoning_effort` parameters; `inherit` = omit the parameter.
+- A leftover `.claude/agents/super-*.md` file from a Claude Code init of the same
+  repo belongs to that harness's build: leave it untouched and do not report it as
+  stale.
+codex-only:end -->
 
+<!-- cc-only:start -->
 Agent definitions load at session start, so files written here take effect from the
-next tick/session, not the current one. Report per-key results (`generated` /
+next tick/session, not the current one.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+Agent definitions load at session start, so files written here take effect from the
+next tick/session, not the current one.
+cursor-only:end -->
+Report per-key results (`generated` /
 `regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
 row.
 
+<!-- cc-only:start -->
 Note: permission layers commonly treat `.claude/` as protected — in a headless or
 auto-accept session the write may be auto-denied even when other edits sail through.
 init is an attended bootstrap step; if the write prompts, it needs a human approval,
 and if it is denied, report the role as blocked rather than retrying.
+<!-- cc-only:end -->
+<!-- cursor-only:start
+Note: permission layers commonly treat `.claude/` as protected — in a headless or
+auto-accept session the write may be auto-denied even when other edits sail through.
+init is an attended bootstrap step; if the write prompts, it needs a human approval,
+and if it is denied, report the role as blocked rather than retrying.
+cursor-only:end -->
 
 ## Step 4 — Vault
 

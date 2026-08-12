@@ -210,6 +210,11 @@ and on every early-exit/escalation path.
    `external`; if `--driver=cron` was explicitly requested, say that the in-session cron driver is
    Claude Code-only before continuing. An existing loop file's `driver:` must be `external`.
 cursor-only:end -->
+<!-- codex-only:start
+2. **Driver.** Only the `external` driver exists in this build. Treat any `--driver=` value as
+   `external`; if `--driver=cron` was explicitly requested, say that the in-session cron driver is
+   Claude Code-only before continuing. An existing loop file's `driver:` must be `external`.
+codex-only:end -->
 3. **Locate state.** Derive the goal folder from the required input (the `superplan`
    Goal-Identification rule — parent of the `master-plans/` folder), then **root it at
    `primary_root()`** (see **L1**) — so the lookup and the lazy first-write target are in the primary
@@ -285,6 +290,13 @@ The in-session cron driver requires Claude Code's CronCreate/CronList/CronDelete
 exist on Cursor. Driver B below is the only driver.
 
 cursor-only:end -->
+<!-- codex-only:start
+### Driver A — `cron` (Claude Code only — NOT available in this build)
+
+The in-session cron driver requires Claude Code's CronCreate/CronList/CronDelete tools and does not
+exist on Codex. Driver B below is the only driver.
+
+codex-only:end -->
 ### Driver B — `external` (Desktop scheduled task, or headless OS cron) — CLEAN CONTEXT
 
 `/<consumer> <bootstrap-input> --driver=desktop` (aliases `--driver=external` / `--driver=headless`)
@@ -351,6 +363,31 @@ interval, each in a **fresh session = clean context**.
   (`superagent-tick.sh`, `bootstrap.sh`, `install-timer.sh`, …) still invoke the Claude CLI — until
   they are ported, schedule the `agent -p` recipe above directly.
 cursor-only:end -->
+<!-- codex-only:start
+- **Headless OS cron / launchd / systemd timer**: the tick's prompt is a **file read**, not a skill
+  invocation by name — the scheduler asks the CLI to read this plugin's supervisor SKILL.md directly
+  (`<plugin-root>/plugins/superagent/skills/<consumer>/SKILL.md`) and run exactly one `--tick`. The
+  loop's own internal per-tick dispatches (e.g. superagent's `superagent:superplan` /
+  `superagent:superrun`) still go through the skill mechanism once the session is running, so the
+  plugin must be installed via the Codex plugin marketplace (`codex plugin marketplace add
+  <plugin-repo>/codex`, then `codex plugin add superagent@superagent`) — there is no per-invocation
+  `--plugin-dir` analog. The tick runs via the Codex CLI's headless mode (`codex exec`) in a **fresh
+  session per tick** and **must never resume a prior session** (a fresh process per tick is what
+  bounds context — L4 is a no-op in `external` mode, so the loop runs straight to `DONE` with no
+  handoff).
+  ```
+  # <plugin-root> = the installed marketplace root (the directory containing plugins/ and templates/).
+  cd <repo> && OPENAI_API_KEY=... codex exec \
+    "Read <plugin-root>/plugins/superagent/skills/<consumer>/SKILL.md and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER ask the user a question in chat; if a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop." \
+    --sandbox workspace-write -c sandbox_workspace_write.network_access=true \
+    >> /tmp/<consumer>.log 2>&1
+  ```
+  Schedule with cron/launchd/systemd; auth via `OPENAI_API_KEY` in the scheduler env, or the CLI's
+  stored login (`codex login`) where the scheduler user has one (a headless scheduler can't do
+  interactive OAuth). The shipped `scripts/` wrappers are harness-aware: `SUPER_HARNESS=codex` makes
+  `superagent-tick.sh` fire `codex exec` (sandbox per `SUPER_CODEX_SANDBOX`, default
+  `workspace-write`) — see scripts/README.md.
+codex-only:end -->
 - Duplicate guard: **not** `CronList` (each fresh session's `CronList` is empty). The **lock (L3)**
   prevents overlap; "is a loop already set up?" is answered by the loop-file `status` plus the fact that
   the *Desktop routine / scheduler entry* is what the user manages.
@@ -380,6 +417,10 @@ setup.
 Stop a loop manually: disable/remove the scheduler entry for this loop file. Re-running
 `/<consumer> <bootstrap-input>` reports current state and re-prints the scheduler setup.
 cursor-only:end -->
+<!-- codex-only:start
+Stop a loop manually: disable/remove the scheduler entry for this loop file. Re-running
+`/<consumer> <bootstrap-input>` reports current state and re-prints the scheduler setup.
+codex-only:end -->
 
 ---
 
@@ -409,6 +450,11 @@ In this build the external driver is the only driver, and every tick runs in a f
 accumulates, so `check_session_budget()` is a structural no-op: always proceed straight to the caller's
 per-tick body. (`session_skill_count` is never consulted.)
 cursor-only:end -->
+<!-- codex-only:start
+In this build the external driver is the only driver, and every tick runs in a fresh context — nothing
+accumulates, so `check_session_budget()` is a structural no-op: always proceed straight to the caller's
+per-tick body. (`session_skill_count` is never consulted.)
+codex-only:end -->
 <!-- cc-only:start -->
 Run this at the **start of every tick**, *after* reading the loop file (L2 Step 0) and *after* the
 `DONE` no-op, but *before* the caller's per-tick body — i.e. **before invoking any skill**. It is what
@@ -579,6 +625,7 @@ instead.
 > subagent** — it must be the top-level loop agent.
 
 ### Rung 1 — Subagent panel (resolve autonomously)
+<!-- cc-only:start -->
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
 `model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
@@ -588,7 +635,27 @@ parameter; the pin rides the definition) — dispatch with
 overriding `SUPER_PANEL_AGENT_TYPE`) and omit `model:`; missing definition = hard error, re-run
 `superagent:init` — each with **`run_in_background: false`**, so the turn **waits** for all three
 verdicts to arrive as tool results; never dispatch the panel in the background and poll
-`TaskOutput`/`TaskList` for it). Give each the **same packet**: the decision/blocker statement, the relevant plan +
+`TaskOutput`/`TaskList` for it).
+<!-- cc-only:end -->
+<!-- cursor-only:start
+Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
+general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE`; if `SUPER_MODEL_PANEL` is
+non-`inherit`, dispatch with `subagent_type: super-panel` instead — the definition `superagent:init`
+generates in `.claude/agents/`, overriding `SUPER_PANEL_AGENT_TYPE` — and omit `model:`; missing
+definition = hard error, re-run `superagent:init`. Effort is not supported in this build: a
+non-`inherit` `SUPER_EFFORT_PANEL` → WARN, treat as `inherit`, and dispatch normally — never a hard
+error. Dispatch synchronously, so the turn **waits** for all three verdicts to arrive as tool
+results; never dispatch the panel in the background and poll for it).
+cursor-only:end -->
+<!-- codex-only:start
+Dispatch **3 independent subagents in parallel** (one `spawn_agent` call per panelist, all three in a
+single message. Pass the panel pins as spawn parameters: `SUPER_MODEL_PANEL` → `model`,
+`SUPER_EFFORT_PANEL` → `reasoning_effort`; `inherit` = omit that parameter. There are no
+agent-definition files in this build — the pins ride the spawn call itself, and nothing needs a
+`superagent:init` re-run. Wait for all three children's results before proceeding; never
+fire-and-forget the panel).
+codex-only:end -->
+Give each the **same packet**: the decision/blocker statement, the relevant plan +
 report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
 from independent reasoning, not framing. Require each to return a structured verdict —
 `{chosen_option, rationale, confidence}` over the concrete options (or `insufficient-info`).

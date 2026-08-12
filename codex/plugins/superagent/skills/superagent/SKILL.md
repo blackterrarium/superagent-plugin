@@ -23,8 +23,14 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the
->   one containing `skills/` and `templates/`). Substitute its absolute path wherever it appears.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed marketplace root (the
+>   directory containing `plugins/` and `templates/`; skills live under
+>   `plugins/superagent/skills/`, four levels above each SKILL.md). Substitute its absolute path
+>   wherever it appears. Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`,
+>   `launch.sh`, …) are not packaged inside this marketplace root — they live in the plugin
+>   source repository, whose `codex/` directory is this root when installed from a repo checkout.
+>   Read `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -65,10 +71,13 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 | "I'll plan this step and then run it in the same tick while I'm here" | NO. **One skill per tick.** Set the next status and let the next cron tick run it. superplan and superrun contexts must never intermix. |
 | "I'll just invoke `superplan`/`superrun` via the Skill tool here — it's simpler" | NO. **Every `superplan`/`superrun` invocation runs in its own `general-purpose` subagent** (see **Subagent dispatch**). superagent's own context ingests only the returned Final Report (which it then relays verbatim to the caller), never the full skill execution — that is what keeps the supervisor lean and the per-session threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6) meaningful. |
 | "I'll detect the next step / execute the plan myself" | NO. superagent never traverses, plans, or executes. It dispatches `superplan` / `superrun` (each in its own subagent) and reacts to their Final Reports. |
+| "/superagent was run again — I'll start the loop" | NO. Check first. A non-terminal loop file = the scheduler entry is already the driver; report state and re-print setup, don't arm anything. Never start a second loop. |
 | "A fresh/empty context means I lost the loop state" | NO. All state is in the loop file. A `--tick` works identically in a clean context (external driver) or an accumulating one (cron). Acquire the lock, read the file, run one tick. |
 | "A skill raised a question — I'll just ask the user" | NO. First run the **subagent panel** (Decision-escalation ladder). Ask the user only if the panel cannot converge. |
 | "The work is blocked — terminate the loop" | NO. Run the panel on the blocker first (retry / re-plan / decline / escalate). Stop the driver only when DONE or an escalation pauses the loop. |
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
+| "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, release the lock, end the tick. Each later scheduled tick does ONE batched `curl` over the recorded run ids and exits unless every run is terminal. Per-tick heavy polling is the context waste the parked state exists to eliminate. |
+| "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. |
 | "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false`): the blocked Agent call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
 
 ## Hard gate — `<PLAN.md>` is required
@@ -133,6 +142,8 @@ resume branching, and the read-`master_plan`/`status`/…-before-Step-1 step. Af
 
 ## Step 0.5 — Session skill-budget gate (check BEFORE every iteration)
 
+A structural no-op in this build (superloop L4): the external driver is the only driver and every tick
+runs in a fresh context. Go straight to **Step 1**.
 
 ---
 
@@ -250,6 +261,10 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    `superrun` (Step 2); the park and resume ticks increment `iteration` but **not**
    `session_skill_count` again.
 
+**RESUME / restart while parked (form B):** a persisted `WAITING FOR CI` is recovered on the standard
+RESUME path — check the recorded runs once (batched curl or `gh run view`): all terminal → run the
+resume flow above this tick; any still running → report the parked state (the scheduler's ticks keep
+checking) and exit.
 
 ---
 
@@ -379,6 +394,7 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    Write — no commit, no PR (the file is gitignored).
 2. **Terminal** (`DONE`, hard error, or `WAITING FOR INPUT` unanswered in an unattended run): print a
    final summary (plus the pending question + resume instructions for the input case) and
+   `stop_driver()` (instruct the user to disable the scheduler entry). No more
    ticks fire.
 3. **Otherwise**: do nothing to the driver — the next `--tick <loop-file>` fires on its own (the
    in-session `cron` job, or the external Desktop routine / OS-cron entry, depending on `driver`).
@@ -397,6 +413,19 @@ The two drivers (Driver A `cron`, Driver B `external`), the context model, the o
 (`acquire_lock()` / `release_lock()`), and `stop_driver()` are **superloop L2 + L3**. superagent arms
 `/superagent --tick <loop-file>` as its tick prompt (`<consumer>` = `superagent`).
 
+**Running from the Codex CLI.** For `external` mode the tick fires in a fresh headless `codex exec`
+session per interval; the scheduler drives it by asking the CLI to *read the supervisor's SKILL.md
+directly (at the plugin's installed location —
+`<marketplace-root>/plugins/superagent/skills/superagent/SKILL.md`) and run exactly one `--tick`*
+(superloop L2, Driver B). The loop's own internal `superagent:superplan` / `superagent:superrun`
+dispatches still go through the skill mechanism once the session is running, so the plugin must be
+installed via the Codex plugin marketplace (`codex plugin marketplace add <plugin-repo>/codex`, then
+`codex plugin add superagent@superagent`) — there is no per-invocation `--plugin-dir` analog. The
+shipped `scripts/` wrappers are harness-aware: `SUPER_HARNESS=codex` makes `superagent-tick.sh` fire
+`codex exec` (sandbox per `SUPER_CODEX_SANDBOX`, default `workspace-write`; auth via `OPENAI_API_KEY`
+in `.env` or the CLI's stored login). The driver must never resume a prior session (fresh context per
+tick — L4 is a no-op in `external` mode, so the loop runs straight to `DONE`); an interactive
+monitoring/answering console is a separate plane that can be started/stopped independently.
 
 ---
 
@@ -448,4 +477,6 @@ tick, even one the loop already resolved itself.
     (interactive prompt, or `answer:` in the loop file for a scheduled loop)>
 
 On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
+and confirmation the user was reminded to disable the scheduler entry. Include the final tick's
+verbatim **Delegated skill
 report** and any still-open `Findings & issues`.

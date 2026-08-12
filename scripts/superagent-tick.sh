@@ -54,7 +54,7 @@ fi
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
 load_superenv "$REPO"
-# Which agent CLI drives the tick: SUPER_HARNESS=claude (default) | cursor.
+# Which agent CLI drives the tick: SUPER_HARNESS=claude (default) | cursor | codex.
 # Put the right binary on PATH (systemd/cron use a minimal PATH without
 # ~/.local/bin) and fail fast if it's still missing, then verify gh auth.
 HARNESS="$(superagent_harness)" || exit 6
@@ -152,9 +152,10 @@ echo "=== $(ts) superagent-tick harness=${HARNESS} model=${TICK_MODEL:-default} 
 echo "    requires: superagent plugin resolvable for this session (tick entry reads skills/superagent/SKILL.md directly at ${SKILLS_ROOT}; superplan / superrun still resolved via the skill mechanism)" >>"$LOG_FILE"
 
 # API auth: a key in $REPO/.env (repo policy) when present — ANTHROPIC_API_KEY
-# (claude) / CURSOR_API_KEY (cursor); otherwise fall through to the CLI's own
-# stored login (subscription/OAuth hosts have no separate key). If neither exists
-# the CLI itself fails with a clear auth error, logged below — so warn, don't abort.
+# (claude) / CURSOR_API_KEY (cursor) / OPENAI_API_KEY (codex); otherwise fall
+# through to the CLI's own stored login (subscription/OAuth hosts have no separate
+# key; codex: `codex login`). If neither exists the CLI itself fails with a clear
+# auth error, logged below — so warn, don't abort.
 if [[ "$HARNESS" == cursor && -z "${CURSOR_API_KEY:-}" ]]; then
   echo "    note: CURSOR_API_KEY not set (no $REPO/.env entry); relying on the Cursor CLI's own stored login" >>"$LOG_FILE"
 elif [[ "$HARNESS" == codex && -z "${OPENAI_API_KEY:-}" ]]; then

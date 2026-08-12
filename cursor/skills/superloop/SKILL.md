@@ -446,15 +446,14 @@ instead.
 
 ### Rung 1 — Subagent panel (resolve autonomously)
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
-general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
-`model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
-`claude-fable-5`) **or `SUPER_EFFORT_PANEL` is non-`inherit`** (the Agent tool has no effort
-parameter; the pin rides the definition) — dispatch with
-`subagent_type: super-panel` instead (the definition `superagent:init` generates in `.cursor/agents/`,
-overriding `SUPER_PANEL_AGENT_TYPE`) and omit `model:`; missing definition = hard error, re-run
-`superagent:init` — each with **`run_in_background: false`**, so the turn **waits** for all three
-verdicts to arrive as tool results; never dispatch the panel in the background and poll
-`TaskOutput`/`TaskList` for it). Give each the **same packet**: the decision/blocker statement, the relevant plan +
+general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE`; if `SUPER_MODEL_PANEL` is
+non-`inherit`, dispatch with `subagent_type: super-panel` instead — the definition `superagent:init`
+generates in `.cursor/agents/`, overriding `SUPER_PANEL_AGENT_TYPE` — and omit `model:`; missing
+definition = hard error, re-run `superagent:init`. Effort is not supported in this build: a
+non-`inherit` `SUPER_EFFORT_PANEL` → WARN, treat as `inherit`, and dispatch normally — never a hard
+error. Dispatch synchronously, so the turn **waits** for all three verdicts to arrive as tool
+results; never dispatch the panel in the background and poll for it).
+Give each the **same packet**: the decision/blocker statement, the relevant plan +
 report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
 from independent reasoning, not framing. Require each to return a structured verdict —
 `{chosen_option, rationale, confidence}` over the concrete options (or `insufficient-info`).

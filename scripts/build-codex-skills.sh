@@ -11,9 +11,11 @@
 #   <!-- cursor-only:start                             block is an inert HTML comment in the
 #     ...content...                                    canonical file; here the wrapper lines AND
 #   cursor-only:end -->                                the content are DROPPED (like cc-only)
-#   <!-- codex-only:start --> ... <!-- codex-only:end --> block is an inert HTML comment in the
-#                                                      canonical file; here the wrapper lines are
-#                                                      dropped and the content is ACTIVATED
+#   <!-- codex-only:start                              block is an inert HTML comment in the
+#     ...content...                                    canonical file; here the wrapper lines are
+#   codex-only:end -->                                 dropped and the content is ACTIVATED
+#                                                      (note: NO closing --> on the start line —
+#                                                      same form as cursor-only)
 #
 # After marker filtering, harness-specific text substitutions are applied (see seds below), and a
 # generated-file banner is inserted after each SKILL.md's frontmatter.
@@ -66,6 +68,7 @@ filter_markers() {
 substitute() {
   sed \
     -e 's/\${CLAUDE_PLUGIN_ROOT}/\${SUPER_PLUGIN_ROOT}/g' \
+    -e 's|\${SUPER_PLUGIN_ROOT}/skills/|\${SUPER_PLUGIN_ROOT}/plugins/superagent/skills/|g' \
     -e 's/claude -p/codex exec/g' \
     -e 's/claude --model/codex exec -m/g' \
     -e 's/ANTHROPIC_API_KEY/OPENAI_API_KEY/g' \
@@ -94,8 +97,14 @@ cat >"$banner_file" <<'EOF'
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the
->   one containing `skills/` and `templates/`). Substitute its absolute path wherever it appears.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed marketplace root (the
+>   directory containing `plugins/` and `templates/`; skills live under
+>   `plugins/superagent/skills/`, four levels above each SKILL.md). Substitute its absolute path
+>   wherever it appears. Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`,
+>   `launch.sh`, …) are not packaged inside this marketplace root — they live in the plugin
+>   source repository, whose `codex/` directory is this root when installed from a repo checkout.
+>   Read `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -271,7 +280,7 @@ Nothing is validated yet — run `scripts/codex-smoke.sh` and update this sectio
 
 ## Known gaps
 
-- `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4).
+- `spawn_agent` availability in plain `codex exec` sessions is unverified (smoke T4b).
 - No end-to-end loop run (a real goal driven to DONE by a scheduler) has been exercised on Codex
   yet — no full multi-tick loop has been exercised.
 EOF
