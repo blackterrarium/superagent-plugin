@@ -19,8 +19,31 @@ SUPER_MODEL_BRANCH_REVIEWER=inherit        # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=inherit            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 
+# ── Reasoning effort per agent role ───────────────────────────────
+# Values are harness-native effort names, or "inherit" (= the CLI/model default).
+#   claude: low | medium | high | xhigh | max
+#   codex:  none | minimal | low | medium | high | xhigh
+#   cursor: not supported — non-inherit values are warned and treated as inherit
+# SUPER_EFFORT_SUPERVISOR is passed at tick invocation (claude: --effort,
+# codex: -c model_reasoning_effort). Any other non-inherit role key pins via the
+# generated per-role agent definition (claude) or the subagent-spawn parameter
+# (codex) — on claude, re-run superagent:init after changing one.
+# NOTE (claude): the CLAUDE_CODE_EFFORT_LEVEL env var overrides BOTH the tick
+# flag and per-role pins — leave it unset in scheduler environments.
+SUPER_EFFORT_SUPERVISOR=inherit         # the superagent tick itself
+SUPER_EFFORT_PLANNER=inherit            # superplan / supergoal dispatch subagent
+SUPER_EFFORT_EXECUTOR=inherit           # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_PANEL=inherit              # L7 escalation panel (3 read-only agents)
+SUPER_EFFORT_IMPLEMENTER=medium
+SUPER_EFFORT_FIX_APPLIER=medium
+SUPER_EFFORT_TASK_REVIEWER=high
+SUPER_EFFORT_RE_REVIEWER=high
+SUPER_EFFORT_BRANCH_REVIEWER=xhigh      # final whole-branch reviewer
+SUPER_EFFORT_FIX_PLANNER=high           # fix rounds 4-5: diagnose, then hand to fix-applier
+
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=cursor                    # this is the Cursor build — the external driver fires the Cursor CLI (`agent`)
+SUPER_CODEX_SANDBOX=workspace-write     # codex harness only: workspace-write (repo+/tmp writable, network on) | danger-full-access
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/

@@ -43,7 +43,8 @@ SUPER_EFFORT_BRANCH_REVIEWER=xhigh      # final whole-branch reviewer
 SUPER_EFFORT_FIX_PLANNER=high           # fix rounds 4-5: diagnose, then hand to fix-applier
 
 # ── Harness ───────────────────────────────────────────────────────
-SUPER_HARNESS=claude                    # claude | cursor — which agent CLI the external driver fires per tick
+SUPER_HARNESS=claude                    # claude | cursor | codex — which agent CLI the external driver fires per tick
+SUPER_CODEX_SANDBOX=workspace-write     # codex harness only: workspace-write (repo+/tmp writable, network on) | danger-full-access
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/
