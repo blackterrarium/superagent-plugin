@@ -5,9 +5,11 @@
 #
 #   bash scripts/codex-smoke.sh
 #
-# It needs Codex CLI auth (`codex login` once, or export OPENAI_API_KEY). It makes NO file
-# changes outside this repo clone (tests run without --yolo, so the agent runs in the default
-# read-only-ish sandbox). Everything — commands, exit codes, output — is captured into
+# It needs Codex CLI auth (`codex login` once, or export OPENAI_API_KEY). Tests T2 and T2b
+# register this repo's codex/ directory as a Codex plugin marketplace and install the superagent
+# plugin into the user's Codex CLI configuration (user-level state, outside the repo); the
+# remaining tests make no file changes outside this repo clone (they run in the default read-only-ish
+# sandbox). Everything — commands, exit codes, output — is captured into
 # codex-smoke-report.md at the repo root. When it finishes, send that file back to the
 # Claude Code session that is driving the Codex port (paste it, or attach it).
 #
