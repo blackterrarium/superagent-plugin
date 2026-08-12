@@ -23,7 +23,7 @@ REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 load_superenv "$REPO"
 
 usage() {
-  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>]" >&2
+  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor]" >&2
   exit 2
 }
 
@@ -32,17 +32,20 @@ SLUG="${1:-}"; LOOP_FILE_IN="${2:-}"
 shift 2
 
 INTERVAL="${SUPER_TICK_INTERVAL:-30m}"; TICK_TIMEOUT=""; OUTPUT_FORMAT="stream"; MODEL=""
+HARNESS="$(superagent_harness)" || exit 2
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --interval) INTERVAL="${2:?--interval needs a value}"; shift 2 ;;
     --timeout)  TICK_TIMEOUT="${2:?--timeout needs a value}"; shift 2 ;;
     --output)   OUTPUT_FORMAT="${2:?--output needs a value}"; shift 2 ;;
     --model)    MODEL="${2:?--model needs a value}"; shift 2 ;;
+    --harness)  HARNESS="${2:?--harness needs a value}"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage ;;
   esac
 done
 
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|cursor) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor)" >&2; exit 2 ;; esac
 
 # Resolve LOOP_FILE to an absolute path (its dir must already exist).
 if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then
@@ -74,8 +77,11 @@ mkdir -p "$CONF_DIR"
   [[ -n "$TICK_TIMEOUT" ]] && echo "TICK_TIMEOUT=$TICK_TIMEOUT"
   echo "TICK_OUTPUT_FORMAT=$OUTPUT_FORMAT"
   # Only pin TICK_MODEL when explicitly given; otherwise the wrapper's default
-  # (opus) applies.
+  # (claude: opus; cursor: the CLI's auto) applies.
   [[ -n "$MODEL" ]] && echo "TICK_MODEL=$MODEL"
+  # Which agent CLI the tick fires (claude | cursor) — pinned at install time so
+  # the detached scheduler unit doesn't depend on the repo's .superenv resolving.
+  echo "SUPER_HARNESS=$HARNESS"
 } >"$CONF_DIR/$SLUG.env"
 
 if [[ "$SCHEDULER" == launchd ]]; then
@@ -110,7 +116,7 @@ if [[ "$SCHEDULER" == launchd ]]; then
     launchctl enable "$DOMAIN/$LABEL" 2>/dev/null || true   # clear any stale disable override
   fi
 
-  echo "Installed $LABEL (interval=$INTERVAL/${INTERVAL_SECS}s timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default})."
+  echo "Installed $LABEL (interval=$INTERVAL/${INTERVAL_SECS}s timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default} harness=$HARNESS)."
   echo "  note:    LaunchAgents fire only while $USER is logged in and the Mac is awake (no linger equivalent)."
   echo "  config:  $CONF_DIR/$SLUG.env"
   echo "  status:  launchctl print $DOMAIN/$LABEL   (or $SCRIPT_DIR/status.sh $SLUG)"
@@ -137,7 +143,7 @@ EOF
   systemctl --user daemon-reload
   systemctl --user enable --now "superagent-tick@$SLUG.timer"
 
-  echo "Installed superagent-tick@$SLUG.timer (interval=$INTERVAL timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default})."
+  echo "Installed superagent-tick@$SLUG.timer (interval=$INTERVAL timeout=${TICK_TIMEOUT:-none} output=$OUTPUT_FORMAT model=${MODEL:-default} harness=$HARNESS)."
   echo "  config:  $CONF_DIR/$SLUG.env"
   echo "  status:  systemctl --user list-timers 'superagent-tick@$SLUG.timer'"
   echo "  logs:    journalctl --user -u superagent-tick@$SLUG.service -f   (or /tmp/superagent-*.log)"

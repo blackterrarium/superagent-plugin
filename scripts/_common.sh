@@ -73,6 +73,42 @@ ensure_claude_bin() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# Harness dispatch — which agent CLI the external driver fires per tick.
+#   SUPER_HARNESS=claude (default) -> the Claude CLI (`claude`)
+#   SUPER_HARNESS=cursor           -> the Cursor CLI (`agent`, older `cursor-agent`)
+# Resolution: process env > <repo>/.superenv > plugin default (via load_superenv).
+# ---------------------------------------------------------------------------
+
+superagent_harness() {
+  local h="${SUPER_HARNESS:-claude}"
+  case "$h" in
+    claude|cursor) echo "$h" ;;
+    *) echo "superagent: bad SUPER_HARNESS '$h' (want claude|cursor)" >&2; return 1 ;;
+  esac
+}
+
+# Fatal check: ensure the Cursor CLI binary is findable; exports
+# SUPERAGENT_CURSOR_BIN with the resolved name (`agent`, or legacy `cursor-agent`).
+ensure_cursor_bin() {
+  _superagent_augment_path
+  local c
+  for c in agent cursor-agent; do
+    if command -v "$c" >/dev/null 2>&1; then
+      export SUPERAGENT_CURSOR_BIN="$c"
+      return 0
+    fi
+  done
+  echo "superagent: Cursor CLI not found on PATH (tried: agent, cursor-agent; checked incl. ~/.local/bin, /usr/local/bin). Install it (curl https://cursor.com/install -fsS | bash) or add its directory to PATH in the scheduler env; aborting." >&2
+  return 1
+}
+
+# Fatal check for whichever CLI the resolved harness needs.
+ensure_cli_bin() {
+  local h; h="$(superagent_harness)" || return 1
+  if [[ "$h" == cursor ]]; then ensure_cursor_bin; else ensure_claude_bin; fi
+}
+
 # Non-fatal report: echoes "ok:<account>" (or "ok" if the account can't be parsed)
 # when gh is authenticated, else "unauth". Used by status.sh.
 gh_auth_state() {

@@ -53,50 +53,88 @@ fi
 # so a misconfigured host does not silently break every superrun CI/PR step.
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-# Put the claude binary on PATH (systemd/cron use a minimal PATH without
+load_superenv "$REPO"
+# Which agent CLI drives the tick: SUPER_HARNESS=claude (default) | cursor.
+# Put the right binary on PATH (systemd/cron use a minimal PATH without
 # ~/.local/bin) and fail fast if it's still missing, then verify gh auth.
-ensure_claude_bin || exit 5
+HARNESS="$(superagent_harness)" || exit 6
+ensure_cli_bin || exit 5
 ensure_gh_auth || exit 4
 
-load_superenv "$REPO"
-# Model: always passed explicitly (--model) so the tick uses THIS model regardless
-# of the CLI's own configured default.
-# TICK_MODEL > SUPER_MODEL_SUPERVISOR > opus; a headless tick has no session
-# model, so "inherit" also resolves to opus.
-TICK_MODEL="${TICK_MODEL:-${SUPER_MODEL_SUPERVISOR:-opus}}"
-[[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL="opus"
+if [[ "$HARNESS" == cursor ]]; then
+  # Cursor build of the plugin: skills live under <plugin-repo>/cursor (generated
+  # by scripts/build-cursor-skills.sh); pass it as --plugin-dir so the loop's
+  # internal superplan/superrun skill dispatches resolve.
+  SKILLS_ROOT="$PLUGIN_ROOT/cursor"
+  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+    echo "superagent-tick: Cursor build missing at $SKILLS_ROOT (run scripts/build-cursor-skills.sh)" >&2
+    exit 7
+  fi
+  # Model: TICK_MODEL > SUPER_MODEL_SUPERVISOR; values are Cursor model names
+  # (agent --list-models). "inherit" -> empty -> omit --model (the CLI's own
+  # default, "auto", applies).
+  TICK_MODEL="${TICK_MODEL:-${SUPER_MODEL_SUPERVISOR:-inherit}}"
+  [[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL=""
+else
+  SKILLS_ROOT="$PLUGIN_ROOT"
+  # Model: always passed explicitly (--model) so the tick uses THIS model regardless
+  # of the CLI's own configured default.
+  # TICK_MODEL > SUPER_MODEL_SUPERVISOR > opus; a headless tick has no session
+  # model, so "inherit" also resolves to opus.
+  TICK_MODEL="${TICK_MODEL:-${SUPER_MODEL_SUPERVISOR:-opus}}"
+  [[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL="opus"
+fi
 
 # Slash commands are unavailable in headless print mode, so open the skill file
-# directly (superloop L2, Driver B) rather than invoking it by name — Skill-tool
-# semantics for a disable-model-invocation skill in headless print mode are
-# unverified, so the proven file-read entry point is used instead. The loop's own
+# directly (superloop L2, Driver B) rather than invoking it by name — on Cursor a
+# disable-model-invocation skill is invisible to model-driven lookup (verified),
+# and on Claude Code the Skill-tool semantics in headless print mode are
+# unverified, so the proven file-read entry point is used on both. The loop's own
 # internal superagent:superplan / superagent:superrun dispatches still go through
-# the Skill tool once the session is running, so the superagent plugin must still
-# be installed AND enabled for this headless session. Non-interactive: the tick
-# must never block on a question.
-PROMPT="Read ${PLUGIN_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
+# the skill mechanism once the session is running, so the plugin must still be
+# installed AND enabled (or passed via --plugin-dir on Cursor) for this headless
+# session. Non-interactive: the tick must never block on a question.
+if [[ "$HARNESS" == cursor ]]; then
+  PROMPT="Read ${SKILLS_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
+else
+  PROMPT="Read ${SKILLS_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
+fi
 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-echo "=== $(ts) superagent-tick model=${TICK_MODEL} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
+echo "=== $(ts) superagent-tick harness=${HARNESS} model=${TICK_MODEL:-default} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
 # Not probed (no live check) — the prompt below reads skills/superagent/SKILL.md
-# directly at PLUGIN_ROOT. The loop's own internal superagent:superplan /
-# superagent:superrun dispatches still go through the Skill tool once running, so
-# the superagent plugin must still be installed AND enabled for this headless
-# session. If the tick fails opaquely, check both: the file exists at
-# PLUGIN_ROOT, and the plugin is enabled.
-echo "    requires: superagent plugin installed+enabled for this session (tick entry reads skills/superagent/SKILL.md directly at ${PLUGIN_ROOT}; superagent:superplan / superagent:superrun still resolved via Skill tool)" >>"$LOG_FILE"
+# directly at SKILLS_ROOT. The loop's own internal superagent:superplan /
+# superagent:superrun dispatches still go through the skill mechanism once
+# running, so the plugin must still be installed AND enabled (claude) or passed
+# via --plugin-dir (cursor) for this headless session. If the tick fails
+# opaquely, check both: the file exists at SKILLS_ROOT, and the plugin resolves.
+echo "    requires: superagent plugin resolvable for this session (tick entry reads skills/superagent/SKILL.md directly at ${SKILLS_ROOT}; superplan / superrun still resolved via the skill mechanism)" >>"$LOG_FILE"
 
-# API auth: an ANTHROPIC_API_KEY in $REPO/.env (repo policy) when present;
-# otherwise fall through to the claude CLI's own stored login (subscription/OAuth
-# hosts have no separate key). If neither exists the CLI itself fails with a
-# clear auth error, logged below — so warn, don't abort.
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+# API auth: a key in $REPO/.env (repo policy) when present — ANTHROPIC_API_KEY
+# (claude) / CURSOR_API_KEY (cursor); otherwise fall through to the CLI's own
+# stored login (subscription/OAuth hosts have no separate key). If neither exists
+# the CLI itself fails with a clear auth error, logged below — so warn, don't abort.
+if [[ "$HARNESS" == cursor && -z "${CURSOR_API_KEY:-}" ]]; then
+  echo "    note: CURSOR_API_KEY not set (no $REPO/.env entry); relying on the Cursor CLI's own stored login" >>"$LOG_FILE"
+elif [[ "$HARNESS" == claude && -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "    note: ANTHROPIC_API_KEY not set (no $REPO/.env entry); relying on the claude CLI's own stored login" >>"$LOG_FILE"
 fi
 
 rc=0
-if [[ "$TICK_OUTPUT_FORMAT" == stream ]]; then
+if [[ "$HARNESS" == cursor ]]; then
+  # Cursor CLI: --trust (headless workspace trust) + --force (unattended tool
+  # approval); the plugin rides --plugin-dir. Model only when pinned (default: auto).
+  cursor_args=(-p "$PROMPT" --trust --force --plugin-dir "$SKILLS_ROOT")
+  [[ -n "$TICK_MODEL" ]] && cursor_args+=(--model "$TICK_MODEL")
+  if [[ "$TICK_OUTPUT_FORMAT" == stream ]]; then
+    cursor_args+=(--output-format stream-json)
+  else
+    cursor_args+=(--output-format text)
+  fi
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" "$SUPERAGENT_CURSOR_BIN" "${cursor_args[@]}" ) \
+    >>"$LOG_FILE" 2>&1 || rc=$?
+elif [[ "$TICK_OUTPUT_FORMAT" == stream ]]; then
   # Live streaming (raw stream-json).
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude -p "$PROMPT" \
       --model "$TICK_MODEL" --allowedTools "Read,Edit,Write,Bash,Task,Skill" --output-format stream-json --verbose ) \

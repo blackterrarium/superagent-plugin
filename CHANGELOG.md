@@ -23,9 +23,19 @@ Experimental Cursor support (stage 1 — packaging + smoke test; not yet validat
   headless print mode, model listing, plugin skill discovery, a generated `cursor-smoke-probe`
   skill (plugin-root/relative-path resolution, strip verification), and the `superagent` hard gate —
   writing everything to `cursor-smoke-report.md` for reporting back.
-- **Known gaps** (recorded in `cursor/README.md`): the external-driver shell scripts still invoke
-  the Claude CLI; superpowers-under-Cursor is unverified (`superrun` needs it); headless skill
-  invocation semantics under `agent -p` are what the smoke test exists to verify.
+- **Smoke-validated** (runs 1–2, Linux, agent 2026.08.11): headless `agent -p`, `--plugin-dir`
+  loading, plugin-root resolution and relative template reads, the file-read tick entry
+  (hard gate fires), and superpowers availability under Cursor. Two facts encoded into the
+  generated banner: skill names are unprefixed on Cursor, and `disable-model-invocation` skills
+  are invisible to model-driven lookup (the tick's file-read entry is therefore mandatory there).
+- **Harness-aware driver scripts.** `SUPER_HARNESS=claude|cursor` (new `.superenv` key, flipped to
+  `cursor` in the generated template; `--harness` flag on `launch.sh`/`install-timer.sh`, pinned
+  into the per-goal registry env) selects which CLI a tick fires: `claude -p …` as before, or
+  `agent -p --trust --force --plugin-dir <repo>/cursor` with `CURSOR_API_KEY`/stored-login auth
+  and Cursor model names (`inherit` → the CLI's `auto`). `_common.sh` gains
+  `superagent_harness` / `ensure_cursor_bin` / `ensure_cli_bin`; `superagent-tick.sh` and
+  `bootstrap.sh` branch per harness.
+- **Known gap** (recorded in `cursor/README.md`): no end-to-end multi-tick loop run on Cursor yet.
 
 ## 0.3.0 — 2026-08-11
 
