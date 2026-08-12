@@ -1,9 +1,11 @@
 # superagent
 
-A Claude Code plugin for **plan-tree authoring and autonomy-loop execution**. It ships two things: a
-family of `super*` skills that turn a goal description into a self-contained, self-reviewed vault of
-plans and closeout reports, and a driver (in-session or an unattended external scheduler) that walks
-that tree to completion without a human babysitting every step.
+A plugin for **plan-tree authoring and autonomy-loop execution** — for **Claude Code, Cursor, and
+OpenAI Codex**. Claude Code is the primary harness with the full feature set; Cursor and Codex run
+the external (unattended) driver from generated builds derived from the same canonical skills. It
+ships two things: a family of `super*` skills that turn a goal description into a self-contained,
+self-reviewed vault of plans and closeout reports, and a driver (in-session or an unattended
+external scheduler) that walks that tree to completion without a human babysitting every step.
 
 ## What this is
 
@@ -17,15 +19,41 @@ docs/PR-authoring skills except `superrun`, which is the one that actually chang
 only by delegating to `subagent-driven-development`. Sitting above all four, the **`superagent`
 supervisor** drives a goal's root plan through repeated ticks of this cycle — one `superplan` or
 `superrun` dispatch per tick, unattended, until every step in the tree is both planned and executed —
-either as an in-session `cron` job or as an external, unattended loop driven by a systemd user timer (or
-cron) firing fresh headless sessions.
+either as an in-session `cron` job or as an external, unattended loop driven by an OS scheduler
+(systemd user timer on Linux, launchd on macOS) firing fresh headless sessions — `claude -p`,
+`agent -p` (Cursor), or `codex exec`, per the repo's configured harness.
 
 ## Install
+
+### Claude Code
 
 ```
 /plugin marketplace add blackterrarium/superagent-plugin
 /plugin install superagent
 ```
+
+### Codex
+
+The Codex build installs through the Codex plugin marketplace — the manifest at
+`.agents/plugins/marketplace.json` points at the generated [`codex/`](codex/README.md) build, so
+the repo (or a local clone) is itself the marketplace root:
+
+```
+codex plugin marketplace add blackterrarium/superagent-plugin   # or: <path-to-local-clone>
+codex plugin add superagent@superagent
+```
+
+Skills then load from the *installed* plugin (`~/.codex/plugins/cache/…`) in every workspace —
+there is no per-invocation `--plugin-dir` on Codex. Bootstrap each target repo by asking a Codex
+session to run the `init` skill (skill names are unprefixed on Codex). Auth, sandbox posture, and
+the model/effort key domains are covered in the [Codex section](#codex-experimental) below.
+
+### Cursor
+
+Install via Cursor's marketplace flow (the root `.cursor-plugin/marketplace.json` points at the
+generated [`cursor/`](cursor/README.md) build), or locally with `agent --plugin-dir <repo>/cursor`.
+
+### Bootstrap (all harnesses)
 
 Then, in **each** target repo, bootstrap it once:
 
@@ -33,9 +61,10 @@ Then, in **each** target repo, bootstrap it once:
 superagent:init
 ```
 
-Invoke it by its full namespaced name, `superagent:init` — a bare `init` collides with a built-in
-Claude Code skill (CLAUDE.md authoring) that ships unscoped in most sessions, so the two are ambiguous
-the moment both are available. `superagent:init` verifies prerequisites, creates a `.superenv` config
+On Claude Code, invoke it by its full namespaced name, `superagent:init` — a bare `init` collides
+with a built-in Claude Code skill (CLAUDE.md authoring) that ships unscoped in most sessions, so the
+two are ambiguous the moment both are available. (On Cursor and Codex, skill names are unprefixed —
+ask the session to run this plugin's `init` skill.) `superagent:init` verifies prerequisites, creates a `.superenv` config
 (copied from this plugin's shipped defaults if the repo has none), seeds the goal vault
 (`root.md` at `<SUPER_GOAL_ROOT>`, default `vault`) if it doesn't already exist, and adds the loop-status
 gitignore entry. It is idempotent — safe to re-run — and never overwrites an existing file; it only
@@ -242,25 +271,28 @@ A generated Cursor build of the plugin lives in [`cursor/`](cursor/README.md) �
 its marketplace flow (this repo's root `.cursor-plugin/marketplace.json` points at `cursor/`) or
 locally with `agent --plugin-dir <repo>/cursor`.
 
-**Status: unvalidated.** To smoke-test it on a machine with the Cursor CLI installed:
+**Status: smoke-validated** (runs 1–2, 2026-08-12): headless `agent -p` + `--plugin-dir` loading,
+skill enumeration/invocation from a neutral workspace, and the tick entry point all work; the
+external-driver scripts are harness-aware (`SUPER_HARNESS=cursor`), and superpowers-under-Cursor
+(required by `superrun`) loads on a host with it configured. Remaining gap: no end-to-end
+multi-tick loop has been driven to DONE on Cursor — see `cursor/README.md`. To re-run the smoke:
 
 ```
 git clone https://github.com/blackterrarium/superagent-plugin && cd superagent-plugin
 bash scripts/cursor-smoke.sh
 ```
 
-then send the generated `cursor-smoke-report.md` back to the session driving the port. Known gaps
-before the report comes back: the external-driver shell scripts still invoke the Claude CLI, and
-superpowers-under-Cursor (required by `superrun`) is unverified — see `cursor/README.md`.
-
 ## Codex (experimental)
 
 A generated Codex build of the plugin lives in [`codex/`](codex/README.md) — external (unattended)
-driver only, in the shape of a Codex plugin-marketplace tree (`codex plugin marketplace add
-<repo>/codex && codex plugin add superagent@superagent`; the skills load via the *installed* plugin,
-not a `--plugin-dir` flag). `scripts/build-codex-skills.sh` derives it from the same conditional
-markers as the Cursor build (single source of truth; `--check` verifies the committed tree is
-fresh) — plus a `codex-only` marker for content inert in the Claude Code and Cursor builds.
+driver only, in the shape of a Codex plugin-marketplace tree. Install (see also Install above):
+`codex plugin marketplace add blackterrarium/superagent-plugin` (or a local clone path — the root
+`.agents/plugins/marketplace.json` makes the repo itself the marketplace root; `<clone>/codex`
+works too) then `codex plugin add superagent@superagent`; the skills and bundled templates load via
+the *installed* plugin copy under `~/.codex/plugins/cache/`, not a `--plugin-dir` flag.
+`scripts/build-codex-skills.sh` derives the build from the same conditional markers as the Cursor
+build (single source of truth; `--check` verifies the committed tree is fresh) — plus a
+`codex-only` marker for content inert in the Claude Code and Cursor builds.
 
 Auth is `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's own stored login (`codex
 login`). Sandbox posture is a separate `.superenv` knob, `SUPER_CODEX_SANDBOX`: `workspace-write`
@@ -271,16 +303,17 @@ take Codex model names (e.g. `gpt-5.1-codex`) or `inherit`; effort keys (`SUPER_
 defaults table (same role keys as Claude Code; there is no `.claude/agents/`-style definition file
 on Codex, role pins ride `spawn_agent`'s `model`/`reasoning_effort` parameters instead).
 
-**Status: unvalidated.** To smoke-test it on a machine with the Codex CLI installed:
+**Status: smoke-validated 8/8** (2026-08-12, codex CLI 0.147.0 on macOS): headless `codex exec`,
+the marketplace install path, skill enumeration and model-invocation from a neutral workspace,
+bundled-template access from the installed plugin copy, `spawn_agent` availability (the subagent
+mapping), the file-read tick entry with its hard gate, and the `-c model_reasoning_effort` effort
+override — see `codex/README.md` for the full validated list. Remaining gap: no end-to-end
+multi-tick loop has been driven to DONE on Codex. To re-run the smoke:
 
 ```
 git clone https://github.com/blackterrarium/superagent-plugin && cd superagent-plugin
 bash scripts/codex-smoke.sh
 ```
-
-then send the generated `codex-smoke-report.md` back to the session driving the port. Known gaps
-before the report comes back: `spawn_agent` availability in plain `codex exec` sessions is
-unverified, and no end-to-end multi-tick loop has been run on Codex yet — see `codex/README.md`.
 
 ## Cutting over an existing repo
 

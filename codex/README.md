@@ -18,7 +18,10 @@ This build differs from the Claude Code plugin:
   `SUPER_EFFORT_<ROLE>`) dispatch as `spawn_agent` parameters (`model` / `reasoning_effort`)
   instead.
 
-Install: `codex plugin marketplace add <repo>/codex` then `codex plugin add superagent@superagent`.
+Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
+root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone
+path, or `<clone>/codex`, works the same) then `codex plugin add superagent@superagent`. The
+install copies `plugins/superagent/` (skills + templates) into `~/.codex/plugins/cache/`.
 
 Auth: `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's own stored login (`codex
 login`).

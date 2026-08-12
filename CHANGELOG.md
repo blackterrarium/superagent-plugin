@@ -37,7 +37,14 @@ Experimental Cursor support (stage 1 — packaging + smoke test; not yet validat
   `bootstrap.sh` branch per harness.
 - **Known gap** (recorded in `cursor/README.md`): no end-to-end multi-tick loop run on Cursor yet.
 
-Experimental Codex support (stage 1 — packaging + smoke test; not yet validated on a Codex host),
+Experimental Codex support (stage 1 — packaging + smoke test; **smoke-validated 8/8 on
+2026-08-12**, codex CLI 0.147.0 on macOS: marketplace manifest moved to
+`.agents/plugins/marketplace.json` with `source.source="local"` + `AVAILABLE`/`ON_INSTALL` policy
+enums per the CLI's real schema; templates moved inside `plugins/superagent/` because
+`codex plugin add` copies only `source.path` into the install cache; a root-level
+`.agents/plugins/marketplace.json` now makes the repo itself installable as a marketplace;
+`spawn_agent` confirmed available in plain `codex exec`; README reframed as a
+Claude Code + Cursor + Codex plugin with per-harness install instructions),
 plus per-role reasoning effort for every harness:
 
 - **`SUPER_HARNESS=codex` driver.** `superagent-tick.sh` gains a third harness branch alongside
