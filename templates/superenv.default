@@ -8,10 +8,10 @@
 # (SUPER_MODEL_SUPERVISOR goes straight to `claude --model`, which takes any form.)
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=inherit          # the superagent tick itself (headless tick: opus)
-SUPER_MODEL_PLANNER=inherit             # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
-SUPER_MODEL_PANEL=inherit               # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_SUPERVISOR=opus             # the superagent tick itself
+SUPER_MODEL_PLANNER=opus                # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=opus               # superrun dispatch subagent (the SDD controller)
+SUPER_MODEL_PANEL=opus                  # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=sonnet
 SUPER_MODEL_FIX_APPLIER=sonnet
 SUPER_MODEL_TASK_REVIEWER=opus
@@ -31,10 +31,10 @@ SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 # (codex) — on claude, re-run superagent:init after changing one.
 # NOTE (claude): the CLAUDE_CODE_EFFORT_LEVEL env var overrides BOTH the tick
 # flag and per-role pins — leave it unset in scheduler environments.
-SUPER_EFFORT_SUPERVISOR=inherit         # the superagent tick itself
-SUPER_EFFORT_PLANNER=inherit            # superplan / supergoal dispatch subagent
-SUPER_EFFORT_EXECUTOR=inherit           # superrun dispatch subagent (the SDD controller)
-SUPER_EFFORT_PANEL=inherit              # L7 escalation panel (3 read-only agents)
+SUPER_EFFORT_SUPERVISOR=medium          # the superagent tick itself
+SUPER_EFFORT_PLANNER=high               # superplan / supergoal dispatch subagent
+SUPER_EFFORT_EXECUTOR=medium            # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_PANEL=xhigh                # L7 escalation panel (3 read-only agents)
 SUPER_EFFORT_IMPLEMENTER=medium
 SUPER_EFFORT_FIX_APPLIER=medium
 SUPER_EFFORT_TASK_REVIEWER=high

@@ -7,10 +7,10 @@
 # (SUPER_MODEL_SUPERVISOR goes straight to `agent --model`, which takes any listed name.)
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=inherit          # the superagent tick itself (headless tick: the CLI default model)
-SUPER_MODEL_PLANNER=inherit             # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
-SUPER_MODEL_PANEL=inherit               # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_SUPERVISOR=inherit             # the superagent tick itself
+SUPER_MODEL_PLANNER=inherit                # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=inherit               # superrun dispatch subagent (the SDD controller)
+SUPER_MODEL_PANEL=inherit                  # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=inherit
 SUPER_MODEL_FIX_APPLIER=inherit
 SUPER_MODEL_TASK_REVIEWER=inherit
@@ -22,10 +22,10 @@ SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 # ── Reasoning effort per agent role (NOT SUPPORTED on Cursor) ─────
 # The Cursor CLI has no reasoning-effort control. Keys are kept for cross-harness
 # .superenv portability; any non-inherit value is warned and treated as inherit.
-SUPER_EFFORT_SUPERVISOR=inherit         # the superagent tick itself
-SUPER_EFFORT_PLANNER=inherit            # superplan / supergoal dispatch subagent
-SUPER_EFFORT_EXECUTOR=inherit           # superrun dispatch subagent (the SDD controller)
-SUPER_EFFORT_PANEL=inherit              # L7 escalation panel (3 read-only agents)
+SUPER_EFFORT_SUPERVISOR=inherit          # the superagent tick itself
+SUPER_EFFORT_PLANNER=inherit               # superplan / supergoal dispatch subagent
+SUPER_EFFORT_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_PANEL=inherit                # L7 escalation panel (3 read-only agents)
 SUPER_EFFORT_IMPLEMENTER=inherit
 SUPER_EFFORT_FIX_APPLIER=inherit
 SUPER_EFFORT_TASK_REVIEWER=inherit

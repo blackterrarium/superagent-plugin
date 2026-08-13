@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.4.3 — 2026-08-13
+## 0.4.4 — 2026-08-13
+
+- **Dispatch-role model/effort defaults: `inherit` → pinned.** The four dispatch roles now ship
+  pinned in `templates/superenv.default`: `SUPER_MODEL_{SUPERVISOR,PLANNER,EXECUTOR,PANEL}=opus`
+  with efforts `medium`/`high`/`medium`/`xhigh`. Rationale: `inherit` made headless and in-session
+  runs behave differently (a headless tick silently fell back to the CLI default — on Codex that
+  meant reasoning effort `low`); pinning makes every run take the same models. Codex build maps
+  the four pins to `gpt-5.6-sol` (same efforts); Cursor build keeps everything `inherit` (Claude
+  tier names are not valid Cursor model names; Cursor has no effort control). Existing repos are
+  unaffected — their `.superenv` copies still carry `inherit` — but a hand-trimmed `.superenv`
+  that omits these keys now falls through to non-`inherit` effort defaults, which on the Claude
+  harness require the `superagent:init`-generated `.claude/agents/super-*.md` definitions:
+  re-run init in that case. Also fixed a stale README cell (`SUPER_TICK_INTERVAL` 30m → 10m,
+  changed in 0.4.1).
 
 - **supergoal: root master plan must carry the planning-session payload.** supergoal runs at the
   end of a planning session, but nothing required the root plan body to preserve that session's
