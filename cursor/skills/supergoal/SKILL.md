@@ -129,7 +129,30 @@ outside the goal folder. The root plan MUST:
   justifies the decomposition;
 - carry **no parent-seed reference** (it is the root);
 - reference `goal-directives.md` (step 5) and any `findings/` docs captured under A6, so a fresh agent
-  reviews them.
+  reviews them;
+- carry the **planning-session payload** — the sections below, in this order, **after** the
+  progress-report table. supergoal typically runs at the **end of a planning session**: every piece of
+  context, every decision, and every rejected alternative that session produced exists only in the
+  conversation until it is written down here. This plan — with `goal-directives.md` and `findings/` —
+  is the **only** context a fresh `superplan` agent gets when it descends into a step, so the payload
+  is what makes the table rows plannable:
+
+  1. **Goal & success criteria** — the distilled objective and the measurable finish line
+     (which step(s) satisfy each criterion).
+  2. **Context** — the current state of the system the goal touches, and the exact files/docs a
+     zero-context planner must read before descending.
+  3. **Locked decisions** — every decision the planning session settled, each with the
+     alternative(s) rejected and why, stated as inputs the sub-plans implement and do **not**
+     re-litigate.
+  4. **Per-step guidance — one subsection per table row (REQUIRED).** For each step: its scope
+     (what is in and what is out), key requirements and constraints, dependencies and interfaces
+     to adjacent steps, and how the step's completion is verified — written so a fresh `superplan`
+     agent can plan that step from this file and its referenced docs alone. A row whose only
+     description is its own row text is **not plannable**: `superplan`'s spec-coverage self-review
+     reads the seed's sections for the step as the step's requirements, so an absent section makes
+     that review vacuous.
+  5. **Cross-step constraints / invariants** — anything that binds every step (omit the section
+     when there are none).
 
 ### 5. Author `goal-directives.md` (structural doc — A2's plan rules do not apply)
 
@@ -178,8 +201,17 @@ Run superauthor A4 in full — spec coverage of `<GOAL>` against the root plan's
 placeholder scan, and type/term consistency (supergoal authored the plan directly, so nothing has
 pre-checked it).
 **Skip** the tree-specific items — the root has no parent, parent row, or ancestors. Additionally
-confirm the progress-report table is the **first major section of the plan body** (the step-4 placement
-rule) — move it to the top if it drifted lower.
+confirm:
+
+- the progress-report table is the **first major section of the plan body** (the step-4 placement
+  rule) — move it to the top if it drifted lower;
+- **every table row has its per-step guidance subsection** (the step-4 planning-session payload)
+  carrying scope, requirements/constraints, dependencies, and verification — add the missing
+  subsection for any row that lacks one;
+- **every decision, constraint, and rejected alternative from the planning session appears in the
+  drafted docs** (the root plan's Locked decisions / payload sections, `goal-directives.md`, or a
+  `findings/` doc) — anything left only in the conversation is invisible to the fresh step
+  planners; write it in before presenting the gate.
 
 ### 7. Confirmation gate (REQUIRED — overrides A5)
 

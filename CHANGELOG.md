@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.3 — 2026-08-13
+
+- **supergoal: root master plan must carry the planning-session payload.** supergoal runs at the
+  end of a planning session, but nothing required the root plan body to preserve that session's
+  output — a title + progress-report table would have passed self-review, leaving `superplan`'s
+  per-step descent (whose spec-coverage review reads the seed's sections as the step's
+  requirements) with nothing to plan from. Step 4 now mandates ordered sections after the table:
+  Goal & success criteria, Context (required reading), Locked decisions (with rejected
+  alternatives, stated as non-relitigable), per-step guidance (one subsection per table row —
+  scope, constraints, dependencies/interfaces, verification), and cross-step invariants. Step 6
+  self-review checks every row has its subsection and every session decision/constraint/rejected
+  alternative landed in the drafted docs. Verified via scratch-drafted supergoal simulation runs
+  (2 baseline + 2 with the new text); Cursor and Codex builds regenerated.
+
 ## 0.4.2 — 2026-08-13
 
 - **Codex sandbox default `workspace-write` → `danger-full-access`.** First end-to-end codex loop
