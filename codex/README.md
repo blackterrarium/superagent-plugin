@@ -26,8 +26,10 @@ install copies `plugins/superagent/` (skills + templates) into `~/.codex/plugins
 Auth: `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's own stored login (`codex
 login`).
 
-Sandbox: `SUPER_CODEX_SANDBOX` in `.superenv` — `workspace-write` (default: repo + /tmp writable,
-network on) or `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`).
+Sandbox: `SUPER_CODEX_SANDBOX` in `.superenv` — `danger-full-access` (default:
+`--dangerously-bypass-approvals-and-sandbox`, claude-harness parity) or `workspace-write`
+(repo + /tmp writable, network on — but the repo's top-level `.git/` stays read-only, so git
+fetch/commit fail and the sync gate parks the loop).
 
 ## Validated (smoke run, 2026-08-12, codex CLI 0.147.0 on macOS)
 

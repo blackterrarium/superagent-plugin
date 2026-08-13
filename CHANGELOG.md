@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2 — 2026-08-13
+
+- **Codex sandbox default `workspace-write` → `danger-full-access`.** First end-to-end codex loop
+  (tick 1) parked `WAITING FOR INPUT` at the L5 sync gate: codex's `workspace-write` sandbox keeps
+  the repo's top-level `.git/` read-only (`git fetch` fails on `.git/FETCH_HEAD`; no
+  `allow_git_writes` knob exists as of codex-cli 0.147.0), so any git-based loop stalls on its
+  first tick. `danger-full-access` is parity with the claude harness, which runs unsandboxed;
+  approvals are moot either way in headless `codex exec`. `workspace-write` remains selectable via
+  `SUPER_CODEX_SANDBOX` for non-git workloads. Updated in the tick script, `.superenv` templates,
+  and docs (README, scripts/README, superloop/superagent skills, codex build banner).
+
 ## 0.4.1 — 2026-08-12
 
 - **Default tick interval 30m → 10m** in the `.superenv` default templates (canonical

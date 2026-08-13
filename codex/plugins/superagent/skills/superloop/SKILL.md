@@ -294,14 +294,15 @@ interval, each in a **fresh session = clean context**.
   # <plugin-root> = the installed marketplace root (the directory containing plugins/ and templates/).
   cd <repo> && OPENAI_API_KEY=... codex exec \
     "Read <plugin-root>/plugins/superagent/skills/<consumer>/SKILL.md and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER ask the user a question in chat; if a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop." \
-    --sandbox workspace-write -c sandbox_workspace_write.network_access=true \
+    --dangerously-bypass-approvals-and-sandbox \
     >> /tmp/<consumer>.log 2>&1
   ```
   Schedule with cron/launchd/systemd; auth via `OPENAI_API_KEY` in the scheduler env, or the CLI's
   stored login (`codex login`) where the scheduler user has one (a headless scheduler can't do
   interactive OAuth). The shipped `scripts/` wrappers are harness-aware: `SUPER_HARNESS=codex` makes
   `superagent-tick.sh` fire `codex exec` (sandbox per `SUPER_CODEX_SANDBOX`, default
-  `workspace-write`) — see scripts/README.md.
+  `danger-full-access` — codex's `workspace-write` keeps the repo's top-level `.git/` read-only,
+  which breaks git fetch/commit and parks the loop at the sync gate) — see scripts/README.md.
 - Duplicate guard: **not** `CronList` (each fresh session's `CronList` is empty). The **lock (L3)**
   prevents overlap; "is a loop already set up?" is answered by the loop-file `status` plus the fact that
   the *Desktop routine / scheduler entry* is what the user manages.

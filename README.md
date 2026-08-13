@@ -160,7 +160,7 @@ shipped build defaults the four dispatch-only roles (supervisor/planner/executor
 | SUPER_EFFORT_RE_REVIEWER | `high` | Reasoning effort for the SDD re-reviewer (post-fix). |
 | SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Reasoning effort for the final whole-branch reviewer. |
 | SUPER_EFFORT_FIX_PLANNER | `high` | Reasoning effort for fix rounds 4–5. |
-| SUPER_CODEX_SANDBOX | `workspace-write` | Codex-harness-only sandbox posture: `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) or `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`). Out-of-domain values abort the tick. |
+| SUPER_CODEX_SANDBOX | `danger-full-access` | Codex-harness-only sandbox posture: `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`) or `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; note codex keeps the repo's top-level `.git/` read-only in this mode, so git fetch/commit fail and the sync gate parks the loop). Out-of-domain values abort the tick. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Subagent type used for the L7 panel (or `Explore`). |
 | SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory name; a sibling of each goal's `master-plans/`. |
@@ -295,9 +295,11 @@ build (single source of truth; `--check` verifies the committed tree is fresh) �
 `codex-only` marker for content inert in the Claude Code and Cursor builds.
 
 Auth is `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's own stored login (`codex
-login`). Sandbox posture is a separate `.superenv` knob, `SUPER_CODEX_SANDBOX`: `workspace-write`
-(default — `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) or
-`danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`). Model keys (`SUPER_MODEL_*`)
+login`). Sandbox posture is a separate `.superenv` knob, `SUPER_CODEX_SANDBOX`:
+`danger-full-access` (default — `--dangerously-bypass-approvals-and-sandbox`, matching the
+unsandboxed claude harness) or `workspace-write` (`--sandbox workspace-write -c
+sandbox_workspace_write.network_access=true`; codex keeps the repo's top-level `.git/` read-only
+in this mode, so git fetch/commit fail and the sync gate parks the loop). Model keys (`SUPER_MODEL_*`)
 take Codex model names (e.g. `gpt-5.1-codex`) or `inherit`; effort keys (`SUPER_EFFORT_*`) take
 `none | minimal | low | medium | high | xhigh | inherit` — see Configuration above for the shared
 defaults table (same role keys as Claude Code; there is no `.claude/agents/`-style definition file

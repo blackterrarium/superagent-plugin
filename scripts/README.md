@@ -87,9 +87,11 @@ install time), the target repo's `.superenv`, or the environment.
   `<plugin-repo>/codex` (`scripts/build-codex-skills.sh`). Auth is `OPENAI_API_KEY` in the target
   repo's `.env`, else the CLI's own stored login (`codex login`). Model values are Codex model
   names (e.g. `gpt-5.1-codex`), with `inherit` omitting `-m` (the CLI's `config.toml` default
-  applies). Sandbox posture is the separate `SUPER_CODEX_SANDBOX` knob (default `workspace-write`,
-  mapping to `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; the
-  alternative `danger-full-access` maps to `--dangerously-bypass-approvals-and-sandbox`) — an
+  applies). Sandbox posture is the separate `SUPER_CODEX_SANDBOX` knob (default
+  `danger-full-access`, mapping to `--dangerously-bypass-approvals-and-sandbox` — parity with the
+  unsandboxed claude harness; the alternative `workspace-write` maps to `--sandbox workspace-write
+  -c sandbox_workspace_write.network_access=true`, but codex keeps the repo's top-level `.git/`
+  read-only in that mode, so git fetch/commit fail and the L5 sync gate parks the loop) — an
   out-of-domain value aborts the tick (exit 8; see Exit codes below) rather than silently picking a
   posture.
 
