@@ -113,9 +113,12 @@ fi
 if [[ "$HARNESS" == claude && -n "${CLAUDE_CODE_EFFORT_LEVEL:-}" ]]; then
   echo "superagent-tick: warning — CLAUDE_CODE_EFFORT_LEVEL='$CLAUDE_CODE_EFFORT_LEVEL' is set; it overrides --effort AND per-role effort pins" >&2
 fi
-# Codex sandbox posture (codex harness only): workspace-write (default) | danger-full-access.
+# Codex sandbox posture (codex harness only): danger-full-access (default) | workspace-write.
+# danger-full-access is parity with the claude harness (which runs unsandboxed): codex's
+# workspace-write keeps the repo's top-level .git/ read-only (no allow_git_writes knob as of
+# codex-cli 0.147.0), so git fetch/commit fail and the L5 sync gate parks the loop on tick 1.
 if [[ "$HARNESS" == codex ]]; then
-  SUPER_CODEX_SANDBOX="${SUPER_CODEX_SANDBOX:-workspace-write}"
+  SUPER_CODEX_SANDBOX="${SUPER_CODEX_SANDBOX:-danger-full-access}"
   case "$SUPER_CODEX_SANDBOX" in
     workspace-write|danger-full-access) ;;
     *) echo "superagent-tick: bad SUPER_CODEX_SANDBOX '$SUPER_CODEX_SANDBOX' (want workspace-write|danger-full-access)" >&2; exit 8 ;;

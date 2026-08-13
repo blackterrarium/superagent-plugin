@@ -496,7 +496,7 @@ dispatches still go through the skill mechanism once the session is running, so 
 installed via the Codex plugin marketplace (`codex plugin marketplace add <plugin-repo>/codex`, then
 `codex plugin add superagent@superagent`) — there is no per-invocation `--plugin-dir` analog. The
 shipped `scripts/` wrappers are harness-aware: `SUPER_HARNESS=codex` makes `superagent-tick.sh` fire
-`codex exec` (sandbox per `SUPER_CODEX_SANDBOX`, default `workspace-write`; auth via `OPENAI_API_KEY`
+`codex exec` (sandbox per `SUPER_CODEX_SANDBOX`, default `danger-full-access`; auth via `OPENAI_API_KEY`
 in `.env` or the CLI's stored login). The driver must never resume a prior session (fresh context per
 tick — L4 is a no-op in `external` mode, so the loop runs straight to `DONE`); an interactive
 monitoring/answering console is a separate plane that can be started/stopped independently.
