@@ -206,13 +206,16 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   { inefh=0 }
   { print }
 ' | sed \
+  -e 's/^SUPER_MODEL_SUPERVISOR=opus/SUPER_MODEL_SUPERVISOR=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PLANNER=opus/SUPER_MODEL_PLANNER=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_EXECUTOR=opus/SUPER_MODEL_EXECUTOR=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PANEL=opus/SUPER_MODEL_PANEL=gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_IMPLEMENTER=sonnet/SUPER_MODEL_IMPLEMENTER=gpt-5.6-terra/' \
   -e 's/^SUPER_MODEL_FIX_APPLIER=sonnet/SUPER_MODEL_FIX_APPLIER=gpt-5.6-terra/' \
   -e 's/^SUPER_MODEL_TASK_REVIEWER=opus/SUPER_MODEL_TASK_REVIEWER=gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_RE_REVIEWER=opus/SUPER_MODEL_RE_REVIEWER=gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_BRANCH_REVIEWER=opus/SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol/' \
-  -e 's/(headless tick: opus)/(headless tick: the CLI default model)/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
   >"$TMP/plugins/superagent/templates/superenv.default"
 
@@ -305,8 +308,9 @@ fetch/commit fail and the sync gate parks the loop).
   `marketplace.json` is NOT discovered), `source.source` is `"local"`, and the policy enums are
   `"AVAILABLE"` / `"ON_INSTALL"`.
 - Codex CLI defaults observed: `codex exec` runs sandbox `read-only`, approval `never`, and the
-  configured default model at reasoning effort `low` — pinning `SUPER_MODEL_SUPERVISOR` /
-  `SUPER_EFFORT_SUPERVISOR` in `.superenv` is recommended for real loops.
+  configured default model at reasoning effort `low` — which is why this build's shipped
+  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=gpt-5.6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
+  instead of leaving them `inherit`.
 
 ## Known gaps
 

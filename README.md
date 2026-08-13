@@ -133,27 +133,35 @@ same three-layer way. The valid domain is harness-native: on Claude Code, `low |
 xhigh | max | inherit`; on the Codex harness, `none | minimal | low | medium | high | xhigh |
 inherit` (no `max`); the Cursor CLI has no effort control at all, so any non-`inherit` value there
 is a no-op — `superagent:init`'s validation pass and the tick itself both WARN and fall back to
-`inherit`. `inherit` means no effort flag is passed, so the CLI's own default applies. Every
-shipped build defaults the four dispatch-only roles (supervisor/planner/executor/panel) to
-`inherit` and the SDD worker roles to a nonzero effort (`medium` for implementer/fix-applier,
-`high` for the reviewers and fix-planner, `xhigh` for the branch reviewer) — see the table below.
+`inherit`. `inherit` means no effort flag is passed, so the CLI's own default applies. The Claude build
+pins every role: the four dispatch roles (supervisor/planner/executor/panel) default to `opus`
+at effort `medium`/`high`/`medium`/`xhigh` respectively, and the SDD worker roles keep their
+nonzero efforts (`medium` for implementer/fix-applier, `high` for the reviewers and fix-planner,
+`xhigh` for the branch reviewer) — see the table below. The Agent tool has no effort parameter,
+so on the Claude build a non-`inherit` effort on any subagent role pins via the per-role agent
+definition `superagent:init` generates — with these defaults that is the normal path, so a repo
+whose `.claude/agents/super-*.md` files are missing (e.g. a hand-trimmed `.superenv` falling
+through to the plugin defaults) needs a re-run of init. The Codex build maps the `opus` pins to
+`gpt-5.6-sol` (and implementer/fix-applier to `gpt-5.6-terra`) with the same efforts; the Cursor
+build ships every model and effort key as `inherit`, since Claude tier names are not valid Cursor
+model names and the Cursor CLI has no effort control.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_MODEL_SUPERVISOR | `inherit` | Model for the superagent tick itself (a headless tick has no session to inherit from, so `inherit` resolves to `opus` there). |
-| SUPER_MODEL_PLANNER | `inherit` | Model for the `superplan` / `supergoal` dispatch subagent. |
-| SUPER_MODEL_EXECUTOR | `inherit` | Model for the `superrun` dispatch subagent (the SDD controller). |
-| SUPER_MODEL_PANEL | `inherit` | Model for the L7 escalation panel (3 read-only agents). |
+| SUPER_MODEL_SUPERVISOR | `opus` | Model for the superagent tick itself. (`inherit` = the session model; a headless tick has no session, so `inherit` resolves to `opus` there.) |
+| SUPER_MODEL_PLANNER | `opus` | Model for the `superplan` / `supergoal` dispatch subagent — plan quality has the most downstream leverage, so this stays on a strong model. |
+| SUPER_MODEL_EXECUTOR | `opus` | Model for the `superrun` dispatch subagent (the SDD controller) — it applies the review confidence filter itself, so it needs judgment. |
+| SUPER_MODEL_PANEL | `opus` | Model for the L7 escalation panel (3 read-only agents). |
 | SUPER_MODEL_IMPLEMENTER | `sonnet` | Model for SDD implementer tasks. |
 | SUPER_MODEL_FIX_APPLIER | `sonnet` | Model for SDD fix-applier tasks. |
 | SUPER_MODEL_TASK_REVIEWER | `opus` | Model for the per-task SDD reviewer. |
 | SUPER_MODEL_RE_REVIEWER | `opus` | Model for the SDD re-reviewer (post-fix). |
 | SUPER_MODEL_BRANCH_REVIEWER | `opus` | Model for the final whole-branch reviewer. |
 | SUPER_MODEL_FIX_PLANNER | `opus` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
-| SUPER_EFFORT_SUPERVISOR | `inherit` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; `inherit` passes no effort flag). |
-| SUPER_EFFORT_PLANNER | `inherit` | Reasoning effort for the `superplan` / `supergoal` dispatch subagent. |
-| SUPER_EFFORT_EXECUTOR | `inherit` | Reasoning effort for the `superrun` dispatch subagent (the SDD controller). |
-| SUPER_EFFORT_PANEL | `inherit` | Reasoning effort for the L7 escalation panel. |
+| SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; `inherit` passes no effort flag). Ticks fire on an interval, so per-tick cost compounds — `medium` covers the routing work. |
+| SUPER_EFFORT_PLANNER | `high` | Reasoning effort for the `superplan` / `supergoal` dispatch subagent. |
+| SUPER_EFFORT_EXECUTOR | `medium` | Reasoning effort for the `superrun` dispatch subagent (the SDD controller) — the hard thinking is delegated to the reviewers and fix planner. |
+| SUPER_EFFORT_PANEL | `xhigh` | Reasoning effort for the L7 escalation panel — it fires rarely and only when everything cheaper has failed. |
 | SUPER_EFFORT_IMPLEMENTER | `medium` | Reasoning effort for SDD implementer tasks. |
 | SUPER_EFFORT_FIX_APPLIER | `medium` | Reasoning effort for SDD fix-applier tasks. |
 | SUPER_EFFORT_TASK_REVIEWER | `high` | Reasoning effort for the per-task SDD reviewer. |
@@ -166,7 +174,7 @@ shipped build defaults the four dispatch-only roles (supervisor/planner/executor
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory name; a sibling of each goal's `master-plans/`. |
 | SUPER_HEAVY_STEP_LIMIT | `6` | Heavy skills (one `superplan`/`superrun` dispatch each) per `cron` session before the context-handoff gate hands off for a fresh context. |
 | SUPER_LOCK_STEAL_MIN | `90` | Minutes before a stale overlap lock (a crashed tick) is auto-stolen. |
-| SUPER_TICK_INTERVAL | `30m` | External-driver tick interval when `--interval` is omitted. |
+| SUPER_TICK_INTERVAL | `10m` | External-driver tick interval when `--interval` is omitted. |
 | SUPER_TEST_EVIDENCE | `local` | `local` = SDD's native local TDD contract; `ci` = the only accepted test evidence is a CI run id + conclusion. |
 | SUPER_CI_FLAG_TEMPLATE | *(empty)* | Commit-message CI flag grammar, e.g. `[test:%s]`; empty means the repo has no commit-flag system. |
 | SUPER_CI_ONE_FLAG_PER_PUSH | `true` | Stamp exactly one CI flag per push — sharding means more pushes, never more flags on one push. |

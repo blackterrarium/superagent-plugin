@@ -6,10 +6,10 @@
 # (SUPER_MODEL_SUPERVISOR goes straight to `codex exec -m`.)
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=inherit          # the superagent tick itself (headless tick: the CLI default model)
-SUPER_MODEL_PLANNER=inherit             # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
-SUPER_MODEL_PANEL=inherit               # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_SUPERVISOR=gpt-5.6-sol             # the superagent tick itself
+SUPER_MODEL_PLANNER=gpt-5.6-sol                # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=gpt-5.6-sol               # superrun dispatch subagent (the SDD controller)
+SUPER_MODEL_PANEL=gpt-5.6-sol                  # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=gpt-5.6-terra
 SUPER_MODEL_FIX_APPLIER=gpt-5.6-terra
 SUPER_MODEL_TASK_REVIEWER=gpt-5.6-sol
@@ -24,10 +24,10 @@ SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 # SUPER_EFFORT_SUPERVISOR is passed at tick invocation (-c model_reasoning_effort).
 # Any other non-inherit role key pins via the subagent-spawn parameter
 # (reasoning_effort on spawn_agent).
-SUPER_EFFORT_SUPERVISOR=inherit         # the superagent tick itself
-SUPER_EFFORT_PLANNER=inherit            # superplan / supergoal dispatch subagent
-SUPER_EFFORT_EXECUTOR=inherit           # superrun dispatch subagent (the SDD controller)
-SUPER_EFFORT_PANEL=inherit              # L7 escalation panel (3 read-only agents)
+SUPER_EFFORT_SUPERVISOR=medium          # the superagent tick itself
+SUPER_EFFORT_PLANNER=high               # superplan / supergoal dispatch subagent
+SUPER_EFFORT_EXECUTOR=medium            # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_PANEL=xhigh                # L7 escalation panel (3 read-only agents)
 SUPER_EFFORT_IMPLEMENTER=medium
 SUPER_EFFORT_FIX_APPLIER=medium
 SUPER_EFFORT_TASK_REVIEWER=high
