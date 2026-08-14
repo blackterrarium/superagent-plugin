@@ -100,10 +100,11 @@ install time), the target repo's `.superenv`, or the environment.
 `_common.sh`'s `load_superenv <repo-root>` resolves every `SUPER_*`/`TICK_*` variable in three layers,
 highest wins: **process env** (e.g. `TICK_MODEL` exported by the scheduler) > **`<repo-root>/.superenv`**
 (repo-local overrides, not checked into the plugin) > **`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`**
-(the plugin's shipped defaults, 28 `SUPER_*` keys covering models, paths, loop tuning, CI policy, and
-review protocol). `superagent-tick.sh`, `launch.sh`, and `install-timer.sh` all call `load_superenv "$REPO"`
-right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPER_MODEL_SUPERVISOR` (default
-`inherit`, which the tick treats as `opus`) are available before argument parsing.
+(the plugin's shipped defaults, 40 `SUPER_*` keys covering models, reasoning efforts, harness, paths,
+loop tuning, CI policy, review protocol, and git/PR policy). `superagent-tick.sh`, `launch.sh`, and
+`install-timer.sh` all call `load_superenv "$REPO"` right after resolving `REPO`, so
+`SUPER_TICK_INTERVAL` (default `10m`) and `SUPER_MODEL_SUPERVISOR` (default `opus`) are available
+before argument parsing.
 
 ## Prerequisites
 
@@ -161,7 +162,7 @@ in the background with no separate console:
 
 ```bash
 $SUPERAGENT_SCRIPTS/launch.sh vault/<STAMP>-<slug>/master-plans/<seed>.md
-# optional: --interval 30m (default)
+# optional: --interval 10m (default)
 ```
 
 It derives the goal slug + loop file, fails fast if the `claude` binary or `gh` auth is missing (arming

@@ -348,4 +348,4 @@ plugin), cut it over once the plugin covers the same behavior:
    `~/.config/superagent/<slug>.env` each time it runs, but the tick **interval** is not stored in that
    file (it lives in the systemd timer drop-in) — read it back from the prior install (or
    `systemctl --user list-timers`) and **re-pass it explicitly** with `--interval`, or the re-install
-   silently falls back to `SUPER_TICK_INTERVAL`'s default (`30m`).
+   silently falls back to `SUPER_TICK_INTERVAL`'s default (`10m`).
