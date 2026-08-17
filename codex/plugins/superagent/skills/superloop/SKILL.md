@@ -263,7 +263,8 @@ end — and run the **Context-handoff gate (L4)** before the body, exactly like 
 The transient/running role (L1) is transient *within* a tick: the loop sets it, runs the body
 synchronously, then sets the next status — all in one turn. Ticks never overlap: in `cron` mode they
 fire between turns; in `external` mode the **lock (L3)** serializes them. So a **persisted** transient
-state means a crashed prior tick (which also left a stale lock that `acquire_lock()` steals after
+state means a crashed prior tick (which also left a stale lock that `acquire_lock()` steals
+immediately when its recorded owner PID is dead, else after
 `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note, **map the persisted transient state back to its matching
 ready state** (the caller supplies the transient→ready mapping for its own status values — superagent:
 `PLANNING → WAITING FOR PLAN`, `RUNNING → WAITING FOR RUN`), and fall through to that branch this tick.
@@ -334,14 +335,24 @@ loop-status dir so two ticks never run concurrently:
 - **`acquire_lock()`** — atomically `mkdir "<loop-file-dir>/.<loop-file-basename>.lockd"`. `<loop-file-dir>`
   is the absolute primary-checkout path (it lands under `primary_root()` — see **L1**),
   so the lock is unambiguous even when the loop is launched from a worktree. On **success**,
-  write a unix timestamp to `…lockd/acquired` and proceed. On **failure** (held): read
-  `…lockd/acquired`; if older than **`SUPER_LOCK_STEAL_MIN` minutes (default 90)** (a crashed tick), `rm -rf` it, re-acquire, and log a
-  recovery note; otherwise **exit the tick immediately** — another tick is in flight, and the next
-  scheduled fire retries.
+  write a unix timestamp to `…lockd/acquired` AND the driving process's PID —
+  `${SUPERAGENT_TICK_PID:-$PPID}` (the external wrapper exports `SUPERAGENT_TICK_PID`; in-session
+  ticks fall back to `$PPID`, the CLI process) — to `…lockd/owner`, then proceed. On **failure**
+  (held): read `…lockd/owner`; if it names a PID that is **no longer alive** (`kill -0 <pid>`
+  fails), the owning tick is dead — `rm -rf` the lock dir, re-acquire, and log a recovery note.
+  If the owner is alive (or there is no `owner` file — an older or hand-made lock), fall back to
+  `…lockd/acquired` age: older than **`SUPER_LOCK_STEAL_MIN` minutes (default 90)** (a crashed
+  tick) → `rm -rf`, re-acquire, log a recovery note; otherwise **exit the tick immediately** —
+  another tick is in flight, and the next scheduled fire retries.
 - **`release_lock()`** — `rm -rf` the lock dir on **every** exit path of a tick (normal end, early
   no-op, escalation/STOP). In `cron` mode ticks already never overlap, so the lock is a harmless no-op;
   in `external` mode it is load-bearing (it is what replaces `CronList`'s implicit single-session
   serialization).
+- **Wrapper safety net** — the agent-side `release_lock()` never runs when the CLI kills the
+  session mid-tick (e.g. a print-mode background-wait ceiling), which used to leak the lock for the
+  full steal window. `superagent-tick.sh` therefore traps EXIT and reaps the lock **iff**
+  `…lockd/owner` names its own PID — it never touches a peer's live lock. The `owner` file is what
+  makes both this trap and the immediate dead-owner steal above possible; always write it.
 
 ---
 

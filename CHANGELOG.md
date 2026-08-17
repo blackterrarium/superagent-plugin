@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.5 — 2026-08-17
+
+- **Fix #15: external ticks were guillotined at 600s and leaked the L3 lock.** Two compounding
+  defects silently halted any loop whose leaf execution exceeded 10 minutes, then wedged it for up
+  to a further 90:
+  - **Background-wait ceiling lifted.** `claude -p` terminates a session's background tasks after
+    600s by default — shorter than a typical `superrun`/`superplan` dispatch — killing the tick's
+    subagents mid-flight while the tick still exited 0. The claude branch of `superagent-tick.sh`
+    now exports `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` (wait indefinitely) unless the operator
+    sets a value, mirroring `TICK_TIMEOUT`'s unlimited-by-default policy. Shipped in the script
+    (not the per-goal env file, which `install-timer.sh` rewrites on every re-arm).
+  - **Crash-safe L3 lock.** `acquire_lock()` now also records the driving PID
+    (`${SUPERAGENT_TICK_PID:-$PPID}`) in `…lockd/owner`; on a held lock, a dead owner is stolen
+    immediately instead of waiting out `SUPER_LOCK_STEAL_MIN` (default 90 min). The tick wrapper
+    exports `SUPERAGENT_TICK_PID`, traps EXIT/TERM/INT, and reaps a leaked lock **iff** the owner
+    file names its own PID — a wrapper that exited early on the held-lock path never touches a
+    peer's live lock.
+  - **Loud abort.** A tick whose session hit a background-wait ceiling (only possible via operator
+    override now) exits 9 with an explicit `ERROR` log line instead of a silent `exit=0`, scanning
+    only its own log segment so a prior tick's output can't poison the verdict.
+
+  Verified with a stub-CLI regression harness (ceiling default + override, own-lock reap,
+  peer-lock preservation, loud abort, prior-log immunity — 10/10). Cursor and Codex builds
+  regenerated; superloop L3 and consumer-skill steal-window wording updated.
+
 ## 0.4.4 — 2026-08-13
 
 - **Dispatch-role model/effort defaults: `inherit` → pinned.** The four dispatch roles now ship

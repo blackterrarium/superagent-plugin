@@ -298,7 +298,8 @@ block.
 These are transient *within* a tick (superagent sets them, runs the skill synchronously, then sets the
 next status — all in one turn). Ticks never overlap: in `cron` mode they fire between turns; in
 `external` mode the **lock** serializes them. So a **persisted** `PLANNING`/`RUNNING` means a crashed
-prior tick (which also left a stale lock that `acquire_lock()` steals after `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log
+prior tick (which also left a stale lock that `acquire_lock()` steals immediately when its recorded
+owner PID is dead, else after `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log
 a recovery note, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, and fall through to
 that branch this tick. (`WAITING FOR CI` is **not** a crash — it is the durable parked state; see its
 own branch.)

@@ -145,6 +145,30 @@ fi
 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
+# --- L3 lock safety net (issue #15) -----------------------------------------
+# The overlap lock is acquired/released by the AGENT inside the session
+# (superloop L3). If the CLI kills the session mid-flight (background-wait
+# ceiling, crash, OOM), release_lock() never runs and the leaked lock wedges the
+# loop until the SUPER_LOCK_STEAL_MIN (90 min) steal window expires. The wrapper
+# outlives the session, so it is the safety net: acquire_lock() records
+# $SUPERAGENT_TICK_PID (this wrapper's PID, exported here) in <lockdir>/owner,
+# and the EXIT trap reaps the lock ONLY when the owner file names this very tick
+# — a wrapper that exited early on the held-lock path must never reap a peer's
+# live lock.
+LOCK_DIR="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").lockd"
+export SUPERAGENT_TICK_PID=$$
+reap_own_lock() {
+  if [[ -d "$LOCK_DIR" && "$(cat "$LOCK_DIR/owner" 2>/dev/null)" == "$$" ]]; then
+    echo "=== $(ts) superagent-tick reaping leaked L3 lock (session ended before release_lock): $LOCK_DIR ===" >>"$LOG_FILE"
+    rm -rf "$LOCK_DIR"
+  fi
+}
+trap reap_own_lock EXIT
+# A signal received while waiting on the CLI child must still run the EXIT trap
+# (bash skips it for a fatal unhandled signal).
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
 echo "=== $(ts) superagent-tick harness=${HARNESS} model=${TICK_MODEL:-default} effort=${TICK_EFFORT:-default} sandbox=${SUPER_CODEX_SANDBOX:-n/a} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
 # Not probed (no live check) — the prompt below reads skills/superagent/SKILL.md
 # directly at SKILLS_ROOT. The loop's own internal superagent:superplan /
@@ -166,6 +190,10 @@ elif [[ "$HARNESS" == codex && -z "${OPENAI_API_KEY:-}" ]]; then
 elif [[ "$HARNESS" == claude && -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "    note: ANTHROPIC_API_KEY not set (no $REPO/.env entry); relying on the claude CLI's own stored login" >>"$LOG_FILE"
 fi
+
+# Bytes already in the log before this tick, so post-run checks only scan THIS
+# tick's segment (a prior tick's output must not poison this one's verdict).
+log_bytes_before="$(wc -c <"$LOG_FILE" 2>/dev/null || echo 0)"
 
 rc=0
 if [[ "$HARNESS" == codex ]]; then
@@ -193,11 +221,32 @@ elif [[ "$HARNESS" == cursor ]]; then
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" "$SUPERAGENT_CURSOR_BIN" "${cursor_args[@]}" ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
 else
+  # The tick's whole job is to dispatch ONE heavy skill (superrun/superplan) into
+  # a subagent and await its Final Report — routinely far longer than print
+  # mode's default 600s background-task wait ceiling, which would terminate the
+  # subagents mid-flight while the tick still exits 0 (issue #15). Lift the
+  # ceiling by default (0 = wait indefinitely), mirroring TICK_TIMEOUT's
+  # unlimited-by-default policy; an operator-set value is respected. This lives
+  # in the shipped script, not the per-goal env file, because install-timer.sh
+  # rewrites that file from scratch on every re-arm.
+  export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-0}"
   claude_args=(-p "$PROMPT" --model "$TICK_MODEL" --allowedTools "Read,Edit,Write,Bash,Task,Skill")
   [[ -n "$TICK_EFFORT" ]] && claude_args+=(--effort "$TICK_EFFORT")
   [[ "$TICK_OUTPUT_FORMAT" == stream ]] && claude_args+=(--output-format stream-json --verbose)
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" claude "${claude_args[@]}" ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
+fi
+
+# A claude session that hits a background-wait ceiling (operator override — the
+# default above is unlimited) kills the tick's subagents mid-flight and still
+# exits 0: a silent abort that leaves status RUNNING and `exit=0` in the log.
+# Detect the CLI's termination line in THIS tick's log segment and fail loudly,
+# so exit=0 keeps meaning "the tick completed its work".
+if [[ "$HARNESS" == claude && "$rc" -eq 0 ]] && \
+   tail -c "+$((log_bytes_before + 1))" "$LOG_FILE" 2>/dev/null \
+     | grep -q "Background tasks still running after"; then
+  echo "=== $(ts) superagent-tick ERROR: session hit the print-mode background-task wait ceiling and was terminated mid-flight (see CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS) ===" >>"$LOG_FILE"
+  rc=9
 fi
 
 echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
