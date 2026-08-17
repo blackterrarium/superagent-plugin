@@ -195,7 +195,13 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `superagent-tick.sh` — the per-tick driver. `LOOP_FILE`, `REPO`, `TICK_TIMEOUT`, `LOG_FILE`
   via env (or `LOOP_FILE` as `$1`). Fresh session, never `--resume`. Runs uncapped by default so long
   CI-push ticks are not killed; wraps the CLI in `timeout` **only** when `TICK_TIMEOUT` is set to a
-  positive integer. Runs the `gh` auth preflight (aborts if `gh` can't authenticate).
+  positive integer, and (claude harness) lifts print mode's 600s background-task wait ceiling
+  (`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` unless the operator sets a value) so a long heavy-skill
+  dispatch is never guillotined mid-flight. Exports `SUPERAGENT_TICK_PID` for the session's
+  `acquire_lock()` owner record, and traps EXIT to reap a leaked L3 lock it owns (a session killed
+  before `release_lock()`), never a peer's. A tick whose session was terminated at a background-wait
+  ceiling exits non-zero with an explicit `ERROR` log line instead of a silent `exit=0`. Runs the
+  `gh` auth preflight (aborts if `gh` can't authenticate).
 - `_common.sh` — sourced helpers: `ensure_gh_auth` (loads/exports `GH_TOKEN`, fatal preflight),
   `ensure_claude_bin` (fatal binary preflight), and `gh_auth_state` (non-fatal report used by `status.sh`).
 - `launch.sh <PLAN.md> [--interval ..] [--timeout ..] [--slug ..] [--output stream|text] [--model <slug>] [--dry-run]`
@@ -285,13 +291,17 @@ answer:
    ```bash
    d="$(dirname "$LOOP_FILE")"; b="$(basename "$LOOP_FILE")"
    mkdir "$d/.$b.lockd"                       # acquire; if it exists, a tick is running — wait
+   echo $$ >"$d/.$b.lockd/owner"               # let a dead-owner steal see this shell's liveness
    $EDITOR "$LOOP_FILE"                        # write: answer: <option>  under ## Pending decision
    rm -rf "$d/.$b.lockd"                       # release
    ```
 
+   (Agent-acquired locks also record the driving PID in `…lockd/owner`; a tick that finds the owner
+   dead steals the lock immediately instead of waiting out `SUPER_LOCK_STEAL_MIN`.)
+
 The console plane is independent: killing a *monitoring* console is always safe; only avoid hard-killing
-a console that is *mid attended-tick* (it self-heals next tick via crash recovery + the 90-min lock
-steal).
+a console that is *mid attended-tick* (it self-heals next tick via crash recovery + the lock steal —
+immediate once the dead owner is detected, else after the 90-min `SUPER_LOCK_STEAL_MIN` window).
 
 ## Safety trade-off (auto-approval)
 

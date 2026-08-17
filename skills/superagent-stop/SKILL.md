@@ -75,6 +75,7 @@ When these are absent, DO NOT pass them — default graceful drain, env kept.
   the `superagent:superagent-monitor` skill.
 - **For a HUNG tick** (stuck at a transient `RUNNING`/`PLANNING` with the lock held and
   no progress) use the `superagent:superagent-force-stop` skill, not this one.
-  `--hard` here only halts and leaves the stale lock for the `SUPER_LOCK_STEAL_MIN`-minute
-  (default 90) steal; `superagent-force-stop` reaps the lock and kicks a recovery tick
+  `--hard` here only halts and leaves the stale lock to the next tick's steal (immediate
+  when the recorded owner PID is dead, else the `SUPER_LOCK_STEAL_MIN`-minute (default 90)
+  window); `superagent-force-stop` reaps the lock and kicks a recovery tick
   so the loop self-heals at once.

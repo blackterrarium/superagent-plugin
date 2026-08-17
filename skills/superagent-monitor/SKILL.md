@@ -127,8 +127,9 @@ user before any stop / uninstall / purge.**
   new ticks fire; a **running tick finishes on its own** (it is not killed). Leaves the loop file + env
   so it can be re-armed.
 - **Hard stop (halt an in-flight tick):** after confirming, `systemctl --user stop
-  superagent-tick@<slug>.service`. Abrupt — leaves a stale lock (auto-stolen after `SUPER_LOCK_STEAL_MIN`
-  minutes, default 90) and a persisted `PLANNING`/`RUNNING` state, both self-healed by crash-recovery on
+  superagent-tick@<slug>.service`. Abrupt — leaves a stale lock (auto-stolen on the next tick: at once
+  when its recorded owner PID is dead, else after `SUPER_LOCK_STEAL_MIN` minutes, default 90) and a
+  persisted `PLANNING`/`RUNNING` state, both self-healed by crash-recovery on
   the next run. May interrupt a git/PR/CI op. Prefer drain unless an immediate halt is needed.
 - **Force-stop a HUNG tick (halt + reap the lock now):** when a tick is wedged (transient status + held
   lock + no progress) and you don't want to wait out the `SUPER_LOCK_STEAL_MIN`-minute (default 90)
