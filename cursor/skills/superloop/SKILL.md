@@ -269,6 +269,37 @@ immediately when its recorded owner PID is dead, else after
 ready state** (the caller supplies the transient→ready mapping for its own status values — superagent:
 `PLANNING → WAITING FOR PLAN`, `RUNNING → WAITING FOR RUN`), and fall through to that branch this tick.
 
+### Tick teardown invariant — never exit on a transient status, never end a tick with a question
+
+A tick has exactly four legal terminal shapes: **advanced** (the next ready / parked / `DONE` status
+written), **parked** (`WAITING FOR CI`, or `WAITING FOR INPUT` with its `## Pending decision` block
+written), a clean **no-op** (held-lock exit, `DONE` guard, budget handoff), or
+**interrupted-and-restored** (below). In every one of them, any transient status **this tick wrote**
+is replaced before the turn ends and any lock **this tick acquired** is released. (A held-lock no-op
+touches neither: the transient status and lock it observed belong to the live peer tick and stay
+exactly as found.) A normal end-of-tick that leaves its own transient status persisted is a **failed
+tick**, even if the session reports success (the shipped external wrapper enforces this: a `0`-exit
+session that leaves a transient status with no live peer holding the lock is re-flagged as a loud
+non-zero tick).
+
+**Ending the tick by asking a question is never legal — in any form.** Not via an Ask tool (the
+driver prompts already forbid those), and **not as the session's final chat message**: in an
+unattended session no one can answer, the harness records the questioning turn as a successful
+completion (`exit 0`, `is_error: false`), and the question strands the transient status and the held
+lock until crash recovery cleans up. If a decision genuinely needs the user, the **only** channel is
+L7 Rung 2's durable machinery — write `## Pending decision`, set `status: WAITING FOR INPUT`,
+`release_lock()`, exit. (An **attended** interactive tick may use `AskUserQuestion` mid-tick per L7
+Rung 2 — but the tick still ends in one of the four terminal shapes above.)
+
+**Interrupted dispatch — self-heal now, don't ask.** If this tick's own heavy dispatch dies under it
+(API stream lost mid-response, host slept, subagent vanished) and the step cannot be completed this
+tick, do exactly what the next tick's crash recovery would do — immediately, so nothing is left
+stranded: append an interruption note to `## Iteration log`, map the transient status back to its
+ready state (the caller's transient→ready mapping), `release_lock()`, and end the tick with a normal
+non-question report naming the interruption. The next scheduled tick retries the step from the ready
+state — **retry is the standing answer to an interruption**; only a genuine decision point (an L7
+trigger) parks the loop on `WAITING FOR INPUT`.
+
 ### Driver A — `cron` (Claude Code only — NOT available in this build)
 
 The in-session cron driver requires Claude Code's CronCreate/CronList/CronDelete tools and does not
@@ -291,7 +322,7 @@ interval, each in a **fresh session = clean context**.
   ```
   # <plugin-root> = this plugin's installed root (the directory containing skills/ and templates/).
   cd <repo> && CURSOR_API_KEY=... agent -p --trust --force \
-    "Read <plugin-root>/skills/<consumer>/SKILL.md and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER ask the user a question in chat; if a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop." \
+    "Read <plugin-root>/skills/<consumer>/SKILL.md and execute exactly ONE --tick on loop file <loop-file>, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the pending-decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave a transient status at exit. Then stop." \
     >> /tmp/<consumer>.log 2>&1
   ```
   Schedule with cron/launchd/systemd; auth via `CURSOR_API_KEY` in the scheduler env (a headless
@@ -500,7 +531,9 @@ If the panel cannot converge (split, or all `insufficient-info`):
    ("user-resolved"), clear the pending block, restore `prior_status`, apply, and **continue this
    tick** — the driver keeps firing, so the loop never breaks.
 3. **Scheduled / unattended tick** (external Desktop/headless, or a `cron` tick with no one present):
-   do **not** block on `AskUserQuestion`. The `## Pending decision` block (with the *"`answer: <option>`"*
+   do **not** block on `AskUserQuestion`, and do **not** end the tick with the question as the final
+   chat message either (L2's tick teardown invariant — a question-terminated turn reads as a
+   successful completion and strands the loop). The `## Pending decision` block (with the *"`answer: <option>`"*
    instruction) is already written and `status: WAITING FOR INPUT` is saved, so **resume is automatic**:
    the next `--tick` polls for the written answer and continues from `prior_status` once it appears —
    even in a brand-new session. In `cron` mode, if you'd rather not burn ticks re-polling, `stop_driver()`

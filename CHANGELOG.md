@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.7 — 2026-08-19
+
+- **Fix #17: a headless tick could end its turn by asking the operator a question, exit 0 as
+  success, and strand `status: RUNNING` + the held lock.** A dispatch interrupted mid-flight (host
+  sleep, API loss) had no prescribed path in the skills: the tick prompt only forbade the
+  `AskQuestion`/`AskUserQuestion` *tools*, so the agent lawfully ended the turn with a plain-text
+  chat question no headless session can answer — a well-formed `success` completion that did no
+  work, burned a full dispatch, and left the loop advertising `RUNNING` with no tick in flight.
+  - **Tick teardown invariant (superloop L2).** A tick now has exactly four legal terminal shapes —
+    advanced, parked (`WAITING FOR CI` / `WAITING FOR INPUT` + pending-decision block), clean no-op,
+    or interrupted-and-restored — and in every one the persisted `status` is non-transient and the
+    lock is released. Ending a tick with a question is never legal in **any** form (tool or final
+    chat message); the only user-decision channel is L7 Rung 2's durable `## Pending decision` +
+    `WAITING FOR INPUT` machinery.
+  - **Interrupted dispatch → self-heal now, don't ask.** The prescribed response to a mid-flight
+    interruption is what the next tick's crash recovery would do, applied immediately: log the
+    interruption, map the transient status back to its ready state (`PLANNING → WAITING FOR PLAN`,
+    `RUNNING → WAITING FOR RUN`), release the lock, end with a normal report. The next scheduled
+    tick retries — retry is the standing answer; only a genuine L7 decision point parks the loop.
+  - **Wrapper enforcement — `exit=0` means "advanced or parked".** After the session ends,
+    `superagent-tick.sh` re-flags a `0`-exit session that left a transient `status` as a loud
+    failed tick (new exit 10 + explicit `ERROR` log line), so monitoring sees the burned tick
+    instead of a healthy-looking no-op. All harnesses; the L3 lock reap (0.4.5 EXIT trap) still
+    runs, so the loop self-heals on the very next tick instead of waiting out the steal window.
+    A held-lock no-op is exempt: when the lock's `owner` names a live PID other than this
+    wrapper's, the transient status on disk is a live peer tick's normal in-flight state, and the
+    overlap is logged as a no-op instead. The check is `set -e`-safe (a missing/unreadable loop
+    file skips it; the `exit=` log line and DONE self-disarm always run).
+  - **Tick prompts strengthened** (wrapper + superloop L2 recipes, all three harnesses): the
+    unattended prompt now also forbids ending the session with a question as the final message and
+    states the no-transient-status-at-exit invariant. `scripts/README.md` exit-code table updated
+    (documents 9 and the new 10 — 9 existed since 0.4.5 but was missing from the table).
+
+  Verified with a stub-CLI regression harness (stranded RUNNING/PLANNING → exit 10 + ERROR line;
+  negative controls: ready/parked/input/DONE statuses, mid-session status advance, nonzero session
+  rc preserved, live-peer held-lock no-op not flagged, dead lock owner still flagged, missing loop
+  file survives `set -e`; prompt-invariant assertions — 20/20). Cursor and Codex builds
+  regenerated.
+
 ## 0.4.6 — 2026-08-19
 
 - **Fix #18: a DONE loop never disarmed its own timer.** `DONE` is terminal, but the external
