@@ -79,6 +79,7 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 | "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, release the lock, end the tick. Each later scheduled tick does ONE batched `curl` over the recorded run ids and exits unless every run is terminal. Per-tick heavy polling is the context waste the parked state exists to eliminate. |
 | "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. |
 | "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false`): the blocked Agent call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
+| "My dispatch was interrupted mid-flight (API lost, host slept) — I'll ask the operator whether to resume or pause" | NO. **A tick never ends with a question — not via a tool, not as the final chat message** (in an unattended session no one can answer; the questioning turn exits 0 and strands `status: PLANNING`/`RUNNING` + the held lock). Self-heal immediately per superloop L2's tick teardown invariant: log the interruption, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, `release_lock()`, end the tick with a normal report. The next scheduled tick retries the step. |
 
 ## Hard gate — `<PLAN.md>` is required
 
@@ -306,6 +307,12 @@ a recovery note, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FO
 that branch this tick. (`WAITING FOR CI` is **not** a crash — it is the durable parked state; see its
 own branch.)
 
+The same mapping applies **in-flight**: if this tick's own dispatch is interrupted and the step cannot
+be completed (superloop L2, tick teardown invariant), apply the reset **now** — log the interruption,
+reset the transient status to its ready state, `release_lock()`, and end the tick with a normal
+report so the next tick retries. Never end the tick asking what to do, and never leave
+`PLANNING`/`RUNNING` persisted on a normal exit.
+
 ### `WAITING FOR CI` (parked — the cheap branch)
 The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-parked**).
 - **external:** run **one batched `curl`** over all ids in `ci_wait.runs` (auth `gh auth token` — with
@@ -403,6 +410,12 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
 3. **Otherwise**: do nothing to the driver — the next `--tick <loop-file>` fires on its own (the
    in-session `cron` job, or the external Desktop routine / OS-cron entry, depending on `driver`).
 4. **Always `release_lock()`** before the turn ends — terminal or not.
+5. **Teardown invariant (superloop L2):** the persisted `status` at end-of-turn is never a
+   `PLANNING`/`RUNNING` this tick wrote (an interrupted dispatch is reset to its ready state
+   in-flight, using the mapping defined in Step 1's crash-recovery branch), and the turn never ends
+   with a question — a decision needing the user ends only via `WAITING FOR INPUT` + `## Pending
+   decision`. The external tick wrapper enforces this: a `0`-exit session that leaves a transient
+   status (with no live peer tick holding the lock) is re-flagged as a loud failed tick (exit 10).
 
 **One-skill-per-iteration is structurally guaranteed:** a `--tick` runs Step 1 → at most one of
 `superplan`/`superrun` → Step 2. Ticks never overlap — in `cron` mode they fire between turns; in

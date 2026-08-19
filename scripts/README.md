@@ -149,9 +149,11 @@ right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPE
 | 6 | `SUPER_HARNESS` is set to something other than `claude`/`cursor`/`codex`. |
 | 7 | The harness's generated build tree is missing (`cursor/` or `codex/` — run the matching `scripts/build-*-skills.sh`). |
 | 8 | `SUPER_CODEX_SANDBOX` (codex harness only) is set to something other than `workspace-write`/`danger-full-access`. |
+| 9 | The session was terminated at a print-mode background-task wait ceiling (claude harness, operator-set `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`) — subagents killed mid-flight while the CLI exited 0. |
+| 10 | The session exited 0 but left a **transient** `status` (`PLANNING`/`RUNNING`) in the loop file — the tick completed without advancing or parking (e.g. an interrupted dispatch that ended its turn with a question; issue #17). The next tick self-heals via crash recovery. |
 | *other* | Propagated verbatim from the underlying CLI's (`claude`/`agent`/`codex`) own exit status. |
 
-Codes 3 and 9+ are unused.
+Codes 3 and 11+ are unused.
 
 ## One-step launch (recommended)
 
@@ -201,7 +203,10 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   dispatch is never guillotined mid-flight. Exports `SUPERAGENT_TICK_PID` for the session's
   `acquire_lock()` owner record, and traps EXIT to reap a leaked L3 lock it owns (a session killed
   before `release_lock()`), never a peer's. A tick whose session was terminated at a background-wait
-  ceiling exits non-zero with an explicit `ERROR` log line instead of a silent `exit=0`. Runs the
+  ceiling exits non-zero with an explicit `ERROR` log line instead of a silent `exit=0`; likewise a
+  session that exits 0 while the loop file still holds a transient `status` (`PLANNING`/`RUNNING`)
+  is re-flagged as a loud failed tick (exit 10) — `exit=0` always means the tick advanced or
+  parked. Runs the
   `gh` auth preflight (aborts if `gh` can't authenticate). **Self-disarms on `DONE`**: after the
   session ends, if the loop file's `status` is `DONE` it uninstalls its own scheduler entry
   (`uninstall-timer.sh <slug> --from-tick`, slug from the env file's `SUPERAGENT_SLUG` or a registry

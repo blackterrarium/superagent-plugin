@@ -135,12 +135,12 @@ fi
 # installed AND enabled (or passed via --plugin-dir on Cursor) for this headless
 # session. Non-interactive: the tick must never block on a question.
 if [[ "$HARNESS" == claude ]]; then
-  PROMPT="Read ${SKILLS_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
+  PROMPT="Read ${SKILLS_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING or RUNNING at exit. Then stop."
 else
-  # cursor + codex: chat questions are impossible in these headless modes; generic wording.
+  # cursor + codex: same invariants; generic wording (no Ask* tools in these harnesses).
   SUPERVISOR_SKILL="$SKILLS_ROOT/skills/superagent/SKILL.md"
   [[ "$HARNESS" == codex ]] && SUPERVISOR_SKILL="$SKILLS_ROOT/plugins/superagent/skills/superagent/SKILL.md"
-  PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat; if a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill. Then stop."
+  PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING or RUNNING at exit. Then stop."
 fi
 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -247,6 +247,35 @@ if [[ "$HARNESS" == claude && "$rc" -eq 0 ]] && \
      | grep -q "Background tasks still running after"; then
   echo "=== $(ts) superagent-tick ERROR: session hit the print-mode background-task wait ceiling and was terminated mid-flight (see CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS) ===" >>"$LOG_FILE"
   rc=9
+fi
+
+# --- stranded-transient detection (issue #17) --------------------------------
+# A session can also end "successfully" having done no work at all: a dispatch
+# interrupted mid-flight (host sleep, API loss) can end its turn by asking the
+# operator a question — a well-formed completion, exit 0 — leaving the loop
+# file's transient status (PLANNING/RUNNING) persisted. The EXIT trap reaps the
+# lock and the next tick's crash recovery heals the status, but exit=0 must
+# keep meaning "the tick advanced or parked": a transient status after a rc=0
+# session is a failed tick. Fail loudly (exit 10) so monitoring sees it.
+# NOT flagged: a held-lock no-op — this wrapper overlapped a LIVE peer tick
+# (lock owner is an alive PID that isn't ours), so the transient status on disk
+# is the peer's normal in-flight state, not a stranding. A dead or absent owner
+# gives the peer no such shield. The check is guarded (readable file, ||-safe
+# pipelines) so set -e can never kill the wrapper here — the exit= log line and
+# the DONE self-disarm below must always run.
+if [[ "$rc" -eq 0 && -r "$LOOP_FILE" ]]; then
+  final_status="$(sed -n 's/^status:[[:space:]]*//p' "$LOOP_FILE" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//' || true)"
+  case "$final_status" in
+    PLANNING|RUNNING)
+      lock_owner="$(cat "$LOCK_DIR/owner" 2>/dev/null || true)"
+      if [[ -n "$lock_owner" && "$lock_owner" != "$$" ]] && kill -0 "$lock_owner" 2>/dev/null; then
+        echo "=== $(ts) superagent-tick: held-lock no-op — peer tick (pid $lock_owner) is mid-flight; transient status '${final_status}' is the peer's, not a stranding ===" >>"$LOG_FILE"
+      else
+        echo "=== $(ts) superagent-tick ERROR: session ended with transient status '${final_status}' — the tick completed without advancing or parking (interrupted dispatch ended in a question? issue #17). The EXIT trap reaps any lock this tick still owns; the next tick self-heals via crash recovery. ===" >>"$LOG_FILE"
+        rc=10
+      fi
+      ;;
+  esac
 fi
 
 echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
