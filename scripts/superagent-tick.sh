@@ -250,4 +250,48 @@ if [[ "$HARNESS" == claude && "$rc" -eq 0 ]] && \
 fi
 
 echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
+
+# --- DONE self-disarm (issue #18) -------------------------------------------
+# status: DONE is terminal, but the scheduler entry keeps firing a full CLI
+# session per interval forever — each a paid no-op — and the old "remind the
+# user to disable the timer" landed in this log, which external mode guarantees
+# nobody is watching. So once the loop file says DONE, the wrapper disarms its
+# own scheduler entry via uninstall-timer.sh --from-tick (drain-wait skipped; on
+# launchd the bootout is the final act and kills this very process, hence: run
+# AFTER the session, log everything first, reap the lock ourselves). The env
+# file and loop-status file are kept, so re-arming stays a one-liner. Runs on
+# any exit rc — DONE is durable regardless of how this particular tick ended.
+# Opt out with SUPER_AUTO_DISARM_ON_DONE=false (env or .superenv) to keep a
+# deliberately polling loop.
+if [[ "${SUPER_AUTO_DISARM_ON_DONE:-true}" == true && \
+      "$(sed -n 's/^status:[[:space:]]*//p' "$LOOP_FILE" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//')" == DONE ]]; then
+  CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
+  DISARM_SLUG=""
+  # Registered slug: SUPERAGENT_SLUG from the per-goal env file (recorded by
+  # install-timer.sh), else scan the registry for the entry naming THIS loop
+  # file (loops armed before the key existed). Either way the LOOP_FILE match
+  # is required — it is the guard against disarming a same-named entry that
+  # drives a different loop.
+  if [[ -n "${SUPERAGENT_SLUG:-}" && \
+        "$(sed -n 's/^LOOP_FILE=//p' "$CONF_DIR/${SUPERAGENT_SLUG}.env" 2>/dev/null | head -1)" == "$LOOP_FILE" ]]; then
+    DISARM_SLUG="$SUPERAGENT_SLUG"
+  else
+    for envf in "$CONF_DIR"/*.env; do
+      [[ -f "$envf" ]] || continue
+      if [[ "$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)" == "$LOOP_FILE" ]]; then
+        DISARM_SLUG="$(basename "$envf" .env)"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$DISARM_SLUG" ]]; then
+    echo "=== $(ts) superagent-tick: loop is DONE — self-disarming scheduler entry '$DISARM_SLUG' (SUPER_AUTO_DISARM_ON_DONE). Loop-status + env file kept; re-arm: $SCRIPT_DIR/install-timer.sh $DISARM_SLUG $LOOP_FILE ===" >>"$LOG_FILE"
+    reap_own_lock   # the launchd bootout below can SIGKILL us before the EXIT trap runs
+    "$SCRIPT_DIR/uninstall-timer.sh" "$DISARM_SLUG" --from-tick >>"$LOG_FILE" 2>&1 || \
+      echo "=== $(ts) superagent-tick: WARNING — self-disarm failed; disable the scheduler entry manually (uninstall-timer.sh $DISARM_SLUG) ===" >>"$LOG_FILE"
+  else
+    echo "=== $(ts) superagent-tick: loop is DONE but no registered scheduler entry names this loop file — skipping self-disarm; disable your scheduler entry manually ===" >>"$LOG_FILE"
+  fi
+fi
+
 exit "$rc"

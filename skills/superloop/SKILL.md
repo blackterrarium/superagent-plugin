@@ -188,7 +188,12 @@ goal-folder derivation, no search. This is the only form that advances the state
    context is fine — **all** state (`status`, `plan_exhausted`, `driver`, `cron_id`, decisions) is in the
    file, not in conversation memory.
 3. If `status` is **`DONE`** → `release_lock()`, no-op, and (in `external` mode) remind the user to
-   disable the Desktop routine / scheduler entry; exit. Otherwise run the **Context-handoff gate (L4,
+   disable the Desktop routine / scheduler entry; exit. (External loops driven by the shipped
+   `scripts/` wrapper disarm themselves: after the session ends, `superagent-tick.sh` sees the
+   `DONE` in the loop file and uninstalls its own scheduler entry —
+   `SUPER_AUTO_DISARM_ON_DONE`, default `true` — so this branch should fire at most once there.
+   Never uninstall the scheduler from **inside** the session: on launchd that kills the running
+   tick's own process group. The wrapper handles it after the session.) Otherwise run the **Context-handoff gate (L4,
    `check_session_budget()`)** — if it hands off, this tick ends there — then go to the caller's per-tick
    body.
 
@@ -251,7 +256,8 @@ codex-only:end -->
      this loop file. (There is no in-session driver to "resume" — the external scheduler is the driver.)
      Do not run a tick here unless the user asks; the scheduler will.
    - **`status: DONE`** → report "already complete" and remind the user to disable the Desktop routine /
-     scheduler entry; exit.
+     scheduler entry if one is still armed (loops driven by the shipped `scripts/` wrapper normally
+     disarmed themselves on the tick that reached `DONE` — `SUPER_AUTO_DISARM_ON_DONE`); exit.
 
 After branching, read `master_plan`, `status`, `plan_exhausted`, `prior_status`, `driver`, `iteration`,
 `session_skill_count` from the loop file before the per-tick body. When form (B) continues to run the
@@ -407,10 +413,15 @@ codex-only:end -->
 
 ### `stop_driver()` — used wherever the loop completes or pauses
 - **cron:** `CronDelete cron_id`; clear `cron_id`. <!-- cc-only -->
-- **external:** the Desktop routine / scheduler entry is **user-managed** — the skill cannot delete it.
-  Leave the terminal/paused status in the loop file (further `--tick` fires no-op on `DONE`, or re-asks
-  on `WAITING FOR INPUT`) and **print a clear instruction to disable the Desktop routine (or remove the
-  cron/launchd entry)** for this loop file.
+- **external:** the Desktop routine / scheduler entry is **user-managed** — the skill cannot delete it
+  from inside the session (on launchd, unloading the job would kill the running tick's own process
+  group). Leave the terminal/paused status in the loop file (further `--tick` fires no-op on `DONE`, or
+  re-asks on `WAITING FOR INPUT`) and **print a clear instruction to disable the Desktop routine (or
+  remove the cron/launchd entry)** for this loop file. For loops driven by the shipped `scripts/`
+  wrapper, `DONE` needs no user action: after the session ends, `superagent-tick.sh` reads the `DONE`
+  status and uninstalls its own scheduler entry (`uninstall-timer.sh <slug> --from-tick`), keeping the
+  loop-status and per-goal env files so the loop stays re-armable — gated by
+  `SUPER_AUTO_DISARM_ON_DONE` (default `true`).
 
 <!-- cc-only:start -->
 Stop a loop manually: cron → `CronDelete` (id in `cron_id` or via `CronList`) or `Esc` on a live tick;

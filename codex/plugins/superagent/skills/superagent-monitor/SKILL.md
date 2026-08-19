@@ -90,7 +90,9 @@ LOCK INPUT`. Read them, then **interpret** for the user:
   fix by setting `GH_TOKEN` in `.env` (see [scripts/README.md](../../scripts/README.md#prerequisites)).
 - **`INPUT=YES`** (status `WAITING FOR INPUT`) — the loop is parked on a decision the L7 panel could not
   resolve. Offer to answer it (Step 2).
-- **`STATUS=DONE`** — the goal is complete; the driver no-ops. Offer to uninstall it (Step 3).
+- **`STATUS=DONE`** — the goal is complete. The tick wrapper self-disarms the scheduler entry on the
+  `DONE` tick (`SUPER_AUTO_DISARM_ON_DONE`, default `true`), so the timer is normally already gone;
+  if one is still armed (opt-out, or a loop armed by a pre-0.4.6 build), offer to uninstall it (Step 3).
 - **`STATUS=WAITING FOR CI`** — the loop is **parked on a long CI wait** (run ids in the loop file's
   `ci_wait:` block), not stuck: external ticks do one cheap status check each and no-op until the runs
   are terminal. A long park is normal for 60–120 min lanes; check the runs (`gh run view <id>`) only if

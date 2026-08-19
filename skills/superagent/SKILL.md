@@ -302,7 +302,9 @@ codex-only:end -->
 
 ### `DONE`
 A tick fired after completion (form A already no-ops `DONE` before Step 1; this covers the cron path).
-Report it, **do not change status**, `stop_driver()`, `release_lock()`, and exit.
+Report it, **do not change status**, `stop_driver()`, `release_lock()`, and exit. (Script-driven
+external loops: the tick wrapper self-disarms the scheduler entry after this session ends — never run
+`uninstall-timer.sh` from inside the session; see superloop L2/`stop_driver()`.)
 
 ### `WAITING FOR INPUT`
 A prior iteration escalated a decision the panel could not resolve. Read the `## Pending decision`
@@ -431,13 +433,17 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
 2. **Terminal** (`DONE`, hard error, or `WAITING FOR INPUT` unanswered in an unattended run): print a
    final summary (plus the pending question + resume instructions for the input case) and
 <!-- cc-only:start -->
-   `stop_driver()` (cron → `CronDelete`; external → instruct the user to disable the routine). No more
+   `stop_driver()` (cron → `CronDelete`; external → on `DONE` the shipped tick wrapper self-disarms
+   the scheduler entry after the session; Desktop-routine or hand-rolled schedulers → instruct the
+   user to disable the routine). No more
 <!-- cc-only:end -->
 <!-- cursor-only:start
-   `stop_driver()` (instruct the user to disable the scheduler entry). No more
+   `stop_driver()` (on `DONE` a shipped-script-driven scheduler entry self-disarms after the session;
+   otherwise instruct the user to disable the scheduler entry). No more
 cursor-only:end -->
 <!-- codex-only:start
-   `stop_driver()` (instruct the user to disable the scheduler entry). No more
+   `stop_driver()` (on `DONE` a shipped-script-driven scheduler entry self-disarms after the session;
+   otherwise instruct the user to disable the scheduler entry). No more
 codex-only:end -->
    ticks fire.
 3. **Otherwise**: do nothing to the driver — the next `--tick <loop-file>` fires on its own (the
@@ -554,15 +560,21 @@ tick, even one the loop already resolved itself.
 
 On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
 <!-- cc-only:start -->
-and confirmation the driver was stopped — `cron` → `CronDelete`d; `external` → the user reminded to
-disable the Desktop routine / scheduler entry. Include the final tick's verbatim **Delegated skill
+and confirmation the driver was stopped — `cron` → `CronDelete`d; `external` → shipped-script loops:
+note that the tick wrapper self-disarms the scheduler entry when this session ends
+(`SUPER_AUTO_DISARM_ON_DONE`); Desktop-routine loops: remind the user to disable the routine. Include
+the final tick's verbatim **Delegated skill
 <!-- cc-only:end -->
 <!-- cursor-only:start
-and confirmation the user was reminded to disable the scheduler entry. Include the final tick's
+and confirmation the driver was stopped — shipped-script loops: note that the tick wrapper
+self-disarms the scheduler entry when this session ends (`SUPER_AUTO_DISARM_ON_DONE`); otherwise
+remind the user to disable the scheduler entry. Include the final tick's
 verbatim **Delegated skill
 cursor-only:end -->
 <!-- codex-only:start
-and confirmation the user was reminded to disable the scheduler entry. Include the final tick's
+and confirmation the driver was stopped — shipped-script loops: note that the tick wrapper
+self-disarms the scheduler entry when this session ends (`SUPER_AUTO_DISARM_ON_DONE`); otherwise
+remind the user to disable the scheduler entry. Include the final tick's
 verbatim **Delegated skill
 codex-only:end -->
 report** and any still-open `Findings & issues`.

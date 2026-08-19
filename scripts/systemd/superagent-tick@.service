@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-# Per-goal knobs: REPO, SUPERAGENT_SCRIPT_DIR, LOOP_FILE, TICK_TIMEOUT (written by
-# install-timer.sh).
+# Per-goal knobs: REPO, SUPERAGENT_SCRIPT_DIR, LOOP_FILE, SUPERAGENT_SLUG,
+# TICK_TIMEOUT (written by install-timer.sh).
 EnvironmentFile=%h/.config/superagent/%i.env
 # superagent-tick.sh lives in the plugin's own scripts/ dir, not in $REPO (the
 # target repo checkout) — SUPERAGENT_SCRIPT_DIR is recorded at install time since

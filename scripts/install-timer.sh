@@ -72,6 +72,9 @@ mkdir -p "$CONF_DIR"
   # environment), and superagent-tick.sh lives in the plugin, not in $REPO.
   echo "SUPERAGENT_SCRIPT_DIR=$SCRIPT_DIR"
   echo "LOOP_FILE=$LOOP_FILE"
+  # The goal slug, so a tick can find its own scheduler entry for the DONE
+  # self-disarm (superagent-tick.sh; SUPER_AUTO_DISARM_ON_DONE).
+  echo "SUPERAGENT_SLUG=$SLUG"
   # Only pin TICK_TIMEOUT when a cap is explicitly given; otherwise omit it so the
   # wrapper runs uncapped (no systemd/script wall-clock ceiling).
   [[ -n "$TICK_TIMEOUT" ]] && echo "TICK_TIMEOUT=$TICK_TIMEOUT"

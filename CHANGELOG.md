@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.6 — 2026-08-19
+
+- **Fix #18: a DONE loop never disarmed its own timer.** `DONE` is terminal, but the external
+  driver kept firing a full CLI session per interval forever — each a paid no-op (measured:
+  ~$0.65/tick, ~$88/day) — while the only shutdown signal was a "disable the timer" reminder
+  written to the tick log, which unattended mode guarantees nobody reads.
+  - **Wrapper self-disarm.** After the session ends, `superagent-tick.sh` reads the loop file's
+    `status`; on `DONE` it uninstalls its own scheduler entry via the new
+    `uninstall-timer.sh <slug> --from-tick` mode, on any session exit code (`DONE` is durable). The
+    loop-status file and per-goal env file are kept, so re-arming stays a one-liner
+    (`install-timer.sh <slug> <LOOP_FILE>`). Gated by `SUPER_AUTO_DISARM_ON_DONE` (new
+    `superenv` key, default `true`) for anyone who deliberately wants a polling loop.
+  - **`--from-tick` mode.** Self-disarm from *inside* the tick needs different launchd mechanics:
+    the normal drain-wait would deadlock (the in-flight tick is the caller), and `launchctl
+    bootout` kills the caller's own process group (the plist ships `AbandonProcessGroup=false`). So
+    `--from-tick` skips the drain, removes the plist first (no re-bootstrap at next login even if
+    the bootout lands mid-flight), reaps the wrapper's own L3 lock pre-bootout (the EXIT trap can't
+    run after SIGKILL), and makes the bootout the final act. On systemd it is simply
+    `disable --now` on the timer — the running oneshot service is untouched.
+  - **Slug discovery.** `install-timer.sh` now records `SUPERAGENT_SLUG` in the per-goal env file;
+    ticks armed by older builds fall back to scanning `~/.config/superagent/*.env` for the entry
+    whose `LOOP_FILE` names this loop. The `LOOP_FILE` match is required either way — the guard
+    against disarming a same-slug entry that drives a different loop. No registered entry → loud
+    skip note, never a guess.
+
+  Verified with a stub-CLI regression harness (launchd + systemd disarm, negative controls:
+  non-DONE / opt-out / unregistered / mismatched registry, nonzero-rc disarm, drain-wait skip,
+  plist-before-bootout ordering, slug recording — 31/31). Cursor and Codex builds regenerated;
+  superloop L2/`stop_driver()` and superagent/monitor skill wording updated (the reminder is now
+  the fallback for user-managed schedulers such as Desktop routines).
+
 ## 0.4.5 — 2026-08-17
 
 - **Fix #15: external ticks were guillotined at 600s and leaked the L3 lock.** Two compounding

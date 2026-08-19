@@ -272,7 +272,9 @@ checking) and exit.
 
 ### `DONE`
 A tick fired after completion (form A already no-ops `DONE` before Step 1; this covers the cron path).
-Report it, **do not change status**, `stop_driver()`, `release_lock()`, and exit.
+Report it, **do not change status**, `stop_driver()`, `release_lock()`, and exit. (Script-driven
+external loops: the tick wrapper self-disarms the scheduler entry after this session ends — never run
+`uninstall-timer.sh` from inside the session; see superloop L2/`stop_driver()`.)
 
 ### `WAITING FOR INPUT`
 A prior iteration escalated a decision the panel could not resolve. Read the `## Pending decision`
@@ -395,7 +397,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    Write — no commit, no PR (the file is gitignored).
 2. **Terminal** (`DONE`, hard error, or `WAITING FOR INPUT` unanswered in an unattended run): print a
    final summary (plus the pending question + resume instructions for the input case) and
-   `stop_driver()` (instruct the user to disable the scheduler entry). No more
+   `stop_driver()` (on `DONE` a shipped-script-driven scheduler entry self-disarms after the session;
+   otherwise instruct the user to disable the scheduler entry). No more
    ticks fire.
 3. **Otherwise**: do nothing to the driver — the next `--tick <loop-file>` fires on its own (the
    in-session `cron` job, or the external Desktop routine / OS-cron entry, depending on `driver`).
@@ -478,6 +481,8 @@ tick, even one the loop already resolved itself.
     (interactive prompt, or `answer:` in the loop file for a scheduled loop)>
 
 On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
-and confirmation the user was reminded to disable the scheduler entry. Include the final tick's
+and confirmation the driver was stopped — shipped-script loops: note that the tick wrapper
+self-disarms the scheduler entry when this session ends (`SUPER_AUTO_DISARM_ON_DONE`); otherwise
+remind the user to disable the scheduler entry. Include the final tick's
 verbatim **Delegated skill
 report** and any still-open `Findings & issues`.
