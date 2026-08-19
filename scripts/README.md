@@ -186,7 +186,8 @@ journalctl --user -u superagent-tick@<goal-slug>.service -f # Linux: service lif
 systemctl --user list-timers 'superagent-tick@<goal-slug>.timer'   # Linux
 launchctl print gui/$(id -u)/com.superagent.tick.<goal-slug>       # macOS
 
-# 4) Stop on DONE (or to pause).
+# 4) Stop to pause. (On DONE the tick wrapper disarms its own scheduler entry —
+#    SUPER_AUTO_DISARM_ON_DONE, default true — so no manual stop is needed there.)
 $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to also drop the env file
 ```
 
@@ -201,7 +202,12 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   `acquire_lock()` owner record, and traps EXIT to reap a leaked L3 lock it owns (a session killed
   before `release_lock()`), never a peer's. A tick whose session was terminated at a background-wait
   ceiling exits non-zero with an explicit `ERROR` log line instead of a silent `exit=0`. Runs the
-  `gh` auth preflight (aborts if `gh` can't authenticate).
+  `gh` auth preflight (aborts if `gh` can't authenticate). **Self-disarms on `DONE`**: after the
+  session ends, if the loop file's `status` is `DONE` it uninstalls its own scheduler entry
+  (`uninstall-timer.sh <slug> --from-tick`, slug from the env file's `SUPERAGENT_SLUG` or a registry
+  scan matching `LOOP_FILE`), keeping the loop-status and env files so re-arming stays a one-liner —
+  gated by `SUPER_AUTO_DISARM_ON_DONE` (default `true`). Without this, a completed loop would keep
+  burning a full CLI session per interval forever.
 - `_common.sh` — sourced helpers: `ensure_gh_auth` (loads/exports `GH_TOKEN`, fatal preflight),
   `ensure_claude_bin` (fatal binary preflight), and `gh_auth_state` (non-fatal report used by `status.sh`).
 - `launch.sh <PLAN.md> [--interval ..] [--timeout ..] [--slug ..] [--output stream|text] [--model <slug>] [--dry-run]`
@@ -216,7 +222,10 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `install-timer.sh <goal-slug> <LOOP_FILE> [--interval ..] [--timeout ..] [--output stream|text] [--model <slug>]`
   — writes the per-goal env file, then arms the OS-appropriate scheduler entry: on Linux installs the
   units, enables lingering, starts the timer; on macOS renders + bootstraps the LaunchAgent.
-- `uninstall-timer.sh <goal-slug> [--purge]` — the external `stop_driver()` (by slug).
+- `uninstall-timer.sh <goal-slug> [--purge] [--from-tick]` — the external `stop_driver()` (by slug).
+  `--from-tick` is the self-disarm mode `superagent-tick.sh` uses on a `DONE` loop: it skips the
+  launchd drain-wait (the caller *is* the running tick), removes the plist before the `bootout`, and
+  makes the `bootout` its final act (launchd reaps the calling process group with the job).
 - `stop.sh <PLAN.md> [--hard] [--purge] [--slug ..] [--dry-run]` — one-step stopper by master plan (what
   the `superagent-stop` skill invokes): finds the installed loop from the plan, drains the timer
   (graceful by default; `--hard` halts an in-flight tick), preserves the loop-status file.
