@@ -209,16 +209,16 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   { inefh=0 }
   { print }
 ' | sed \
-  -e 's/^SUPER_MODEL_SUPERVISOR=opus/SUPER_MODEL_SUPERVISOR=inherit/' \
-  -e 's/^SUPER_MODEL_PLANNER=opus/SUPER_MODEL_PLANNER=inherit/' \
-  -e 's/^SUPER_MODEL_EXECUTOR=opus/SUPER_MODEL_EXECUTOR=inherit/' \
-  -e 's/^SUPER_MODEL_PANEL=opus/SUPER_MODEL_PANEL=inherit/' \
-  -e 's/^SUPER_MODEL_IMPLEMENTER=sonnet/SUPER_MODEL_IMPLEMENTER=inherit/' \
-  -e 's/^SUPER_MODEL_FIX_APPLIER=sonnet/SUPER_MODEL_FIX_APPLIER=inherit/' \
-  -e 's/^SUPER_MODEL_TASK_REVIEWER=opus/SUPER_MODEL_TASK_REVIEWER=inherit/' \
-  -e 's/^SUPER_MODEL_RE_REVIEWER=opus/SUPER_MODEL_RE_REVIEWER=inherit/' \
-  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=opus/SUPER_MODEL_BRANCH_REVIEWER=inherit/' \
-  -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_SUPERVISOR=claude:opus/SUPER_MODEL_SUPERVISOR=inherit/' \
+  -e 's/^SUPER_MODEL_PLANNER=claude:opus/SUPER_MODEL_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_EXECUTOR=claude:opus/SUPER_MODEL_EXECUTOR=inherit/' \
+  -e 's/^SUPER_MODEL_PANEL=claude:opus/SUPER_MODEL_PANEL=inherit/' \
+  -e 's/^SUPER_MODEL_IMPLEMENTER=claude:sonnet/SUPER_MODEL_IMPLEMENTER=inherit/' \
+  -e 's/^SUPER_MODEL_FIX_APPLIER=claude:sonnet/SUPER_MODEL_FIX_APPLIER=inherit/' \
+  -e 's/^SUPER_MODEL_TASK_REVIEWER=claude:opus/SUPER_MODEL_TASK_REVIEWER=inherit/' \
+  -e 's/^SUPER_MODEL_RE_REVIEWER=claude:opus/SUPER_MODEL_RE_REVIEWER=inherit/' \
+  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:opus/SUPER_MODEL_BRANCH_REVIEWER=inherit/' \
+  -e 's/^SUPER_MODEL_FIX_PLANNER=claude:opus/SUPER_MODEL_FIX_PLANNER=inherit/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=cursor\1# this is the Cursor build — the external driver fires the Cursor CLI (`agent`)/' \
   -e 's/^SUPER_EFFORT_SUPERVISOR=medium/SUPER_EFFORT_SUPERVISOR=inherit/' \
   -e 's/^SUPER_EFFORT_PLANNER=high/SUPER_EFFORT_PLANNER=inherit/' \

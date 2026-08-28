@@ -234,16 +234,16 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   { inefh=0 }
   { print }
 ' | sed \
-  -e 's/^SUPER_MODEL_SUPERVISOR=opus/SUPER_MODEL_SUPERVISOR=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_PLANNER=opus/SUPER_MODEL_PLANNER=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_EXECUTOR=opus/SUPER_MODEL_EXECUTOR=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_PANEL=opus/SUPER_MODEL_PANEL=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_IMPLEMENTER=sonnet/SUPER_MODEL_IMPLEMENTER=gpt-5.6-terra/' \
-  -e 's/^SUPER_MODEL_FIX_APPLIER=sonnet/SUPER_MODEL_FIX_APPLIER=gpt-5.6-terra/' \
-  -e 's/^SUPER_MODEL_TASK_REVIEWER=opus/SUPER_MODEL_TASK_REVIEWER=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_RE_REVIEWER=opus/SUPER_MODEL_RE_REVIEWER=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=opus/SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_SUPERVISOR=claude:opus/SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PLANNER=claude:opus/SUPER_MODEL_PLANNER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_EXECUTOR=claude:opus/SUPER_MODEL_EXECUTOR=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PANEL=claude:opus/SUPER_MODEL_PANEL=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_IMPLEMENTER=claude:sonnet/SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra/' \
+  -e 's/^SUPER_MODEL_FIX_APPLIER=claude:sonnet/SUPER_MODEL_FIX_APPLIER=codex:gpt-5.6-terra/' \
+  -e 's/^SUPER_MODEL_TASK_REVIEWER=claude:opus/SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_RE_REVIEWER=claude:opus/SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:opus/SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_FIX_PLANNER=claude:opus/SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
   -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
   >"$TMP/plugins/superagent/templates/superenv.default"

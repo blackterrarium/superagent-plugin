@@ -14,18 +14,18 @@
 # (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=opus             # the superagent tick itself
-SUPER_MODEL_PLANNER=opus                # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=opus               # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
-SUPER_MODEL_PANEL=opus                  # L7 escalation panel (3 read-only agents)
-SUPER_MODEL_IMPLEMENTER=sonnet
-SUPER_MODEL_FIX_APPLIER=sonnet
-SUPER_MODEL_TASK_REVIEWER=opus
-SUPER_MODEL_RE_REVIEWER=opus
-SUPER_MODEL_BRANCH_REVIEWER=opus        # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=opus            # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_SUPERVISOR=claude:opus      # the superagent tick itself
+SUPER_MODEL_PLANNER=claude:opus         # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=claude:opus        # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_PANEL=claude:opus           # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_IMPLEMENTER=claude:sonnet
+SUPER_MODEL_FIX_APPLIER=claude:sonnet
+SUPER_MODEL_TASK_REVIEWER=claude:opus
+SUPER_MODEL_RE_REVIEWER=claude:opus
+SUPER_MODEL_BRANCH_REVIEWER=claude:opus # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=claude:opus     # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
-SUPER_BRIDGE_RELAY_MODEL=sonnet         # model of the thin relay subagent that runs role-bridge.sh for a BRIDGED role (native value or inherit); do not weaken to haiku — it answers the prompt itself instead of relaying
+SUPER_BRIDGE_RELAY_MODEL=sonnet         # model of the thin relay subagent that runs role-bridge.sh for a BRIDGED role (bare native model name or inherit — no harness prefix; the relay always runs on SUPER_HARNESS); do not weaken to haiku — it answers the prompt itself instead of relaying
 
 # ── Reasoning effort per agent role ───────────────────────────────
 # Values are effort names in the ROLE's harness (see the model grammar above), or "inherit"

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 — 2026-08-29
+
+- **`templates/superenv.default` now spells every `SUPER_MODEL_<ROLE>` value in the 0.5.0
+  `[<harness>:]<model>` grammar** (`claude:opus`, `claude:sonnet`; the Codex build emits
+  `codex:gpt-5.6-sol` / `codex:gpt-5.6-terra`, the Cursor build keeps `inherit`). Behaviour is
+  unchanged — the bare tiers already resolved to `claude` — but the shipped defaults now show the
+  form a mixed-harness `.superenv` uses. `SUPER_BRIDGE_RELAY_MODEL` stays a bare native model name
+  (the relay always runs on `SUPER_HARNESS`; the value is written verbatim into the relay agent's
+  `model:` line). `build-codex-skills.sh` / `build-cursor-skills.sh` match the prefixed values.
+
 ## 0.5.1 — 2026-08-29
 
 - **Fix #25 — `superrun` delegate-and-wait spiral under the headless tick driver.** `superrun` is the
