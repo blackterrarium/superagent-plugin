@@ -258,9 +258,71 @@ superagent_ci_runs() {
     ' "$f" 2>/dev/null | grep -oE '[0-9]{5,}' | tr '\n' ' ' | sed 's/ $//'; } || true
 }
 
+# superagent_ci_field <loop-file> <key> — the scalar value of `<key>:` INSIDE
+# the frontmatter's `ci_wait:` block (e.g. `since`, `repo`), trimmed, with
+# surrounding quotes removed. Same block scanning as superagent_ci_runs; a
+# top-level key of the same name never matches. Empty output, rc 0 when absent.
+superagent_ci_field() {
+  local f="${1:-}" k="${2:-}"
+  [[ -n "$f" && -n "$k" ]] || return 0
+  { K="$k" awk '
+      NR==1 && /^---/ { fm=1; next }
+      fm && /^---/ { exit }
+      !fm { next }
+      /^ci_wait:/ { blk=1; next }
+      blk && /^[^[:space:]]/ { blk=0 }
+      !blk { next }
+      { line=$0; sub(/^[[:space:]]+/, "", line) }
+      index(line, ENVIRON["K"] ":") == 1 {
+        v=substr(line, length(ENVIRON["K"])+2); sub(/[[:space:]]+#.*$/, "", v)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); gsub(/^["'"'"']|["'"'"']$/, "", v)
+        print v; exit
+      }
+    ' "$f" 2>/dev/null; } || true
+}
+
+# superagent_epoch_from_iso <timestamp> — seconds since epoch for an ISO-8601
+# UTC timestamp (`2026-08-28T00:00:00Z`, `2026-08-28 00:00:00`, or a bare date;
+# a `+00:00` suffix is accepted). Portable across BSD (`date -j -f`) and GNU
+# (`date -d`). Empty output, rc 0 when the value cannot be parsed.
+superagent_epoch_from_iso() {
+  local t="${1:-}" e=""
+  [[ -n "$t" ]] || return 0
+  t="${t%Z}"; t="${t%+00:00}"; t="${t/T/ }"
+  [[ "$t" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && t="$t 00:00:00"
+  [[ "$t" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] || return 0
+  if date --version >/dev/null 2>&1; then
+    e="$(date -u -d "$t" +%s 2>/dev/null || true)"
+  else
+    e="$(date -u -j -f '%Y-%m-%d %H:%M:%S' "$t" +%s 2>/dev/null || true)"
+  fi
+  [[ "$e" =~ ^[0-9]+$ ]] && echo "$e"
+  return 0
+}
+
+# superagent_lock_owner_state <lockdir> — liveness of the L3 overlap lock's
+# recorded owner, one line:
+#   alive <pid>   owner is a bare PID that is running (a real in-flight tick)
+#   dead <pid>    owner is a bare PID that is gone (crashed tick — reapable)
+#   malformed     owner file exists but is not a bare PID (only age-stealable)
+#   none          no lock dir, or no/empty owner file
+# Shared by answer.sh (reap-or-refuse) and superagent-tick.sh (peer-shield);
+# never fails the caller.
+superagent_lock_owner_state() {
+  local d="${1:-}" o=""
+  [[ -n "$d" && -d "$d" ]] || { echo none; return 0; }
+  o="$(cat "$d/owner" 2>/dev/null || true)"
+  if [[ -z "$o" ]]; then echo none
+  elif [[ ! "$o" =~ ^[0-9]+$ ]]; then echo malformed
+  elif kill -0 "$o" 2>/dev/null; then echo "alive $o"
+  else echo "dead $o"
+  fi
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Operator notification — fired by the tick wrapper on a loop-status transition
-# into WAITING FOR INPUT (a decision needs a human) or DONE. Unattended mode
+# into WAITING FOR INPUT (a decision needs a human), DONE, or a stale CI wait. Unattended mode
 # guarantees nobody is tailing the tick log, so this is the one signal the
 # operator actually receives.
 #   SUPER_NOTIFY_CMD  a shell snippet run via `bash -c` (e.g. a curl to ntfy.sh /
@@ -286,6 +348,10 @@ superagent_notify() {
       ;;
     done)
       title="superagent: $slug is DONE"; body="Loop reached DONE: $loop"
+      ;;
+    ci-stale)
+      title="superagent: $slug CI wait is stale"
+      body="WAITING FOR CI since $(superagent_ci_field "$loop" since) exceeds SUPER_CI_MAX_WAIT_MIN; runs: $(superagent_ci_runs "$loop") — the gate now falls open to the session each interval"
       ;;
     *)
       title="superagent: $slug $event"; body="$loop"

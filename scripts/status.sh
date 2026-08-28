@@ -130,7 +130,7 @@ if [[ -n "$ONE" ]]; then
   if [[ $pending != 0 && $exists == 1 ]]; then
     echo
     echo "=== ## Pending decision ==="
-    awk '/^## Decisions/{exit} /^## Pending decision/{f=1} f{print}' "$LOOP_FILE"
+    awk '/^## Pending decision/{f=1; print; next} f && /^## /{exit} f' "$LOOP_FILE"
     if [[ $pending == 2 ]]; then
       echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
     fi

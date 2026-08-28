@@ -94,9 +94,9 @@ if [[ "$skip_write" != true ]]; then
     # tick — reap it and retry once. A live owner, no owner file at all, or a
     # malformed owner (not a bare PID — only age-stealable, which is a tick's
     # job), is a real in-flight lock: refuse.
-    lock_owner="$(cat "$LOCK_DIR/owner" 2>/dev/null || true)"
-    if [[ "$lock_owner" =~ ^[0-9]+$ ]] && ! kill -0 "$lock_owner" 2>/dev/null; then
-      echo "answer: reaped stale lock (owner pid $lock_owner is dead)" >&2
+    lock_owner_state="$(superagent_lock_owner_state "$LOCK_DIR")"
+    if [[ "$lock_owner_state" == dead\ * ]]; then
+      echo "answer: reaped stale lock (owner pid ${lock_owner_state#dead } is dead)" >&2
       rm -rf "$LOCK_DIR"
     fi
     if ! mkdir "$LOCK_DIR" 2>/dev/null; then

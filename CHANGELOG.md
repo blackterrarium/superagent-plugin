@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.10 — 2026-08-28
+
+- **`WAITING FOR CI` staleness escape (`SUPER_CI_MAX_WAIT_MIN`, default 180).** A run stuck in
+  `queued`/`waiting` used to park the loop silently forever under the 0.4.9 gate. The wrapper now
+  compares `ci_wait.since` (ISO-8601 UTC) against the limit whenever runs are still not `completed`:
+  past it, one `ci-stale` notification (`SUPER_NOTIFY_CMD` / desktop; once per `since` value via a
+  `.<loop>.ci-stale` marker next to the loop file) and the gate falls open so the session runs each
+  interval and can re-park or cancel. `0` disables; an absent/unparseable `since` keeps gating.
+- **`ci_wait.repo`:** the skill now records the PR base repository (`owner/name`) at parking and the
+  wrapper passes it as `gh run view --repo`, so the gate engages on forks/ambiguous remotes instead of
+  silently failing open. Malformed values are ignored (logged) and the old remote-derived behaviour is
+  kept.
+- **Shared owner-liveness helper** `superagent_lock_owner_state <lockdir>` (`alive <pid>` /
+  `dead <pid>` / `malformed` / `none`) in `_common.sh`; `answer.sh`'s dead-owner reap and the tick's
+  peer-shield check use it instead of two hand-rolled `kill -0` sites. Also `superagent_ci_field` and
+  `superagent_epoch_from_iso` helpers.
+- **`status.sh` drill-in:** the `## Pending decision` block now stops at the next `## ` heading instead
+  of spilling into `## Iteration log` when `## Decisions` is absent.
+
 ## 0.4.9 — 2026-08-28
 
 - **`WAITING FOR CI` is now a free park (`SUPER_CI_GATE=true`).** The other parked state still

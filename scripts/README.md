@@ -324,7 +324,11 @@ exits before launching a session until the answer exists (`SUPER_INPUT_GATE=true
 Scheduled fires are likewise free while a loop is parked on `WAITING FOR CI`: the wrapper queries each
 run in the loop file's `ci_wait.runs` with `gh run view --json status` and launches no session until all
 are `completed` (`SUPER_CI_GATE=true`). If the ids cannot be parsed or `gh` fails, it falls through to
-the session (the pre-0.4.9 behaviour) rather than stalling.
+the session (the pre-0.4.9 behaviour) rather than stalling. `ci_wait.repo` (`owner/name`, written at
+parking) is passed as `gh run view --repo` so runs resolve when the clone's remote is a fork. A park whose
+`ci_wait.since` is older than `SUPER_CI_MAX_WAIT_MIN` (default 180 min; `0` disables) with runs still not
+`completed` is announced once (`ci-stale` notification) and the gate falls open so a run stuck in
+`queued`/`waiting` cannot park the loop silently forever.
 
 The operator is told once when the loop parks on a question they have not seen — a transition into
 `WAITING FOR INPUT`, or a changed `## Pending decision` block while already parked (the re-park case) —

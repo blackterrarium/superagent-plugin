@@ -231,23 +231,33 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 **Parking (on receiving a CI-PENDING report, in the `WAITING FOR RUN` branch):**
 
 1. Write a `ci_wait:` block into the loop-file frontmatter with these keys: `runs:` (all run ids,
-   as an inline list of GitHub Actions run ids), `branch:`, `pr:`, `leaf:`, `worktree:`,
-   `subagent:` (the dispatched superrun subagent's id/name, for the `SendMessage` resume), and
-   `since: <timestamp>`. Set `status: WAITING FOR CI`. It must look exactly like this:
+   as an inline list of GitHub Actions run ids), `repo:` (the `owner/name` of the repository the
+   runs live in — the PR's **base** repository, e.g. from `gh repo view --json nameWithOwner`; this is
+   what lets the wrapper find the runs when the clone's remote is a fork), `branch:`, `pr:`, `leaf:`,
+   `worktree:`, `subagent:` (the dispatched superrun subagent's id/name, for the `SendMessage`
+   resume), and `since: <ISO-8601 UTC timestamp, e.g. 2026-08-28T14:05:00Z>`. Set
+   `status: WAITING FOR CI`. It must look exactly like this:
 
    ```yaml
    ci_wait:
      runs: [123456, 234567]      # GitHub Actions run ids — inline list; the wrapper's CI gate parses this block
+     repo: <owner>/<name>        # where the runs live (PR base repo); the wrapper passes it as `gh run view --repo`
      branch: <branch>
      pr: <number>
      leaf: <plan path>
      worktree: <path>
      subagent: <id/name>
-     since: <timestamp>
+     since: <ISO-8601 UTC timestamp>
    ```
 
    `ci_wait:` must be a top-level frontmatter key with `runs:` indented beneath it (not a `{…}`
-   flow mapping) — that is the shape `superagent-tick.sh`'s `SUPER_CI_GATE` reads.
+   flow mapping) — that is the shape `superagent-tick.sh`'s `SUPER_CI_GATE` reads. `since:` must be
+   ISO-8601 UTC: the wrapper compares it against `SUPER_CI_MAX_WAIT_MIN` (default 180) and, once a
+   park is older than that with runs still not `completed`, notifies the operator once (`ci-stale`)
+   and lets the session run each interval so a run stuck in `queued`/`waiting` cannot park the loop
+   silently forever. A session that lands in the external branch with runs still running should
+   treat that as the stale case: inspect the runs (`gh run view <id>`), and either re-park with a
+   fresh `since:` if they are genuinely progressing, or cancel/re-trigger and re-park.
 2. **Arm the resume signal — by driver:**
    - **external:** the tick is a fresh headless session — a Monitor cannot outlive it, and the
      scheduler is user-managed (never touched). The scheduler keeps firing ticks; the `WAITING FOR
@@ -340,8 +350,10 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
   - (Loops driven by the shipped `scripts/` wrapper normally never reach this branch while a run is
     still in progress: `superagent-tick.sh` performs the same `gh run view` check in bash before
     launching the session and exits 0 while any run is not `completed` — `SUPER_CI_GATE`, default
-    on. A session that does land here with runs still running means the gate was off or `gh`
-    failed in the wrapper; do the single query as written.)
+    on. A session that does land here with runs still running means the gate was off, `gh`
+    failed in the wrapper, or the park exceeded `SUPER_CI_MAX_WAIT_MIN` (stale wait — see
+    **Parking**); do the single query as written, and in the stale case decide whether to re-park
+    with a fresh `since:` or cancel/re-trigger the run.)
   - Any run still not `completed` → `release_lock()`, exit. Nothing else this tick.
   - All terminal → run the **Resuming** flow (CI wait — monitor-parked) this tick: verify, dispatch
     the resume subagent, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
