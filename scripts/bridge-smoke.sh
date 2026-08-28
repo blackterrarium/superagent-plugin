@@ -61,6 +61,10 @@ run_test "T5b nested claude -p (CLAUDECODE unset)" claude "NESTED-OK" \
 # T6 — relay definition round trip under Claude Code: a throwaway repo with a generated
 # super-implementer.md bridged to codex; the session must return the sentinel. The generated
 # agent definition lives under $R/.claude/agents/, so `claude -p` must run with $R as cwd.
+# Models: the outer session stands in for the SDD controller/loop tick, which runs on opus or
+# sonnet in production — `--model sonnet` here, not haiku. <relay-model> tracks
+# SUPER_BRIDGE_RELAY_MODEL in templates/superenv.default (sonnet); a haiku relay was measured to
+# skip Bash entirely and answer the task prompt itself, which is what RELAY-PROVEN catches.
 # Proof-of-dispatch: TMPDIR is pinned to a private dir for the child so role-bridge.sh (which
 # derives its log dir from ${TMPDIR:-/tmp}) writes its implementer-*.log there; RELAY-PROVEN is
 # only emitted when that log file exists AND the sentinel is in the session's own output — so a
@@ -69,14 +73,14 @@ run_test "T5b nested claude -p (CLAUDECODE unset)" claude "NESTED-OK" \
 # report instead of making the whole probe disappear.
 R="$WORK/t6"; mkdir -p "$R/.claude/agents"; (cd "$R" && git init -q)
 sed -e 's/<role>/implementer/g' -e 's/<KEY>/SUPER_MODEL_IMPLEMENTER/g' -e 's/<harness>/codex/g' \
-    -e 's/<model>/inherit/g' -e 's/<effort>/low/g' -e 's/<relay-model>/haiku/g' \
+    -e 's/<model>/inherit/g' -e 's/<effort>/low/g' -e 's/<relay-model>/sonnet/g' \
     -e "s#<bridge-path>#$BRIDGE#g" "$ROOT/templates/super-role-bridge-agent.md" >"$R/.claude/agents/super-implementer.md"
 # NB: claude's --allowedTools takes a variadic arg list, so it greedily swallows any
 # positional prompt that follows it; `--` stops that consumption at the prompt.
 run_test "T6 relay definition round trip (claude→codex)" claude "RELAY-PROVEN" \
   bash -c 'command -v codex >/dev/null 2>&1 || { echo SKIP-OTHER-CLI-MISSING; exit 0; }
     mkdir -p "$1"
-    out="$(cd "$2" && SUPERAGENT_BRIDGE="$3" TMPDIR="$1" claude -p --model haiku --allowedTools "Bash,Agent,Task" -- "$4" 2>&1)"
+    out="$(cd "$2" && SUPERAGENT_BRIDGE="$3" TMPDIR="$1" claude -p --model sonnet --allowedTools "Bash,Agent,Task" -- "$4" 2>&1)"
     echo "$out"
     ls "$1"/superagent-bridge/implementer-*.log >/dev/null 2>&1 && [[ "$out" == *RELAY-OK* ]] && echo RELAY-PROVEN' \
     _ "$WORK/tmp6" "$R" "$BRIDGE" \

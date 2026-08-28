@@ -226,7 +226,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_EFFORT_BRANCH_REVIEWER=xhigh/SUPER_EFFORT_BRANCH_REVIEWER=inherit/' \
   -e 's/^SUPER_EFFORT_FIX_PLANNER=high/SUPER_EFFORT_FIX_PLANNER=inherit/' \
   -e '/^SUPER_CODEX_SANDBOX=/d' \
-  -e 's/^SUPER_BRIDGE_RELAY_MODEL=haiku\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
+  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
   >"$TMP/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
