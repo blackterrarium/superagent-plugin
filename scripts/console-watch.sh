@@ -12,11 +12,9 @@
 #
 #   console-watch.sh <LOOP_FILE> [interval_secs]     (default interval: 60)
 #
-# To ANSWER a parked decision, use one of (see README):
-#   1. attended tick (preferred, race-free): run one --tick interactively so the
-#      skill's WAITING FOR INPUT branch prompts you via AskQuestion under the lock;
-#   2. answer injection: write `answer: <option>` under `## Pending decision` in
-#      the loop file (hold the same .<loop>.lockd lock), then let the next tick resume.
+# To ANSWER a parked decision: answer.sh <slug> "<option>" (records the answer
+# under the lock and kicks a tick now); or run one attended --tick; or hand-edit
+# `answer: <option>` under ## Pending decision (next scheduled tick resumes).
 set -euo pipefail
 
 LOOP_FILE="${LOOP_FILE:-${1:-}}"

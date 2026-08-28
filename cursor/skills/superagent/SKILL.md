@@ -286,10 +286,15 @@ block.
     prompt):** do **not** block on `AskUserQuestion` (in a headless `agent -p` tick
     there is no TTY to answer, so it would stall the one-shot session). Ensure `## Pending decision`
     holds the question + an explicit *"write your choice as `answer: <option>` under this block"*
-    instruction, `release_lock()`, and exit. The **scheduler keeps firing `--tick`**, which **polls**
-    for the written answer and resumes the moment it appears — no driver teardown needed. A human can
-    supply that answer from an independent interactive console (see the CLI runbook), or by editing the
-    loop file directly.
+    instruction, `release_lock()`, and exit.
+    The scheduler keeps firing, but for loops driven by the shipped `scripts/` wrapper the fire is
+    **free while unanswered**: `superagent-tick.sh` reads the loop file in bash and exits without a
+    session until an `answer:` line exists under `## Pending decision` (`SUPER_INPUT_GATE`, default
+    on); it also notifies the operator once on the transition (`SUPER_NOTIFY_CMD`, else a desktop
+    notification). A human answers **and resumes immediately** with
+    `$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"` (writes the line under the lock, kicks a tick),
+    from `superagent:superagent-monitor`, or by editing the loop file directly (next scheduled fire
+    resumes).
 
 ### `PLANNING` or `RUNNING` (crash recovery)
 These are transient *within* a tick (superagent sets them, runs the skill synchronously, then sets the
@@ -482,7 +487,7 @@ tick, even one the loop already resolved itself.
     crash-recovery / escalation-only — write: none (no skill dispatched this tick)>
 
     ⚠️ **Needs you:** <only when status == WAITING FOR INPUT — the pending question + how to answer
-    (interactive prompt, or `answer:` in the loop file for a scheduled loop)>
+    (interactive prompt, or `answer.sh <slug> "<option>"` for a scheduled loop)>
 
 On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
 and confirmation the driver was stopped — shipped-script loops: note that the tick wrapper
