@@ -36,7 +36,8 @@ run_test() {
   local out rc
   out="$("${TCMD[@]+"${TCMD[@]}"}" "$@" 2>&1)"; rc=$?
   { echo; echo '```'; printf '$ '; printf '%q ' "$@"; echo; echo "$out" | tail -40; echo "exit=$rc"; echo '```'; } >>"$REPORT"
-  if [ "$rc" -eq 0 ] && [[ "$out" == *"$expect"* ]]; then echo "PASS" >>"$REPORT"; PASS=$((PASS+1))
+  if [[ "$out" == *"SKIP-OTHER-CLI-MISSING"* ]]; then echo "SKIP (other CLI not on PATH)" >>"$REPORT"; SKIP=$((SKIP+1))
+  elif [ "$rc" -eq 0 ] && [[ "$out" == *"$expect"* ]]; then echo "PASS" >>"$REPORT"; PASS=$((PASS+1))
   else echo "FAIL (expected substring: $expect)" >>"$REPORT"; FAIL=$((FAIL+1)); fi
   echo >>"$REPORT"
 }
@@ -60,25 +61,39 @@ run_test "T5b nested claude -p (CLAUDECODE unset)" claude "NESTED-OK" \
 # T6 — relay definition round trip under Claude Code: a throwaway repo with a generated
 # super-implementer.md bridged to codex; the session must return the sentinel. The generated
 # agent definition lives under $R/.claude/agents/, so `claude -p` must run with $R as cwd.
-if command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1; then
-  R="$WORK/t6"; mkdir -p "$R/.claude/agents"; (cd "$R" && git init -q)
-  sed -e 's/<role>/implementer/g' -e 's/<KEY>/SUPER_MODEL_IMPLEMENTER/g' -e 's/<harness>/codex/g' \
-      -e 's/<model>/inherit/g' -e 's/<effort>/low/g' -e 's/<relay-model>/haiku/g' \
-      -e "s#<bridge-path>#$BRIDGE#g" "$ROOT/templates/super-role-bridge-agent.md" >"$R/.claude/agents/super-implementer.md"
-  # NB: claude's --allowedTools takes a variadic arg list, so it greedily swallows any
-  # positional prompt that follows it; `--` stops that consumption at the prompt.
-  run_test "T6 relay definition round trip (claude→codex)" claude "RELAY-OK" \
-    bash -c 'cd "$1" && env SUPERAGENT_BRIDGE="$2" claude -p --model haiku --allowedTools "Bash,Agent,Task" -- "$3"' _ "$R" "$BRIDGE" \
-      "Dispatch ONE subagent with subagent_type: super-implementer and the prompt 'Reply with exactly: RELAY-OK'. Output its reply verbatim."
-fi
+# Proof-of-dispatch: TMPDIR is pinned to a private dir for the child so role-bridge.sh (which
+# derives its log dir from ${TMPDIR:-/tmp}) writes its implementer-*.log there; RELAY-PROVEN is
+# only emitted when that log file exists AND the sentinel is in the session's own output — so a
+# session that never actually dispatched the relay can't fake a pass. The other CLI's presence is
+# checked inside the wrapped command (not an outer `if`) so a missing one shows as SKIP in the
+# report instead of making the whole probe disappear.
+R="$WORK/t6"; mkdir -p "$R/.claude/agents"; (cd "$R" && git init -q)
+sed -e 's/<role>/implementer/g' -e 's/<KEY>/SUPER_MODEL_IMPLEMENTER/g' -e 's/<harness>/codex/g' \
+    -e 's/<model>/inherit/g' -e 's/<effort>/low/g' -e 's/<relay-model>/haiku/g' \
+    -e "s#<bridge-path>#$BRIDGE#g" "$ROOT/templates/super-role-bridge-agent.md" >"$R/.claude/agents/super-implementer.md"
+# NB: claude's --allowedTools takes a variadic arg list, so it greedily swallows any
+# positional prompt that follows it; `--` stops that consumption at the prompt.
+run_test "T6 relay definition round trip (claude→codex)" claude "RELAY-PROVEN" \
+  bash -c 'command -v codex >/dev/null 2>&1 || { echo SKIP-OTHER-CLI-MISSING; exit 0; }
+    mkdir -p "$1"
+    out="$(cd "$2" && SUPERAGENT_BRIDGE="$3" TMPDIR="$1" claude -p --model haiku --allowedTools "Bash,Agent,Task" -- "$4" 2>&1)"
+    echo "$out"
+    ls "$1"/superagent-bridge/implementer-*.log >/dev/null 2>&1 && [[ "$out" == *RELAY-OK* ]] && echo RELAY-PROVEN' \
+    _ "$WORK/tmp6" "$R" "$BRIDGE" \
+    "Dispatch ONE subagent with subagent_type: super-implementer and the prompt 'Reply with exactly: RELAY-OK'. Output its reply verbatim."
 
-# T7 — spawn_agent relay round trip under Codex (codex→claude).
-if command -v codex >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
-  pre="$(sed -e 's/<role>/implementer/g' -e 's/<harness>/claude/g' -e 's/<model>/haiku/g' -e 's/<effort>/low/g' -e "s#<bridge-path>#$BRIDGE#g" "$ROOT/templates/relay-preamble.md")"
-  run_test "T7 spawn_agent relay round trip (codex→claude)" codex "RELAY-OK" \
-    codex exec --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C "$WORK" \
-      "Spawn ONE agent (spawn_agent) with this exact message, then output its reply verbatim: $(printf '%s\nReply with exactly: RELAY-OK' "$pre")"
-fi
+# T7 — spawn_agent relay round trip under Codex (codex→claude). Same proof-of-dispatch and
+# other-CLI-missing handling as T6; --role implementer in the relay preamble yields
+# implementer-*.log under the pinned TMPDIR.
+pre="$(sed -e 's/<role>/implementer/g' -e 's/<harness>/claude/g' -e 's/<model>/haiku/g' -e 's/<effort>/low/g' -e "s#<bridge-path>#$BRIDGE#g" "$ROOT/templates/relay-preamble.md")"
+run_test "T7 spawn_agent relay round trip (codex→claude)" codex "RELAY-PROVEN" \
+  bash -c 'command -v claude >/dev/null 2>&1 || { echo SKIP-OTHER-CLI-MISSING; exit 0; }
+    mkdir -p "$1"
+    out="$(TMPDIR="$1" codex exec --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C "$2" "$3" 2>&1)"
+    echo "$out"
+    ls "$1"/superagent-bridge/implementer-*.log >/dev/null 2>&1 && [[ "$out" == *RELAY-OK* ]] && echo RELAY-PROVEN' \
+    _ "$WORK/tmp7" "$WORK" \
+    "Spawn ONE agent (spawn_agent) with this exact message, then output its reply verbatim: $(printf '%s\nReply with exactly: RELAY-OK' "$pre")"
 
 { echo "---"; echo "PASS=$PASS FAIL=$FAIL SKIP=$SKIP"; } >>"$REPORT"
 echo "bridge-smoke: PASS=$PASS FAIL=$FAIL SKIP=$SKIP — report: $REPORT"
