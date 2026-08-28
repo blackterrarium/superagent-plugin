@@ -71,7 +71,9 @@ LOCK INPUT`. Read them, then **interpret** for the user:
   `ci_wait:` block), not stuck: the wrapper checks the runs with `gh run view` in bash each interval and
   launches no session until every run is terminal (`SUPER_CI_GATE`). A long park is normal for 60–120 min
   lanes; check the runs (`gh run view <id>`) only if the user asks or the park exceeds the lane's expected
-  runtime.
+  runtime. A park older than `SUPER_CI_MAX_WAIT_MIN` (default 180 min, per `ci_wait.since`) is announced
+  once as `ci-stale` (`SUPER_NOTIFY_CMD` / desktop) and the gate falls open — sessions then run each
+  interval; if the user asks about that notification, inspect the runs and offer to cancel/re-trigger.
 - **`TIMER!=active` but STATUS non-terminal** — the driver was stopped/removed while work remains; offer
   to re-arm (Step 3).
 - **`TICK=yes` / `LOCK=yes`** — a tick is running right now. Do **not** mutate that loop's file or

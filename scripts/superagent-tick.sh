@@ -88,25 +88,54 @@ ensure_gh_auth || exit 4
 # preflight above): any run not `completed` → one log line, exit 0, no session.
 # Fail-OPEN on doubt (no parseable ids, gh error): fall through to the session,
 # which is exactly today's behaviour — the gate must never strand a loop.
-# Opt out with SUPER_CI_GATE=false.
+# `ci_wait.repo: owner/name` (written at parking) is passed as `--repo` so the
+# ids resolve when the clone's remote is a fork or ambiguous; without it gh
+# uses the remote of $REPO as before.
+# Staleness escape: a run stuck in `queued`/`waiting` would otherwise park the
+# loop silently forever. When `ci_wait.since` is older than SUPER_CI_MAX_WAIT_MIN
+# (default 180; 0 disables) the gate notifies once per `since` (ci-stale) and
+# falls open so the session can inspect/re-park. Opt out with SUPER_CI_GATE=false.
 if [[ "${SUPER_CI_GATE:-true}" == true && \
       "$(superagent_loop_status "$LOOP_FILE")" == "WAITING FOR CI" ]]; then
   ci_runs="$(superagent_ci_runs "$LOOP_FILE")"
   if [[ -z "$ci_runs" ]]; then
     echo "=== $(ts) superagent-tick: WAITING FOR CI — no run ids in ci_wait — letting the session handle it ===" >>"$LOG_FILE"
   else
+    ci_repo_args=()
+    ci_repo="$(superagent_ci_field "$LOOP_FILE" repo)"
+    if [[ "$ci_repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+      ci_repo_args=(--repo "$ci_repo")
+    elif [[ -n "$ci_repo" ]]; then
+      echo "=== $(ts) superagent-tick: WAITING FOR CI — ignoring malformed ci_wait.repo '${ci_repo}' (want owner/name) ===" >>"$LOG_FILE"
+    fi
     ci_total=0; ci_running=0; ci_failed=""; ci_fail_reason=""
     for ci_id in $ci_runs; do
       ci_total=$((ci_total + 1))
-      ci_state="$( (cd "$REPO" && gh run view "$ci_id" --json status --jq .status) 2>>"$LOG_FILE" )" || { ci_failed="$ci_id"; ci_fail_reason="gh query failed"; break; }
+      ci_state="$( (cd "$REPO" && gh run view "$ci_id" ${ci_repo_args[@]+"${ci_repo_args[@]}"} --json status --jq .status) 2>>"$LOG_FILE" )" || { ci_failed="$ci_id"; ci_fail_reason="gh query failed"; break; }
       [[ -n "$ci_state" ]] || { ci_failed="$ci_id"; ci_fail_reason="gh returned no status"; break; }
       [[ "$ci_state" == completed ]] || ci_running=$((ci_running + 1))
     done
     if [[ -n "$ci_failed" ]]; then
       echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_fail_reason} for run ${ci_failed} — letting the session handle it ===" >>"$LOG_FILE"
     elif [[ "$ci_running" -gt 0 ]]; then
-      echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_running}/${ci_total} run(s) still running — skipping the session (SUPER_CI_GATE) ===" >>"$LOG_FILE"
-      exit 0
+      ci_max_min="${SUPER_CI_MAX_WAIT_MIN:-180}"
+      [[ "$ci_max_min" =~ ^[0-9]+$ ]] || ci_max_min=180
+      ci_since="$(superagent_ci_field "$LOOP_FILE" since)"
+      ci_since_epoch="$(superagent_epoch_from_iso "$ci_since")"
+      ci_age_min=""
+      [[ -n "$ci_since_epoch" ]] && ci_age_min=$(( ($(date -u +%s) - ci_since_epoch) / 60 ))
+      if [[ "$ci_max_min" -gt 0 && -n "$ci_age_min" && "$ci_age_min" -gt "$ci_max_min" ]]; then
+        echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_running}/${ci_total} run(s) still running but the park (since ${ci_since}, ${ci_age_min} min) exceeds SUPER_CI_MAX_WAIT_MIN=${ci_max_min} — falling open to the session ===" >>"$LOG_FILE"
+        # notify once per `since` value: the marker records which park was announced
+        ci_stale_marker="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").ci-stale"
+        if [[ "$(cat "$ci_stale_marker" 2>/dev/null || true)" != "$ci_since" ]]; then
+          printf '%s\n' "$ci_since" >"$ci_stale_marker" 2>/dev/null || true
+          superagent_notify ci-stale "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+        fi
+      else
+        echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_running}/${ci_total} run(s) still running — skipping the session (SUPER_CI_GATE) ===" >>"$LOG_FILE"
+        exit 0
+      fi
     else
       echo "=== $(ts) superagent-tick: WAITING FOR CI — all ${ci_total} run(s) terminal — running the resume session ===" >>"$LOG_FILE"
     fi
@@ -325,9 +354,9 @@ if [[ "$rc" -eq 0 && -r "$LOOP_FILE" ]]; then
   final_status="$(sed -n 's/^status:[[:space:]]*//p' "$LOOP_FILE" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//' || true)"
   case "$final_status" in
     PLANNING|RUNNING)
-      lock_owner="$(cat "$LOCK_DIR/owner" 2>/dev/null || true)"
-      if [[ -n "$lock_owner" && "$lock_owner" != "$$" ]] && kill -0 "$lock_owner" 2>/dev/null; then
-        echo "=== $(ts) superagent-tick: held-lock no-op — peer tick (pid $lock_owner) is mid-flight; transient status '${final_status}' is the peer's, not a stranding ===" >>"$LOG_FILE"
+      lock_owner_state="$(superagent_lock_owner_state "$LOCK_DIR")"
+      if [[ "$lock_owner_state" == alive\ * && "${lock_owner_state#alive }" != "$$" ]]; then
+        echo "=== $(ts) superagent-tick: held-lock no-op — peer tick (pid ${lock_owner_state#alive }) is mid-flight; transient status '${final_status}' is the peer's, not a stranding ===" >>"$LOG_FILE"
       else
         echo "=== $(ts) superagent-tick ERROR: session ended with transient status '${final_status}' — the tick completed without advancing or parking (interrupted dispatch ended in a question? issue #17). The EXIT trap reaps any lock this tick still owns; the next tick self-heals via crash recovery. ===" >>"$LOG_FILE"
         rc=10
