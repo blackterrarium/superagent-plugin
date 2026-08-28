@@ -9,23 +9,36 @@
   - **Bash gate (`SUPER_INPUT_GATE=true`).** `superagent-tick.sh` reads the loop file before any
     preflight; `WAITING FOR INPUT` with no `answer:` under `## Pending decision` → one log line,
     exit 0, no session. Polling continues for free; resume-on-answer is unchanged.
-  - **One notification on the transition (`SUPER_NOTIFY_CMD`).** The wrapper snapshots `status`
-    before the session and fires `superagent_notify` when the tick parks the loop
-    (`waiting-for-input`, body = the pending question) or finishes it (`done`). Your snippet runs via
-    `bash -c` with `SUPERAGENT_EVENT/SLUG/TITLE/BODY` + `LOOP_FILE` in env (ntfy/Slack/Pushover…);
-    unset → `osascript` (macOS) / `notify-send` (Linux) when available. A failing notifier is logged
-    and never fails the tick. Transition detection = fires once, no sidecar state.
-  - **`scripts/answer.sh [--no-kick] <slug> <answer…>`.** Records `answer: <text>` directly under
-    `## Pending decision` holding the L3 lock (refuses with exit 4 while a tick is mid-flight, 3 if
-    the loop isn't parked), then kicks one tick via the registered scheduler entry so the loop resumes
-    in seconds. Kick logic lifted into `_common.sh` (`superagent_kick_tick`) and shared with
-    `launch.sh`. `superagent-monitor` now recommends it as the primary answer path.
+  - **One notification per unseen park (`SUPER_NOTIFY_CMD`).** The wrapper snapshots `status` **and
+    the `## Pending decision` block** before the session and fires `superagent_notify
+    waiting-for-input` (body = the pending question) when the tick leaves the loop parked on a
+    question the operator has not been shown: a status transition into `WAITING FOR INPUT`, **or a
+    changed pending block while already parked** — the re-park case, where a tick consumes `answer:`
+    and immediately parks on a *new* question, so status is `WAITING FOR INPUT` on both sides and a
+    status-only guard would stay silent while the gate suppressed every later session (a silently
+    stranded loop). `done` fires on the status transition alone. Your snippet runs via `bash -c` with
+    `SUPERAGENT_EVENT/SLUG/TITLE/BODY` + `LOOP_FILE` in env (ntfy/Slack/Pushover…) — **single-quote
+    it in `.superenv`**, which is sourced under `set -euo pipefail`; unset → `osascript` (macOS) /
+    `notify-send` (Linux) when available. A failing notifier is logged (and logs no "notified" line)
+    and never fails the tick. Still no sidecar state: an unchanged parked loop is silent, and a gated
+    fire exits before the check.
+  - **`scripts/answer.sh [--no-kick] [--replace] <slug> <answer…>`.** Records `answer: <text>`
+    directly under `## Pending decision` holding the L3 lock (refuses with exit 4 while a tick is
+    mid-flight, 3 if the loop isn't parked — both re-checked *under* the lock), then kicks one tick
+    via the registered scheduler entry so the loop resumes in seconds. Both flags parse in **any
+    position**, so `answer.sh g "Option A" --no-kick` honors the flag instead of recording it as part
+    of the answer, and an unknown `--flag` is a usage error (exit 2) rather than answer text;
+    `--replace` overwrites an answer already recorded in the block (without it the existing answer is
+    kept and only kicked). Kick logic lifted into `_common.sh` (`superagent_kick_tick`) and shared
+    with `launch.sh`. `superagent-monitor` now recommends it as the primary answer path.
   - New `_common.sh` readers `superagent_loop_status` / `superagent_pending_section` /
     `superagent_pending_answer` (answer detection is scoped to the pending section — an `answer:`
     under `## Decisions` never counts).
   - All new helpers tolerate empty arguments (`${1:-}`, never `${1:?}` — which would abort the
     calling tick); `answer.sh` passes the answer through `ENVIRON` (backslash-safe), checks for the
-    heading before taking the lock, and traps TERM/INT so a signal never leaks the lock.
+    heading before taking the lock, arms its release traps *before* writing the lock's `owner` file
+    (a kill in that window used to strand an ownerless lock until the 90-minute steal window), and
+    traps TERM/INT so a signal never leaks the lock.
   - Follow-ups (not here): a `WAITING FOR CI` bash gate; event-driven wake via launchd
     `WatchPaths` / a systemd `.path` unit.
 

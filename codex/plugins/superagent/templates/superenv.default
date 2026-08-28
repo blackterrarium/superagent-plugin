@@ -49,7 +49,9 @@ SUPER_LOCK_STEAL_MIN=90                 # stale-lock steal window, minutes
 SUPER_TICK_INTERVAL=10m                 # external-driver default when --interval omitted
 SUPER_AUTO_DISARM_ON_DONE=true          # external driver: a tick that finds status DONE uninstalls its own scheduler entry (loop-status + env file kept); false = keep the timer polling
 SUPER_INPUT_GATE=true                   # external driver: a tick that finds WAITING FOR INPUT with no `answer:` exits without launching a session (bash-only poll); false = launch the session every interval as before
-SUPER_NOTIFY_CMD=                       # external driver: shell snippet run when a loop parks on WAITING FOR INPUT or reaches DONE (env: SUPERAGENT_EVENT SUPERAGENT_SLUG LOOP_FILE SUPERAGENT_TITLE SUPERAGENT_BODY), e.g. curl -d "$SUPERAGENT_BODY" -H "Title: $SUPERAGENT_TITLE" ntfy.sh/<topic>; empty = desktop notification (osascript / notify-send) when available
+SUPER_NOTIFY_CMD=                       # external driver: shell snippet run when a loop parks on WAITING FOR INPUT or reaches DONE (env: SUPERAGENT_EVENT SUPERAGENT_SLUG LOOP_FILE SUPERAGENT_TITLE SUPERAGENT_BODY), e.g. SUPER_NOTIFY_CMD='curl -s -d "$SUPERAGENT_BODY" -H "Title: $SUPERAGENT_TITLE" ntfy.sh/<topic>'; empty = desktop notification (osascript / notify-send) when available
+#   SINGLE-quote the value: this file is *sourced* under `set -euo pipefail`, so an unquoted (or double-quoted) $SUPERAGENT_BODY expands when .superenv loads — before those variables exist — and aborts every tick with "unbound variable"; single quotes defer the expansion to notify time.
+#   SUPERAGENT_BODY carries the loop's `## Pending decision` text, so the question itself reaches whatever endpoint the snippet targets (phone, Slack, pager).
 
 # ── CI / test-evidence policy ─────────────────────────────────────
 SUPER_TEST_EVIDENCE=local               # local = SDD's native TDD contract; ci = evidence is CI run ids only
