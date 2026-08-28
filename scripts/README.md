@@ -278,12 +278,18 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   exits 0 and writes `codex-smoke-report.md` at the repo root — failures are the data, not a script
   bug.
 - `role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit> --cwd <dir>
-  --prompt-file <file> [--role <name>]` — runs one agent role on a foreign harness CLI, headless:
-  reads the prompt from `<file>`, runs the target CLI in `<dir>`, prints its final message on stdout
-  and nothing else (CLI chatter goes to a log file, path printed on stderr). The relay definitions a
-  bridged role dispatches through (`templates/super-role-bridge-agent.md` on Claude/Cursor,
-  `templates/relay-preamble.md` on Codex) shell out to this script; it is also copied into the
-  `codex/` and `cursor/` builds.
+  --prompt-file <file> [--role <name>] [--tools role|executor|<list>]` — runs one agent role on a
+  harness CLI, headless: reads the prompt from `<file>`, runs the target CLI in `<dir>`, prints its
+  final message on stdout and nothing else (CLI chatter goes to a log file, path printed on stderr).
+  The relay definitions a bridged role dispatches through (`templates/super-role-bridge-agent.md` on
+  Claude/Cursor, `templates/relay-preamble.md` on Codex) shell out to this script; it is also copied
+  into the `codex/` and `cursor/` builds. `--tools` (claude only) selects the `--allowedTools` set:
+  `role` (default: `Read,Edit,Write,Bash,Grep,Glob`) for a leaf role, `executor`
+  (`…,Task,Skill` — the tick's own set) for a controller that dispatches subagents itself — this is
+  how `superagent` runs `superrun` as the top-level agent of its own process, native or bridged, so
+  the SDD controller's children can be foreground-waited on (issue #25). For claude the print-mode
+  background-wait ceiling is lifted (`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS` defaults to 0) like the
+  tick does.
 - `bridge-test.sh` — offline tests for `role-bridge.sh` and the `_common.sh` role-grammar parser,
   using `PATH` shims in place of the real CLIs (no network, no live CLI needed); prints `bridge-test:
   N failure(s)` and exits 1 on any failure.

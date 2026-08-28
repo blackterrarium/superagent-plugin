@@ -159,7 +159,23 @@ anything above 600 s unless `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` ar
 process environment. `scripts/superagent-tick.sh` exports both (1 h / 2 h defaults; operator-set
 values win) for every unattended tick, but an **attended (non-tick) session must set them in its own
 environment before dispatching a bridged role** — otherwise the bridge is killed mid-run and the
-role comes back `BRIDGE-FAILED`.
+role comes back `BRIDGE-FAILED`. The same applies to the `cron` (in-session) driver, because the
+executor is always a bridge call (next paragraph): launch that session as
+`BASH_DEFAULT_TIMEOUT_MS=3600000 BASH_MAX_TIMEOUT_MS=7200000 claude`; the supervisor refuses to
+dispatch `superrun` when `BASH_MAX_TIMEOUT_MS` is below 2 h.
+
+**The executor always runs as its own process.** `superrun` is the `subagent-driven-development`
+controller: it dispatches implementer/reviewer subagents and must foreground-wait on each. A subagent
+cannot foreground-wait on its own children (they background and yield), so dispatching `superrun` as
+an Agent-tool subagent — the pre-0.5.1 design — decayed into a `SendMessage`-nudge spiral with two
+writers racing on the worktree and ticks that never converged (issue #25). Since 0.5.1 the
+supervisor starts `superrun` through `scripts/role-bridge.sh --tools executor` from its own Bash tool
+— a fresh top-level `claude -p` (or the executor's harness CLI, when `SUPER_MODEL_EXECUTOR` is
+bridged) with the tick's `Read,Edit,Write,Bash,Grep,Glob,Task,Skill` allowlist — and blocks on it
+exactly as it blocked on the subagent. Inside that process SDD's subagents are depth 1 and the
+synchronous wait holds. A CI-PENDING yield ends the process; the resume tick starts a fresh one with
+the recorded packet (the `ci_wait.subagent` field is gone). `superplan` is unchanged (it spawns no
+subagents, so a depth-1 subagent is the right container).
 
 **Cursor is unverified as a bridge target and as a supervisor for bridged roles** (no live smoke;
 the `agent` CLI is absent on the build host, so smoke T3 skips) — the relay definition's `tools:`

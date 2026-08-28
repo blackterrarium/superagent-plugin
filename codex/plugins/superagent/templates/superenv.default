@@ -15,7 +15,7 @@
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=gpt-5.6-sol             # the superagent tick itself
 SUPER_MODEL_PLANNER=gpt-5.6-sol                # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=gpt-5.6-sol               # superrun dispatch subagent (the SDD controller)
+SUPER_MODEL_EXECUTOR=gpt-5.6-sol               # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
 SUPER_MODEL_PANEL=gpt-5.6-sol                  # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=gpt-5.6-terra
 SUPER_MODEL_FIX_APPLIER=gpt-5.6-terra
@@ -34,7 +34,7 @@ SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED role
 # (reasoning_effort on spawn_agent).
 SUPER_EFFORT_SUPERVISOR=medium          # the superagent tick itself
 SUPER_EFFORT_PLANNER=high               # superplan / supergoal dispatch subagent
-SUPER_EFFORT_EXECUTOR=medium            # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_EXECUTOR=medium            # superrun (the SDD controller), passed to its CLI process
 SUPER_EFFORT_PANEL=xhigh                # L7 escalation panel (3 read-only agents)
 SUPER_EFFORT_IMPLEMENTER=medium
 SUPER_EFFORT_FIX_APPLIER=medium

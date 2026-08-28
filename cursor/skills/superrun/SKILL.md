@@ -108,7 +108,17 @@ preserves the same isolation in substance.
 
 **You MUST use `superpowers:subagent-driven-development` to execute the target leaf plan. Do not
 execute it any other way.** Invoke it via the Skill tool and follow it exactly, **subject to the
-repo profile below**:
+repo profile below**.
+
+> **You must be the top-level agent of your process.** SDD's task loop dispatches subagents and
+> foreground-waits on each one; a subagent cannot foreground-wait on its own children (superloop
+> L7's depth-1 constraint), so if superrun itself were a subagent, every SDD child would background
+> and yield instead of returning, and the loop would decay into `SendMessage` nudges and a
+> two-writer worktree race (issue #25). A `superagent` loop therefore runs superrun in its own
+> headless CLI process (`role-bridge.sh --tools executor`); a human runs it as the session's task.
+> If you find you are an Agent-tool subagent anyway, stop before Step 3 and report BLOCKED:
+> "superrun was dispatched as a subagent; it must run as a top-level process — see superagent
+> **Subagent dispatch**." Never nudge backgrounded children along by hand.
 
 - **Read the target leaf plan yourself** and extract its **full task list** plus scene-setting
   context. subagent-driven-development expects you to hand each implementer the **full task text**
@@ -249,13 +259,12 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
      packet, and how to check the runs (`gh run list --branch <branch>`), then **end the turn**.
      Once every run is terminal, re-invoke superrun via its **Resume entry — post-CI** with that
      packet and the conclusions to finish the leaf.
-   - **Dispatched as a subagent (e.g. by a `superagent` loop):** do NOT arm the wait yourself
-     (a Monitor cannot resume a subagent whose turn has ended) and do NOT emit interim
+   - **Dispatched by a `superagent` loop (a headless process the supervisor is blocking on):** do
+     NOT arm the wait yourself (a Monitor cannot outlive your process) and do NOT emit interim
      "still waiting" notifications. Return a **CI-PENDING report** (format below) as your final
-     message and stop. The supervisor owns the wait and resumes you — `SendMessage` in-session, or a
-     fresh resume dispatch (see **Resume entry — post-CI**) when the session was recycled — with the
-     terminal conclusions. A CI-PENDING report is a valid yield, not a failure and not your Final
-     Report.
+     message and stop — your process ends with it. The supervisor owns the wait and later starts a
+     fresh superrun process with this packet plus the terminal conclusions (see **Resume entry —
+     post-CI**). A CI-PENDING report is a valid yield, not a failure and not your Final Report.
 
          ## Superrun CI-PENDING
          **Leaf plan:** <full path to the target leaf plan>
@@ -308,7 +317,7 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
 
 ### Resume entry — post-CI (superagent-driven)
 
-When superrun is invoked (or a prior superrun subagent is `SendMessage`-resumed) with a **CI-terminal
+When superrun is invoked with a **CI-terminal
 resume packet** — the CI-PENDING fields (leaf plan, root, worktree, branch, PR url, run ids) plus each
 run's terminal conclusion — do **not** re-run Steps 1–3: the leaf is already implemented and its runs
 are already terminal. Enter the recorded worktree (it was left in place), verify the packet's
@@ -327,7 +336,10 @@ and merges its docs-only **closeout PR**. Capture that PR URL too.
 ## Step 5 — Worktree lifecycle
 
 After `superfinish` reports the work merged, exit the worktree via `ExitWorktree`
-(worktree is kept only while a PR stays open). If the **code PR** was left open in Step 3a (CI red /
+(worktree is kept only while a PR stays open). When that tool is unavailable (a headless process
+whose allowlist lacks it — the `superagent` dispatch path), do the equivalent by hand from the
+primary checkout: `git worktree remove <path>` (the branch is already merged and deleted remotely).
+If the **code PR** was left open in Step 3a (CI red /
 BLOCKED, not merged), leave the worktree in place and note that in the Final Report.
 
 ## Final Report — then exit

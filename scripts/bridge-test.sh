@@ -21,6 +21,7 @@ mkshim() {
 #!/usr/bin/env bash
 printf '%s\n' "\$@" >"$T/$name.argv"
 cat >"$T/$name.stdin"
+printf '%s\n' "\${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-unset}" >"$T/$name.env"
 case "\${SHIM_MODE:-ok}" in
   fail) echo "boom" >&2; exit 9 ;;
   empty) exit 0 ;;
@@ -45,6 +46,21 @@ check "claude: prompt on stdin"   cmp -s "$T/claude.stdin" "$T/prompt.txt"
 check "claude: log path on stderr" grep -q '^role-bridge: log=' "$T/err"
 "$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
 check "claude: inherit omits flags" [ "$(argv claude)" = "-p --allowedTools Read,Edit,Write,Bash,Grep,Glob " ]
+check "claude: bg-wait ceiling lifted (0) when unset" bash -c "env -u CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS '$BRIDGE' --harness claude --model inherit --effort inherit --cwd '$T/cwd' --prompt-file '$T/prompt.txt' >/dev/null 2>&1; [ \"\$(cat '$T/claude.env')\" = 0 ]"
+CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=5000 "$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "claude: operator bg-wait ceiling respected" [ "$(cat "$T/claude.env")" = 5000 ]
+# --tools: the executor role (superrun, issue #25) runs as its own top-level `claude -p` process and
+# needs the tick's Task/Skill allowlist so SDD's subagents dispatch at depth 1 inside it.
+"$BRIDGE" --harness claude --model opus --effort medium --tools executor --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role executor >/dev/null 2>&1
+check "claude: --tools executor allowlist" [ "$(argv claude)" = "-p --model opus --effort medium --allowedTools Read,Edit,Write,Bash,Grep,Glob,Task,Skill " ]
+"$BRIDGE" --harness claude --model inherit --effort inherit --tools "Read,Bash" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "claude: --tools explicit list" [ "$(argv claude)" = "-p --allowedTools Read,Bash " ]
+"$BRIDGE" --harness claude --model inherit --effort inherit --tools role --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "claude: --tools role = default" [ "$(argv claude)" = "-p --allowedTools Read,Edit,Write,Bash,Grep,Glob " ]
+"$BRIDGE" --harness codex --model inherit --effort inherit --tools executor --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
+check "codex: --tools accepted and ignored" bash -c "[ $rc -eq 0 ] && ! grep -q -- '--allowedTools' '$T/codex.argv'"
+"$BRIDGE" --harness claude --model inherit --effort inherit --tools "" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
+check "usage error on empty --tools" [ "$rc" -eq 64 ]
 
 # ── codex ──
 out="$("$BRIDGE" --harness codex --model gpt-5.6-terra --effort medium --cwd "$T/cwd" --prompt-file "$T/prompt.txt" 2>/dev/null)"

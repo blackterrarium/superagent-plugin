@@ -15,7 +15,7 @@
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=inherit             # the superagent tick itself
 SUPER_MODEL_PLANNER=inherit                # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit               # superrun dispatch subagent (the SDD controller)
+SUPER_MODEL_EXECUTOR=inherit               # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
 SUPER_MODEL_PANEL=inherit                  # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=inherit
 SUPER_MODEL_FIX_APPLIER=inherit
@@ -31,7 +31,7 @@ SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED role
 # .superenv portability; any non-inherit value is warned and treated as inherit.
 SUPER_EFFORT_SUPERVISOR=inherit          # the superagent tick itself
 SUPER_EFFORT_PLANNER=inherit               # superplan / supergoal dispatch subagent
-SUPER_EFFORT_EXECUTOR=inherit            # superrun dispatch subagent (the SDD controller)
+SUPER_EFFORT_EXECUTOR=inherit            # superrun (the SDD controller), passed to its CLI process
 SUPER_EFFORT_PANEL=inherit                # L7 escalation panel (3 read-only agents)
 SUPER_EFFORT_IMPLEMENTER=inherit
 SUPER_EFFORT_FIX_APPLIER=inherit

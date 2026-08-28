@@ -75,7 +75,8 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
 | "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, release the lock, end the tick. Each later scheduled tick does ONE batched `curl` over the recorded run ids and exits unless every run is terminal. Per-tick heavy polling is the context waste the parked state exists to eliminate. |
 | "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. |
-| "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false`): the blocked Agent call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
+| "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false` on the Agent call for `superplan`; a blocking Bash call for `superrun`): the blocked call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
+| "I'll dispatch `superrun` as an Agent-tool subagent like `superplan`" | NO. **`superrun` runs in its own CLI process** (`role-bridge.sh --tools executor` from your Bash tool — see **Subagent dispatch**). `superrun` is the SDD controller and must dispatch its own implementer/reviewer subagents; a subagent cannot foreground-wait on its children (superloop L7's depth-1 constraint), so as an Agent-tool subagent it degrades into a `SendMessage`-nudge spiral and never converges (issue #25). |
 | "My dispatch was interrupted mid-flight (API lost, host slept) — I'll ask the operator whether to resume or pause" | NO. **A tick never ends with a question — not via a tool, not as the final chat message** (in an unattended session no one can answer; the questioning turn exits 0 and strands `status: PLANNING`/`RUNNING` + the held lock). Self-heal immediately per superloop L2's tick teardown invariant: log the interruption, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, `release_lock()`, end the tick with a normal report. The next scheduled tick retries the step. |
 
 ## Hard gate — `<PLAN.md>` is required
@@ -158,33 +159,86 @@ advance.
 
 ## Subagent dispatch — `superplan`/`superrun` always run isolated
 
-**Every heavy-skill invocation runs in its own subagent — superagent NEVER invokes `superplan` or
-`superrun` inline in its own context.** When Step 1 reaches a `WAITING FOR PLAN` / `WAITING FOR RUN`
-branch, dispatch the skill with the **Agent tool** (`subagent_type: general-purpose` — that type has the
-full tool access `superplan`/`superrun` need: Bash, Edit/Write, git, `gh`, `EnterWorktree`, CI/Monitor
-tools — and `run_in_background: false`; see **Synchronous dispatch** below). Instruct the subagent to:
+**Every heavy-skill invocation runs isolated from superagent's own context — superagent NEVER
+invokes `superplan` or `superrun` inline.** The two skills are isolated differently, and the
+difference is load-bearing:
+
+- **`superplan` → an Agent-tool subagent.** `superplan` authors documents and dispatches no
+  subagents of its own, so a depth-1 subagent is the right container. When Step 1 reaches the
+  `WAITING FOR PLAN` branch, dispatch it with the **Agent tool** (`subagent_type: general-purpose` —
+  full tool access: Bash, Edit/Write, git, `gh` — and `run_in_background: false`; see **Synchronous
+  dispatch** below).
+- **`superrun` → its own CLI process.** `superrun` is the `subagent-driven-development` controller:
+  it dispatches implementer / reviewer / fix-applier subagents and foreground-waits on each. **A
+  subagent cannot foreground-wait on its own children** (superloop L7's depth-1 constraint): run as
+  an Agent-tool subagent, `superrun`'s children background and yield control back after every turn,
+  and the tick decays into a `SendMessage`-nudge spiral with two writers racing on the worktree
+  (issue #25). So when Step 1 reaches the `WAITING FOR RUN` branch — and for the ci-resume dispatch
+  and any escalation-ladder retry — start `superrun` as the **top-level agent of a fresh headless
+  CLI process** via the shipped bridge, from **your own Bash tool**, and block on it:
+
+  1. Write the dispatch prompt (the instruction list below, with the concrete `<PLAN.md>` path and,
+     for a resume, the `ci_wait` packet + conclusions) to a temp file with a quoted heredoc:
+     `f="$(mktemp "${TMPDIR:-/tmp}/super-executor.XXXXXX")"; cat >"$f" <<'__SUPERAGENT_PROMPT_END__' … __SUPERAGENT_PROMPT_END__`.
+  2. Resolve the executor's harness / model / effort (see **Model resolution** below), then run —
+     from the **primary checkout root** (`superrun` makes its own worktree), with `timeout: 7200000`
+     on the Bash call:
+     `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools executor --cwd "<primary root>" --prompt-file "$f" --role executor`
+     `--tools executor` gives the child the tick's own allowlist (`Read,Edit,Write,Bash,Grep,Glob,Task,Skill`),
+     so inside that process `superrun`'s SDD subagents are depth 1 and the synchronous wait holds —
+     exactly as it does for this tick's own dispatches. The bridge also lifts the print-mode
+     background-wait ceiling (issue #15) for the child.
+  3. Exit 0 → stdout **is** `superrun`'s final message (Final Report or CI-PENDING report); parse and
+     relay it exactly as before. Non-zero → the bridge prints `role-bridge: log=<path>` on stderr;
+     treat it as a crashed dispatch (escalation ladder, quoting the log path) — never retry blindly.
+
+  **Preflight (once per tick, before the first `superrun` dispatch):** `superrun` runs 20–60 min and
+  the Bash tool kills anything past its cap. `scripts/superagent-tick.sh` exports
+  `BASH_MAX_TIMEOUT_MS=7200000` for every external tick; an attended `cron` session must be launched
+  with `BASH_DEFAULT_TIMEOUT_MS=3600000 BASH_MAX_TIMEOUT_MS=7200000 claude …`. Check
+  `[ "${BASH_MAX_TIMEOUT_MS:-0}" -ge 7200000 ]` in Bash; if it fails, do **not** dispatch — reset
+  `RUNNING → WAITING FOR RUN`, `stop_driver()`, `release_lock()`, and report the missing env var in
+  `Findings & issues` (a dispatch that gets guillotined at 600 s strands a half-done worktree).
+
+  The child process shares this host's CLI login and plugin set, so `superagent:superrun` and
+  `superpowers:*` resolve there exactly as here; the `.cursor/agents/super-<role>.md` definitions
+  `superagent:init` generated resolve from the `--cwd` root as usual.
+
+Either way, instruct the executor/subagent to:
 
 1. invoke the named skill (`superagent:superplan` or `superagent:superrun`) via its **Skill tool** with `<PLAN.md> =
    master_plan` (and the per-branch arguments below), and
 2. **return that skill's complete Final Report verbatim as its final message** — the subagent's final
    message is what superagent receives as the tool result, and the verbatim report is exactly what the
-   per-branch step-5 parsing consumes. (One sanctioned exception: a `superrun` subagent that queued
-   long CI returns a **CI-PENDING report** instead and stays resumable — that is a valid yield, not a
-   failure; see **CI wait — monitor-parked**.)
+   per-branch step-5 parsing consumes. (One sanctioned exception: a `superrun` process that queued
+   long CI returns a **CI-PENDING report** instead and exits — that is a valid yield, not a failure;
+   a fresh process resumes it later; see **CI wait — monitor-parked**.)
 
 **Model resolution — every heavy-skill dispatch site passes a model per its `.superenv` role key**
 (`SUPER_MODEL_PLANNER` for `superplan`, `SUPER_MODEL_EXECUTOR` for `superrun` — including the
-ci-resume's fresh subagent and escalation-ladder retries):
+ci-resume's fresh process and escalation-ladder retries).
+
+*`superrun` (process dispatch):* the bridge takes the CLI's native model string directly, so no
+agent definition is involved. In Bash, `. "${SUPER_PLUGIN_ROOT}/scripts/_common.sh"` and pass
+`--harness "$(superagent_role_harness "$SUPER_MODEL_EXECUTOR")"` (an `inherit` harness → `SUPER_HARNESS`),
+`--model "$(superagent_role_model "$SUPER_MODEL_EXECUTOR")"` (a tier, a full `claude-*` ID, or a
+foreign harness's model — all pass through unchanged; `inherit` omits the flag) and
+`--effort "$SUPER_EFFORT_EXECUTOR"` (`inherit` omits it). A bridged executor (harness ≠
+`SUPER_HARNESS`) is the same command with the foreign `--harness`; the bridge runs that CLI. A
+`.cursor/agents/super-executor.md` definition, if `superagent:init` generated one, is unused by this
+path.
+
+*`superplan` (Agent-tool dispatch):*
 
 - `inherit` → omit the `model:` parameter (the subagent runs on the session model).
 - A tier name (`sonnet` | `opus` | `haiku` | `fable`) → pass it as `model:`.
 - A **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) → the Agent tool's `model:`
-  parameter is tier-enum-only and rejects it; instead dispatch with `subagent_type: super-planner` /
-  `super-executor` — the per-role agent definition `superagent:init` generates in `.cursor/agents/`,
+  parameter is tier-enum-only and rejects it; instead dispatch with `subagent_type: super-planner`
+  — the per-role agent definition `superagent:init` generates in `.cursor/agents/`,
   whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
   that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
 - A **bridged** value (harness prefix or inference ≠ `SUPER_HARNESS`, e.g. `codex:gpt-5.6-sol`,
-  `openai/gpt-5`) → dispatch with `subagent_type: super-planner` / `super-executor` and omit
+  `openai/gpt-5`) → dispatch with `subagent_type: super-planner` and omit
   `model:`; the generated definition is a relay to that harness's CLI. A Final Report that begins
   `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
   crashed subagent, quoting its `log=` path.
@@ -192,9 +246,11 @@ ci-resume's fresh subagent and escalation-ladder retries):
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and
 invites `TaskOutput`/`TaskList` status checks while the work runs — for a long `superplan`/`superrun`
-that polling is pure supervisor-context waste. So every heavy-skill Agent call — the Step-1 dispatches,
-the ci-resume's fresh subagent, an escalation-ladder retry — passes **`run_in_background: false`** and
-**blocks until the subagent's final message returns as the tool result**. The blocked wait costs zero
+that polling is pure supervisor-context waste. So every heavy-skill dispatch — the Step-1 `superplan`
+Agent call passes **`run_in_background: false`**; the `superrun` bridge call (Step-1, the ci-resume's
+fresh process, an escalation-ladder retry) is a plain **foreground Bash call with `timeout: 7200000`**,
+never `run_in_background: true` — **blocks until the child's final message returns as the tool
+result**. The blocked wait costs zero
 context; there is nothing to check on and nothing to do until the report arrives. No `TaskOutput` /
 `TaskList` peeks, no sleep loops, no "let me see how it's doing" reads — a poll can only report "still
 running", which the synchronous return delivers for free by not having returned yet. A long dispatch
@@ -210,7 +266,8 @@ this tick's **Final Report — per tick** so the caller sees it on the CLI, plus
 flags. Relaying the *small Final Report* verbatim is exactly the "ingests only the small Final Report"
 contract below — it is the report, not the full execution trace.
 
-Do **not** pass `isolation: worktree` to the Agent call — `superplan`/`superrun` create and manage their
+Do **not** pass `isolation: worktree` to the `superplan` Agent call, and point the `superrun` bridge's
+`--cwd` at the primary checkout root, never a worktree — `superplan`/`superrun` create and manage their
 own worktrees/PRs, and forcing an outer worktree would conflict with that.
 
 Everything around the dispatch stays in **superagent's own (parent) context, unchanged**: the pre/post
@@ -224,9 +281,10 @@ Report per tick (and relays it to the caller), not the full execution trace.
 
 ## CI wait — monitor-parked (never poll a long CI)
 
-A `superrun` subagent that pushes a long CI lane does **not** block until CI finishes — per its own
+A `superrun` process that pushes a long CI lane does **not** block until CI finishes — per its own
 Step 3a it returns a **CI-PENDING report** (leaf plan, root, worktree, branch, PR url, run ids) and
-stops, resumable later. The supervisor's job is to **park the loop on that wait, not to poll it**:
+exits; a fresh process resumes the leaf later from that packet. The supervisor's job is to **park
+the loop on that wait, not to poll it**:
 neither the supervisor's context (a `gh run view` loop) nor the tick cadence (re-checking CI every
 tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 
@@ -236,8 +294,7 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    as an inline list of GitHub Actions run ids), `repo:` (the `owner/name` of the repository the
    runs live in — the PR's **base** repository, e.g. from `gh repo view --json nameWithOwner`; this is
    what lets the wrapper find the runs when the clone's remote is a fork), `branch:`, `pr:`, `leaf:`,
-   `worktree:`, `subagent:` (the dispatched superrun subagent's id/name, for the `SendMessage`
-   resume), and `since: <ISO-8601 UTC timestamp, e.g. 2026-08-28T14:05:00Z>`. Set
+   `worktree:`, and `since: <ISO-8601 UTC timestamp, e.g. 2026-08-28T14:05:00Z>`. Set
    `status: WAITING FOR CI`. It must look exactly like this:
 
    ```yaml
@@ -248,7 +305,6 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
      pr: <number>
      leaf: <plan path>
      worktree: <path>
-     subagent: <id/name>
      since: <ISO-8601 UTC timestamp>
    ```
 
@@ -275,14 +331,12 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 2. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
    `SUPER_GH_DISABLE_SANDBOX=true` — or the same batched curl) — never advance on the Monitor's report
    alone.
-3. **Resume `superagent:superrun`:** if `ci_wait.subagent` is still reachable (same session — the cron/Monitor
-   path), `SendMessage` it **once**: "CI run(s) <ids> terminal: <id: conclusion, …>. Finish the leaf
-   now — Step 3a terminal-state branch, then closeout; return your Final Report." If it is not
-   reachable (external fresh session; or `SendMessage` fails), dispatch a **fresh** general-purpose
-   subagent (`run_in_background: false` — synchronous, like every heavy dispatch; model per
-   **Model resolution** under **Subagent dispatch**, from `SUPER_MODEL_EXECUTOR`) instructed to invoke
-   `superagent:superrun` with the full `ci_wait` packet + conclusions via its
-   **Resume entry — post-CI**. Either way the subagent returns the real Final Report.
+3. **Resume `superagent:superrun`:** the process that yielded has exited, so there is nothing to
+   message — dispatch a **fresh** `superrun` process exactly as in `WAITING FOR RUN` step 3 (bridge,
+   `--tools executor`, foreground Bash, `timeout: 7200000`; model per **Model resolution** under
+   **Subagent dispatch**, from `SUPER_MODEL_EXECUTOR`), with a prompt that instructs it to invoke
+   `superagent:superrun` with the full `ci_wait` packet + each run's conclusion via its
+   **Resume entry — post-CI**. It returns the real Final Report.
 4. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
    next state, iteration log). Clear the `ci_wait:` block.
 5. The heavy-skill count for this leaf was already incremented on the tick that dispatched
@@ -358,7 +412,7 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
     with a fresh `since:` or cancel/re-trigger the run.)
   - Any run still not `completed` → `release_lock()`, exit. Nothing else this tick.
   - All terminal → run the **Resuming** flow (CI wait — monitor-parked) this tick: verify, dispatch
-    the resume subagent, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
+    the resume process, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
 
 ### `WAITING FOR PLAN`
 1. **Sync gate (pre).** Run `sync_main()` so `superplan` reads a fresh tree. If it STOPs, pause and end
@@ -394,15 +448,16 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
 1. **Sync gate (pre).** Run `sync_main()` so `superrun`'s traversal reads a fresh tree. If it STOPs,
    pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
-3. **Dispatch `superagent:superrun` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Model
-   per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_EXECUTOR`.
-   Instruct the subagent to invoke the `superagent:superrun` skill (Skill tool) with
+3. **Dispatch `superagent:superrun` in its own CLI process** — **not** an Agent-tool subagent: run
+   `role-bridge.sh --tools executor` from your Bash tool, foreground, `timeout: 7200000`, after the
+   `BASH_MAX_TIMEOUT_MS` preflight (all in **Subagent dispatch**). Model per **Model resolution**
+   (see **Subagent dispatch**), from `SUPER_MODEL_EXECUTOR`.
+   The prompt instructs it to invoke the `superagent:superrun` skill (Skill tool) with
    `<PLAN.md> = master_plan` (the root) and to **return superrun's complete Final Report verbatim as its
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
-   (step 5's park case; the subagent stays resumable). superagent never invokes `superrun` inline in its
-   own context.
-4. **Sync gate (post + be-sure).** If the subagent returned a **CI-PENDING report** (see step 5),
+   (step 5's park case; a fresh process resumes it). superagent never invokes `superrun` inline in its
+   own context, and never as a subagent (issue #25).
+4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
    skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
    `sync_main()`, then verify `superrun`'s reported merges landed
    on local `main`: the leaf's closeout report exists and is tracked, and (if the code PR merged) its

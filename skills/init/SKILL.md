@@ -230,6 +230,11 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
 
+(`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch
+`superrun` through it: the executor always runs as the top-level agent of its own CLI process via
+`role-bridge.sh --tools executor`, taking `SUPER_MODEL_EXECUTOR` / `SUPER_EFFORT_EXECUTOR` directly —
+see superagent **Subagent dispatch**, issue #25.)
+
 <!-- cc-only:start -->
 - **Bridged role (its harness ≠ `SUPER_HARNESS`):** render
   `${CLAUDE_PLUGIN_ROOT}/templates/super-role-bridge-agent.md` to the listed path, substituting

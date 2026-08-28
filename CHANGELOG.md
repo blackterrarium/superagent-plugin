@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.1 — 2026-08-29
+
+- **Fix #25 — `superrun` delegate-and-wait spiral under the headless tick driver.** `superrun` is the
+  `subagent-driven-development` controller and must foreground-wait on its own implementer/reviewer
+  subagents; dispatched as an Agent-tool subagent (depth 1), its children ran at depth 2, where the
+  synchronous wait does not hold — they backgrounded and yielded, and the tick decayed into a
+  `SendMessage`-nudge spiral (~18 nudges), a two-writer worktree race (a late child amended `HEAD`
+  after the checkpoint) and non-convergence. The supervisor now starts `superrun` as the **top-level
+  agent of its own CLI process** via `scripts/role-bridge.sh --tools executor` from its own Bash
+  tool (foreground, `timeout: 7200000`) and blocks on it as before; inside that process SDD's
+  subagents are depth 1 and the wait holds. Native and bridged executors take the same path
+  (`SUPER_MODEL_EXECUTOR` passes to the CLI directly — a full `claude-*` ID no longer needs the
+  `super-executor` agent definition). `superplan` is unchanged.
+- `role-bridge.sh`: new `--tools role|executor|<list>` (claude only; ignored elsewhere) selecting the
+  `--allowedTools` set; the claude branch now lifts the print-mode background-wait ceiling for the
+  child (`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS` defaults to 0, operator value kept), mirroring the tick.
+- CI park/resume: the `ci_wait.subagent` field and the in-session `SendMessage` resume are gone — a
+  CI-PENDING yield ends the executor process; the resume tick starts a fresh one with the packet.
+- `superrun`: refuses (BLOCKED) if it finds itself an Agent-tool subagent; falls back to
+  `git worktree remove` when `ExitWorktree` is not in the process allowlist.
+- Supervisor preflight: the `superrun` dispatch requires `BASH_MAX_TIMEOUT_MS ≥ 7200000` in the
+  session environment (exported by `superagent-tick.sh`; an attended `cron` session must launch with
+  `BASH_DEFAULT_TIMEOUT_MS=3600000 BASH_MAX_TIMEOUT_MS=7200000 claude`) — otherwise the tick resets to
+  `WAITING FOR RUN` and reports the missing variable instead of guillotining a half-done leaf.
+
+**Upgrade note.** Armed external loops pick this up on their next tick (the tick re-reads the plugin
+skills); nothing to re-arm. `cron`-driver sessions must be relaunched with the two `BASH_*` variables
+above.
+
 ## 0.5.0 — 2026-08-29
 
 - **Cross-harness role mixing.** Role keys accept `[<harness>:]<model>` (`claude|codex|cursor|pi`); a
