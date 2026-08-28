@@ -100,10 +100,10 @@ install time), the target repo's `.superenv`, or the environment.
 `_common.sh`'s `load_superenv <repo-root>` resolves every `SUPER_*`/`TICK_*` variable in three layers,
 highest wins: **process env** (e.g. `TICK_MODEL` exported by the scheduler) > **`<repo-root>/.superenv`**
 (repo-local overrides, not checked into the plugin) > **`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`**
-(the plugin's shipped defaults, 28 `SUPER_*` keys covering models, paths, loop tuning, CI policy, and
-review protocol). `superagent-tick.sh`, `launch.sh`, and `install-timer.sh` all call `load_superenv "$REPO"`
-right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPER_MODEL_SUPERVISOR` (default
-`inherit`, which the tick treats as `opus`) are available before argument parsing.
+(the plugin's shipped defaults — every `SUPER_*` key with its default, described per key or per
+section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, and `install-timer.sh` all call
+`load_superenv "$REPO"` right after resolving `REPO`, so `SUPER_TICK_INTERVAL` and `SUPER_MODEL_SUPERVISOR`
+(defaults in the template) are available before argument parsing.
 
 ## Prerequisites
 
@@ -319,8 +319,14 @@ answer:
    `.<loop>.lockd` as a tick would) — it is consumed on the next scheduled fire.
 
 While a loop waits, scheduled fires cost nothing: `superagent-tick.sh` checks the loop file in bash and
-exits before launching a session until the answer exists (`SUPER_INPUT_GATE=true`, `.superenv`). The
-operator is told once when the loop parks on a question they have not seen — a transition into
+exits before launching a session until the answer exists (`SUPER_INPUT_GATE=true`, `.superenv`).
+
+Scheduled fires are likewise free while a loop is parked on `WAITING FOR CI`: the wrapper queries each
+run in the loop file's `ci_wait.runs` with `gh run view --json status` and launches no session until all
+are `completed` (`SUPER_CI_GATE=true`). If the ids cannot be parsed or `gh` fails, it falls through to
+the session (the pre-0.4.9 behaviour) rather than stalling.
+
+The operator is told once when the loop parks on a question they have not seen — a transition into
 `WAITING FOR INPUT`, or a changed `## Pending decision` block while already parked (the re-park case) —
 or finishes: set `SUPER_NOTIFY_CMD` to any shell snippet (it sees `SUPERAGENT_EVENT` =
 `waiting-for-input`|`done`, `SUPERAGENT_SLUG`, `LOOP_FILE`, `SUPERAGENT_TITLE`, `SUPERAGENT_BODY`), e.g.

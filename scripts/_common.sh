@@ -236,6 +236,28 @@ superagent_pending_answer() {
   echo "$a"
 }
 
+# superagent_ci_runs <loop-file> — the GitHub Actions run ids recorded under the
+# frontmatter's `ci_wait:` → `runs:` while the loop is WAITING FOR CI, as a
+# space-separated list. Accepts the canonical inline form `runs: [1, 2]` and a
+# `- id` list. Only the frontmatter is read; only the runs: entry inside the
+# ci_wait: block is scanned (pr:/iteration: numbers never leak in). Empty
+# output, rc 0 when there are none, the file is unreadable, or the arg is empty.
+superagent_ci_runs() {
+  local f="${1:-}"
+  [[ -n "$f" ]] || return 0
+  { awk '
+      NR==1 && /^---/ { fm=1; next }
+      fm && /^---/ { exit }
+      !fm { next }
+      /^ci_wait:/ { blk=1; next }
+      blk && /^[^[:space:]]/ { blk=0 }
+      !blk { next }
+      /^[[:space:]]+runs:/ { inruns=1; sub(/^[[:space:]]+runs:/, ""); print; next }
+      inruns && /^[[:space:]]+-/ { print; next }
+      inruns { inruns=0 }
+    ' "$f" 2>/dev/null | grep -oE '[0-9]{5,}' | tr '\n' ' ' | sed 's/ $//'; } || true
+}
+
 # ---------------------------------------------------------------------------
 # Operator notification — fired by the tick wrapper on a loop-status transition
 # into WAITING FOR INPUT (a decision needs a human) or DONE. Unattended mode

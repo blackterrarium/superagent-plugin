@@ -10,7 +10,8 @@
 #   status.sh --json <slug>   single-loop JSON object
 #
 # Fields per loop: slug, status, iteration, timer (active?), tick (running
-# now?), lock (held?), input (parked on WAITING FOR INPUT?), done?, next fire.
+# now?), lock (held?), input (YES = parked, needs you; ans = answer recorded,
+# next fire resumes), done?, next fire.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,12 +45,15 @@ _collect() {
     set -a; # shellcheck disable=SC1090
     . "$envf"; set +a
   fi
-  status=""; iteration=""; pending=0; done_=0; exists=0
+  status=""; iteration=""; pending=0; done_=0; exists=0; answer_recorded=false
   if [[ -n "$LOOP_FILE" && -f "$LOOP_FILE" ]]; then
     exists=1
     status="$(_field "$LOOP_FILE" status)"
     iteration="$(_field "$LOOP_FILE" iteration)"
-    [[ "$status" == "WAITING FOR INPUT" ]] && pending=1
+    answer_recorded=false
+    if [[ "$status" == "WAITING FOR INPUT" ]]; then
+      if superagent_pending_answer "$LOOP_FILE" >/dev/null; then pending=2; answer_recorded=true; else pending=1; fi
+    fi
     [[ "$status" == "DONE" ]] && done_=1
   fi
   if [[ "$(superagent_scheduler)" == launchd ]]; then
@@ -103,9 +107,9 @@ if [[ "$JSON" == 1 ]]; then
   for slug in "${slugs[@]}"; do
     _collect "$slug"
     [[ $first == 1 ]] && first=0 || out+=","
-    out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
+    out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
       "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
-      "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$pending" "$done_" \
+      "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
       "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$GH_STATE")")
   done
   out+="]"
@@ -123,10 +127,13 @@ if [[ -n "$ONE" ]]; then
   echo "Timer:       ${timer_active:-unknown}   next-fire=${next_fire}"
   echo "Tick now:    ${tick_running:-unknown}   lock-held=$([[ $lock_held == 1 ]] && echo yes || echo no)"
   echo "gh auth:     $GH_STATE"
-  if [[ $pending == 1 && $exists == 1 ]]; then
+  if [[ $pending != 0 && $exists == 1 ]]; then
     echo
     echo "=== ## Pending decision ==="
     awk '/^## Decisions/{exit} /^## Pending decision/{f=1} f{print}' "$LOOP_FILE"
+    if [[ $pending == 2 ]]; then
+      echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
+    fi
   fi
   if [[ $exists == 1 ]]; then
     echo
@@ -148,11 +155,18 @@ printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' SLUG STATUS ITER TIMER TICK LOCK
 printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' ------------------------ ------------------ ----- -------- ------ ------ -----
 for slug in "${slugs[@]}"; do
   _collect "$slug"
+  # A `case` embedded inside `$(...)` mis-parses on bash 3.2 (macOS's shipped
+  # bash) when the script is read from a file rather than typed interactively —
+  # its command-substitution parser counts parens naively and the `1)`/`2)`
+  # pattern terminators are read as closing the subshell. Assign in a plain
+  # statement instead.
+  input_col=-
+  case $pending in 1) input_col=YES ;; 2) input_col=ans ;; esac
   printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' \
     "$slug" "${status:-<none>}" "${iteration:-?}" \
     "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
     "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
-    "$([[ $pending == 1 ]] && echo YES || echo -)"
+    "$input_col"
 done
 echo
 echo "Drill in: $SCRIPT_DIR/status.sh <slug>   |   JSON: $SCRIPT_DIR/status.sh --json"
