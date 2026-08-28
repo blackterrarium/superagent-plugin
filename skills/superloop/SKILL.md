@@ -691,7 +691,8 @@ Dispatch **3 independent subagents in parallel** (single message, multiple `Agen
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
 `model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
 `claude-fable-5`) **or `SUPER_EFFORT_PANEL` is non-`inherit`** (the Agent tool has no effort
-parameter; the pin rides the definition) — dispatch with
+parameter; the pin rides the definition) **or `SUPER_MODEL_PANEL` is bridged (names another
+harness)** — dispatch with
 `subagent_type: super-panel` instead (the definition `superagent:init` generates in `.claude/agents/`,
 overriding `SUPER_PANEL_AGENT_TYPE`) and omit `model:`; missing definition = hard error, re-run
 `superagent:init` — each with **`run_in_background: false`**, so the turn **waits** for all three
@@ -701,7 +702,8 @@ verdicts to arrive as tool results; never dispatch the panel in the background a
 <!-- cursor-only:start
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE`; if `SUPER_MODEL_PANEL` is
-non-`inherit`, dispatch with `subagent_type: super-panel` instead — the definition `superagent:init`
+non-`inherit` **or `SUPER_MODEL_PANEL` is bridged (names another harness)**, dispatch with
+`subagent_type: super-panel` instead — the definition `superagent:init`
 generates in `.claude/agents/`, overriding `SUPER_PANEL_AGENT_TYPE` — and omit `model:`; missing
 definition = hard error, re-run `superagent:init`. Effort is not supported in this build: a
 non-`inherit` `SUPER_EFFORT_PANEL` → WARN, treat as `inherit`, and dispatch normally — never a hard
@@ -713,7 +715,9 @@ Dispatch **3 independent subagents in parallel** (one `spawn_agent` call per pan
 single message. Pass the panel pins as spawn parameters: `SUPER_MODEL_PANEL` → `model`,
 `SUPER_EFFORT_PANEL` → `reasoning_effort`; `inherit` = omit that parameter. There are no
 agent-definition files in this build — the pins ride the spawn call itself, and nothing needs a
-`superagent:init` re-run. Wait for all three children's results before proceeding; never
+`superagent:init` re-run. If `SUPER_MODEL_PANEL` is bridged, each panelist is a relay spawn
+(`model` = `SUPER_BRIDGE_RELAY_MODEL`, message = rendered `relay-preamble.md` + the packet).
+Wait for all three children's results before proceeding; never
 fire-and-forget the panel).
 codex-only:end -->
 Give each the **same packet**: the decision/blocker statement, the relevant plan +

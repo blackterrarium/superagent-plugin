@@ -16,7 +16,10 @@ related skills: supertraverse, superfinish, superplan
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
 >   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
->   not available — use an OS scheduler.
+>   not available — use an OS scheduler. A role whose `.superenv` value names another harness
+>   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
+>   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
+>   reply beginning `BRIDGE-FAILED` as a failed subagent.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
@@ -146,6 +149,13 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    generates in `.cursor/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
+   **Bridged roles:** a value naming a harness other than `SUPER_HARNESS` (explicit
+   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi)
+   is dispatched with `subagent_type: super-<role>` and no `model:`, exactly like a full-ID pin;
+   the definition `superagent:init` generated is a relay that runs the foreign CLI and returns its
+   result verbatim. A reply beginning `BRIDGE-FAILED` is a failed subagent: treat it as you would an
+   implementer/reviewer that crashed (retry once, then the skill's normal escalation), and quote the
+   `log=` path in the BLOCKED report. Missing definition = hard error (re-run `superagent:init`).
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
    model keys). `inherit` = no override.
    Effort is not supported in this build: a non-`inherit` `SUPER_EFFORT_<ROLE>` value →

@@ -19,7 +19,12 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. "Skill tool" = reference the skill by
+>   resolved model/effort as spawn parameters instead. A role whose value names another harness
+>   (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (model = SUPER_BRIDGE_RELAY_MODEL) whose message is
+>   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
+>   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
+>   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
@@ -186,6 +191,11 @@ ci-resume's fresh subagent and escalation-ladder retries):
   `super-executor` — the per-role agent definition `superagent:init` generates in `.claude/agents/`,
   whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
   that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
+- A **bridged** value (harness prefix or inference ≠ `SUPER_HARNESS`, e.g. `codex:gpt-5.6-sol`,
+  `openai/gpt-5`) → dispatch with `subagent_type: super-planner` / `super-executor` and omit
+  `model:`; the generated definition is a relay to that harness's CLI. A Final Report that begins
+  `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
+  crashed subagent, quoting its `log=` path.
 
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and

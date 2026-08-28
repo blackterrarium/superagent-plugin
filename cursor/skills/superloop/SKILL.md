@@ -15,7 +15,10 @@ license: all rights reserved
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
 >   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
->   not available — use an OS scheduler.
+>   not available — use an OS scheduler. A role whose `.superenv` value names another harness
+>   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
+>   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
+>   reply beginning `BRIDGE-FAILED` as a failed subagent.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
@@ -501,7 +504,8 @@ instead.
 ### Rung 1 — Subagent panel (resolve autonomously)
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE`; if `SUPER_MODEL_PANEL` is
-non-`inherit`, dispatch with `subagent_type: super-panel` instead — the definition `superagent:init`
+non-`inherit` **or `SUPER_MODEL_PANEL` is bridged (names another harness)**, dispatch with
+`subagent_type: super-panel` instead — the definition `superagent:init`
 generates in `.cursor/agents/`, overriding `SUPER_PANEL_AGENT_TYPE` — and omit `model:`; missing
 definition = hard error, re-run `superagent:init`. Effort is not supported in this build: a
 non-`inherit` `SUPER_EFFORT_PANEL` → WARN, treat as `inherit`, and dispatch normally — never a hard

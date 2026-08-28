@@ -130,6 +130,13 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    generates in `.claude/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
+   **Bridged roles:** a value naming a harness other than `SUPER_HARNESS` (explicit
+   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi)
+   is dispatched with `subagent_type: super-<role>` and no `model:`, exactly like a full-ID pin;
+   the definition `superagent:init` generated is a relay that runs the foreign CLI and returns its
+   result verbatim. A reply beginning `BRIDGE-FAILED` is a failed subagent: treat it as you would an
+   implementer/reviewer that crashed (retry once, then the skill's normal escalation), and quote the
+   `log=` path in the BLOCKED report. Missing definition = hard error (re-run `superagent:init`).
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
    model keys). `inherit` = no override.
 <!-- cc-only:start -->
@@ -149,7 +156,10 @@ cursor-only:end -->
    as the spawn call's `reasoning_effort` parameter (`inherit` = omit it), alongside the
    role's model key as `model`. There are no per-role definition files on Codex and
    nothing for `superagent:init` to generate — a bad effort value fails in the spawn
-   call itself.
+   call itself. A **bridged** role (harness ≠ codex) is spawned as a relay: `model` =
+   `SUPER_BRIDGE_RELAY_MODEL` (omit when `inherit`), message =
+   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for the role + the full
+   task prompt; a `BRIDGE-FAILED` reply is a failed subagent.
 codex-only:end -->
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
