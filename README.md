@@ -145,6 +145,26 @@ warns when auth looks absent. `SUPER_MODEL_SUPERVISOR` is native-only: a prefix 
 `SUPER_HARNESS` is accepted and stripped, but any other prefix (or a foreign inference) is a hard
 error in both `init` and the tick itself (exit 11) — the supervisor can never be bridged.
 
+**Security posture.** The bridge runs the foreign CLI with approvals bypassed — codex
+`--dangerously-bypass-approvals-and-sandbox` (or `--sandbox workspace-write -c
+sandbox_workspace_write.network_access=true` when `SUPER_CODEX_SANDBOX=workspace-write`), cursor
+`--trust --force`, claude `--allowedTools Read,Edit,Write,Bash,Grep,Glob` — i.e. exactly the same
+unattended posture the tick itself runs under. A bridged role therefore has the foreign CLI's full
+write access to the worktree it is pointed at; bridge only to a CLI you would let run unattended
+there anyway.
+
+**Timeouts.** A relay subagent shells out to `role-bridge.sh` and then blocks on the foreign CLI for
+as long as the real task takes. Claude Code's Bash tool caps that at 120 s by default and refuses
+anything above 600 s unless `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` are set in the
+process environment. `scripts/superagent-tick.sh` exports both (1 h / 2 h defaults; operator-set
+values win) for every unattended tick, but an **attended (non-tick) session must set them in its own
+environment before dispatching a bridged role** — otherwise the bridge is killed mid-run and the
+role comes back `BRIDGE-FAILED`.
+
+**Cursor is unverified as a bridge target and as a supervisor for bridged roles** (no live smoke;
+the `agent` CLI is absent on the build host, so smoke T3 skips) — the relay definition's `tools:`
+key and tool names are Claude Code's; adapt in `.cursor/agents/` if Cursor rejects them.
+
 `SUPER_EFFORT_*` keys set per-role reasoning effort independently of the model pin, resolved the
 same three-layer way, and validated in **the role's own resolved harness's domain**, not
 necessarily `SUPER_HARNESS`'s: on `claude`, `low | medium | high | xhigh | max | inherit`
@@ -197,7 +217,7 @@ its default and why it must not be weakened to `haiku`.
 | SUPER_EFFORT_RE_REVIEWER | `high` | Reasoning effort for the SDD re-reviewer (post-fix). |
 | SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Reasoning effort for the final whole-branch reviewer. |
 | SUPER_EFFORT_FIX_PLANNER | `high` | Reasoning effort for fix rounds 4–5. |
-| SUPER_CODEX_SANDBOX | `danger-full-access` | Codex-harness-only sandbox posture: `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`) or `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; note codex keeps the repo's top-level `.git/` read-only in this mode, so git fetch/commit fail and the sync gate parks the loop). Out-of-domain values abort the tick. |
+| SUPER_CODEX_SANDBOX | `danger-full-access` | Sandbox posture for the Codex harness, and for any codex-bridged role on other harnesses: `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`) or `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; note codex keeps the repo's top-level `.git/` read-only in this mode, so git fetch/commit fail and the sync gate parks the loop). Out-of-domain values abort the tick. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Subagent type used for the L7 panel (or `Explore`). |
 | SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory name; a sibling of each goal's `master-plans/`. |
@@ -316,6 +336,11 @@ directory: [`scripts/README.md`](scripts/README.md).
   answering `WAITING FOR INPUT`, drain/hard-stop/uninstall/re-arm.
 
 ## Cursor (experimental)
+
+> **Unverified:** Cursor as a bridge *target* and as a supervisor for bridged roles has no live
+> smoke coverage (the `agent` CLI is absent on the build host, so bridge smoke T3 skips) — the relay
+> definition's `tools:` key and tool names are Claude Code's; adapt in `.cursor/agents/` if Cursor
+> rejects them.
 
 A generated Cursor build of the plugin lives in [`cursor/`](cursor/README.md) — external
 (unattended) driver only, with the Claude Code in-session machinery stripped at build time.

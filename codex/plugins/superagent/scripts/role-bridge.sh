@@ -9,9 +9,11 @@
 # (path printed on stderr as "role-bridge: log=<path>").
 # Exit: 0 ok · 2 CLI binary not found · 3 CLI exited non-zero · 4 CLI exited 0 with empty result ·
 #       64 usage. "inherit" omits the corresponding flag.
-# Env: SUPER_CODEX_SANDBOX (danger-full-access default | workspace-write) for --harness codex.
-# BRIDGE_UNSET_CLAUDECODE=<true|false> — Task 1's T5 probe (claude CLI 2.1.250) found a plain
-# nested `claude -p` succeeds under CLAUDECODE=1, so this stays false (CLAUDECODE is left set).
+# Env: SUPER_CODEX_SANDBOX (danger-full-access default | workspace-write) for --harness codex;
+#      an out-of-domain value is a usage error (exit 64).
+# BRIDGE_UNSET_CLAUDECODE is a bake-time constant set just below, NOT an environment knob:
+# Task 1's T5 probe (claude CLI 2.1.250) found a plain nested `claude -p` succeeds under
+# CLAUDECODE=1, so it stays false (CLAUDECODE is left set) unless a future probe says otherwise.
 set -uo pipefail
 
 BRIDGE_UNSET_CLAUDECODE=false   # T5 probe passed under CLAUDECODE=1; no need to unset it
@@ -32,13 +34,25 @@ case "$harness" in claude|codex|cursor|pi) ;; *) echo "role-bridge: --harness mu
 [ -d "$cwd" ] || { echo "role-bridge: --cwd '$cwd' is not a directory" >&2; exit 64; }
 [ -f "$prompt_file" ] || { echo "role-bridge: --prompt-file '$prompt_file' not found" >&2; exit 64; }
 
-logdir="${TMPDIR:-/tmp}/superagent-bridge"; mkdir -p "$logdir"
+# SUPER_CODEX_SANDBOX is read below for --harness codex; reject an out-of-domain value here
+# rather than silently falling through to the danger-full-access branch.
+case "${SUPER_CODEX_SANDBOX:-}" in
+  ""|danger-full-access|workspace-write) ;;
+  *) echo "role-bridge: SUPER_CODEX_SANDBOX must be danger-full-access|workspace-write (got '$SUPER_CODEX_SANDBOX')" >&2; exit 64 ;;
+esac
+
+# --role reaches the log path, so keep it to a safe basename charset: anything outside
+# [A-Za-z0-9_-] becomes "_" (a "../x" role can never escape $logdir).
+role_safe="$(printf '%s' "$role" | tr -c 'A-Za-z0-9_-' '_')"
+[ -n "$role_safe" ] || role_safe=role
+logdir="${TMPDIR:-/tmp}/superagent-bridge"; mkdir -p "$logdir"; chmod 700 "$logdir" 2>/dev/null || true
 stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
-log="$logdir/${role}-${stamp}.log"
-echo "role-bridge: log=$log" >&2
+log="$logdir/${role_safe}-${stamp}.log"
 
 bin=""; case "$harness" in claude) bin=claude ;; codex) bin=codex ;; cursor) bin=agent ;; pi) bin=pi ;; esac
 command -v "$bin" >/dev/null 2>&1 || { echo "role-bridge: '$bin' not found on PATH (harness=$harness)" >&2; exit 2; }
+# Announced only once the binary exists, so an exit-2 run never advertises a log nobody wrote.
+echo "role-bridge: log=$log" >&2
 
 result=""; rc=0
 case "$harness" in
@@ -58,7 +72,7 @@ case "$harness" in
     else
       args+=(--dangerously-bypass-approvals-and-sandbox)
     fi
-    out="$logdir/${role}-${stamp}.last"
+    out="$logdir/${role_safe}-${stamp}.last"
     args+=(--skip-git-repo-check -C "$cwd")
     [ "$model"  != inherit ] && args+=(-m "$model")
     [ "$effort" != inherit ] && args+=(-c "model_reasoning_effort=$effort")
@@ -74,7 +88,19 @@ case "$harness" in
     ;;
   pi)
     args=(-p)
-    m="$model"; [ "$effort" != inherit ] && m="${m}:${effort}"
+    # pi carries the thinking level as a ":<level>" suffix on the model string, so with no
+    # model there is nowhere to put it: warn instead of dropping it silently. An explicit
+    # level already on the model ("openai/gpt-5:high") wins — never suffix twice.
+    m="$model"
+    if [ "$effort" != inherit ]; then
+      if [ "$model" = inherit ]; then
+        echo "role-bridge: warning — --effort '$effort' dropped: pi carries the level on the model string and --model is 'inherit'" >&2
+      elif printf '%s' "$m" | grep -q ':[A-Za-z0-9_-]*$'; then
+        echo "role-bridge: warning — --model '$m' already pins a level; ignoring --effort '$effort'" >&2
+      else
+        m="${m}:${effort}"
+      fi
+    fi
     [ "$model" != inherit ] && args+=(--model "$m")
     result="$(cd "$cwd" && pi "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
     ;;

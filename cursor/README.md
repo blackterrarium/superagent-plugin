@@ -17,6 +17,10 @@ This build differs from the Claude Code plugin:
 - **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
   (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
   (default `inherit`) sets the relay subagent's model.
+- **Bridging on Cursor is UNVERIFIED.** Cursor as a bridge *target* and as a supervisor for bridged
+  roles has no live smoke coverage (bridge smoke T3 skipped — no `agent` CLI on the build host); the
+  relay definition's `tools:` key and tool names are Claude Code's; adapt in `.cursor/agents/` if
+  Cursor rejects them.
 
 Install (local): `agent --plugin-dir <repo>/cursor …` — or add the repository as a Cursor
 marketplace (the root `.cursor-plugin/marketplace.json` points at this directory).

@@ -29,7 +29,9 @@ produced yourself is wrong by definition, because it did not come from `<harness
    unique terminator instead.
 2. **Bash.** Run, from your current working directory (the same checkout/worktree the prompt refers to):
    `"${SUPERAGENT_BRIDGE:-<bridge-path>}" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$f" --role <role>`
-   Wait for it to finish; it may take many minutes. Never modify files yourself.
+   Pass an explicit long timeout on the Bash tool call (`timeout: 7200000` ms, or the largest the
+   tool accepts) — the bridge may run for many minutes and the tool's default cap would kill it
+   mid-run. Wait for it to finish. Never modify files yourself.
 3. If it exited 0: reply with its stdout **verbatim** as your final message — no preamble, no
    commentary, no summary.
 4. If it exited non-zero: reply with exactly `BRIDGE-FAILED exit=<code> harness=<harness>

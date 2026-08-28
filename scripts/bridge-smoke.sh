@@ -37,6 +37,7 @@ run_test() {
   out="$("${TCMD[@]+"${TCMD[@]}"}" "$@" 2>&1)"; rc=$?
   { echo; echo '```'; printf '$ '; printf '%q ' "$@"; echo; echo "$out" | tail -40; echo "exit=$rc"; echo '```'; } >>"$REPORT"
   if [[ "$out" == *"SKIP-OTHER-CLI-MISSING"* ]]; then echo "SKIP (other CLI not on PATH)" >>"$REPORT"; SKIP=$((SKIP+1))
+  elif [[ "$out" == *"SKIP-LONG-NOT-REQUESTED"* ]]; then echo "SKIP (long probe not requested — set BRIDGE_SMOKE_LONG=1)" >>"$REPORT"; SKIP=$((SKIP+1))
   elif [ "$rc" -eq 0 ] && [[ "$out" == *"$expect"* ]]; then echo "PASS" >>"$REPORT"; PASS=$((PASS+1))
   else echo "FAIL (expected substring: $expect)" >>"$REPORT"; FAIL=$((FAIL+1)); fi
   echo >>"$REPORT"
@@ -93,11 +94,37 @@ pre="$(sed -e 's/<role>/implementer/g' -e 's/<harness>/claude/g' -e 's/<model>/h
 run_test "T7 spawn_agent relay round trip (codex→claude)" codex "RELAY-PROVEN" \
   bash -c 'command -v claude >/dev/null 2>&1 || { echo SKIP-OTHER-CLI-MISSING; exit 0; }
     mkdir -p "$1"
-    out="$(TMPDIR="$1" codex exec --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C "$2" "$3" 2>&1)"
+    out="$(TMPDIR="$1" codex exec --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C "$2" "$3" </dev/null 2>&1)"
     echo "$out"
     ls "$1"/superagent-bridge/implementer-*.log >/dev/null 2>&1 && [[ "$out" == *RELAY-OK* ]] && echo RELAY-PROVEN' \
     _ "$WORK/tmp7" "$WORK" \
     "Spawn ONE agent (spawn_agent) with this exact message, then output its reply verbatim: $(printf '%s\nReply with exactly: RELAY-OK' "$pre")"
+
+# T8 — long-running bridge call (opt-in: BRIDGE_SMOKE_LONG=1; otherwise SKIP). Same shape as T6,
+# but the dispatched task sleeps past Claude Code's 120s default Bash-tool timeout, so a relay
+# that does not pass an explicit long `timeout` — or an outer session with no
+# BASH_DEFAULT_TIMEOUT_MS / BASH_MAX_TIMEOUT_MS in its env — is killed mid-bridge and
+# RELAY-PROVEN never appears. Those two vars are forwarded to the child `claude -p` explicitly,
+# which is exactly what superagent-tick.sh exports for a real tick. The outer per-probe cap is
+# raised for this one probe (the default 240s is shorter than the probe itself).
+R8="$WORK/t8"; mkdir -p "$R8/.claude/agents"; ( cd "$R8" && git init -q )
+sed -e 's/<role>/implementer/g' -e 's/<KEY>/SUPER_MODEL_IMPLEMENTER/g' -e 's/<harness>/codex/g' \
+    -e 's/<model>/inherit/g' -e 's/<effort>/low/g' -e 's/<relay-model>/sonnet/g' \
+    -e "s#<bridge-path>#$BRIDGE#g" "$ROOT/templates/super-role-bridge-agent.md" >"$R8/.claude/agents/super-implementer.md"
+if command -v timeout >/dev/null 2>&1; then TCMD=(timeout 1200)
+elif command -v gtimeout >/dev/null 2>&1; then TCMD=(gtimeout 1200); fi
+run_test "T8 long bridge call (claude→codex, >120s)" claude "RELAY-PROVEN" \
+  bash -c '[ "${BRIDGE_SMOKE_LONG:-0}" = 1 ] || { echo SKIP-LONG-NOT-REQUESTED; exit 0; }
+    command -v codex >/dev/null 2>&1 || { echo SKIP-OTHER-CLI-MISSING; exit 0; }
+    mkdir -p "$1"
+    out="$(cd "$2" && SUPERAGENT_BRIDGE="$3" TMPDIR="$1" \
+      BASH_DEFAULT_TIMEOUT_MS="${BASH_DEFAULT_TIMEOUT_MS:-3600000}" \
+      BASH_MAX_TIMEOUT_MS="${BASH_MAX_TIMEOUT_MS:-7200000}" \
+      claude -p --model sonnet --allowedTools "Bash,Agent,Task" -- "$4" 2>&1)"
+    echo "$out"
+    ls "$1"/superagent-bridge/implementer-*.log >/dev/null 2>&1 && [[ "$out" == *RELAY-OK* ]] && echo RELAY-PROVEN' \
+    _ "$WORK/tmp8" "$R8" "$BRIDGE" \
+    "Dispatch ONE subagent with subagent_type: super-implementer and the prompt 'Run the shell command \`sleep 200\` and then reply with exactly: RELAY-OK'. Output its reply verbatim."
 
 { echo "---"; echo "PASS=$PASS FAIL=$FAIL SKIP=$SKIP"; } >>"$REPORT"
 echo "bridge-smoke: PASS=$PASS FAIL=$FAIL SKIP=$SKIP — report: $REPORT"

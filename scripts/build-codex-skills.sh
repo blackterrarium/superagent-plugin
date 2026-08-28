@@ -43,6 +43,11 @@ OUT="$ROOT/codex"
 CHECK=false
 [ "${1:-}" = "--check" ] && CHECK=true
 
+# The superenv.default header rewrite below is delimited by awk on this exact comment line —
+# if it is ever reworded, the awk silently swallows the rest of the file. Fail loudly instead.
+grep -q '^# (SUPER_MODEL_SUPERVISOR' "$ROOT/templates/superenv.default" \
+  || { echo "build: superenv.default header end-marker missing" >&2; exit 1; }
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 TMP="$WORK/out"
@@ -360,6 +365,8 @@ if $CHECK; then
     echo "build-codex-skills: --check: $OUT does not exist (run the build first)" >&2
     exit 1
   fi
+  [ -x "$OUT/plugins/superagent/scripts/role-bridge.sh" ] \
+    || { echo "build-codex-skills: --check: $OUT/plugins/superagent/scripts/role-bridge.sh missing or not executable" >&2; exit 1; }
   if diff -r "$TMP" "$OUT" >/dev/null 2>&1; then
     echo "build-codex-skills: codex/ is up to date"
   else

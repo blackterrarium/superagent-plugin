@@ -25,6 +25,14 @@ Claude tier names don't apply there; if a bridged role on those builds ever retu
 answer with no corresponding `role-bridge.sh` log file, that is the same short-circuit under a
 different default — pin `SUPER_BRIDGE_RELAY_MODEL` to a mid-tier model explicitly on that build.
 
+**Audit your role keys before upgrading the Codex and Cursor builds.** A *leaked* Claude value on
+those builds — e.g. `SUPER_MODEL_PLANNER=sonnet` left behind in a hand-trimmed `.superenv` — used to
+be out-of-domain: it WARNed and fell back to `inherit`. It is now a well-formed role value naming the
+`claude` harness, so the role becomes **bridged** and really runs the `claude` CLI: real spend on
+another provider, or (when `claude` is not installed on the host) a hard `superagent:init` ABORT on
+the missing-binary check. Grep every `SUPER_MODEL_*` / `SUPER_EFFORT_*` key in the repo's `.superenv`
+and set the ones you meant to be native back to `inherit` or to a native model name.
+
 ## 0.4.10 — 2026-08-28
 
 - **`WAITING FOR CI` staleness escape (`SUPER_CI_MAX_WAIT_MIN`, default 180).** A run stuck in

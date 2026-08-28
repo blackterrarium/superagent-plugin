@@ -36,6 +36,11 @@ OUT="$ROOT/cursor"
 CHECK=false
 [ "${1:-}" = "--check" ] && CHECK=true
 
+# The superenv.default header rewrite below is delimited by awk on this exact comment line —
+# if it is ever reworded, the awk silently swallows the rest of the file. Fail loudly instead.
+grep -q '^# (SUPER_MODEL_SUPERVISOR' "$ROOT/templates/superenv.default" \
+  || { echo "build: superenv.default header end-marker missing" >&2; exit 1; }
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 TMP="$WORK/out"
@@ -225,7 +230,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_EFFORT_RE_REVIEWER=high/SUPER_EFFORT_RE_REVIEWER=inherit/' \
   -e 's/^SUPER_EFFORT_BRANCH_REVIEWER=xhigh/SUPER_EFFORT_BRANCH_REVIEWER=inherit/' \
   -e 's/^SUPER_EFFORT_FIX_PLANNER=high/SUPER_EFFORT_FIX_PLANNER=inherit/' \
-  -e '/^SUPER_CODEX_SANDBOX=/d' \
+  -e 's/^SUPER_CODEX_SANDBOX=danger-full-access\([[:space:]]*\)# codex harness only:/SUPER_CODEX_SANDBOX=danger-full-access\1# used by bridged codex roles:/' \
   -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
   >"$TMP/templates/superenv.default"
 
@@ -264,6 +269,10 @@ This build differs from the Claude Code plugin:
 - **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
   (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
   (default `inherit`) sets the relay subagent's model.
+- **Bridging on Cursor is UNVERIFIED.** Cursor as a bridge *target* and as a supervisor for bridged
+  roles has no live smoke coverage (bridge smoke T3 skipped — no `agent` CLI on the build host); the
+  relay definition's `tools:` key and tool names are Claude Code's; adapt in `.cursor/agents/` if
+  Cursor rejects them.
 
 Install (local): `agent --plugin-dir <repo>/cursor …` — or add the repository as a Cursor
 marketplace (the root `.cursor-plugin/marketplace.json` points at this directory).
@@ -308,6 +317,8 @@ if $CHECK; then
     echo "build-cursor-skills: --check: $OUT does not exist (run the build first)" >&2
     exit 1
   fi
+  [ -x "$OUT/scripts/role-bridge.sh" ] \
+    || { echo "build-cursor-skills: --check: $OUT/scripts/role-bridge.sh missing or not executable" >&2; exit 1; }
   if diff -r "$TMP" "$OUT" >/dev/null 2>&1; then
     echo "build-cursor-skills: cursor/ is up to date"
   else

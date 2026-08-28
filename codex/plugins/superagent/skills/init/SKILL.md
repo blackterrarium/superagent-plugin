@@ -221,8 +221,9 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
   stale.
 
 Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
-`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`, or
-`bridge(<harness>)`.
+`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`,
+`bridge(<harness>)`, or `bridge(<harness>, definition: conflict)` — a bridged role whose
+relay definition could not be written (hand-edited file kept, or the write was denied).
 
 
 ## Step 4 — Vault

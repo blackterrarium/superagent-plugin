@@ -533,6 +533,9 @@ Give each the **same packet**: the decision/blocker statement, the relevant plan
 report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
 from independent reasoning, not framing. Require each to return a structured verdict —
 `{chosen_option, rationale, confidence}` over the concrete options (or `insufficient-info`).
+A reply that begins `BRIDGE-FAILED` is a bridged panelist whose foreign CLI never produced a
+verdict: count it as that panelist returning `insufficient-info` (never as a vote, and never as a
+reason to abandon the rung), and note the bridge failure in the `## Decisions` entry.
 
 **Converge.** If **≥2 of 3** agree on the same option with non-low confidence → **adopt it.** Record
 it under `## Decisions` (option + one-line rationale + "panel 2/3" or "3/3"), then **apply** the

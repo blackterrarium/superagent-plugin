@@ -321,8 +321,9 @@ Agent definitions load at session start, so files written here take effect from 
 next tick/session, not the current one.
 cursor-only:end -->
 Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
-`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`, or
-`bridge(<harness>)`.
+`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`,
+`bridge(<harness>)`, or `bridge(<harness>, definition: conflict)` — a bridged role whose
+relay definition could not be written (hand-edited file kept, or the write was denied).
 
 <!-- cc-only:start -->
 Note: permission layers commonly treat `.claude/` as protected — in a headless or

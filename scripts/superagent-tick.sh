@@ -189,10 +189,24 @@ if [[ -n "$TICK_MODEL" ]]; then
     exit 11
   fi
   TICK_MODEL="$(superagent_role_model "$TICK_MODEL")"
+  # A same-harness prefix on an inherit value ("claude:inherit") strips to the literal
+  # string "inherit", which would reach the CLI as a model NAME. Re-apply this harness's
+  # inherit mapping after the strip (claude: a headless tick has no session model -> opus;
+  # codex/cursor: empty -> omit the model flag, the CLI's own default applies).
+  if [[ "$TICK_MODEL" == "inherit" ]]; then
+    if [[ "$HARNESS" == claude ]]; then TICK_MODEL="opus"; else TICK_MODEL=""; fi
+  fi
 fi
 # Bridged roles (a role key naming another harness) run through this script; export its
 # path so relay agents never depend on a plugin-cache path baked at init time.
 export SUPERAGENT_BRIDGE="$PLUGIN_ROOT/scripts/role-bridge.sh"
+# A bridged role's relay subagent shells out to role-bridge.sh and then WAITS on a foreign
+# CLI doing real work — minutes to an hour. Claude Code's Bash tool defaults to a 120s
+# timeout and refuses anything above 600s unless these are set in the process env, so a
+# bridged role would be killed mid-run. Exported unconditionally (harmless on harnesses that
+# ignore them); an operator-set value is respected, and TICK_TIMEOUT still bounds the whole tick.
+export BASH_DEFAULT_TIMEOUT_MS="${BASH_DEFAULT_TIMEOUT_MS:-3600000}"
+export BASH_MAX_TIMEOUT_MS="${BASH_MAX_TIMEOUT_MS:-7200000}"
 
 # Supervisor reasoning effort: TICK_EFFORT > SUPER_EFFORT_SUPERVISOR > inherit.
 # Harness-native names (claude: low..max; codex: none..xhigh); inherit -> pass nothing.
@@ -212,12 +226,18 @@ fi
 # danger-full-access is parity with the claude harness (which runs unsandboxed): codex's
 # workspace-write keeps the repo's top-level .git/ read-only (no allow_git_writes knob as of
 # codex-cli 0.147.0), so git fetch/commit fail and the L5 sync gate parks the loop on tick 1.
-if [[ "$HARNESS" == codex ]]; then
-  SUPER_CODEX_SANDBOX="${SUPER_CODEX_SANDBOX:-danger-full-access}"
+# Validated whenever the key is SET, on every harness: role-bridge.sh reads it for any
+# codex-BRIDGED role too, so a typo on a claude/cursor host must not slip through to the
+# bridge. The default is only materialised on the codex harness, where the tick itself
+# passes the flag.
+if [[ -n "${SUPER_CODEX_SANDBOX:-}" ]]; then
   case "$SUPER_CODEX_SANDBOX" in
     workspace-write|danger-full-access) ;;
     *) echo "superagent-tick: bad SUPER_CODEX_SANDBOX '$SUPER_CODEX_SANDBOX' (want workspace-write|danger-full-access)" >&2; exit 8 ;;
   esac
+fi
+if [[ "$HARNESS" == codex ]]; then
+  SUPER_CODEX_SANDBOX="${SUPER_CODEX_SANDBOX:-danger-full-access}"
 fi
 
 # Slash commands are unavailable in headless print mode, so open the skill file
@@ -307,7 +327,9 @@ if [[ "$HARNESS" == codex ]]; then
   [[ -n "$TICK_MODEL" ]]  && codex_args+=(-m "$TICK_MODEL")
   [[ -n "$TICK_EFFORT" ]] && codex_args+=(-c "model_reasoning_effort=$TICK_EFFORT")
   [[ "$TICK_OUTPUT_FORMAT" == stream ]] && codex_args+=(--json)
-  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" codex "${codex_args[@]}" ) \
+  # </dev/null: `codex exec <prompt-arg>` with an inherited non-TTY stdin blocks forever
+  # on "Reading additional input from stdin...".
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" codex "${codex_args[@]}" </dev/null ) \
     >>"$LOG_FILE" 2>&1 || rc=$?
 elif [[ "$HARNESS" == cursor ]]; then
   # Cursor CLI: --trust (headless workspace trust) + --force (unattended tool

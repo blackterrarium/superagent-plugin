@@ -42,6 +42,7 @@ SUPER_EFFORT_FIX_PLANNER=inherit           # fix rounds 4-5: diagnose, then hand
 
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=cursor                    # this is the Cursor build — the external driver fires the Cursor CLI (`agent`)
+SUPER_CODEX_SANDBOX=danger-full-access  # used by bridged codex roles: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/

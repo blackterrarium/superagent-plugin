@@ -20,7 +20,10 @@ yourself is wrong by definition, because it did not come from `<harness>`.
    unique terminator instead.
 2. **Shell.** Run, from your current working directory:
    `"<bridge-path>" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$f" --role <role>`
-   Wait for it to finish; it may take many minutes. Never modify files yourself.
+   Pass an explicit long timeout on the shell tool call (its `timeout_ms` parameter if it has one,
+   set to 7200000 ms, otherwise the largest value the tool allows) — the bridge may run for many
+   minutes and the tool's default cap would kill it mid-run. Wait for it to finish. Never modify
+   files yourself.
 3. If it exited 0: reply with its stdout **verbatim** as your final message — nothing else.
 4. If it exited non-zero: reply with exactly `BRIDGE-FAILED exit=<code> harness=<harness>
    role=<role> log=<path>`, where `<path>` is the file path the bridge printed on stderr after

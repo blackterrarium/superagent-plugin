@@ -72,8 +72,11 @@ SHIM_MODE=fail "$BRIDGE" --harness claude --model inherit --effort inherit --cwd
 check "exit 3 when CLI fails" [ "$rc" -eq 3 ]
 SHIM_MODE=empty "$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
 check "exit 4 on empty result" [ "$rc" -eq 4 ]
-PATH="/usr/bin:/bin" "$BRIDGE" --harness pi --model x/y --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
+PATH="/usr/bin:/bin" "$BRIDGE" --harness pi --model x/y --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/err2"; rc=$?
 check "exit 2 when binary missing" [ "$rc" -eq 2 ]
+# The log line is printed only after the binary check, so an exit-2 run must not advertise
+# a log path that was never written.
+if grep -q 'log=' "$T/err2"; then fail "exit 2: no log= on stderr"; else ok "exit 2: no log= on stderr"; fi
 "$BRIDGE" --harness nope --model x --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
 check "usage error on bad harness" [ "$rc" -eq 64 ]
 # Recognized flag with no following value must exit 64, not hang (bash 3.2's `shift 2` with
@@ -81,6 +84,27 @@ check "usage error on bad harness" [ "$rc" -eq 64 ]
 # with perl's alarm so a regression fails the test instead of hanging the suite.
 perl -e 'alarm 5; exec @ARGV' "$BRIDGE" --harness claude --model >/dev/null 2>&1; rc=$?
 check "usage error on trailing flag with no value" [ "$rc" -eq 64 ]
+
+# ── SUPER_CODEX_SANDBOX domain (read for ANY codex-bridged role, on any harness) ──
+SUPER_CODEX_SANDBOX=read-only "$BRIDGE" --harness codex --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/errsb"; rc=$?
+check "exit 64 on bad SUPER_CODEX_SANDBOX" [ "$rc" -eq 64 ]
+check "bad sandbox message" grep -q 'SUPER_CODEX_SANDBOX must be danger-full-access|workspace-write' "$T/errsb"
+
+# ── --role sanitising (the role reaches the log path) ──
+rm -f "$TMPDIR"/superagent-bridge/*.log 2>/dev/null || true
+"$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role '../x' >/dev/null 2>"$T/errrole"
+logpath="$(sed -n 's/^role-bridge: log=//p' "$T/errrole")"
+check "role sanitised: log stays in logdir" bash -c "[ \"\$(dirname '$logpath')\" = '$TMPDIR/superagent-bridge' ]"
+check "role sanitised: no path chars in name" bash -c "b=\"\$(basename '$logpath')\"; [[ \"\$b\" == ___x-* ]]"
+check "role sanitised: log file exists" [ -f "$logpath" ]
+
+# ── pi effort-suffix edge cases ──
+"$BRIDGE" --harness pi --model inherit --effort high --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/errpi1"
+check "pi: WARN when effort dropped under inherit model" grep -q "warning — --effort 'high' dropped" "$T/errpi1"
+check "pi: no --model when inherit" [ "$(argv pi)" = "-p " ]
+"$BRIDGE" --harness pi --model openai/gpt-5:high --effort low --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/errpi2"
+check "pi: no double suffix" [ "$(argv pi)" = "-p --model openai/gpt-5:high " ]
+check "pi: WARN on already-pinned level" grep -q "already pins a level" "$T/errpi2"
 
 # ── _common.sh role parser ──
 . "$ROOT/scripts/_common.sh"

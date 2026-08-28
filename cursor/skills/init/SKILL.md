@@ -224,8 +224,9 @@ effort was validated in its own harness's domain (item 6) and is passed through 
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one.
 Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
-`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`, or
-`bridge(<harness>)`.
+`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`,
+`bridge(<harness>)`, or `bridge(<harness>, definition: conflict)` — a bridged role whose
+relay definition could not be written (hand-edited file kept, or the write was denied).
 
 Note: permission layers commonly treat `.cursor/` as protected — in a headless or
 auto-accept session the write may be auto-denied even when other edits sail through.
