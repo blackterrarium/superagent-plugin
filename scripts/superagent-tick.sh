@@ -208,9 +208,13 @@ elif [[ "$HARNESS" == claude && -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "    note: ANTHROPIC_API_KEY not set (no $REPO/.env entry); relying on the claude CLI's own stored login" >>"$LOG_FILE"
 fi
 
-# Status on entry, so post-run hooks can detect a TRANSITION (notify once on
-# parking/finishing, never on every subsequent fire).
+# Status AND pending-decision text on entry, so post-run hooks can detect a
+# transition (notify once on parking/finishing, never on every subsequent fire)
+# — and also a RE-park: a tick that consumes an answer and immediately parks on
+# a NEW question leaves the status identical on both sides, so the status alone
+# would miss it and the gate would then silently suppress every later session.
 status_before="$(superagent_loop_status "$LOOP_FILE")"
+pending_before="$(superagent_pending_section "$LOOP_FILE")"
 
 # Bytes already in the log before this tick, so post-run checks only scan THIS
 # tick's segment (a prior tick's output must not poison this one's verdict).
@@ -302,17 +306,27 @@ fi
 echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
 
 # --- transition notifications -----------------------------------------------
-# Tell the operator ONCE when this tick parked the loop on WAITING FOR INPUT or
-# finished it (DONE) — the transition (entry status != exit status) is the
-# once-only guard, so no sidecar state is needed and a gated/unchanged fire is
-# silent. SUPER_NOTIFY_CMD or the desktop notifier; see superagent_notify.
+# Tell the operator ONCE whenever this tick leaves the loop parked on a question
+# they have not been shown, or finishes it (DONE).
+#   DONE               → a status transition (entry status != exit status).
+#   WAITING FOR INPUT  → a status transition into it, OR the `## Pending
+#                        decision` block changed while already parked. The
+#                        second arm is the re-park case: a tick that consumes
+#                        `answer:` and immediately parks on a NEW question shows
+#                        WAITING FOR INPUT on both sides, so a status-only guard
+#                        would stay silent and the gate would then suppress
+#                        every later session — a silently stranded loop.
+# Still no sidecar state: an unchanged parked loop notifies nothing, and a gated
+# fire exits long before this block, so repeats are impossible.
+# SUPER_NOTIFY_CMD or the desktop notifier; see superagent_notify.
 status_after="$(superagent_loop_status "$LOOP_FILE")"
-if [[ "$status_before" != "$status_after" ]]; then
-  notify_slug="${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}"
-  case "$status_after" in
-    "WAITING FOR INPUT") superagent_notify waiting-for-input "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
-    DONE)                superagent_notify done              "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
-  esac
+pending_after="$(superagent_pending_section "$LOOP_FILE")"
+notify_slug="${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}"
+if [[ "$status_after" == "WAITING FOR INPUT" ]] && \
+   { [[ "$status_before" != "$status_after" ]] || [[ "$pending_before" != "$pending_after" ]]; }; then
+  superagent_notify waiting-for-input "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+elif [[ "$status_after" == DONE && "$status_before" != "$status_after" ]]; then
+  superagent_notify done "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
 fi
 
 # --- DONE self-disarm (issue #18) -------------------------------------------

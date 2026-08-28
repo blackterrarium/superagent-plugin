@@ -28,13 +28,20 @@ Three small, independent changes to the shipped driver; no skill-logic change, n
    session as today. Knob: `SUPER_INPUT_GATE=true` (default).
    *Rejected:* self-disarm on `WAITING FOR INPUT` like `DONE` — a hand-written `answer:` would then
    silently never be consumed unless the operator remembered to re-arm.
-2. **Notify once on the transition** (`superagent-tick.sh`). The wrapper snapshots `status` before the
-   session and compares after. On a transition *into* `WAITING FOR INPUT` or `DONE` it fires
-   `superagent_notify`: `SUPER_NOTIFY_CMD` (operator shell snippet — ntfy/Slack/Pushover curl, etc.,
-   with `SUPERAGENT_EVENT`/`SUPERAGENT_SLUG`/`LOOP_FILE`/`SUPERAGENT_TITLE`/`SUPERAGENT_BODY` in its
-   env) when set; otherwise a desktop notification via `osascript` (macOS) / `notify-send` (Linux)
-   when available; otherwise log only. Transition detection means it fires exactly once — no
-   "already notified" sidecar state. Never fails the tick.
+2. **Notify once per unseen park** (`superagent-tick.sh`). The trigger is *the loop is parked on a
+   question the operator has not been shown* — not merely a status change. The wrapper snapshots both
+   `status` and the `## Pending decision` block before the session and compares after; it fires the
+   `waiting-for-input` event when the exit status is `WAITING FOR INPUT` and **either** the status
+   transitioned into it **or** the pending block changed while already parked. That second arm covers
+   the **re-park**: a tick that consumes `answer:` and immediately parks on a *new* question shows
+   `WAITING FOR INPUT` on both sides, so a status-only guard would say nothing and the gate (1) would
+   then suppress every subsequent session — a silently stranded loop. `DONE` fires on the status
+   transition alone. The notifier is `SUPER_NOTIFY_CMD` (operator shell snippet — ntfy/Slack/Pushover
+   curl, etc., with `SUPERAGENT_EVENT`/`SUPERAGENT_SLUG`/`LOOP_FILE`/`SUPERAGENT_TITLE`/`SUPERAGENT_BODY`
+   in its env) when set; otherwise a desktop notification via `osascript` (macOS) / `notify-send`
+   (Linux) when available; otherwise log only. This still needs no "already notified" sidecar state
+   and cannot spam: an unchanged parked loop matches neither arm, and a gated fire (1) exits before
+   the session, never reaching the check at all. Never fails the tick.
 3. **Answer + kick now** (`scripts/answer.sh <slug> <answer…>`). Writes `answer: <text>` directly under
    the `## Pending decision` heading **under the L3 lock** (refuses if a tick holds it, refuses if the
    loop is not `WAITING FOR INPUT`), then kicks one tick immediately via the registered scheduler

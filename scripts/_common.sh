@@ -269,17 +269,22 @@ superagent_notify() {
       title="superagent: $slug $event"; body="$loop"
       ;;
   esac
+  # `notified` is the success record only: on a SUPER_NOTIFY_CMD failure the
+  # "failed (rc=N)" line above is the record, and claiming both would tell the
+  # operator a message went out that did not.
+  local ok=true
   if [[ -n "${SUPER_NOTIFY_CMD:-}" ]]; then
     SUPERAGENT_EVENT="$event" SUPERAGENT_SLUG="$slug" LOOP_FILE="$loop" \
     SUPERAGENT_TITLE="$title" SUPERAGENT_BODY="$body" \
-      bash -c "$SUPER_NOTIFY_CMD" || echo "superagent: SUPER_NOTIFY_CMD failed (rc=$?) for event=$event" >&2
+      bash -c "$SUPER_NOTIFY_CMD" \
+      || { echo "superagent: SUPER_NOTIFY_CMD failed (rc=$?) for event=$event" >&2; ok=false; }
   elif [[ "$(uname -s)" == Darwin ]] && command -v osascript >/dev/null 2>&1; then
     local t="${title//\"/}" b="${body//\"/}"; t="${t//\\/}"; b="${b//\\/}"
     osascript -e "display notification \"$b\" with title \"$t\"" >/dev/null 2>&1 || true
   elif command -v notify-send >/dev/null 2>&1; then
     notify-send "$title" "$body" >/dev/null 2>&1 || true
   fi
-  echo "superagent: notified event=$event slug=$slug"
+  [[ "$ok" == true ]] && echo "superagent: notified event=$event slug=$slug"
   return 0
 }
 
