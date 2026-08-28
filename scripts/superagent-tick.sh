@@ -80,6 +80,38 @@ HARNESS="$(superagent_harness)" || exit 6
 ensure_cli_bin || exit 5
 ensure_gh_auth || exit 4
 
+# --- WAITING FOR CI gate ------------------------------------------------------
+# A loop parked on CI resumes only when every run in ci_wait.runs is terminal.
+# The skill's external branch does exactly one status query and exits otherwise
+# — but that query used to cost a full CLI session per interval for the whole
+# 60–120 min lane. Do the same query here in bash (gh is authenticated by the
+# preflight above): any run not `completed` → one log line, exit 0, no session.
+# Fail-OPEN on doubt (no parseable ids, gh error): fall through to the session,
+# which is exactly today's behaviour — the gate must never strand a loop.
+# Opt out with SUPER_CI_GATE=false.
+if [[ "${SUPER_CI_GATE:-true}" == true && \
+      "$(superagent_loop_status "$LOOP_FILE")" == "WAITING FOR CI" ]]; then
+  ci_runs="$(superagent_ci_runs "$LOOP_FILE")"
+  if [[ -z "$ci_runs" ]]; then
+    echo "=== $(ts) superagent-tick: WAITING FOR CI — no run ids in ci_wait — letting the session handle it ===" >>"$LOG_FILE"
+  else
+    ci_total=0; ci_running=0; ci_failed=""
+    for ci_id in $ci_runs; do
+      ci_total=$((ci_total + 1))
+      ci_state="$( (cd "$REPO" && gh run view "$ci_id" --json status --jq .status) 2>>"$LOG_FILE" )" || { ci_failed="$ci_id"; break; }
+      [[ "$ci_state" == completed ]] || ci_running=$((ci_running + 1))
+    done
+    if [[ -n "$ci_failed" ]]; then
+      echo "=== $(ts) superagent-tick: WAITING FOR CI — gh query failed for run ${ci_failed} — letting the session handle it ===" >>"$LOG_FILE"
+    elif [[ "$ci_running" -gt 0 ]]; then
+      echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_running}/${ci_total} run(s) still running — skipping the session (SUPER_CI_GATE) ===" >>"$LOG_FILE"
+      exit 0
+    else
+      echo "=== $(ts) superagent-tick: WAITING FOR CI — all ${ci_total} run(s) terminal — running the resume session ===" >>"$LOG_FILE"
+    fi
+  fi
+fi
+
 if [[ "$HARNESS" == cursor ]]; then
   # Cursor build of the plugin: skills live under <plugin-repo>/cursor (generated
   # by scripts/build-cursor-skills.sh); pass it as --plugin-dir so the loop's
