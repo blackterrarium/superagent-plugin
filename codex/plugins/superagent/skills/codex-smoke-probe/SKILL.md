@@ -17,6 +17,7 @@ no extra prose before or after it.
    contain the string "cc-only" OR the string "cursor-only" (a correct Codex build must NOT —
    either would be marker leakage from the build).
 4. Report the CODEX_HOME environment variable: `echo "${CODEX_HOME:-unset}"`.
+5. Check whether `<plugin_root>/scripts/role-bridge.sh` exists and is executable.
 
 Report block (fill every value):
 
@@ -28,4 +29,5 @@ Report block (fill every value):
     superloop_has_codex_banner: <yes|no>
     superloop_marker_leakage: <yes|no>
     env_codex_home: <value, or unset>
+    role_bridge_present: <yes|no>
     PROBE-END

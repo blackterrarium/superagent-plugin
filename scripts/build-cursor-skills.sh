@@ -65,7 +65,7 @@ substitute() {
     -e 's|`\.claude/`|`.cursor/`|g' \
     -e 's/claude -p/agent -p/g' \
     -e 's/claude --model/agent --model/g' \
-    -e 's/ANTHROPIC_API_KEY/CURSOR_API_KEY/g' \
+    -e '/OPENAI_API_KEY` \/ `ANTHROPIC_API_KEY/!s/ANTHROPIC_API_KEY/CURSOR_API_KEY/g' \
     -e 's/Claude CLI/Cursor CLI/g' \
     -e 's/^driver: cron  .*/driver: external                  # the only driver in this build (external scheduler — fresh context per tick)/' \
     -e 's/^cron_id:  .*# CronCreate job id.*/cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty/'
@@ -144,6 +144,7 @@ no extra prose before or after it.
    "GENERATED FILE — Cursor build" (a correct Cursor build MUST); does it contain the string
    "cc-only" (a correct Cursor build must NOT — that would be marker leakage from the build).
 4. Report the CLAUDE_PLUGIN_ROOT environment variable: `echo "${CLAUDE_PLUGIN_ROOT:-unset}"`.
+5. Check whether `<plugin_root>/scripts/role-bridge.sh` exists and is executable.
 
 Report block (fill every value):
 
@@ -155,24 +156,37 @@ Report block (fill every value):
     superloop_has_cursor_banner: <yes|no>
     superloop_marker_leakage: <yes|no>
     env_claude_plugin_root: <value, or unset>
+    role_bridge_present: <yes|no>
     PROBE-END
 EOF
 
 # ── Templates ────────────────────────────────────────────────────────────────
 mkdir -p "$TMP/templates"
 cp "$ROOT/templates/super-role-agent.md" "$TMP/templates/"
+cp "$ROOT/templates/super-role-bridge-agent.md" "$TMP/templates/"
+cp "$ROOT/templates/relay-preamble.md" "$TMP/templates/"
 cp "$ROOT/templates/vault-root.md" "$TMP/templates/"
+mkdir -p "$TMP/scripts"
+cp "$ROOT/scripts/role-bridge.sh" "$TMP/scripts/"
+chmod +x "$TMP/scripts/role-bridge.sh"
 
 # superenv.default: same seds as skills, then Cursor-specific header + model defaults.
 substitute <"$ROOT/templates/superenv.default" | awk '
   # Replace the Claude model-values header block (lines from "# Model values:" through the
   # "(SUPER_MODEL_SUPERVISOR ..." comment line) with the Cursor wording.
   /^# Model values:/ { inhdr=1
-    print "# Model values (Cursor build): a Cursor model name (see `agent --list-models`) or"
-    print "# \"inherit\". \"inherit\" = omit the model override; the subagent runs on the session"
-    print "# model. Any non-inherit value needs the per-role agent definition in .cursor/agents/"
-    print "# — re-run superagent:init after changing one."
-    print "# (SUPER_MODEL_SUPERVISOR goes straight to `agent --model`, which takes any listed name.)"
+    print "# Model values: \"inherit\", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi"
+    print "# and <model> is that harness'"'"'s native model string — cursor: `agent --list-models`; claude: a"
+    print "# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); codex: a Codex model (gpt-5.6-sol);"
+    print "# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the"
+    print "# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a \"/\" → pi)."
+    print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"
+    print "# per-role subagent hook, executed by that harness'"'"'s CLI via scripts/role-bridge.sh (the CLI must"
+    print "# be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS."
+    print "# \"inherit\" = omit the model override. On claude, a full ID, a non-inherit effort, or a bridged"
+    print "# harness on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent definition in"
+    print "# .claude/agents/ — re-run superagent:init after setting one."
+    print "# (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)"
     next }
   inhdr && /^# \(SUPER_MODEL_SUPERVISOR/ { inhdr=0; next }
   inhdr && /^#/ { next }
@@ -213,6 +227,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_EFFORT_BRANCH_REVIEWER=xhigh/SUPER_EFFORT_BRANCH_REVIEWER=inherit/' \
   -e 's/^SUPER_EFFORT_FIX_PLANNER=high/SUPER_EFFORT_FIX_PLANNER=inherit/' \
   -e '/^SUPER_CODEX_SANDBOX=/d' \
+  -e 's/^SUPER_BRIDGE_RELAY_MODEL=haiku\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
   >"$TMP/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────

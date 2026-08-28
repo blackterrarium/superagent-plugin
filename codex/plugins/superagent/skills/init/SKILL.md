@@ -110,7 +110,7 @@ which is exactly the case Step 2 below fixes by creating one.
    @anthropic-ai/claude-code`; codex: `npm install -g @openai/codex`; cursor: the Cursor CLI
    installer; pi: `npm install -g @earendil-works/pi-coding-agent`). Auth is WARN-only: codex →
    `OPENAI_API_KEY` set or `~/.codex/auth.json` present; pi → for a `<provider>/` of `openai` or
-   `anthropic`, `OPENAI_API_KEY` / `OPENAI_API_KEY` set; claude/cursor → binary only.
+   `anthropic`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` set; claude/cursor → binary only.
    Also run `bash "${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh" 2>&1 | head -1` — a usage line
    proves the bridge shipped with this build; a "not found" is a broken install: ABORT.
 
