@@ -8,9 +8,8 @@
 # A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same
 # per-role subagent hook, executed by that harness's CLI via scripts/role-bridge.sh (the CLI must
 # be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS.
-# "inherit" = omit the model override. On claude, a full ID, a non-inherit effort, or a bridged
-# harness on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent definition in
-# .claude/agents/ — re-run superagent:init after setting one.
+# On Codex there are no agent-definition files: native pins ride spawn_agent parameters;
+# bridged roles spawn a relay from templates/relay-preamble.md.
 # (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
 # ── Model per agent role ──────────────────────────────────────────

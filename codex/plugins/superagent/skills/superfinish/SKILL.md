@@ -35,7 +35,9 @@ related skills: superplan, supertraverse
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
+>   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
+>   path for it.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.

@@ -110,7 +110,9 @@ cat >"$banner_file" <<'EOF'
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
+>   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
+>   path for it.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -202,9 +204,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
     print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"
     print "# per-role subagent hook, executed by that harness'"'"'s CLI via scripts/role-bridge.sh (the CLI must"
     print "# be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS."
-    print "# \"inherit\" = omit the model override. On claude, a full ID, a non-inherit effort, or a bridged"
-    print "# harness on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent definition in"
-    print "# .claude/agents/ — re-run superagent:init after setting one."
+    print "# On Codex there are no agent-definition files: native pins ride spawn_agent parameters;"
+    print "# bridged roles spawn a relay from templates/relay-preamble.md."
     print "# (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)"
     next }
   inhdr && /^# \(SUPER_MODEL_SUPERVISOR/ { inhdr=0; next }
@@ -292,13 +293,17 @@ This build differs from the Claude Code plugin:
   tooling) is stripped; loops run via an OS scheduler firing fresh headless `codex exec` sessions.
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
-- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take Codex model names (e.g. `gpt-5.1-codex`) or
-  `inherit` — Claude tier names are not valid here.
+- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Codex model name
+  (e.g. `gpt-5.1-codex`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  `pi:openai/gpt-5`, …) is valid too but BRIDGED — dispatched through a relay that runs the shipped
+  `scripts/role-bridge.sh`.
 - **Effort keys** (`SUPER_EFFORT_*`) take Codex effort names (`none | minimal | low | medium |
   high | xhigh`) or `inherit`.
-- **No `.claude/agents/` definition files.** Role pins (`SUPER_MODEL_<ROLE>` /
-  `SUPER_EFFORT_<ROLE>`) dispatch as `spawn_agent` parameters (`model` / `reasoning_effort`)
-  instead.
+- **No `.claude/agents/` definition files.** Native pins ride `spawn_agent` parameters; bridged
+  roles spawn a relay from `templates/relay-preamble.md`.
+- **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
+  (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
+  (default `inherit`) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone
@@ -342,6 +347,12 @@ fetch/commit fail and the sync gate parks the loop).
 - The `superagent-monitor` attended-tick recipe still shows canonical paths and a Claude-only
   flag (pre-existing in both generated builds; tracked for follow-up).
 EOF
+
+# ── Post-generation sanity checks ─────────────────────────────────────────────
+grep -q 'OPENAI_API_KEY` / `ANTHROPIC_API_KEY' "$TMP/plugins/superagent/skills/init/SKILL.md" \
+  || { echo "build-codex-skills: pi-auth carve-out no longer matches — fix the sed address" >&2; exit 1; }
+[ -x "$TMP/plugins/superagent/scripts/role-bridge.sh" ] \
+  || { echo "build-codex-skills: role-bridge.sh not executable" >&2; exit 1; }
 
 # ── Emit or check ────────────────────────────────────────────────────────────
 if $CHECK; then

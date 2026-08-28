@@ -10,8 +10,13 @@ This build differs from the Claude Code plugin:
   tooling) is stripped; loops run via an OS scheduler firing fresh headless `agent -p` sessions.
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
-- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take Cursor model names (`agent --list-models`)
-  or `inherit` — Claude tier names are not valid here.
+- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Cursor model name
+  (`agent --list-models`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  `codex:gpt-5.6-sol`, …) is valid too but BRIDGED — dispatched through a relay that runs the
+  shipped `scripts/role-bridge.sh`.
+- **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
+  (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
+  (default `inherit`) sets the relay subagent's model.
 
 Install (local): `agent --plugin-dir <repo>/cursor …` — or add the repository as a Cursor
 marketplace (the root `.cursor-plugin/marketplace.json` points at this directory).

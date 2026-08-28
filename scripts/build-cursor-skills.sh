@@ -183,9 +183,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
     print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"
     print "# per-role subagent hook, executed by that harness'"'"'s CLI via scripts/role-bridge.sh (the CLI must"
     print "# be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS."
-    print "# \"inherit\" = omit the model override. On claude, a full ID, a non-inherit effort, or a bridged"
-    print "# harness on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent definition in"
-    print "# .claude/agents/ — re-run superagent:init after setting one."
+    print "# On Cursor a non-inherit or bridged value on any role key except SUPER_MODEL_SUPERVISOR needs"
+    print "# the per-role agent definition in .cursor/agents/ — re-run superagent:init after setting one."
     print "# (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)"
     next }
   inhdr && /^# \(SUPER_MODEL_SUPERVISOR/ { inhdr=0; next }
@@ -258,8 +257,13 @@ This build differs from the Claude Code plugin:
   tooling) is stripped; loops run via an OS scheduler firing fresh headless `agent -p` sessions.
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
-- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take Cursor model names (`agent --list-models`)
-  or `inherit` — Claude tier names are not valid here.
+- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Cursor model name
+  (`agent --list-models`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  `codex:gpt-5.6-sol`, …) is valid too but BRIDGED — dispatched through a relay that runs the
+  shipped `scripts/role-bridge.sh`.
+- **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
+  (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
+  (default `inherit`) sets the relay subagent's model.
 
 Install (local): `agent --plugin-dir <repo>/cursor …` — or add the repository as a Cursor
 marketplace (the root `.cursor-plugin/marketplace.json` points at this directory).
@@ -291,6 +295,12 @@ stored login, or `CURSOR_API_KEY` in the target repo's `.env`. Model: `SUPER_MOD
   Cursor yet — the tick invocation itself is smoke-validated (T5), the full multi-tick loop is
   not.
 EOF
+
+# ── Post-generation sanity checks ─────────────────────────────────────────────
+grep -q 'OPENAI_API_KEY` / `ANTHROPIC_API_KEY' "$TMP/skills/init/SKILL.md" \
+  || { echo "build-cursor-skills: pi-auth carve-out no longer matches — fix the sed address" >&2; exit 1; }
+[ -x "$TMP/scripts/role-bridge.sh" ] \
+  || { echo "build-cursor-skills: role-bridge.sh not executable" >&2; exit 1; }
 
 # ── Emit or check ────────────────────────────────────────────────────────────
 if $CHECK; then

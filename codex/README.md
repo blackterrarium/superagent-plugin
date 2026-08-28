@@ -10,13 +10,17 @@ This build differs from the Claude Code plugin:
   tooling) is stripped; loops run via an OS scheduler firing fresh headless `codex exec` sessions.
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
-- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take Codex model names (e.g. `gpt-5.1-codex`) or
-  `inherit` — Claude tier names are not valid here.
+- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Codex model name
+  (e.g. `gpt-5.1-codex`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  `pi:openai/gpt-5`, …) is valid too but BRIDGED — dispatched through a relay that runs the shipped
+  `scripts/role-bridge.sh`.
 - **Effort keys** (`SUPER_EFFORT_*`) take Codex effort names (`none | minimal | low | medium |
   high | xhigh`) or `inherit`.
-- **No `.claude/agents/` definition files.** Role pins (`SUPER_MODEL_<ROLE>` /
-  `SUPER_EFFORT_<ROLE>`) dispatch as `spawn_agent` parameters (`model` / `reasoning_effort`)
-  instead.
+- **No `.claude/agents/` definition files.** Native pins ride `spawn_agent` parameters; bridged
+  roles spawn a relay from `templates/relay-preamble.md`.
+- **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
+  (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
+  (default `inherit`) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone
