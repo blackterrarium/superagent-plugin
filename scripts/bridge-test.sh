@@ -76,6 +76,11 @@ PATH="/usr/bin:/bin" "$BRIDGE" --harness pi --model x/y --effort inherit --cwd "
 check "exit 2 when binary missing" [ "$rc" -eq 2 ]
 "$BRIDGE" --harness nope --model x --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
 check "usage error on bad harness" [ "$rc" -eq 64 ]
+# Recognized flag with no following value must exit 64, not hang (bash 3.2's `shift 2` with
+# $#=1 shifts nothing and returns nonzero, so a naive parse loop spins forever). Bound the run
+# with perl's alarm so a regression fails the test instead of hanging the suite.
+perl -e 'alarm 5; exec @ARGV' "$BRIDGE" --harness claude --model >/dev/null 2>&1; rc=$?
+check "usage error on trailing flag with no value" [ "$rc" -eq 64 ]
 
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]

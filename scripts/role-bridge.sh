@@ -19,12 +19,12 @@ BRIDGE_UNSET_CLAUDECODE=false   # T5 probe passed under CLAUDECODE=1; no need to
 harness=""; model="inherit"; effort="inherit"; cwd=""; prompt_file=""; role="role"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --harness)     harness="${2:-}"; shift 2 ;;
-    --model)       model="${2:-inherit}"; shift 2 ;;
-    --effort)      effort="${2:-inherit}"; shift 2 ;;
-    --cwd)         cwd="${2:-}"; shift 2 ;;
-    --prompt-file) prompt_file="${2:-}"; shift 2 ;;
-    --role)        role="${2:-role}"; shift 2 ;;
+    --harness)     [ $# -ge 2 ] || { echo "role-bridge: --harness requires a value" >&2; exit 64; }; harness="$2"; shift 2 ;;
+    --model)       [ $# -ge 2 ] || { echo "role-bridge: --model requires a value" >&2; exit 64; }; model="$2"; shift 2 ;;
+    --effort)      [ $# -ge 2 ] || { echo "role-bridge: --effort requires a value" >&2; exit 64; }; effort="$2"; shift 2 ;;
+    --cwd)         [ $# -ge 2 ] || { echo "role-bridge: --cwd requires a value" >&2; exit 64; }; cwd="$2"; shift 2 ;;
+    --prompt-file) [ $# -ge 2 ] || { echo "role-bridge: --prompt-file requires a value" >&2; exit 64; }; prompt_file="$2"; shift 2 ;;
+    --role)        [ $# -ge 2 ] || { echo "role-bridge: --role requires a value" >&2; exit 64; }; role="$2"; shift 2 ;;
     *) echo "role-bridge: unknown argument '$1'" >&2; exit 64 ;;
   esac
 done
