@@ -235,3 +235,45 @@ superagent_pending_answer() {
   [[ -n "$a" ]] || return 1
   echo "$a"
 }
+
+# ---------------------------------------------------------------------------
+# Operator notification — fired by the tick wrapper on a loop-status transition
+# into WAITING FOR INPUT (a decision needs a human) or DONE. Unattended mode
+# guarantees nobody is tailing the tick log, so this is the one signal the
+# operator actually receives.
+#   SUPER_NOTIFY_CMD  a shell snippet run via `bash -c` (e.g. a curl to ntfy.sh /
+#                     Slack / Pushover) with SUPERAGENT_EVENT, SUPERAGENT_SLUG,
+#                     LOOP_FILE, SUPERAGENT_TITLE, SUPERAGENT_BODY exported;
+#   (unset/empty)     a desktop notification: osascript on macOS, notify-send on
+#                     Linux, when available; otherwise log only.
+# Never fails the caller (a broken notifier must not fail a healthy tick).
+# ---------------------------------------------------------------------------
+superagent_notify() {
+  local event="${1:?event}" slug="${2:?slug}" loop="${3:?loop-file}" title body
+  case "$event" in
+    waiting-for-input)
+      title="superagent: $slug needs a decision"
+      body="$({ superagent_pending_section "$loop" | grep -v '^[[:space:]]*$' | head -3 \
+                | tr '\n' ' ' | cut -c1-200; } || true)"
+      [[ -n "$body" ]] || body="WAITING FOR INPUT: $loop"
+      ;;
+    done)
+      title="superagent: $slug is DONE"; body="Loop reached DONE: $loop"
+      ;;
+    *)
+      title="superagent: $slug $event"; body="$loop"
+      ;;
+  esac
+  if [[ -n "${SUPER_NOTIFY_CMD:-}" ]]; then
+    SUPERAGENT_EVENT="$event" SUPERAGENT_SLUG="$slug" LOOP_FILE="$loop" \
+    SUPERAGENT_TITLE="$title" SUPERAGENT_BODY="$body" \
+      bash -c "$SUPER_NOTIFY_CMD" || echo "superagent: SUPER_NOTIFY_CMD failed (rc=$?) for event=$event" >&2
+  elif [[ "$(uname -s)" == Darwin ]] && command -v osascript >/dev/null 2>&1; then
+    local t="${title//\"/}" b="${body//\"/}"; t="${t//\\/}"; b="${b//\\/}"
+    osascript -e "display notification \"$b\" with title \"$t\"" >/dev/null 2>&1 || true
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "$title" "$body" >/dev/null 2>&1 || true
+  fi
+  echo "superagent: notified event=$event slug=$slug"
+  return 0
+}

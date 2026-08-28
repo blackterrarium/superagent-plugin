@@ -208,6 +208,10 @@ elif [[ "$HARNESS" == claude && -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "    note: ANTHROPIC_API_KEY not set (no $REPO/.env entry); relying on the claude CLI's own stored login" >>"$LOG_FILE"
 fi
 
+# Status on entry, so post-run hooks can detect a TRANSITION (notify once on
+# parking/finishing, never on every subsequent fire).
+status_before="$(superagent_loop_status "$LOOP_FILE")"
+
 # Bytes already in the log before this tick, so post-run checks only scan THIS
 # tick's segment (a prior tick's output must not poison this one's verdict).
 log_bytes_before="$(wc -c <"$LOG_FILE" 2>/dev/null || echo 0)"
@@ -296,6 +300,19 @@ if [[ "$rc" -eq 0 && -r "$LOOP_FILE" ]]; then
 fi
 
 echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
+
+# --- transition notifications -----------------------------------------------
+# Tell the operator ONCE when this tick parked the loop on WAITING FOR INPUT or
+# finished it (DONE) — the transition (entry status != exit status) is the
+# once-only guard, so no sidecar state is needed and a gated/unchanged fire is
+# silent. SUPER_NOTIFY_CMD or the desktop notifier; see superagent_notify.
+status_after="$(superagent_loop_status "$LOOP_FILE")"
+if [[ "$status_before" != "$status_after" ]]; then
+  case "$status_after" in
+    "WAITING FOR INPUT") superagent_notify waiting-for-input "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
+    DONE)                superagent_notify done              "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
+  esac
+fi
 
 # --- DONE self-disarm (issue #18) -------------------------------------------
 # status: DONE is terminal, but the scheduler entry keeps firing a full CLI
