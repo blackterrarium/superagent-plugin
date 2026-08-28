@@ -282,3 +282,16 @@ superagent_notify() {
   echo "superagent: notified event=$event slug=$slug"
   return 0
 }
+
+# superagent_kick_tick <slug> — fire ONE tick now (non-blocking) through the
+# registered scheduler entry, instead of waiting out the interval. Used by
+# launch.sh (first tick) and answer.sh (resume right after an answer). rc is
+# the scheduler's: non-zero when the entry is not loaded/armed.
+superagent_kick_tick() {
+  local slug="${1:-}"; [[ -n "$slug" ]] || { echo "superagent: kick_tick needs a slug" >&2; return 1; }
+  if [[ "$(superagent_scheduler)" == launchd ]]; then
+    launchctl kickstart "$(superagent_launchd_domain)/$(superagent_launchd_label "$slug")"
+  else
+    systemctl --user start --no-block "superagent-tick@$slug.service"
+  fi
+}

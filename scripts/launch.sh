@@ -147,11 +147,7 @@ install_args=(--interval "$INTERVAL" --output "$OUTPUT_FORMAT" --harness "$HARNE
 
 # Kick the first tick now (non-blocking) so the loop starts immediately instead of
 # waiting for the timer's first interval.
-if [[ "$(superagent_scheduler)" == launchd ]]; then
-  launchctl kickstart "$(superagent_launchd_domain)/$(superagent_launchd_label "$SLUG")" 2>/dev/null || true
-else
-  systemctl --user start --no-block "superagent-tick@$SLUG.service" 2>/dev/null || true
-fi
+superagent_kick_tick "$SLUG" 2>/dev/null || true
 
 echo
 echo "Launched superagent external loop:"
