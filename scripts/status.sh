@@ -109,7 +109,7 @@ if [[ "$JSON" == 1 ]]; then
     [[ $first == 1 ]] && first=0 || out+=","
     out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
       "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
-      "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$pending" "$answer_recorded" "$done_" \
+      "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
       "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$GH_STATE")")
   done
   out+="]"
@@ -132,7 +132,7 @@ if [[ -n "$ONE" ]]; then
     echo "=== ## Pending decision ==="
     awk '/^## Decisions/{exit} /^## Pending decision/{f=1} f{print}' "$LOOP_FILE"
     if [[ $pending == 2 ]]; then
-      echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh $ONE \"<same answer>\")"
+      echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
     fi
   fi
   if [[ $exists == 1 ]]; then

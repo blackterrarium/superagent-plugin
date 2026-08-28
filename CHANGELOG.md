@@ -11,9 +11,12 @@
   The skill now prescribes the inline-list form as canonical.
 - **`answer.sh`:** releases the lock *before* kicking on the "answer already recorded" path (the
   kicked tick used to find the lock held and exit, costing an interval); reaps a lock whose `owner`
-  PID is dead (superloop L3) instead of refusing forever.
+  PID is dead (superloop L3) instead of refusing forever; a malformed or absent `owner` is treated as
+  a live lock and still refuses (exit 4).
 - **`status.sh`:** `INPUT` column is `YES` (parked, needs you) / `ans` (answer recorded, next fire
-  resumes) / `-`; JSON gains `answer_recorded`; drill-in prints the recorded answer.
+  resumes) / `-`; JSON gains `answer_recorded`; drill-in prints the recorded answer. JSON
+  `pending_input` stays `0|1` and now means *parked and unanswered*; `answer_recorded` carries the
+  second bit.
 - `scripts/README.md`: the `.superenv` paragraph cites `templates/superenv.default` instead of stale
   key-count/default values.
 

@@ -224,11 +224,24 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 
 **Parking (on receiving a CI-PENDING report, in the `WAITING FOR RUN` branch):**
 
-1. Write a `ci_wait:` block into the loop-file frontmatter — `runs:` (all run ids), written as an
-   inline list of GitHub Actions run ids, e.g. `runs: [123456, 234567]` (the shipped wrapper's CI
-   gate parses this block), `branch:`, `pr:`,
-   `leaf:`, `worktree:`, `subagent:` (the dispatched superrun subagent's id/name, for the
-   `SendMessage` resume), `since: <timestamp>`. Set `status: WAITING FOR CI`.
+1. Write a `ci_wait:` block into the loop-file frontmatter with these keys: `runs:` (all run ids,
+   as an inline list of GitHub Actions run ids), `branch:`, `pr:`, `leaf:`, `worktree:`,
+   `subagent:` (the dispatched superrun subagent's id/name, for the `SendMessage` resume), and
+   `since: <timestamp>`. Set `status: WAITING FOR CI`. It must look exactly like this:
+
+   ```yaml
+   ci_wait:
+     runs: [123456, 234567]      # GitHub Actions run ids — inline list; the wrapper's CI gate parses this block
+     branch: <branch>
+     pr: <number>
+     leaf: <plan path>
+     worktree: <path>
+     subagent: <id/name>
+     since: <timestamp>
+   ```
+
+   `ci_wait:` must be a top-level frontmatter key with `runs:` indented beneath it (not a `{…}`
+   flow mapping) — that is the shape `superagent-tick.sh`'s `SUPER_CI_GATE` reads.
 2. **Arm the resume signal — by driver:**
    - **external:** the tick is a fresh headless session — a Monitor cannot outlive it, and the
      scheduler is user-managed (never touched). The scheduler keeps firing ticks; the `WAITING FOR

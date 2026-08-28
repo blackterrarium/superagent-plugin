@@ -95,15 +95,15 @@ if [[ "${SUPER_CI_GATE:-true}" == true && \
   if [[ -z "$ci_runs" ]]; then
     echo "=== $(ts) superagent-tick: WAITING FOR CI — no run ids in ci_wait — letting the session handle it ===" >>"$LOG_FILE"
   else
-    ci_total=0; ci_running=0; ci_failed=""
+    ci_total=0; ci_running=0; ci_failed=""; ci_fail_reason=""
     for ci_id in $ci_runs; do
       ci_total=$((ci_total + 1))
-      ci_state="$( (cd "$REPO" && gh run view "$ci_id" --json status --jq .status) 2>>"$LOG_FILE" )" || { ci_failed="$ci_id"; break; }
-      [[ -n "$ci_state" ]] || { ci_failed="$ci_id"; break; }
+      ci_state="$( (cd "$REPO" && gh run view "$ci_id" --json status --jq .status) 2>>"$LOG_FILE" )" || { ci_failed="$ci_id"; ci_fail_reason="gh query failed"; break; }
+      [[ -n "$ci_state" ]] || { ci_failed="$ci_id"; ci_fail_reason="gh returned no status"; break; }
       [[ "$ci_state" == completed ]] || ci_running=$((ci_running + 1))
     done
     if [[ -n "$ci_failed" ]]; then
-      echo "=== $(ts) superagent-tick: WAITING FOR CI — gh query failed for run ${ci_failed} — letting the session handle it ===" >>"$LOG_FILE"
+      echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_fail_reason} for run ${ci_failed} — letting the session handle it ===" >>"$LOG_FILE"
     elif [[ "$ci_running" -gt 0 ]]; then
       echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_running}/${ci_total} run(s) still running — skipping the session (SUPER_CI_GATE) ===" >>"$LOG_FILE"
       exit 0
