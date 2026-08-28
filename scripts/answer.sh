@@ -50,6 +50,13 @@ LOCK_DIR="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").lockd"
 if existing="$(superagent_pending_answer "$LOOP_FILE")"; then
   echo "answer: an answer is already recorded ('$existing') — not overwriting; kicking a tick to consume it" >&2
 else
+  # Check the heading BEFORE touching the lock/file — wc -l can't tell "no
+  # heading matched" from "no trailing newline" (awk's print always appends
+  # one), so a heading-less file would otherwise be silently rewritten.
+  grep -q '^## Pending decision' "$LOOP_FILE" || {
+    echo "answer: no '## Pending decision' heading in $LOOP_FILE — cannot place the answer" >&2
+    exit 5
+  }
   # Same lock discipline as a tick (superloop L3): mkdir is the atomic acquire.
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     echo "answer: a tick holds the lock ($LOCK_DIR) — retry when it finishes (status.sh $SLUG)" >&2
@@ -57,17 +64,18 @@ else
   fi
   echo $$ >"$LOCK_DIR/owner"
   trap 'rm -rf "$LOCK_DIR"' EXIT
+  # A signal received mid-write must still run the EXIT trap and release the lock.
+  trap 'exit 143' TERM
+  trap 'exit 130' INT
   tmp="$(mktemp)"
-  awk -v ans="$ANSWER" '{ print } /^## Pending decision/ && !done { print "answer: " ans; done=1 }' \
+  # Pass the answer via the environment, not `awk -v` — -v runs escape
+  # processing on its value, so a literal backslash (e.g. `C:\new\table`)
+  # would be mangled into control characters/newlines.
+  ANS="$ANSWER" awk '{ print } /^## Pending decision/ && !done { print "answer: " ENVIRON["ANS"]; done=1 }' \
     "$LOOP_FILE" >"$tmp"
-  if [[ "$(wc -l <"$tmp")" -le "$(wc -l <"$LOOP_FILE")" ]]; then
-    rm -f "$tmp"
-    echo "answer: no '## Pending decision' heading in $LOOP_FILE — cannot place the answer" >&2
-    exit 5
-  fi
   cat "$tmp" >"$LOOP_FILE"   # in place: keep the file's inode/permissions
   rm -f "$tmp"
-  rm -rf "$LOCK_DIR"; trap - EXIT
+  rm -rf "$LOCK_DIR"; trap - EXIT TERM INT
   echo "answer: recorded 'answer: $ANSWER' in $LOOP_FILE"
 fi
 
