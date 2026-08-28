@@ -515,9 +515,13 @@ BLOCKED / CI-red outcome, or any place a skill surfaces a clarification rather t
 Standing posture: if a delegated skill would otherwise ask the user inline, resolve it via this ladder
 instead.
 
-> **Depth-1 subagent constraint.** Subagents cannot spawn subagents (depth-1). The read-only
-> 3-subagent panel fits within this limit; the supervisor that runs the panel **cannot itself be a
-> subagent** — it must be the top-level loop agent.
+> **Depth-1 subagent constraint.** Subagents cannot spawn subagents (depth-1) — more precisely, a
+> subagent cannot foreground-wait on children it spawns; they background and yield instead. The
+> read-only 3-subagent panel fits within this limit; the supervisor that runs the panel **cannot
+> itself be a subagent** — it must be the top-level loop agent. The same constraint is why
+> `superagent` runs `superrun` (the SDD controller, which must wait on its own implementer/reviewer
+> subagents) as the top-level agent of a separate CLI process rather than as a subagent (issue #25;
+> see superagent **Subagent dispatch**).
 
 ### Rung 1 — Subagent panel (resolve autonomously)
 Dispatch **3 independent subagents in parallel** (one `spawn_agent` call per panelist, all three in a

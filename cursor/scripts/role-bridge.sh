@@ -2,7 +2,19 @@
 # role-bridge.sh — run ONE agent role on a foreign harness CLI, headless.
 #
 #   role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit>
-#                  --cwd <dir> --prompt-file <file> [--role <name>]
+#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|executor|<list>]
+#
+# --tools (claude harness only; accepted and ignored elsewhere) picks the `--allowedTools` set:
+#   role     (default) Read,Edit,Write,Bash,Grep,Glob — a leaf role (implementer/reviewer/...)
+#   executor           the tick's own set plus Grep/Glob: Read,Edit,Write,Bash,Grep,Glob,Task,Skill —
+#                      for a controller role (superrun) that must dispatch subagents and invoke
+#                      skills itself. This is how superagent runs superrun as the TOP-LEVEL agent of
+#                      its own `claude -p` process (issue #25): a subagent cannot foreground-wait on
+#                      its own children, so the SDD controller has to be depth 0 in some process.
+#   <list>             an explicit comma-separated allowlist.
+# For --harness claude the print-mode background-wait ceiling is lifted (CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS
+# defaults to 0 = wait indefinitely, mirroring superagent-tick.sh; an operator-set value is kept),
+# so a nested controller's subagents are never guillotined mid-flight (issue #15).
 #
 # Reads the prompt from <file>, runs the harness CLI in <dir>, prints the CLI's final message on
 # stdout and NOTHING else. CLI chatter/stderr goes to $TMPDIR/superagent-bridge/<role>-<stamp>.log
@@ -18,7 +30,9 @@ set -uo pipefail
 
 BRIDGE_UNSET_CLAUDECODE=false   # T5 probe passed under CLAUDECODE=1; no need to unset it
 
-harness=""; model="inherit"; effort="inherit"; cwd=""; prompt_file=""; role="role"
+harness=""; model="inherit"; effort="inherit"; cwd=""; prompt_file=""; role="role"; tools="role"
+TOOLS_ROLE="Read,Edit,Write,Bash,Grep,Glob"
+TOOLS_EXECUTOR="Read,Edit,Write,Bash,Grep,Glob,Task,Skill"
 while [ $# -gt 0 ]; do
   case "$1" in
     --harness)     [ $# -ge 2 ] || { echo "role-bridge: --harness requires a value" >&2; exit 64; }; harness="$2"; shift 2 ;;
@@ -27,12 +41,19 @@ while [ $# -gt 0 ]; do
     --cwd)         [ $# -ge 2 ] || { echo "role-bridge: --cwd requires a value" >&2; exit 64; }; cwd="$2"; shift 2 ;;
     --prompt-file) [ $# -ge 2 ] || { echo "role-bridge: --prompt-file requires a value" >&2; exit 64; }; prompt_file="$2"; shift 2 ;;
     --role)        [ $# -ge 2 ] || { echo "role-bridge: --role requires a value" >&2; exit 64; }; role="$2"; shift 2 ;;
+    --tools)       [ $# -ge 2 ] || { echo "role-bridge: --tools requires a value" >&2; exit 64; }; tools="$2"; shift 2 ;;
     *) echo "role-bridge: unknown argument '$1'" >&2; exit 64 ;;
   esac
 done
 case "$harness" in claude|codex|cursor|pi) ;; *) echo "role-bridge: --harness must be claude|codex|cursor|pi (got '$harness')" >&2; exit 64 ;; esac
 [ -d "$cwd" ] || { echo "role-bridge: --cwd '$cwd' is not a directory" >&2; exit 64; }
 [ -f "$prompt_file" ] || { echo "role-bridge: --prompt-file '$prompt_file' not found" >&2; exit 64; }
+case "$tools" in
+  role)     allowed="$TOOLS_ROLE" ;;
+  executor) allowed="$TOOLS_EXECUTOR" ;;
+  "")       echo "role-bridge: --tools must be role|executor|<comma-separated list> (got '')" >&2; exit 64 ;;
+  *)        allowed="$tools" ;;
+esac
 
 # SUPER_CODEX_SANDBOX is read below for --harness codex; reject an out-of-domain value here
 # rather than silently falling through to the danger-full-access branch.
@@ -60,8 +81,8 @@ case "$harness" in
     args=(-p)
     [ "$model"  != inherit ] && args+=(--model "$model")
     [ "$effort" != inherit ] && args+=(--effort "$effort")
-    args+=(--allowedTools "Read,Edit,Write,Bash,Grep,Glob")
-    envargs=(-u CLAUDE_CODE_EFFORT_LEVEL)
+    args+=(--allowedTools "$allowed")
+    envargs=(-u CLAUDE_CODE_EFFORT_LEVEL "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-0}")
     [ "$BRIDGE_UNSET_CLAUDECODE" = true ] && envargs+=(-u CLAUDECODE)
     result="$(cd "$cwd" && env "${envargs[@]}" claude "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
     ;;
