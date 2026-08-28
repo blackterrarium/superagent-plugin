@@ -118,4 +118,6 @@ the flag — let `launch.sh` apply its defaults.
   the goal's supergoal PR should be merged and the checkout synced first.
 - This skill only *launches*. To watch, answer a `WAITING FOR INPUT` decision, or
   stop/drain a loop, use the `superagent:superagent-monitor` skill (or the
-  `${SUPER_PLUGIN_ROOT}/scripts/*` helpers directly).
+  `${SUPER_PLUGIN_ROOT}/scripts/*` helpers directly). You are notified once when that
+  happens (SUPER_NOTIFY_CMD, else a desktop notification); answer + resume with
+  `$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"`.

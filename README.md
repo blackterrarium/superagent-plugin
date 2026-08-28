@@ -228,9 +228,11 @@ machine, and (unless terminal) lets the driver fire the next tick.
 
 A `WAITING FOR INPUT` decision is one the 3-subagent escalation panel (superloop L7) couldn't converge
 on (≥2/3 agreement). Interactively, the panel's options are put to a human via `AskUserQuestion`; on a
-scheduled/unattended tick there is no one to prompt, so the loop writes the pending question plus an
-`answer: <option>` instruction into the loop file and every subsequent tick polls for it — resume is
-automatic once a human (or a separate monitoring console) supplies it.
+scheduled/unattended tick there is no one to prompt,
+so the loop writes the pending question plus an `answer: <option>` instruction into the loop file,
+the driver notifies the operator once (`SUPER_NOTIFY_CMD` / desktop notification), and scheduled
+fires are free until an answer exists (a bash check, no session). `scripts/answer.sh <slug> "<option>"`
+records the answer under the lock and kicks a tick, so resume is immediate.
 
 Launch an unattended loop with `superagent:superagent-external` (wraps `launch.sh`, which prepares the
 loop file and arms the timer in one step); watch/answer/drain any number of concurrent loops with

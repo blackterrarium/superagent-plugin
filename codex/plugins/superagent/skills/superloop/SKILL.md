@@ -348,8 +348,9 @@ interval, each in a **fresh session = clean context**.
   a human can additionally open an interactive Claude session to **monitor** (read the
   loop file, tail the driver log, `gh pr/run`) and to **answer** a `WAITING FOR INPUT` decision — either
   by running one attended `--tick` (a person is present, so the L7 Rung-2 branch uses `AskQuestion` and
-  applies the answer under the L3 lock) or by writing `answer: <option>` into the loop file for the next
-  scheduled tick to poll. Because all state is in the loop file, this console can be started and stopped
+  applies the answer under the L3 lock) or by writing `answer: <option>` into the loop file
+  (`scripts/answer.sh <slug> "<option>"` does this under the lock and kicks a tick at once; a hand edit is
+  picked up on the next scheduled fire). Because all state is in the loop file, this console can be started and stopped
   at will without affecting driver progress (only the driver process should use `--resume`-free fresh
   ticks; an interactive console may `--resume` freely).
 
@@ -546,5 +547,9 @@ If the panel cannot converge (split, or all `insufficient-info`):
    successful completion and strands the loop). The `## Pending decision` block (with the *"`answer: <option>`"*
    instruction) is already written and `status: WAITING FOR INPUT` is saved, so **resume is automatic**:
    the next `--tick` polls for the written answer and continues from `prior_status` once it appears —
-   even in a brand-new session. In `cron` mode, if you'd rather not burn ticks re-polling, `stop_driver()`
+   even in a brand-new session.
+   (Shipped-wrapper loops pay nothing while waiting: `superagent-tick.sh` polls the file in bash and
+   only launches a session once the answer exists — `SUPER_INPUT_GATE` — and notifies the operator
+   once on parking — `SUPER_NOTIFY_CMD`.)
+   In `cron` mode, if you'd rather not burn ticks re-polling, `stop_driver()`
    to pause; the next `/<consumer> <bootstrap-input>` re-arms and resumes. `release_lock()` and end the tick.

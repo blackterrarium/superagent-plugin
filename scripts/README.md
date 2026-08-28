@@ -183,6 +183,7 @@ $SUPERAGENT_SCRIPTS/install-timer.sh <goal-slug> <LOOP_FILE> --interval 30m
 
 # 3) Monitor (any of these; start/stop freely).
 $SUPERAGENT_SCRIPTS/console-watch.sh <LOOP_FILE>            # alerts on WAITING FOR INPUT / DONE
+$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"            # answer WAITING FOR INPUT + kick a tick now
 tail -f /tmp/superagent-*.log                               # tick body, all schedulers
 journalctl --user -u superagent-tick@<goal-slug>.service -f # Linux: service lifecycle + preflight errors
 systemctl --user list-timers 'superagent-tick@<goal-slug>.timer'   # Linux
@@ -243,6 +244,11 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   resets the persisted `RUNNING`/`PLANNING` state.
 - `console-watch.sh <LOOP_FILE> [interval]` — read-only monitor that alerts on `WAITING FOR INPUT` /
   `DONE`.
+- `answer.sh [--no-kick] [--replace] <slug> <answer…>` — answer a `WAITING FOR INPUT` loop: writes
+  `answer: <text>` under `## Pending decision` (holding the L3 lock) and kicks one tick so the loop
+  resumes now. Both flags are accepted in any position: `--no-kick` records only, `--replace`
+  overwrites an answer already recorded in the block. Exit codes: 2 usage · 1 unknown slug / missing
+  loop file · 3 not `WAITING FOR INPUT` · 4 lock held · 5 no `## Pending decision` heading.
 - `status.sh [--json] [<slug>]` — enumerate **all** registered loops (from `~/.config/superagent/*.env`)
   with their live status/timer/tick/lock/input state; drill into one with `<slug>`.
 - `build-codex-skills.sh [--check]` — derives the committed `codex/` Codex plugin-marketplace build
@@ -298,20 +304,40 @@ answer:
    claude   # interactive; then: invoke the superagent:superagent skill and run one --tick on <LOOP_FILE>
    ```
 
-2. **Answer injection.** Edit the loop file directly — add `answer: <option>` under `## Pending
-   decision` — then let the next scheduled tick poll it and resume. Acquire the same lock first to avoid
-   racing a poll tick:
+2. **`answer.sh` (one command, resumes now).** Records the answer under the lock and kicks a tick:
 
    ```bash
-   d="$(dirname "$LOOP_FILE")"; b="$(basename "$LOOP_FILE")"
-   mkdir "$d/.$b.lockd"                       # acquire; if it exists, a tick is running — wait
-   echo $$ >"$d/.$b.lockd/owner"               # let a dead-owner steal see this shell's liveness
-   $EDITOR "$LOOP_FILE"                        # write: answer: <option>  under ## Pending decision
-   rm -rf "$d/.$b.lockd"                       # release
+   $SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"
+   $SUPERAGENT_SCRIPTS/answer.sh --no-kick <slug> "<option>"   # record only, no kick
+   $SUPERAGENT_SCRIPTS/answer.sh --replace <slug> "<option>"   # overwrite a recorded answer
    ```
 
-   (Agent-acquired locks also record the driving PID in `…lockd/owner`; a tick that finds the owner
-   dead steals the lock immediately instead of waiting out `SUPER_LOCK_STEAL_MIN`.)
+   Both flags parse in any position (`answer.sh <slug> "<option>" --no-kick` works too, and is not
+   recorded as part of the answer); an unknown `--flag` is a usage error (exit 2).
+
+   A hand edit also works (add `answer: <option>` under `## Pending decision`, holding
+   `.<loop>.lockd` as a tick would) — it is consumed on the next scheduled fire.
+
+While a loop waits, scheduled fires cost nothing: `superagent-tick.sh` checks the loop file in bash and
+exits before launching a session until the answer exists (`SUPER_INPUT_GATE=true`, `.superenv`). The
+operator is told once when the loop parks on a question they have not seen — a transition into
+`WAITING FOR INPUT`, or a changed `## Pending decision` block while already parked (the re-park case) —
+or finishes: set `SUPER_NOTIFY_CMD` to any shell snippet (it sees `SUPERAGENT_EVENT` =
+`waiting-for-input`|`done`, `SUPERAGENT_SLUG`, `LOOP_FILE`, `SUPERAGENT_TITLE`, `SUPERAGENT_BODY`), e.g.
+
+```bash
+SUPER_NOTIFY_CMD='curl -s -d "$SUPERAGENT_BODY" -H "Title: $SUPERAGENT_TITLE" ntfy.sh/<topic>'
+```
+
+The value must be **single-quoted**: `.superenv` is *sourced* under `set -euo pipefail`, so an unquoted
+`$SUPERAGENT_BODY` expands when the file loads — before those variables exist — and aborts every tick
+with "unbound variable"; single quotes defer the expansion to notify time. `SUPERAGENT_BODY` carries
+the loop's pending-decision text, so the question itself reaches whatever endpoint the snippet targets.
+Unset, the wrapper falls back to a desktop notification (`osascript` on macOS, `notify-send` on Linux)
+when available.
+
+(Agent-acquired locks also record the driving PID in `…lockd/owner`; a tick that finds the owner
+dead steals the lock immediately instead of waiting out `SUPER_LOCK_STEAL_MIN`.)
 
 The console plane is independent: killing a *monitoring* console is always safe; only avoid hard-killing
 a console that is *mid attended-tick* (it self-heals next tick via crash recovery + the lock steal —

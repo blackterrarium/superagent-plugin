@@ -15,6 +15,7 @@
 #   TICK_TIMEOUT  optional per-tick wall-clock cap, seconds (default: none/unlimited)
 #   LOG_FILE      driver log path                          (default: /tmp/superagent-<loop>.log)
 set -euo pipefail
+ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -54,6 +55,24 @@ fi
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
 load_superenv "$REPO"
+
+# --- WAITING FOR INPUT gate ---------------------------------------------------
+# A loop parked on WAITING FOR INPUT resumes only when a human writes
+# `answer: <option>` under ## Pending decision. Until then every scheduler fire
+# used to launch a full paid CLI session that read the file, found no answer, and
+# exited — the same no-op-per-interval waste #18 fixed for DONE. Poll the file in
+# bash instead: no answer → log one line, exit 0 (a legal clean no-op under the
+# L2 teardown invariant), no session. The moment an answer appears the next fire
+# runs the session as before (or answer.sh kicks one immediately). Runs BEFORE
+# the gh/CLI preflight so a parked loop costs nothing at all. Opt out with
+# SUPER_INPUT_GATE=false.
+if [[ "${SUPER_INPUT_GATE:-true}" == true && \
+      "$(superagent_loop_status "$LOOP_FILE")" == "WAITING FOR INPUT" ]] && \
+   ! superagent_pending_answer "$LOOP_FILE" >/dev/null; then
+  echo "=== $(ts) superagent-tick: loop is WAITING FOR INPUT with no answer — skipping the session (SUPER_INPUT_GATE). Answer + resume now: $SCRIPT_DIR/answer.sh ${SUPERAGENT_SLUG:-<slug>} \"<option>\" ===" >>"$LOG_FILE"
+  exit 0
+fi
+
 # Which agent CLI drives the tick: SUPER_HARNESS=claude (default) | cursor | codex.
 # Put the right binary on PATH (systemd/cron use a minimal PATH without
 # ~/.local/bin) and fail fast if it's still missing, then verify gh auth.
@@ -143,8 +162,6 @@ else
   PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING or RUNNING at exit. Then stop."
 fi
 
-ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
-
 # --- L3 lock safety net (issue #15) -----------------------------------------
 # The overlap lock is acquired/released by the AGENT inside the session
 # (superloop L3). If the CLI kills the session mid-flight (background-wait
@@ -190,6 +207,14 @@ elif [[ "$HARNESS" == codex && -z "${OPENAI_API_KEY:-}" ]]; then
 elif [[ "$HARNESS" == claude && -z "${ANTHROPIC_API_KEY:-}" ]]; then
   echo "    note: ANTHROPIC_API_KEY not set (no $REPO/.env entry); relying on the claude CLI's own stored login" >>"$LOG_FILE"
 fi
+
+# Status AND pending-decision text on entry, so post-run hooks can detect a
+# transition (notify once on parking/finishing, never on every subsequent fire)
+# — and also a RE-park: a tick that consumes an answer and immediately parks on
+# a NEW question leaves the status identical on both sides, so the status alone
+# would miss it and the gate would then silently suppress every later session.
+status_before="$(superagent_loop_status "$LOOP_FILE")"
+pending_before="$(superagent_pending_section "$LOOP_FILE")"
 
 # Bytes already in the log before this tick, so post-run checks only scan THIS
 # tick's segment (a prior tick's output must not poison this one's verdict).
@@ -279,6 +304,30 @@ if [[ "$rc" -eq 0 && -r "$LOOP_FILE" ]]; then
 fi
 
 echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
+
+# --- transition notifications -----------------------------------------------
+# Tell the operator ONCE whenever this tick leaves the loop parked on a question
+# they have not been shown, or finishes it (DONE).
+#   DONE               → a status transition (entry status != exit status).
+#   WAITING FOR INPUT  → a status transition into it, OR the `## Pending
+#                        decision` block changed while already parked. The
+#                        second arm is the re-park case: a tick that consumes
+#                        `answer:` and immediately parks on a NEW question shows
+#                        WAITING FOR INPUT on both sides, so a status-only guard
+#                        would stay silent and the gate would then suppress
+#                        every later session — a silently stranded loop.
+# Still no sidecar state: an unchanged parked loop notifies nothing, and a gated
+# fire exits long before this block, so repeats are impossible.
+# SUPER_NOTIFY_CMD or the desktop notifier; see superagent_notify.
+status_after="$(superagent_loop_status "$LOOP_FILE")"
+pending_after="$(superagent_pending_section "$LOOP_FILE")"
+notify_slug="${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}"
+if [[ "$status_after" == "WAITING FOR INPUT" ]] && \
+   { [[ "$status_before" != "$status_after" ]] || [[ "$pending_before" != "$pending_after" ]]; }; then
+  superagent_notify waiting-for-input "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+elif [[ "$status_after" == DONE && "$status_before" != "$status_after" ]]; then
+  superagent_notify done "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+fi
 
 # --- DONE self-disarm (issue #18) -------------------------------------------
 # status: DONE is terminal, but the scheduler entry keeps firing a full CLI

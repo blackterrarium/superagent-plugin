@@ -89,7 +89,8 @@ LOCK INPUT`. Read them, then **interpret** for the user:
   operations, and every tick's preflight aborts loudly, so no loop can make progress. Flag this first;
   fix by setting `GH_TOKEN` in `.env` (see [scripts/README.md](../../scripts/README.md#prerequisites)).
 - **`INPUT=YES`** (status `WAITING FOR INPUT`) — the loop is parked on a decision the L7 panel could not
-  resolve. Offer to answer it (Step 2).
+  resolve. Offer to answer it (Step 2). The operator was notified once when it parked (SUPER_NOTIFY_CMD /
+  desktop), and scheduled fires are free until answered (SUPER_INPUT_GATE).
 - **`STATUS=DONE`** — the goal is complete. The tick wrapper self-disarms the scheduler entry on the
   `DONE` tick (`SUPER_AUTO_DISARM_ON_DONE`, default `true`), so the timer is normally already gone;
   if one is still armed (opt-out, or a loop armed by a pre-0.4.6 build), offer to uninstall it (Step 3).
@@ -117,32 +118,33 @@ race-free (runs under the L3 lock and applies + continues in one step).
 
 Read the loop's `LOOP_FILE` from `~/.config/superagent/<slug>.env`.
 
-**Path A — attended tick (preferred).** Present the decision options to the user with `AskQuestion`, then
-run exactly one interactive tick, passing the chosen answer as guidance. The skill's
-`WAITING FOR INPUT` branch consumes it, records it under `## Decisions`, restores `prior_status`, and
-continues the tick — all under the lock, serialized against the scheduler. Derive the plugin root from
-`$SUPERAGENT_SCRIPTS` and read the skill file directly (this is a headless `codex exec` call, so it cannot
-run a slash command or rely on `${SUPER_PLUGIN_ROOT}`, which is undefined outside a live tool-execution
-context — superloop L2 Driver B):
+**Path A — `answer.sh` (preferred).** Present the decision options to the user with `AskQuestion`, then
+record the answer and resume the loop in one step — it takes the loop's L3 lock (refuses if a tick is
+mid-flight: retry), writes `answer: <option>` under `## Pending decision`, and kicks one tick
+immediately so the loop resumes now rather than after the interval (the wrapper's `SUPER_INPUT_GATE`
+otherwise skips sessions until that line exists):
+
+```
+"$SUPERAGENT_SCRIPTS/answer.sh" <slug> "<option>"        # --no-kick records only; --replace overwrites a recorded answer
+tail -f /tmp/superagent-<loop-basename>.log               # watch the resumed tick
+```
+
+Exit codes: 2 = usage (unknown flag / missing slug or answer), 1 = unknown slug or missing loop file,
+3 = not `WAITING FOR INPUT`, 4 = lock held (a tick is running — wait, then retry; if no tick is
+running the lock is stale, `force-stop.sh --slug <slug>` reaps it), 5 = no `## Pending decision`
+heading in the loop file.
+
+**Path B — attended tick (when you want to watch it apply in-session).** Run exactly one interactive
+tick, passing the chosen answer as guidance. The skill's `WAITING FOR INPUT` branch consumes it,
+records it under `## Decisions`, restores `prior_status`, and continues the tick — all under the lock,
+serialized against the scheduler. Derive the plugin root from `$SUPERAGENT_SCRIPTS` and read the skill
+file directly (headless `codex exec` cannot run a slash command or rely on `${SUPER_PLUGIN_ROOT}` —
+superloop L2 Driver B):
 
 ```
 cd "$primary_root"
 PLUGIN_ROOT="$(cd "$SUPERAGENT_SCRIPTS/.." && pwd)"
 codex exec "Read ${PLUGIN_ROOT}/skills/superagent/SKILL.md and run exactly ONE --tick on loop file <LOOP_FILE>. The pending decision is answered: <ANSWER>. Apply it and continue the tick." --allowedTools "Read,Edit,Write,Bash,Task,Skill"
-```
-
-**Path B — answer injection (durable, no tick now).** Write `answer: <option>` under `## Pending
-decision`; the next scheduled tick polls and resumes. Hold the loop's own lock so you never race a poll
-tick:
-
-```
-d="$(dirname "<LOOP_FILE>")"; b="$(basename "<LOOP_FILE>")"
-if mkdir "$d/.$b.lockd" 2>/dev/null; then
-  # edit <LOOP_FILE>: add `answer: <option>` under ## Pending decision
-  rm -rf "$d/.$b.lockd"
-else
-  echo "a tick holds the lock; retry shortly"   # do NOT edit while held
-fi
 ```
 
 Never call `AskUserQuestion`/`AskQuestion` on behalf of a *headless* tick — that is the driver's job to
@@ -179,8 +181,9 @@ user before any stop / uninstall / purge.**
 
 - **Read-only enumeration (Step 1) is always safe** and never affects loop progress — start/stop this
   monitor freely.
-- **Locks are load-bearing.** Only edit a loop-status file (Path B) while holding that loop's
-  `.<loop>.lockd`; never touch a loop whose `LOCK=yes`/`TICK=yes` without the lock.
+- **Locks are load-bearing.** `answer.sh` (Path A) takes the lock for you; if hand-editing a loop-status
+  file directly, hold that loop's `.<loop>.lockd` yourself. Never touch a loop whose `LOCK=yes`/`TICK=yes`
+  without the lock.
 - **Confirm before destructive actions** (hard stop, `--purge`). Drain and re-arm are reversible.
 - **Operate per `primary_root`.** The loop files and locks exist only in the primary checkout; a `<slug>`
   with a missing loop file is a resume-via-bootstrap situation, not an error to paper over.

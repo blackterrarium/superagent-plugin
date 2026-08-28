@@ -199,3 +199,104 @@ load_superenv() {
   set +a
   rm -f "$snapshot"
 }
+
+# ---------------------------------------------------------------------------
+# Loop-status file readers — shared by the tick wrapper, answer.sh, status.sh.
+# All are safe under a caller's `set -euo pipefail`: a missing/unreadable file,
+# an absent field, or a missing/empty argument yields empty output, never a
+# fatal rc and never an abort of the caller's shell (except where the rc IS
+# the answer — superagent_pending_answer).
+# ---------------------------------------------------------------------------
+
+# superagent_loop_status <loop-file> — trimmed frontmatter `status:` value.
+superagent_loop_status() {
+  local f="${1:-}"
+  [[ -n "$f" ]] || return 0
+  { sed -n 's/^status:[[:space:]]*//p' "$f" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//'; } || true
+}
+
+# superagent_pending_section <loop-file> — body of `## Pending decision`
+# (heading excluded, up to the next `## ` heading).
+superagent_pending_section() {
+  local f="${1:-}"
+  [[ -n "$f" ]] || return 0
+  awk '/^## Pending decision/{f=1; next} /^## /{f=0} f' "$f" 2>/dev/null || true
+}
+
+# superagent_pending_answer <loop-file> — the first non-empty `answer: <x>` value
+# INSIDE ## Pending decision (an answer: line elsewhere, e.g. under ## Decisions,
+# never counts). Echoes the value and returns 0; returns 1 with no output if none.
+superagent_pending_answer() {
+  local f="${1:-}" a
+  [[ -n "$f" ]] || return 1
+  a="$({ superagent_pending_section "$f" \
+        | sed -n 's/^[[:space:]]*answer:[[:space:]]*//p' | sed 's/[[:space:]]*$//' \
+        | grep -v '^$' | head -1; } || true)"
+  [[ -n "$a" ]] || return 1
+  echo "$a"
+}
+
+# ---------------------------------------------------------------------------
+# Operator notification — fired by the tick wrapper on a loop-status transition
+# into WAITING FOR INPUT (a decision needs a human) or DONE. Unattended mode
+# guarantees nobody is tailing the tick log, so this is the one signal the
+# operator actually receives.
+#   SUPER_NOTIFY_CMD  a shell snippet run via `bash -c` (e.g. a curl to ntfy.sh /
+#                     Slack / Pushover) with SUPERAGENT_EVENT, SUPERAGENT_SLUG,
+#                     LOOP_FILE, SUPERAGENT_TITLE, SUPERAGENT_BODY exported;
+#   (unset/empty)     a desktop notification: osascript on macOS, notify-send on
+#                     Linux, when available; otherwise log only.
+# Never fails the caller (a broken notifier must not fail a healthy tick) — this
+# includes malformed/empty args: `${1:?}` on an empty positional aborts the
+# WHOLE calling script under set -e (not just this function), so args are
+# defaulted with `${n:-}`, never required, and a missing/empty slug falls back
+# to "unknown" rather than aborting.
+# ---------------------------------------------------------------------------
+superagent_notify() {
+  local event="${1:-}" slug="${2:-}" loop="${3:-}" title body
+  [[ -n "$slug" ]] || slug="unknown"
+  case "$event" in
+    waiting-for-input)
+      title="superagent: $slug needs a decision"
+      body="$({ superagent_pending_section "$loop" | grep -v '^[[:space:]]*$' | head -3 \
+                | tr '\n' ' ' | cut -c1-200; } || true)"
+      [[ -n "$body" ]] || body="WAITING FOR INPUT: $loop"
+      ;;
+    done)
+      title="superagent: $slug is DONE"; body="Loop reached DONE: $loop"
+      ;;
+    *)
+      title="superagent: $slug $event"; body="$loop"
+      ;;
+  esac
+  # `notified` is the success record only: on a SUPER_NOTIFY_CMD failure the
+  # "failed (rc=N)" line above is the record, and claiming both would tell the
+  # operator a message went out that did not.
+  local ok=true
+  if [[ -n "${SUPER_NOTIFY_CMD:-}" ]]; then
+    SUPERAGENT_EVENT="$event" SUPERAGENT_SLUG="$slug" LOOP_FILE="$loop" \
+    SUPERAGENT_TITLE="$title" SUPERAGENT_BODY="$body" \
+      bash -c "$SUPER_NOTIFY_CMD" \
+      || { echo "superagent: SUPER_NOTIFY_CMD failed (rc=$?) for event=$event" >&2; ok=false; }
+  elif [[ "$(uname -s)" == Darwin ]] && command -v osascript >/dev/null 2>&1; then
+    local t="${title//\"/}" b="${body//\"/}"; t="${t//\\/}"; b="${b//\\/}"
+    osascript -e "display notification \"$b\" with title \"$t\"" >/dev/null 2>&1 || true
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "$title" "$body" >/dev/null 2>&1 || true
+  fi
+  [[ "$ok" == true ]] && echo "superagent: notified event=$event slug=$slug"
+  return 0
+}
+
+# superagent_kick_tick <slug> — fire ONE tick now (non-blocking) through the
+# registered scheduler entry, instead of waiting out the interval. Used by
+# launch.sh (first tick) and answer.sh (resume right after an answer). rc is
+# the scheduler's: non-zero when the entry is not loaded/armed.
+superagent_kick_tick() {
+  local slug="${1:-}"; [[ -n "$slug" ]] || { echo "superagent: kick_tick needs a slug" >&2; return 1; }
+  if [[ "$(superagent_scheduler)" == launchd ]]; then
+    launchctl kickstart "$(superagent_launchd_domain)/$(superagent_launchd_label "$slug")"
+  else
+    systemctl --user start --no-block "superagent-tick@$slug.service"
+  fi
+}
