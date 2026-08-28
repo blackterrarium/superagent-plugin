@@ -151,9 +151,10 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
 | 8 | `SUPER_CODEX_SANDBOX` (codex harness only) is set to something other than `workspace-write`/`danger-full-access`. |
 | 9 | The session was terminated at a print-mode background-task wait ceiling (claude harness, operator-set `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`) — subagents killed mid-flight while the CLI exited 0. |
 | 10 | The session exited 0 but left a **transient** `status` (`PLANNING`/`RUNNING`) in the loop file — the tick completed without advancing or parking (e.g. an interrupted dispatch that ended its turn with a question; issue #17). The next tick self-heals via crash recovery. |
+| 11 | `SUPER_MODEL_SUPERVISOR` (or `TICK_MODEL`) names a harness prefix (`[harness:]<model>`) other than the resolved `SUPER_HARNESS` — the supervisor must run natively; it cannot be bridged. |
 | *other* | Propagated verbatim from the underlying CLI's (`claude`/`agent`/`codex`) own exit status. |
 
-Codes 3 and 11+ are unused.
+Code 3 is unused.
 
 ## One-step launch (recommended)
 

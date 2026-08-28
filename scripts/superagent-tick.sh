@@ -180,6 +180,20 @@ else
   [[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL="opus"
 fi
 
+# Role-value grammar ([harness:]<model>) — the supervisor must be native to this harness:
+# strip a matching prefix, abort on a foreign one (a bridged supervisor is not a thing).
+if [[ -n "$TICK_MODEL" ]]; then
+  _sup_h="$(superagent_role_harness "$TICK_MODEL")"
+  if [[ "$_sup_h" != "$HARNESS" && "$_sup_h" != inherit && "$_sup_h" != unknown ]]; then
+    echo "superagent-tick: SUPER_MODEL_SUPERVISOR='$TICK_MODEL' names harness '$_sup_h' but SUPER_HARNESS=$HARNESS — the supervisor cannot be bridged" >&2
+    exit 11
+  fi
+  TICK_MODEL="$(superagent_role_model "$TICK_MODEL")"
+fi
+# Bridged roles (a role key naming another harness) run through this script; export its
+# path so relay agents never depend on a plugin-cache path baked at init time.
+export SUPERAGENT_BRIDGE="$PLUGIN_ROOT/scripts/role-bridge.sh"
+
 # Supervisor reasoning effort: TICK_EFFORT > SUPER_EFFORT_SUPERVISOR > inherit.
 # Harness-native names (claude: low..max; codex: none..xhigh); inherit -> pass nothing.
 # Cursor has no effort control: warn and drop.

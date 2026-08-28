@@ -82,5 +82,26 @@ check "usage error on bad harness" [ "$rc" -eq 64 ]
 perl -e 'alarm 5; exec @ARGV' "$BRIDGE" --harness claude --model >/dev/null 2>&1; rc=$?
 check "usage error on trailing flag with no value" [ "$rc" -eq 64 ]
 
+# ── _common.sh role parser ──
+. "$ROOT/scripts/_common.sh"
+ph() { [ "$(superagent_role_harness "$1")" = "$2" ]; }
+check "parse: tier → claude"          ph sonnet claude
+check "parse: claude- id → claude"    ph claude-fable-5 claude
+check "parse: gpt- → codex"           ph gpt-5.6-terra codex
+check "parse: o-series → codex"       ph o4-mini codex
+check "parse: codex- → codex"         ph codex-mini codex
+check "parse: slash → pi"             ph openai/gpt-5 pi
+check "parse: prefix wins"            ph pi:sonnet pi
+check "parse: cursor prefix"          ph cursor:auto cursor
+check "parse: inherit"                ph inherit inherit
+check "parse: unknown"                ph sonet unknown
+check "parse: model strip"            [ "$(superagent_role_model codex:gpt-5.6-sol)" = gpt-5.6-sol ]
+check "parse: model no prefix"        [ "$(superagent_role_model opus)" = opus ]
+check "effort: claude max ok"         superagent_effort_valid claude max
+if superagent_effort_valid codex max; then fail "effort: codex max rejected"; else ok "effort: codex max rejected"; fi
+check "effort: pi off ok"             superagent_effort_valid pi off
+if superagent_effort_valid cursor high; then fail "effort: cursor high rejected"; else ok "effort: cursor high rejected"; fi
+check "effort: inherit always ok"     superagent_effort_valid cursor inherit
+
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]
