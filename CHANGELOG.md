@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.8 — 2026-08-28
+
+- **A loop parked on `WAITING FOR INPUT` no longer burns a paid session per interval.** The
+  wrapper had no pre-screen for the parked state, so every scheduler fire launched a full CLI session
+  that read the file, found no answer, and exited — the DONE-polling waste of #18, still open for the
+  parked state. Three additive driver changes (no skill-logic or scheduler change):
+  - **Bash gate (`SUPER_INPUT_GATE=true`).** `superagent-tick.sh` reads the loop file before any
+    preflight; `WAITING FOR INPUT` with no `answer:` under `## Pending decision` → one log line,
+    exit 0, no session. Polling continues for free; resume-on-answer is unchanged.
+  - **One notification on the transition (`SUPER_NOTIFY_CMD`).** The wrapper snapshots `status`
+    before the session and fires `superagent_notify` when the tick parks the loop
+    (`waiting-for-input`, body = the pending question) or finishes it (`done`). Your snippet runs via
+    `bash -c` with `SUPERAGENT_EVENT/SLUG/TITLE/BODY` + `LOOP_FILE` in env (ntfy/Slack/Pushover…);
+    unset → `osascript` (macOS) / `notify-send` (Linux) when available. A failing notifier is logged
+    and never fails the tick. Transition detection = fires once, no sidecar state.
+  - **`scripts/answer.sh [--no-kick] <slug> <answer…>`.** Records `answer: <text>` directly under
+    `## Pending decision` holding the L3 lock (refuses with exit 4 while a tick is mid-flight, 3 if
+    the loop isn't parked), then kicks one tick via the registered scheduler entry so the loop resumes
+    in seconds. Kick logic lifted into `_common.sh` (`superagent_kick_tick`) and shared with
+    `launch.sh`. `superagent-monitor` now recommends it as the primary answer path.
+  - New `_common.sh` readers `superagent_loop_status` / `superagent_pending_section` /
+    `superagent_pending_answer` (answer detection is scoped to the pending section — an `answer:`
+    under `## Decisions` never counts).
+  - All new helpers tolerate empty arguments (`${1:-}`, never `${1:?}` — which would abort the
+    calling tick); `answer.sh` passes the answer through `ENVIRON` (backslash-safe), checks for the
+    heading before taking the lock, and traps TERM/INT so a signal never leaks the lock.
+  - Follow-ups (not here): a `WAITING FOR CI` bash gate; event-driven wake via launchd
+    `WatchPaths` / a systemd `.path` unit.
+
 ## 0.4.7 — 2026-08-19
 
 - **Fix #17: a headless tick could end its turn by asking the operator a question, exit 0 as
