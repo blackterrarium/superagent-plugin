@@ -308,9 +308,10 @@ echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
 # silent. SUPER_NOTIFY_CMD or the desktop notifier; see superagent_notify.
 status_after="$(superagent_loop_status "$LOOP_FILE")"
 if [[ "$status_before" != "$status_after" ]]; then
+  notify_slug="${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}"
   case "$status_after" in
-    "WAITING FOR INPUT") superagent_notify waiting-for-input "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
-    DONE)                superagent_notify done              "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
+    "WAITING FOR INPUT") superagent_notify waiting-for-input "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
+    DONE)                superagent_notify done              "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true ;;
   esac
 fi
 

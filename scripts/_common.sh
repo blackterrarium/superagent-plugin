@@ -246,10 +246,15 @@ superagent_pending_answer() {
 #                     LOOP_FILE, SUPERAGENT_TITLE, SUPERAGENT_BODY exported;
 #   (unset/empty)     a desktop notification: osascript on macOS, notify-send on
 #                     Linux, when available; otherwise log only.
-# Never fails the caller (a broken notifier must not fail a healthy tick).
+# Never fails the caller (a broken notifier must not fail a healthy tick) — this
+# includes malformed/empty args: `${1:?}` on an empty positional aborts the
+# WHOLE calling script under set -e (not just this function), so args are
+# defaulted with `${n:-}`, never required, and a missing/empty slug falls back
+# to "unknown" rather than aborting.
 # ---------------------------------------------------------------------------
 superagent_notify() {
-  local event="${1:?event}" slug="${2:?slug}" loop="${3:?loop-file}" title body
+  local event="${1:-}" slug="${2:-}" loop="${3:-}" title body
+  [[ -n "$slug" ]] || slug="unknown"
   case "$event" in
     waiting-for-input)
       title="superagent: $slug needs a decision"
