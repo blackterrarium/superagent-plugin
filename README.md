@@ -120,31 +120,59 @@ same name, then the repo-root `.superenv` file, then this plugin's shipped defau
 (`templates/superenv.default`). A repo with no `.superenv` runs entirely on the defaults below —
 `superagent:init` creates one by copying this file so the repo can edit knobs in place.
 
-`SUPER_MODEL_*` keys accept a tier name (`sonnet` | `opus` | `haiku` | `fable`), `inherit` (run on
-the session model), or a **full model ID** (`claude-<family>-<version>`, e.g. `claude-fable-5` — no
-date stamp needed). The Agent tool's `model:` parameter is tier-enum-only, so a full ID on any role
-key except `SUPER_MODEL_SUPERVISOR` is applied via a per-role agent definition
-(`.claude/agents/super-<role>.md`, `model:` frontmatter) that `superagent:init` generates — re-run
-init after setting or changing a full-ID value. `SUPER_MODEL_SUPERVISOR` needs no definition: the
-tick passes it straight to `claude --model`, which accepts every form.
+`SUPER_MODEL_*` keys on the nine role keys (`_PLANNER`, `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`,
+`_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`, `_BRANCH_REVIEWER`, `_FIX_PLANNER`) accept
+`inherit` (run on the session model) or `[<harness>:]<model>` — an optional harness prefix
+(`claude` | `codex` | `cursor` | `pi`) plus that harness's own native model string: for `claude`, a
+tier name (`sonnet` | `opus` | `haiku` | `fable`) or a **full model ID**
+(`claude-<family>-<version>`, e.g. `claude-fable-5` — no date stamp needed); for `codex`, a Codex
+model name (e.g. `gpt-5.6-sol`); for `cursor`, a Cursor model name; for `pi`, a
+`<provider>/<model>[:<thinking>]` string (e.g. `openai/gpt-5`). When the prefix is omitted the
+harness is *inferred* from the value's shape (an explicit prefix always wins over inference):
+`sonnet`/`opus`/`haiku`/`fable`/a `claude-`-prefixed ID → `claude`; a `gpt-`-, `o<digit>`-, or
+`codex`-prefixed value → `codex`; a value containing `/` → `pi`; anything else WARNs and falls back
+to `inherit`, as before this feature. A role is **native** when its resolved harness equals
+`SUPER_HARNESS` — dispatched exactly as always (a full ID or non-default effort on any role except
+`SUPER_MODEL_SUPERVISOR` still needs the per-role agent definition, `.claude/agents/super-<role>.md`,
+that `superagent:init` generates — re-run init after changing such a value; the Agent tool's `model:`
+parameter is tier-enum-only). A role naming a *different* harness is **bridged**: the same per-role
+dispatch hook is generated to point at a thin relay subagent instead of a real one — it shells out
+to `scripts/role-bridge.sh --harness <h> --model <m> --effort <e>`, which runs that harness's own
+CLI headless on the prompt and returns its final message verbatim, so the bridge target's CLI
+(`claude` / `codex` / `agent` / `pi`) must be installed and already authenticated on the host
+running the tick — `superagent:init` checks the binary is on `PATH` (hard error if missing) and
+warns when auth looks absent. `SUPER_MODEL_SUPERVISOR` is native-only: a prefix equal to
+`SUPER_HARNESS` is accepted and stripped, but any other prefix (or a foreign inference) is a hard
+error in both `init` and the tick itself (exit 11) — the supervisor can never be bridged.
 
 `SUPER_EFFORT_*` keys set per-role reasoning effort independently of the model pin, resolved the
-same three-layer way. The valid domain is harness-native: on Claude Code, `low | medium | high |
-xhigh | max | inherit`; on the Codex harness, `none | minimal | low | medium | high | xhigh |
-inherit` (no `max`); the Cursor CLI has no effort control at all, so any non-`inherit` value there
-is a no-op — `superagent:init`'s validation pass and the tick itself both WARN and fall back to
-`inherit`. `inherit` means no effort flag is passed, so the CLI's own default applies. The Claude build
-pins every role: the four dispatch roles (supervisor/planner/executor/panel) default to `opus`
-at effort `medium`/`high`/`medium`/`xhigh` respectively, and the SDD worker roles keep their
-nonzero efforts (`medium` for implementer/fix-applier, `high` for the reviewers and fix-planner,
-`xhigh` for the branch reviewer) — see the table below. The Agent tool has no effort parameter,
-so on the Claude build a non-`inherit` effort on any subagent role pins via the per-role agent
-definition `superagent:init` generates — with these defaults that is the normal path, so a repo
-whose `.claude/agents/super-*.md` files are missing (e.g. a hand-trimmed `.superenv` falling
-through to the plugin defaults) needs a re-run of init. The Codex build maps the `opus` pins to
-`gpt-5.6-sol` (and implementer/fix-applier to `gpt-5.6-terra`) with the same efforts; the Cursor
-build ships every model and effort key as `inherit`, since Claude tier names are not valid Cursor
-model names and the Cursor CLI has no effort control.
+same three-layer way, and validated in **the role's own resolved harness's domain**, not
+necessarily `SUPER_HARNESS`'s: on `claude`, `low | medium | high | xhigh | max | inherit`
+(`--effort` when bridged, the agent definition's `effort:` frontmatter when native); on `codex`,
+`none | minimal | low | medium | high | xhigh | inherit` (no `max`; `-c
+model_reasoning_effort=` bridged, the `reasoning_effort` spawn param native); on `pi`, `off |
+minimal | low | medium | high | inherit` (a `:<level>` suffix on the model string); on `cursor`,
+`inherit` only — the CLI has no effort control at all, so any other value is a no-op and both
+`superagent:init`'s validation pass and the tick itself WARN and fall back to `inherit`.
+Out-of-domain values always WARN and fall back to `inherit` the same way, regardless of harness.
+`inherit` means no effort flag is passed, so the CLI's own default applies. The Claude build pins
+every *native* role: the four dispatch roles (supervisor/planner/executor/panel) default to
+`opus` at effort `medium`/`high`/`medium`/`xhigh` respectively, and the SDD worker roles keep
+their nonzero efforts (`medium` for implementer/fix-applier, `high` for the reviewers and
+fix-planner, `xhigh` for the branch reviewer) — see the table below. The Agent tool has no effort
+parameter, so on the Claude build a non-`inherit` effort on any subagent role pins via the
+per-role agent definition `superagent:init` generates (a relay definition, generated from
+`templates/super-role-bridge-agent.md`, for a bridged role; a real one otherwise) — with these
+defaults that is the normal path, so a repo whose `.claude/agents/super-*.md` files are missing
+(e.g. a hand-trimmed `.superenv` falling through to the plugin defaults) needs a re-run of init.
+The Codex build maps the `opus` pins to `gpt-5.6-sol` (and implementer/fix-applier to
+`gpt-5.6-terra`) with the same efforts and generates relay spawns from
+`templates/relay-preamble.md` for a bridged role instead of an agent-definition file; the Cursor
+build ships every model and effort key as `inherit` by default, since Claude tier names are not
+valid Cursor model names and the Cursor CLI has no effort control, but still supports bridged
+roles through the same relay-definition mechanism as Claude when a role key is set explicitly.
+`SUPER_BRIDGE_RELAY_MODEL` pins the model of that thin relay subagent — see the table below for
+its default and why it must not be weakened to `haiku`.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -158,6 +186,7 @@ model names and the Cursor CLI has no effort control.
 | SUPER_MODEL_RE_REVIEWER | `opus` | Model for the SDD re-reviewer (post-fix). |
 | SUPER_MODEL_BRANCH_REVIEWER | `opus` | Model for the final whole-branch reviewer. |
 | SUPER_MODEL_FIX_PLANNER | `opus` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
+| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex/Cursor builds: `inherit`) | Model of the thin relay subagent that runs `role-bridge.sh` for a bridged role — it only copies a prompt and returns a result, so keep it cheap; do not weaken to `haiku` — measured to answer the prompt itself instead of relaying. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; `inherit` passes no effort flag). Ticks fire on an interval, so per-tick cost compounds — `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Reasoning effort for the `superplan` / `supergoal` dispatch subagent. |
 | SUPER_EFFORT_EXECUTOR | `medium` | Reasoning effort for the `superrun` dispatch subagent (the SDD controller) — the hard thinking is delegated to the reviewers and fix planner. |
@@ -187,6 +216,18 @@ model names and the Cursor CLI has no effort control.
 | SUPER_SKIP_FINISHING_HANDOFF | `false` | `true` bypasses `superpowers:finishing-a-development-branch`'s interactive menu entirely (`superrun` Step 3a integrates the code PR itself instead). |
 | SUPER_GH_DISABLE_SANDBOX | `false` | `true` on hosts (e.g. macOS) where `gh` needs keychain access the tool sandbox blocks. |
 | SUPER_REPO_NOTES | *(empty)* | Optional path to a repo doc the SDD executor reads before starting the task loop, treated as standing repo policy. |
+
+Mixing example — Claude supervisor, OpenAI implementer, Pi-hosted panel:
+
+    SUPER_HARNESS=claude
+    SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra   SUPER_EFFORT_IMPLEMENTER=medium
+    SUPER_MODEL_PANEL=pi:openai/gpt-5             SUPER_EFFORT_PANEL=high
+
+The supervisor and every other role stay on the native Claude harness; `implementer` and `panel` are
+bridged — each dispatch runs a relay subagent that shells out to `scripts/role-bridge.sh` on, respectively,
+an authenticated `codex` CLI and an authenticated `pi` CLI, and returns that CLI's final message
+verbatim. `superagent:init` regenerates `.claude/agents/super-implementer.md` and
+`.claude/agents/super-panel.md` as relay definitions and checks both `codex` and `pi` are on `PATH`.
 
 ## The loop in one page
 
@@ -281,7 +322,10 @@ A generated Cursor build of the plugin lives in [`cursor/`](cursor/README.md) �
 `scripts/build-cursor-skills.sh` derives it from conditional markers in the canonical skills
 (single source of truth; `--check` verifies the committed tree is fresh). Install on Cursor via
 its marketplace flow (this repo's root `.cursor-plugin/marketplace.json` points at `cursor/`) or
-locally with `agent --plugin-dir <repo>/cursor`.
+locally with `agent --plugin-dir <repo>/cursor`. Model keys (`SUPER_MODEL_*`) take a Cursor model
+name or `inherit` when native, or `[<harness>:]<model>` to bridge a role to another harness's CLI
+(`claude` | `codex` | `pi`) via `scripts/role-bridge.sh`, shipped in this build; a bridged role
+generates a relay agent definition the same way the Claude build does — see Configuration above.
 
 **Status: smoke-validated** (runs 1–2, 2026-08-12): headless `agent -p` + `--plugin-dir` loading,
 skill enumeration/invocation from a neutral workspace, and the tick entry point all work; the
@@ -312,10 +356,14 @@ login`). Sandbox posture is a separate `.superenv` knob, `SUPER_CODEX_SANDBOX`:
 unsandboxed claude harness) or `workspace-write` (`--sandbox workspace-write -c
 sandbox_workspace_write.network_access=true`; codex keeps the repo's top-level `.git/` read-only
 in this mode, so git fetch/commit fail and the sync gate parks the loop). Model keys (`SUPER_MODEL_*`)
-take Codex model names (e.g. `gpt-5.1-codex`) or `inherit`; effort keys (`SUPER_EFFORT_*`) take
-`none | minimal | low | medium | high | xhigh | inherit` — see Configuration above for the shared
-defaults table (same role keys as Claude Code; there is no `.claude/agents/`-style definition file
-on Codex, role pins ride `spawn_agent`'s `model`/`reasoning_effort` parameters instead).
+take Codex model names (e.g. `gpt-5.1-codex`) or `inherit` when native, or `[<harness>:]<model>`
+to bridge a role to another harness's CLI (`claude` | `cursor` | `pi`) via `scripts/role-bridge.sh`,
+shipped in this build; effort keys (`SUPER_EFFORT_*`) take `none | minimal | low | medium | high |
+xhigh | inherit` when the role is native to Codex, or the bridged role's own harness domain — see
+Configuration above for the shared defaults table (same role keys as Claude Code; a native role's
+pin rides `spawn_agent`'s `model`/`reasoning_effort` parameters, there is no `.claude/agents/`-style
+definition file on Codex — a bridged role instead spawns a relay agent from
+`templates/relay-preamble.md`).
 
 **Status: smoke-validated 8/8** (2026-08-12, codex CLI 0.147.0 on macOS): headless `codex exec`,
 the marketplace install path, skill enumeration and model-invocation from a neutral workspace,

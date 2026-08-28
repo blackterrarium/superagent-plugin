@@ -52,6 +52,14 @@ Override with `--model <slug>` on `launch.sh` / `install-timer.sh`
 generated agent definition is involved at this layer, unlike the subagent role keys. The header
 line in the tick log records the model in use (`model=...`).
 
+`SUPER_MODEL_SUPERVISOR` (and `TICK_MODEL`) must be **native** to `SUPER_HARNESS`: the value's
+grammar is `[<harness>:]<model>` with the same `claude|codex|cursor|pi` prefix and inference rules
+as the nine subagent role keys (see the main [`README.md`](../README.md#configuration)'s
+Configuration section), but a prefix — explicit or inferred — that names a harness other than the
+resolved `SUPER_HARNESS` is a hard error (exit 11; see Exit codes below) rather than a bridge: the
+supervisor itself can never be dispatched through `role-bridge.sh`, only the nine dispatch-hook
+role keys can.
+
 ## Effort
 
 Per-role reasoning effort rides alongside the model pin, resolved the same way: `TICK_EFFORT` env
@@ -62,6 +70,15 @@ harness-native: claude accepts `low|medium|high|xhigh|max`, codex accepts
 `none|minimal|low|medium|high|xhigh` (no `max`). The Cursor CLI has no effort control at all — any
 non-`inherit` `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` is logged as a warning and dropped, never
 passed through.
+
+This domain applies to `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` specifically, since the supervisor
+is always native to `SUPER_HARNESS`. The nine subagent role keys (`SUPER_EFFORT_PLANNER`,
+`_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
+`_BRANCH_REVIEWER`, `_FIX_PLANNER`) are validated in **their own resolved harness's** domain
+instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
+a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|inherit` (delivered
+as a `:<level>` suffix on the model string). See the main [`README.md`](../README.md#configuration)
+for the full per-role-harness table and defaults.
 
 `CLAUDE_CODE_EFFORT_LEVEL` (a `claude` CLI env var) outranks both `--effort` and any per-role agent
 frontmatter effort pin, so the tick never sets it itself; if the scheduler environment already
@@ -260,6 +277,20 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   availability, the real tick file-read entry + hard gate, and effort-flag pass-through); always
   exits 0 and writes `codex-smoke-report.md` at the repo root — failures are the data, not a script
   bug.
+- `role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit> --cwd <dir>
+  --prompt-file <file> [--role <name>]` — runs one agent role on a foreign harness CLI, headless:
+  reads the prompt from `<file>`, runs the target CLI in `<dir>`, prints its final message on stdout
+  and nothing else (CLI chatter goes to a log file, path printed on stderr). The relay definitions a
+  bridged role dispatches through (`templates/super-role-bridge-agent.md` on Claude/Cursor,
+  `templates/relay-preamble.md` on Codex) shell out to this script; it is also copied into the
+  `codex/` and `cursor/` builds.
+- `bridge-test.sh` — offline tests for `role-bridge.sh` and the `_common.sh` role-grammar parser,
+  using `PATH` shims in place of the real CLIs (no network, no live CLI needed); prints `bridge-test:
+  N failure(s)` and exits 1 on any failure.
+- `bridge-smoke.sh` — live probes for `role-bridge.sh` against whatever real CLIs are installed on
+  the host (T1–T7: each harness native, plus Claude↔Codex relay round trips); missing CLIs are
+  reported as SKIP, not FAIL. Always exits 0 and writes `bridge-smoke-report.md` at the repo root —
+  failures are the data, not a script bug.
 
 ## Monitoring multiple concurrent loops
 

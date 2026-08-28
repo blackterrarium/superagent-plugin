@@ -89,8 +89,11 @@ Out-of-domain values → WARN, treat as `inherit` (existing policy).
 ### New key
 
 `SUPER_BRIDGE_RELAY_MODEL` — model of the thin relay subagent that runs the bridge. Default
-`haiku` under `SUPER_HARNESS=claude`; `inherit` under `codex` and `cursor` (the CLI's default
-subagent model). Validated as a native model value.
+`sonnet` under `SUPER_HARNESS=claude`; `inherit` under `codex` and `cursor` (the CLI's default
+subagent model). Validated as a native model value. (Originally speced as `haiku`; raised to
+`sonnet` after the 2026-08-29 bridge smoke run measured a `haiku` relay subagent answering the
+bridged prompt itself — inventing an answer — instead of shelling out to `role-bridge.sh`, so
+`haiku` is unsafe for this role and must not be used on the Claude build.)
 
 ### `init` validation additions
 
