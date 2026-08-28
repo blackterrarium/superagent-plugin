@@ -99,6 +99,7 @@ if [[ "${SUPER_CI_GATE:-true}" == true && \
     for ci_id in $ci_runs; do
       ci_total=$((ci_total + 1))
       ci_state="$( (cd "$REPO" && gh run view "$ci_id" --json status --jq .status) 2>>"$LOG_FILE" )" || { ci_failed="$ci_id"; break; }
+      [[ -n "$ci_state" ]] || { ci_failed="$ci_id"; break; }
       [[ "$ci_state" == completed ]] || ci_running=$((ci_running + 1))
     done
     if [[ -n "$ci_failed" ]]; then

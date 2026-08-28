@@ -8,7 +8,7 @@
 # so it never races a tick, then kicks one tick through the registered scheduler
 # entry so the loop resumes in seconds instead of after the next interval
 # (superagent-tick.sh's SUPER_INPUT_GATE skips sessions until this line exists).
-# The flags are accepted in any position before the answer text:
+# The flags are accepted in any position (before or after the slug/answer):
 #   --no-kick   record the answer only; the next scheduled tick resumes.
 #   --replace   overwrite an answer: line already recorded in the block
 #               (without it, an existing answer is kept and only kicked).
@@ -90,8 +90,19 @@ if [[ "$skip_write" != true ]]; then
   }
   # Same lock discipline as a tick (superloop L3): mkdir is the atomic acquire.
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    echo "answer: a tick holds the lock ($LOCK_DIR) — retry when it finishes (status.sh $SLUG); if no tick is running, the lock is stale — force-stop.sh --slug $SLUG reaps it" >&2
-    exit 4
+    # superloop L3: a lock whose recorded owner PID is dead belongs to a crashed
+    # tick — reap it and retry once. A live owner, or no owner file at all (an
+    # older/hand-made lock — only age-stealable, which is a tick's job), is a
+    # real in-flight tick: refuse.
+    lock_owner="$(cat "$LOCK_DIR/owner" 2>/dev/null || true)"
+    if [[ -n "$lock_owner" ]] && ! kill -0 "$lock_owner" 2>/dev/null; then
+      echo "answer: reaped stale lock (owner pid $lock_owner is dead)" >&2
+      rm -rf "$LOCK_DIR"
+    fi
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      echo "answer: a tick holds the lock ($LOCK_DIR) — retry when it finishes (status.sh $SLUG); if no tick is running and the lock is old, force-stop.sh --slug $SLUG reaps it" >&2
+      exit 4
+    fi
   fi
   # Arm the release traps BEFORE writing `owner`: a kill landing between the
   # mkdir and that write would otherwise strand an ownerless lock that superloop
@@ -108,6 +119,9 @@ if [[ "$skip_write" != true ]]; then
   if existing="$(superagent_pending_answer "$LOOP_FILE")" && [[ "$REPLACE" != true ]]; then
     echo "answer: an answer is already recorded ('$existing') — not overwriting (use --replace); kicking a tick to consume it" >&2
     skip_write=true
+  fi
+  if [[ "$skip_write" == true ]]; then
+    rm -rf "$LOCK_DIR"; trap - EXIT TERM INT   # nothing to write — never kick while holding the lock
   fi
 fi
 if [[ "$skip_write" != true ]]; then

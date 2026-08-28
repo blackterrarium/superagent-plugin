@@ -100,10 +100,10 @@ install time), the target repo's `.superenv`, or the environment.
 `_common.sh`'s `load_superenv <repo-root>` resolves every `SUPER_*`/`TICK_*` variable in three layers,
 highest wins: **process env** (e.g. `TICK_MODEL` exported by the scheduler) > **`<repo-root>/.superenv`**
 (repo-local overrides, not checked into the plugin) > **`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`**
-(the plugin's shipped defaults, 28 `SUPER_*` keys covering models, paths, loop tuning, CI policy, and
-review protocol). `superagent-tick.sh`, `launch.sh`, and `install-timer.sh` all call `load_superenv "$REPO"`
-right after resolving `REPO`, so `SUPER_TICK_INTERVAL` (default `30m`) and `SUPER_MODEL_SUPERVISOR` (default
-`inherit`, which the tick treats as `opus`) are available before argument parsing.
+(the plugin's shipped defaults — every `SUPER_*` key with its default and a one-line description lives
+there; it is the reference). `superagent-tick.sh`, `launch.sh`, and `install-timer.sh` all call
+`load_superenv "$REPO"` right after resolving `REPO`, so `SUPER_TICK_INTERVAL` and `SUPER_MODEL_SUPERVISOR`
+(defaults in the template) are available before argument parsing.
 
 ## Prerequisites
 
