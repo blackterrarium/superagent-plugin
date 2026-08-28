@@ -16,6 +16,7 @@ no extra prose before or after it.
    "GENERATED FILE — Cursor build" (a correct Cursor build MUST); does it contain the string
    "cc-only" (a correct Cursor build must NOT — that would be marker leakage from the build).
 4. Report the CLAUDE_PLUGIN_ROOT environment variable: `echo "${CLAUDE_PLUGIN_ROOT:-unset}"`.
+5. Check whether `<plugin_root>/scripts/role-bridge.sh` exists and is executable.
 
 Report block (fill every value):
 
@@ -27,4 +28,5 @@ Report block (fill every value):
     superloop_has_cursor_banner: <yes|no>
     superloop_marker_leakage: <yes|no>
     env_claude_plugin_root: <value, or unset>
+    role_bridge_present: <yes|no>
     PROBE-END

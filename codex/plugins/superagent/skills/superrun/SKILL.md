@@ -17,7 +17,14 @@ related skills: supertraverse, superfinish, superplan
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. "Skill tool" = reference the skill by
+>   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
+>   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
+>   generate; a bridged role's relay spawn needs no definition either). A role whose value names
+>   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
+>   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
+>   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
+>   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
@@ -28,7 +35,9 @@ related skills: supertraverse, superfinish, superplan
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
+>   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
+>   path for it.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -152,13 +161,24 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    generates in `.claude/agents/`, and omit `model:`. A missing definition for a full-ID key, or any
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
+   **Bridged roles:** a value naming a harness other than `SUPER_HARNESS` (explicit
+   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi,
+   tier names and `claude-*`→claude, which is bridged only when `SUPER_HARNESS` ≠ claude)
+   is dispatched with `subagent_type: super-<role>` and no `model:`, exactly like a full-ID pin;
+   the definition `superagent:init` generated is a relay that runs the foreign CLI and returns its
+   result verbatim. A reply beginning `BRIDGE-FAILED` is a failed subagent: treat it as you would an
+   implementer/reviewer that crashed (retry once, then the skill's normal escalation), and quote the
+   `log=` path in the BLOCKED report. Missing definition = hard error (re-run `superagent:init`).
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
    model keys). `inherit` = no override.
    In this build the effort pin dispatches at spawn time: pass the role's resolved value
    as the spawn call's `reasoning_effort` parameter (`inherit` = omit it), alongside the
    role's model key as `model`. There are no per-role definition files on Codex and
    nothing for `superagent:init` to generate — a bad effort value fails in the spawn
-   call itself.
+   call itself. A **bridged** role (harness ≠ codex) is spawned as a relay: `model` =
+   `SUPER_BRIDGE_RELAY_MODEL` (omit when `inherit`), message =
+   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for the role + the full
+   task prompt; a `BRIDGE-FAILED` reply is a failed subagent.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or

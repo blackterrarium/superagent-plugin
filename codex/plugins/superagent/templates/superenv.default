@@ -1,9 +1,16 @@
 # .superenv — superagent plugin defaults
 # Precedence: env var > repo-root .superenv > this plugin default.
-# Model values (Codex build): a Codex model name (e.g. gpt-5.6-sol) or "inherit".
-# "inherit" = omit the model override; the CLI's config.toml default applies.
-# Role pins dispatch as spawn_agent parameters — no agent-definition files on Codex.
-# (SUPER_MODEL_SUPERVISOR goes straight to `codex exec -m`.)
+# Model values: "inherit", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi
+# and <model> is that harness's native model string — codex: a Codex model (gpt-5.6-sol); claude:
+# a tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); cursor: `agent --list-models`;
+# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the
+# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a "/" → pi).
+# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same
+# per-role subagent hook, executed by that harness's CLI via scripts/role-bridge.sh (the CLI must
+# be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS.
+# On Codex there are no agent-definition files: native pins ride spawn_agent parameters;
+# bridged roles spawn a relay from templates/relay-preamble.md.
+# (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=gpt-5.6-sol             # the superagent tick itself
@@ -17,6 +24,7 @@ SUPER_MODEL_RE_REVIEWER=gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol        # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
+SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED roles; inherit = the CLI default subagent model
 
 # ── Reasoning effort per agent role ───────────────────────────────
 # Values are Codex effort names, or "inherit" (= the CLI/model default).

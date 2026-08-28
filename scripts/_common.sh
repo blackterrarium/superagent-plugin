@@ -89,6 +89,39 @@ superagent_harness() {
   esac
 }
 
+# Role model value grammar: "inherit" | [harness ":"] model, harness = claude|codex|cursor|pi.
+# superagent_role_harness <value> -> claude|codex|cursor|pi|inherit|unknown  (prefix wins;
+# otherwise inferred: tier names / claude-* -> claude; gpt-* / o<digit>* / codex* -> codex;
+# a "/" (provider/model) -> pi). superagent_role_model <value> -> value minus any prefix.
+superagent_role_harness() {
+  local v="${1:-}"
+  case "$v" in
+    inherit|"") echo inherit; return ;;
+    claude:*|codex:*|cursor:*|pi:*) echo "${v%%:*}"; return ;;
+  esac
+  case "$v" in
+    sonnet|opus|haiku|fable|claude-*) echo claude ;;
+    gpt-*|o[0-9]*|codex*)             echo codex ;;
+    */*)                              echo pi ;;
+    *)                                echo unknown ;;
+  esac
+}
+superagent_role_model() {
+  local v="${1:-}"
+  case "$v" in claude:*|codex:*|cursor:*|pi:*) echo "${v#*:}" ;; *) echo "$v" ;; esac
+}
+# superagent_effort_valid <harness> <effort> -> 0 iff effort is in that harness's domain.
+superagent_effort_valid() {
+  local h="${1:-}" e="${2:-inherit}"
+  [ "$e" = inherit ] && return 0
+  case "$h" in
+    claude) case "$e" in low|medium|high|xhigh|max) return 0 ;; esac ;;
+    codex)  case "$e" in none|minimal|low|medium|high|xhigh) return 0 ;; esac ;;
+    pi)     case "$e" in off|minimal|low|medium|high) return 0 ;; esac ;;
+  esac
+  return 1
+}
+
 # Fatal check: ensure the Cursor CLI binary is findable; exports
 # SUPERAGENT_CURSOR_BIN with the resolved name (`agent`, or legacy `cursor-agent`).
 ensure_cursor_bin() {

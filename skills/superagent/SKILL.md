@@ -185,6 +185,11 @@ ci-resume's fresh subagent and escalation-ladder retries):
   `super-executor` — the per-role agent definition `superagent:init` generates in `.claude/agents/`,
   whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
   that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
+- A **bridged** value (harness prefix or inference ≠ `SUPER_HARNESS`, e.g. `codex:gpt-5.6-sol`,
+  `openai/gpt-5`) → dispatch with `subagent_type: super-planner` / `super-executor` and omit
+  `model:`; the generated definition is a relay to that harness's CLI. A Final Report that begins
+  `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
+  crashed subagent, quoting its `log=` path.
 
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and

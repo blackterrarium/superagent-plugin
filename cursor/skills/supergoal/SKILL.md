@@ -16,7 +16,10 @@ related skills: superauthor, superplan, supertraverse
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
 >   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
->   not available — use an OS scheduler.
+>   not available — use an OS scheduler. A role whose `.superenv` value names another harness
+>   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
+>   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
+>   reply beginning `BRIDGE-FAILED` as a failed subagent.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.

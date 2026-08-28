@@ -15,7 +15,10 @@ license: all rights reserved
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
 >   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
->   not available — use an OS scheduler.
+>   not available — use an OS scheduler. A role whose `.superenv` value names another harness
+>   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
+>   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
+>   reply beginning `BRIDGE-FAILED` as a failed subagent.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
@@ -90,6 +93,15 @@ which is exactly the case Step 2 below fixes by creating one.
    [scripts/README.md](../../scripts/README.md#cron-fallback-instead-of-systemd)). Run
    `uname -s` and say which scheduler this host would use — planning-only usage
    (`supergoal`/`superplan`) is host-independent.
+5. **Bridge targets.** For every harness that appears as a *bridged* role harness in the resolved
+   config (item 5 of the validation below): its CLI must be on PATH — `claude`, `codex`, `agent`
+   (Cursor), `pi` — else **ABORT** with an install hint (claude: `npm install -g
+   @anthropic-ai/claude-code`; codex: `npm install -g @openai/codex`; cursor: the Cursor CLI
+   installer; pi: `npm install -g @earendil-works/pi-coding-agent`). Auth is WARN-only: codex →
+   `OPENAI_API_KEY` set or `~/.codex/auth.json` present; pi → for a `<provider>/` of `openai` or
+   `anthropic`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` set; claude/cursor → binary only.
+   Also run `bash "${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh" 2>&1 | head -1` — a usage line
+   proves the bridge shipped with this build; a "not found" is a broken install: ABORT.
 
 ## Step 2 — Config
 
@@ -101,12 +113,13 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-### .superenv validation (lint — WARN + fallback, never abort)
+### .superenv validation (lint — WARN + fallback, never abort — one exception)
 
 Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
 using it. For each finding emit one WARN row in the summary; the effective value used
 by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
-report-only.
+report-only. There is exactly one exception to "never abort": a foreign harness on
+`SUPER_MODEL_SUPERVISOR` (item 5) stops init.
 
 1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
    also exist in `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
@@ -126,22 +139,47 @@ report-only.
 4. **Numerics** (positive integer, else WARN + template default):
    `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
    `SUPER_TICK_INTERVAL` must parse as an interval span (e.g. `600`, `90s`, `30m`, `2h`).
-5. **Model keys** (each `SUPER_MODEL_*`):
-   valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
-   and `claude-*` IDs not in that list → WARN, treat as `inherit`.
-6. **Effort keys** (each `SUPER_EFFORT_*`):
-   effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
+5. **Model keys** (each `SUPER_MODEL_*`): grammar `inherit | [<harness>:]<model>`, `<harness>` ∈
+   `claude|codex|cursor|pi`. Resolve each key's **harness** by taking the FIRST arm that matches:
+   (a) the value is literally `inherit`, or empty/unset → harness = `SUPER_HARNESS` (i.e. always
+   **native**), the key has no model, and inference is skipped entirely — this is the normal case
+   and never WARNs; (b) an explicit `<harness>:` prefix → that harness; (c) otherwise infer —
+   `sonnet|opus|haiku|fable|claude-*` → `claude`; `gpt-*|o<digit>*|codex*` → `codex`; a value
+   containing `/` → `pi`;
+   anything else → `cursor`, i.e. **native**: Cursor model names are free-form (cf.
+   `agent --list-models`), so a bare value matching no prefix and no pattern above is taken as a
+   Cursor model name — checked below against the model list rather than rejected here. Arm (c)
+   still runs first, so a Codex-looking name such as `gpt-5` infers `codex` and is therefore
+   **bridged**; write `cursor:gpt-5` to run that same name natively on Cursor.
+   Strip the prefix to get the **model**. The role is **native** when its harness equals
+   `SUPER_HARNESS`, else **bridged** — so an arm-(a) `inherit` role is always native, item 6
+   validates its effort in `SUPER_HARNESS`'s domain, and its summary row shows harness =
+   `SUPER_HARNESS`. `SUPER_MODEL_SUPERVISOR` must be native: a foreign harness there is a **hard
+   error** (stop and report; the tick refuses it too) — `SUPER_MODEL_SUPERVISOR=inherit` satisfies
+   this trivially.
+   Native model values are further validated per build:
+   a Cursor model name (`agent --list-models`) or `inherit`; a name not in that list → WARN, treat
+   as `inherit` (catches typos before they become an agent definition that fails at spawn time).
+   Bridged model values are not validated beyond the grammar (the foreign CLI owns its names), except
+   `pi`, whose model must contain exactly one `/` (`<provider>/<model>`).
+   `SUPER_BRIDGE_RELAY_MODEL` is validated as a native model value (invalid → WARN, treat as
+   `inherit`).
+6. **Effort keys** (each `SUPER_EFFORT_<ROLE>`): valid in the domain of the ROLE's harness (from
+   item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
+   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high`;
+   cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
 
 ## Step 3 — Role agents (model/effort pins)
 
 Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `agent --model`.
-On Cursor, valid model values are Cursor model names (see `agent --list-models`) or
-`inherit`. Any value other than `inherit` is pinned via a generated per-role agent
-definition — the definition's `model:` frontmatter carries the name. Claude Code tier
-names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`) are
-NOT valid Cursor model names unless they appear in `agent --list-models`: if a
-resolved value is one of these and not listed there, WARN and treat it as `inherit`.
+On Cursor, a **native** model value is a Cursor model name (see `agent --list-models`)
+or `inherit`; any native value other than `inherit` is pinned via a generated per-role
+agent definition — the definition's `model:` frontmatter carries the name. Claude Code
+tier names (`sonnet` | `opus` | `haiku` | `fable`) and Claude model IDs (`claude-*`)
+are NOT discarded: under item 5's grammar they resolve to harness `claude`, which is
+foreign to this build, so such a role is **bridged** and gets a relay definition
+instead of being treated as a typo.
 
 Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
@@ -157,7 +195,17 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
 
-- **Value is a model name (anything valid other than `inherit`):** render
+- **Bridged role (its harness ≠ `SUPER_HARNESS`):** render
+  `${SUPER_PLUGIN_ROOT}/templates/super-role-bridge-agent.md` to the listed path, substituting
+  `<role>`, `<KEY>` (both keys), `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit`
+  when unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
+  `inherit`), and `<bridge-path>` = the absolute path of
+  `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`. The `generated-by: superagent:init`
+  marker/ownership rules stated in the native bullets below apply to this file too (never
+  overwrite an unmarked file at that path — report `conflict` and leave it), but the native
+  bullets' case selection does not apply to a bridged role. A bridged panel role ignores
+  `SUPER_PANEL_AGENT_TYPE` (WARN once).
+- **Native role whose value is a model name (anything valid other than `inherit`):** render
   `${SUPER_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
   the agents directory if needed), substituting `<role>` (the path's `super-` suffix,
   e.g. `planner`), `<KEY>`, and `<model-id>`. These files are **derived artifacts
@@ -169,13 +217,16 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
   exists with the marker:** delete it (a stale derived artifact) and report
   `removed (stale)`.
 - **Value is `inherit`, no file present:** nothing to do.
-Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line).
+Effort keys are not supported for *native* Cursor roles: a native role's non-inherit
+SUPER_EFFORT_* value → WARN and treat as inherit (never render an effort: line). A bridged role's
+effort was validated in its own harness's domain (item 6) and is passed through to the relay.
 
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one.
-Report per-key results (`generated` /
-`regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
-row.
+Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
+`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`,
+`bridge(<harness>)`, or `bridge(<harness>, definition: conflict)` — a bridged role whose
+relay definition could not be written (hand-edited file kept, or the write was denied).
 
 Note: permission layers commonly treat `.cursor/` as protected — in a headless or
 auto-accept session the write may be auto-denied even when other edits sail through.

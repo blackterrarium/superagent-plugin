@@ -16,7 +16,14 @@ license: all rights reserved
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. "Skill tool" = reference the skill by
+>   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
+>   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
+>   generate; a bridged role's relay spawn needs no definition either). A role whose value names
+>   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
+>   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
+>   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
+>   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
@@ -27,7 +34,9 @@ license: all rights reserved
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
+>   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
+>   path for it.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -515,12 +524,18 @@ Dispatch **3 independent subagents in parallel** (one `spawn_agent` call per pan
 single message. Pass the panel pins as spawn parameters: `SUPER_MODEL_PANEL` → `model`,
 `SUPER_EFFORT_PANEL` → `reasoning_effort`; `inherit` = omit that parameter. There are no
 agent-definition files in this build — the pins ride the spawn call itself, and nothing needs a
-`superagent:init` re-run. Wait for all three children's results before proceeding; never
+`superagent:init` re-run. If `SUPER_MODEL_PANEL` is bridged, each panelist is a relay spawn:
+`model` = `SUPER_BRIDGE_RELAY_MODEL` (omit when `inherit`), message = rendered
+`relay-preamble.md` + the packet.
+Wait for all three children's results before proceeding; never
 fire-and-forget the panel).
 Give each the **same packet**: the decision/blocker statement, the relevant plan +
 report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
 from independent reasoning, not framing. Require each to return a structured verdict —
 `{chosen_option, rationale, confidence}` over the concrete options (or `insufficient-info`).
+A reply that begins `BRIDGE-FAILED` is a bridged panelist whose foreign CLI never produced a
+verdict: count it as that panelist returning `insufficient-info` (never as a vote, and never as a
+reason to abandon the rung), and note the bridge failure in the `## Decisions` entry.
 
 **Converge.** If **≥2 of 3** agree on the same option with non-low confidence → **adopt it.** Record
 it under `## Decisions` (option + one-line rationale + "panel 2/3" or "3/3"), then **apply** the

@@ -1,11 +1,17 @@
 # .superenv — superagent plugin defaults
 # Precedence: env var > repo-root .superenv > this plugin default.
-# Model values: an Agent-tool tier name (sonnet | opus | haiku | fable), "inherit",
-# or a full model ID (claude-<family>-<version>, e.g. claude-fable-5 — no date stamp
-# needed). "inherit" = omit the model override; the subagent runs on the session model.
-# A full ID on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent
-# definition in .claude/agents/ — re-run superagent:init after setting one.
-# (SUPER_MODEL_SUPERVISOR goes straight to `claude --model`, which takes any form.)
+# Model values: "inherit", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi
+# and <model> is that harness's native model string — claude: a tier (sonnet|opus|haiku|fable) or
+# full ID (claude-fable-5); codex: a Codex model (gpt-5.6-sol); cursor: `agent --list-models`;
+# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the
+# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a "/" → pi).
+# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same
+# per-role subagent hook, executed by that harness's CLI via scripts/role-bridge.sh (the CLI must
+# be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS.
+# "inherit" = omit the model override. On claude, a full ID, a non-inherit effort, or a bridged
+# harness on any role key except SUPER_MODEL_SUPERVISOR needs the per-role agent definition in
+# .claude/agents/ — re-run superagent:init after setting one.
+# (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=opus             # the superagent tick itself
@@ -19,12 +25,15 @@ SUPER_MODEL_RE_REVIEWER=opus
 SUPER_MODEL_BRANCH_REVIEWER=opus        # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=opus            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
+SUPER_BRIDGE_RELAY_MODEL=sonnet         # model of the thin relay subagent that runs role-bridge.sh for a BRIDGED role (native value or inherit); do not weaken to haiku — it answers the prompt itself instead of relaying
 
 # ── Reasoning effort per agent role ───────────────────────────────
-# Values are harness-native effort names, or "inherit" (= the CLI/model default).
+# Values are effort names in the ROLE's harness (see the model grammar above), or "inherit"
+# (= the CLI/model default).
 #   claude: low | medium | high | xhigh | max
 #   codex:  none | minimal | low | medium | high | xhigh
 #   cursor: not supported — non-inherit values are warned and treated as inherit
+#   pi:     off | minimal | low | medium | high (applied as the :<level> model suffix)
 # SUPER_EFFORT_SUPERVISOR is passed at tick invocation (claude: --effort,
 # codex: -c model_reasoning_effort). Any other non-inherit role key pins via the
 # generated per-role agent definition (claude) or the subagent-spawn parameter

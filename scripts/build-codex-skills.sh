@@ -43,6 +43,11 @@ OUT="$ROOT/codex"
 CHECK=false
 [ "${1:-}" = "--check" ] && CHECK=true
 
+# The superenv.default header rewrite below is delimited by awk on this exact comment line —
+# if it is ever reworded, the awk silently swallows the rest of the file. Fail loudly instead.
+grep -q '^# (SUPER_MODEL_SUPERVISOR' "$ROOT/templates/superenv.default" \
+  || { echo "build: superenv.default header end-marker missing" >&2; exit 1; }
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 TMP="$WORK/out"
@@ -70,7 +75,7 @@ substitute() {
     -e 's/\${CLAUDE_PLUGIN_ROOT}/\${SUPER_PLUGIN_ROOT}/g' \
     -e 's/claude -p/codex exec/g' \
     -e 's/claude --model/codex exec -m/g' \
-    -e 's/ANTHROPIC_API_KEY/OPENAI_API_KEY/g' \
+    -e '/OPENAI_API_KEY` \/ `ANTHROPIC_API_KEY/!s/ANTHROPIC_API_KEY/OPENAI_API_KEY/g' \
     -e 's/Claude CLI/Codex CLI/g' \
     -e 's/^driver: cron  .*/driver: external                  # the only driver in this build (external scheduler — fresh context per tick)/' \
     -e 's/^cron_id:  .*# CronCreate job id.*/cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty/'
@@ -92,7 +97,14 @@ cat >"$banner_file" <<'EOF'
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. "Skill tool" = reference the skill by
+>   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
+>   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
+>   generate; a bridged role's relay spawn needs no definition either). A role whose value names
+>   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
+>   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
+>   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
+>   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
 >   sessions only — never in a headless tick). `EnterWorktree` = not available; use
 >   `git worktree` via shell.
@@ -103,7 +115,9 @@ cat >"$banner_file" <<'EOF'
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md).
+>   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
+>   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
+>   path for it.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -153,6 +167,7 @@ no extra prose before or after it.
    contain the string "cc-only" OR the string "cursor-only" (a correct Codex build must NOT —
    either would be marker leakage from the build).
 4. Report the CODEX_HOME environment variable: `echo "${CODEX_HOME:-unset}"`.
+5. Check whether `<plugin_root>/scripts/role-bridge.sh` exists and is executable.
 
 Report block (fill every value):
 
@@ -164,6 +179,7 @@ Report block (fill every value):
     superloop_has_codex_banner: <yes|no>
     superloop_marker_leakage: <yes|no>
     env_codex_home: <value, or unset>
+    role_bridge_present: <yes|no>
     PROBE-END
 EOF
 
@@ -173,17 +189,29 @@ EOF
 # including a root-level templates/ — would not ship (verified against codex CLI 0.147.0).
 mkdir -p "$TMP/plugins/superagent/templates"
 cp "$ROOT/templates/super-role-agent.md" "$TMP/plugins/superagent/templates/"
+cp "$ROOT/templates/super-role-bridge-agent.md" "$TMP/plugins/superagent/templates/"
+cp "$ROOT/templates/relay-preamble.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/vault-root.md" "$TMP/plugins/superagent/templates/"
+mkdir -p "$TMP/plugins/superagent/scripts"
+cp "$ROOT/scripts/role-bridge.sh" "$TMP/plugins/superagent/scripts/"
+chmod +x "$TMP/plugins/superagent/scripts/role-bridge.sh"
 
 # superenv.default: same seds as skills, then Codex-specific header + model defaults.
 substitute <"$ROOT/templates/superenv.default" | awk '
   # Replace the Claude model-values header block (lines from "# Model values:" through the
   # "(SUPER_MODEL_SUPERVISOR ..." comment line) with the Codex wording.
   /^# Model values:/ { inhdr=1
-    print "# Model values (Codex build): a Codex model name (e.g. gpt-5.6-sol) or \"inherit\"."
-    print "# \"inherit\" = omit the model override; the CLI'"'"'s config.toml default applies."
-    print "# Role pins dispatch as spawn_agent parameters — no agent-definition files on Codex."
-    print "# (SUPER_MODEL_SUPERVISOR goes straight to `codex exec -m`.)"
+    print "# Model values: \"inherit\", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi"
+    print "# and <model> is that harness'"'"'s native model string — codex: a Codex model (gpt-5.6-sol); claude:"
+    print "# a tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); cursor: `agent --list-models`;"
+    print "# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the"
+    print "# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a \"/\" → pi)."
+    print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"
+    print "# per-role subagent hook, executed by that harness'"'"'s CLI via scripts/role-bridge.sh (the CLI must"
+    print "# be installed and logged in). SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS."
+    print "# On Codex there are no agent-definition files: native pins ride spawn_agent parameters;"
+    print "# bridged roles spawn a relay from templates/relay-preamble.md."
+    print "# (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)"
     next }
   inhdr && /^# \(SUPER_MODEL_SUPERVISOR/ { inhdr=0; next }
   inhdr && /^#/ { next }
@@ -217,6 +245,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_BRANCH_REVIEWER=opus/SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_FIX_PLANNER=opus/SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
+  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
   >"$TMP/plugins/superagent/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
@@ -269,13 +298,17 @@ This build differs from the Claude Code plugin:
   tooling) is stripped; loops run via an OS scheduler firing fresh headless `codex exec` sessions.
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
-- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take Codex model names (e.g. `gpt-5.1-codex`) or
-  `inherit` — Claude tier names are not valid here.
+- **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Codex model name
+  (e.g. `gpt-5.1-codex`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  `pi:openai/gpt-5`, …) is valid too but BRIDGED — dispatched through a relay that runs the shipped
+  `scripts/role-bridge.sh`.
 - **Effort keys** (`SUPER_EFFORT_*`) take Codex effort names (`none | minimal | low | medium |
   high | xhigh`) or `inherit`.
-- **No `.claude/agents/` definition files.** Role pins (`SUPER_MODEL_<ROLE>` /
-  `SUPER_EFFORT_<ROLE>`) dispatch as `spawn_agent` parameters (`model` / `reasoning_effort`)
-  instead.
+- **No `.claude/agents/` definition files.** Native pins ride `spawn_agent` parameters; bridged
+  roles spawn a relay from `templates/relay-preamble.md`.
+- **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
+  (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
+  (default `inherit`) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone
@@ -320,12 +353,20 @@ fetch/commit fail and the sync gate parks the loop).
   flag (pre-existing in both generated builds; tracked for follow-up).
 EOF
 
+# ── Post-generation sanity checks ─────────────────────────────────────────────
+grep -q 'OPENAI_API_KEY` / `ANTHROPIC_API_KEY' "$TMP/plugins/superagent/skills/init/SKILL.md" \
+  || { echo "build-codex-skills: pi-auth carve-out no longer matches — fix the sed address" >&2; exit 1; }
+[ -x "$TMP/plugins/superagent/scripts/role-bridge.sh" ] \
+  || { echo "build-codex-skills: role-bridge.sh not executable" >&2; exit 1; }
+
 # ── Emit or check ────────────────────────────────────────────────────────────
 if $CHECK; then
   if [ ! -d "$OUT" ]; then
     echo "build-codex-skills: --check: $OUT does not exist (run the build first)" >&2
     exit 1
   fi
+  [ -x "$OUT/plugins/superagent/scripts/role-bridge.sh" ] \
+    || { echo "build-codex-skills: --check: $OUT/plugins/superagent/scripts/role-bridge.sh missing or not executable" >&2; exit 1; }
   if diff -r "$TMP" "$OUT" >/dev/null 2>&1; then
     echo "build-codex-skills: codex/ is up to date"
   else
