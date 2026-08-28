@@ -91,11 +91,11 @@ if [[ "$skip_write" != true ]]; then
   # Same lock discipline as a tick (superloop L3): mkdir is the atomic acquire.
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     # superloop L3: a lock whose recorded owner PID is dead belongs to a crashed
-    # tick — reap it and retry once. A live owner, or no owner file at all (an
-    # older/hand-made lock — only age-stealable, which is a tick's job), is a
-    # real in-flight tick: refuse.
+    # tick — reap it and retry once. A live owner, no owner file at all, or a
+    # malformed owner (not a bare PID — only age-stealable, which is a tick's
+    # job), is a real in-flight lock: refuse.
     lock_owner="$(cat "$LOCK_DIR/owner" 2>/dev/null || true)"
-    if [[ -n "$lock_owner" ]] && ! kill -0 "$lock_owner" 2>/dev/null; then
+    if [[ "$lock_owner" =~ ^[0-9]+$ ]] && ! kill -0 "$lock_owner" 2>/dev/null; then
       echo "answer: reaped stale lock (owner pid $lock_owner is dead)" >&2
       rm -rf "$LOCK_DIR"
     fi

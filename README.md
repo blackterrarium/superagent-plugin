@@ -203,7 +203,9 @@ checkout, never in a worktree.
 a crashed prior tick — self-healed back to its ready state. `WAITING FOR CI` is a durable **parked**
 state: the loop never polls a long CI run with `gh run watch` or a sleep loop — a `cron` session arms one
 event-fired `Monitor` and suspends its driver for the wait; an `external` tick does one cheap batched
-`curl` check per fire and no-ops until every run is terminal.
+`curl` check per fire and no-ops until every run is terminal. On the shipped external driver, parked
+fires are free — the wrapper checks the recorded run ids in bash and starts no session until they are
+terminal.
 
 Each tick dispatches **at most one** of `superplan` / `superrun`, always in its **own subagent**
 (`Agent` tool, synchronous — the supervisor waits on the tool result, it never polls a background

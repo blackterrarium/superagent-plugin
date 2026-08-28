@@ -336,6 +336,11 @@ the loop's pending-decision text, so the question itself reaches whatever endpoi
 Unset, the wrapper falls back to a desktop notification (`osascript` on macOS, `notify-send` on Linux)
 when available.
 
+The same holds for `WAITING FOR CI`: the wrapper queries each run in the loop file's `ci_wait.runs`
+with `gh run view --json status` and launches no session until all are `completed`
+(`SUPER_CI_GATE=true`). If the ids cannot be parsed or `gh` fails, it falls through to the session
+(the pre-0.4.9 behaviour) rather than stalling.
+
 (Agent-acquired locks also record the driving PID in `…lockd/owner`; a tick that finds the owner
 dead steals the lock immediately instead of waiting out `SUPER_LOCK_STEAL_MIN`.)
 

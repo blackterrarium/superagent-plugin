@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.9 — 2026-08-28
+
+- **`WAITING FOR CI` is now a free park (`SUPER_CI_GATE=true`).** The other parked state still
+  launched a full CLI session per interval whose only job was one status query. `superagent-tick.sh`
+  now parses `ci_wait.runs` from the loop-file frontmatter (`superagent_ci_runs`; inline
+  `runs: [id, id]` or a `- id` list) and runs `gh run view <id> --json status` for each after the gh
+  preflight; any run not `completed` → one log line, exit 0, no session. Fail-open: unparseable ids
+  or a `gh` error fall through to the session (the old behaviour) — the gate can never strand a loop.
+  The skill now prescribes the inline-list form as canonical.
+- **`answer.sh`:** releases the lock *before* kicking on the "answer already recorded" path (the
+  kicked tick used to find the lock held and exit, costing an interval); reaps a lock whose `owner`
+  PID is dead (superloop L3) instead of refusing forever.
+- **`status.sh`:** `INPUT` column is `YES` (parked, needs you) / `ans` (answer recorded, next fire
+  resumes) / `-`; JSON gains `answer_recorded`; drill-in prints the recorded answer.
+- `scripts/README.md`: the `.superenv` paragraph cites `templates/superenv.default` instead of stale
+  key-count/default values.
+
 ## 0.4.8 — 2026-08-28
 
 - **A loop parked on `WAITING FOR INPUT` no longer burns a paid session per interval.** The
