@@ -150,7 +150,8 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
    **Bridged roles:** a value naming a harness other than `SUPER_HARNESS` (explicit
-   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi)
+   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi,
+   tier names and `claude-*`→claude, which is bridged only when `SUPER_HARNESS` ≠ claude)
    is dispatched with `subagent_type: super-<role>` and no `model:`, exactly like a full-ID pin;
    the definition `superagent:init` generated is a relay that runs the foreign CLI and returns its
    result verbatim. A reply beginning `BRIDGE-FAILED` is a failed subagent: treat it as you would an

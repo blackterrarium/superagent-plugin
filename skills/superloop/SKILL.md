@@ -715,8 +715,9 @@ Dispatch **3 independent subagents in parallel** (one `spawn_agent` call per pan
 single message. Pass the panel pins as spawn parameters: `SUPER_MODEL_PANEL` → `model`,
 `SUPER_EFFORT_PANEL` → `reasoning_effort`; `inherit` = omit that parameter. There are no
 agent-definition files in this build — the pins ride the spawn call itself, and nothing needs a
-`superagent:init` re-run. If `SUPER_MODEL_PANEL` is bridged, each panelist is a relay spawn
-(`model` = `SUPER_BRIDGE_RELAY_MODEL`, message = rendered `relay-preamble.md` + the packet).
+`superagent:init` re-run. If `SUPER_MODEL_PANEL` is bridged, each panelist is a relay spawn:
+`model` = `SUPER_BRIDGE_RELAY_MODEL` (omit when `inherit`), message = rendered
+`relay-preamble.md` + the packet.
 Wait for all three children's results before proceeding; never
 fire-and-forget the panel).
 codex-only:end -->

@@ -16,9 +16,11 @@ license: all rights reserved
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. A role whose value names another harness
->   (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
->   (model = SUPER_BRIDGE_RELAY_MODEL) whose message is
+>   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
+>   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
+>   generate; a bridged role's relay spawn needs no definition either). A role whose value names
+>   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
 >   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
@@ -520,8 +522,9 @@ Dispatch **3 independent subagents in parallel** (one `spawn_agent` call per pan
 single message. Pass the panel pins as spawn parameters: `SUPER_MODEL_PANEL` → `model`,
 `SUPER_EFFORT_PANEL` → `reasoning_effort`; `inherit` = omit that parameter. There are no
 agent-definition files in this build — the pins ride the spawn call itself, and nothing needs a
-`superagent:init` re-run. If `SUPER_MODEL_PANEL` is bridged, each panelist is a relay spawn
-(`model` = `SUPER_BRIDGE_RELAY_MODEL`, message = rendered `relay-preamble.md` + the packet).
+`superagent:init` re-run. If `SUPER_MODEL_PANEL` is bridged, each panelist is a relay spawn:
+`model` = `SUPER_BRIDGE_RELAY_MODEL` (omit when `inherit`), message = rendered
+`relay-preamble.md` + the packet.
 Wait for all three children's results before proceeding; never
 fire-and-forget the panel).
 Give each the **same packet**: the decision/blocker statement, the relevant plan +

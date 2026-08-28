@@ -17,9 +17,11 @@ related skills: superplan, supertraverse
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. A role whose value names another harness
->   (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
->   (model = SUPER_BRIDGE_RELAY_MODEL) whose message is
+>   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
+>   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
+>   generate; a bridged role's relay spawn needs no definition either). A role whose value names
+>   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
 >   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by

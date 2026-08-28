@@ -17,9 +17,11 @@ related skills: supertraverse, superfinish, superplan
 >   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
 >   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
 >   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead. A role whose value names another harness
->   (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
->   (model = SUPER_BRIDGE_RELAY_MODEL) whose message is
+>   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
+>   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
+>   generate; a bridged role's relay spawn needs no definition either). A role whose value names
+>   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
+>   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
 >   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
@@ -158,7 +160,8 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    other unrecognized value, is a hard error — fail the dispatch loudly (for the missing-definition
    case, instruct a `superagent:init` re-run); never silently substitute a cheaper tier.
    **Bridged roles:** a value naming a harness other than `SUPER_HARNESS` (explicit
-   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi)
+   `codex:`/`pi:`/`cursor:`/`claude:` prefix, or inferred — `gpt-*`→codex, `<provider>/<model>`→pi,
+   tier names and `claude-*`→claude, which is bridged only when `SUPER_HARNESS` ≠ claude)
    is dispatched with `subagent_type: super-<role>` and no `model:`, exactly like a full-ID pin;
    the definition `superagent:init` generated is a relay that runs the foreign CLI and returns its
    result verbatim. A reply beginning `BRIDGE-FAILED` is a failed subagent: treat it as you would an
