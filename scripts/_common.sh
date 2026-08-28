@@ -199,3 +199,33 @@ load_superenv() {
   set +a
   rm -f "$snapshot"
 }
+
+# ---------------------------------------------------------------------------
+# Loop-status file readers — shared by the tick wrapper, answer.sh, status.sh.
+# All are safe under a caller's `set -euo pipefail`: a missing/unreadable file
+# or an absent field yields empty output, never a fatal rc (except where the
+# rc IS the answer — superagent_pending_answer).
+# ---------------------------------------------------------------------------
+
+# superagent_loop_status <loop-file> — trimmed frontmatter `status:` value.
+superagent_loop_status() {
+  { sed -n 's/^status:[[:space:]]*//p' "${1:?loop-file}" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//'; } || true
+}
+
+# superagent_pending_section <loop-file> — body of `## Pending decision`
+# (heading excluded, up to the next `## ` heading).
+superagent_pending_section() {
+  awk '/^## Pending decision/{f=1; next} /^## /{f=0} f' "${1:?loop-file}" 2>/dev/null || true
+}
+
+# superagent_pending_answer <loop-file> — the first non-empty `answer: <x>` value
+# INSIDE ## Pending decision (an answer: line elsewhere, e.g. under ## Decisions,
+# never counts). Echoes the value and returns 0; returns 1 with no output if none.
+superagent_pending_answer() {
+  local a
+  a="$({ superagent_pending_section "${1:?loop-file}" \
+        | sed -n 's/^[[:space:]]*answer:[[:space:]]*//p' | sed 's/[[:space:]]*$//' \
+        | grep -v '^$' | head -1; } || true)"
+  [[ -n "$a" ]] || return 1
+  echo "$a"
+}
