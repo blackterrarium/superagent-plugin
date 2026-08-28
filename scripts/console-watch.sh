@@ -12,9 +12,11 @@
 #
 #   console-watch.sh <LOOP_FILE> [interval_secs]     (default interval: 60)
 #
-# To ANSWER a parked decision: answer.sh <slug> "<option>" (records the answer
-# under the lock and kicks a tick now); or run one attended --tick; or hand-edit
-# `answer: <option>` under ## Pending decision (next scheduled tick resumes).
+# To ANSWER a parked decision: answer.sh [--no-kick] [--replace] <slug> "<option>"
+# (records the answer under the lock and kicks a tick now; --no-kick records only,
+# --replace overwrites an answer already recorded — both accepted in any
+# position); or run one attended --tick; or hand-edit `answer: <option>` under
+# ## Pending decision (next scheduled tick resumes).
 set -euo pipefail
 
 LOOP_FILE="${LOOP_FILE:-${1:-}}"

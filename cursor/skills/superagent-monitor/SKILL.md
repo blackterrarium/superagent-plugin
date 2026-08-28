@@ -119,12 +119,14 @@ immediately so the loop resumes now rather than after the interval (the wrapper'
 otherwise skips sessions until that line exists):
 
 ```
-"$SUPERAGENT_SCRIPTS/answer.sh" <slug> "<option>"        # add --no-kick to record only
+"$SUPERAGENT_SCRIPTS/answer.sh" <slug> "<option>"        # --no-kick records only; --replace overwrites a recorded answer
 tail -f /tmp/superagent-<loop-basename>.log               # watch the resumed tick
 ```
 
-Exit codes: 3 = not `WAITING FOR INPUT`, 4 = lock held (a tick is running — wait, then retry), 1 =
-unknown slug.
+Exit codes: 2 = usage (unknown flag / missing slug or answer), 1 = unknown slug or missing loop file,
+3 = not `WAITING FOR INPUT`, 4 = lock held (a tick is running — wait, then retry; if no tick is
+running the lock is stale, `force-stop.sh --slug <slug>` reaps it), 5 = no `## Pending decision`
+heading in the loop file.
 
 **Path B — attended tick (when you want to watch it apply in-session).** Run exactly one interactive
 tick, passing the chosen answer as guidance. The skill's `WAITING FOR INPUT` branch consumes it,
