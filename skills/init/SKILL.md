@@ -89,6 +89,15 @@ which is exactly the case Step 2 below fixes by creating one.
    [scripts/README.md](../../scripts/README.md#cron-fallback-instead-of-systemd)). Run
    `uname -s` and say which scheduler this host would use — planning-only usage
    (`supergoal`/`superplan`) is host-independent.
+5. **Bridge targets.** For every harness that appears as a *bridged* role harness in the resolved
+   config (item 5 of the validation below): its CLI must be on PATH — `claude`, `codex`, `agent`
+   (Cursor), `pi` — else **ABORT** with an install hint (claude: `npm install -g
+   @anthropic-ai/claude-code`; codex: `npm install -g @openai/codex`; cursor: the Cursor CLI
+   installer; pi: `npm install -g @earendil-works/pi-coding-agent`). Auth is WARN-only: codex →
+   `OPENAI_API_KEY` set or `~/.codex/auth.json` present; pi → for a `<provider>/` of `openai` or
+   `anthropic`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` set; claude/cursor → binary only.
+   Also run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/role-bridge.sh" 2>&1 | head -1` — a usage line
+   proves the bridge shipped with this build; a "not found" is a broken install: ABORT.
 
 ## Step 2 — Config
 
@@ -125,33 +134,30 @@ report-only.
 4. **Numerics** (positive integer, else WARN + template default):
    `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
    `SUPER_TICK_INTERVAL` must parse as an interval span (e.g. `600`, `90s`, `30m`, `2h`).
-5. **Model keys** (each `SUPER_MODEL_*`):
+5. **Model keys** (each `SUPER_MODEL_*`): grammar `inherit | [<harness>:]<model>`, `<harness>` ∈
+   `claude|codex|cursor|pi`. Resolve each key's **harness**: an explicit prefix wins; otherwise infer —
+   `sonnet|opus|haiku|fable|claude-*` → `claude`; `gpt-*|o<digit>*|codex*` → `codex`; a value
+   containing `/` → `pi`; anything else → WARN "unrecognized model value", treat as `inherit`.
+   Strip the prefix to get the **model**. The role is **native** when its harness equals
+   `SUPER_HARNESS`, else **bridged**. `SUPER_MODEL_SUPERVISOR` must be native: a foreign harness
+   there is a **hard error** (stop and report; the tick refuses it too).
+   Native model values are further validated per build:
 <!-- cc-only:start -->
-   valid = a tier name (`sonnet|opus|haiku|fable`), `inherit`, or a full Claude model
-   ID (`^claude-`). Anything else → WARN, treat as `inherit` (catches typos like
-   `sonet` before they become an agent definition that fails at spawn time).
+   a tier name (`sonnet|opus|haiku|fable`), `inherit`, or a full Claude model ID (`^claude-`).
 <!-- cc-only:end -->
 <!-- cursor-only:start
-   valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
-   and `claude-*` IDs not in that list → WARN, treat as `inherit`.
+   a Cursor model name (`agent --list-models`) or `inherit`.
 cursor-only:end -->
 <!-- codex-only:start
-   valid = a Codex model name or `inherit`. A Claude tier name
-   (`sonnet|opus|haiku|fable`) or Claude model ID (`^claude-`) → WARN, treat as
-   `inherit` (a hand-trimmed `.superenv` can let the claude-flavored plugin default
-   leak through).
+   a Codex model name or `inherit`.
 codex-only:end -->
-6. **Effort keys** (each `SUPER_EFFORT_*`):
-<!-- cc-only:start -->
-   valid = `low|medium|high|xhigh|max|inherit`; else WARN, treat as `inherit`.
-<!-- cc-only:end -->
-<!-- cursor-only:start
-   effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
-cursor-only:end -->
-<!-- codex-only:start
-   valid = `none|minimal|low|medium|high|xhigh|inherit`; else WARN (note: claude's
-   `max` is NOT a Codex effort), treat as `inherit`.
-codex-only:end -->
+   Bridged model values are not validated beyond the grammar (the foreign CLI owns its names), except
+   `pi`, whose model must contain exactly one `/` (`<provider>/<model>`).
+   `SUPER_BRIDGE_RELAY_MODEL` is validated as a native model value.
+6. **Effort keys** (each `SUPER_EFFORT_<ROLE>`): valid in the domain of the ROLE's harness (from
+   item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
+   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high`;
+   cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
 
 ## Step 3 — Role agents (model/effort pins)
 
@@ -199,6 +205,13 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
 
 <!-- cc-only:start -->
+- **Bridged role (its harness ≠ `SUPER_HARNESS`):** render
+  `${CLAUDE_PLUGIN_ROOT}/templates/super-role-bridge-agent.md` to the listed path, substituting
+  `<role>`, `<KEY>` (both keys), `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit`
+  when unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
+  `inherit`), and `<bridge-path>` = the absolute path of
+  `${CLAUDE_PLUGIN_ROOT}/scripts/role-bridge.sh`. Same marker/ownership rules as below. A bridged
+  panel role ignores `SUPER_PANEL_AGENT_TYPE` (WARN once).
 - **Generate when:** the model value is a **full model ID** (`^claude-`), OR the
   effort value is non-`inherit` (a tier-name model alone rides the Task call's
   `model:` parameter and needs no file). Render
@@ -220,6 +233,13 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 - **Neither key requires a file, no file present:** nothing to do.
 <!-- cc-only:end -->
 <!-- cursor-only:start
+- **Bridged role (its harness ≠ `SUPER_HARNESS`):** render
+  `${CLAUDE_PLUGIN_ROOT}/templates/super-role-bridge-agent.md` to the listed path, substituting
+  `<role>`, `<KEY>` (both keys), `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit`
+  when unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
+  `inherit`), and `<bridge-path>` = the absolute path of
+  `${CLAUDE_PLUGIN_ROOT}/scripts/role-bridge.sh`. Same marker/ownership rules as below. A bridged
+  panel role ignores `SUPER_PANEL_AGENT_TYPE` (WARN once).
 - **Value is a model name (anything valid other than `inherit`):** render
   `${CLAUDE_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
   the agents directory if needed), substituting `<role>` (the path's `super-` suffix,
@@ -240,7 +260,13 @@ cursor-only:end -->
   role, resolve both keys (using the validated values above) and record the effective
   pair in the summary — e.g. `planner: model=gpt-5.1-codex, effort=inherit — n/a
   (spawn-parameter pins)`. At runtime the loop passes these as the `spawn_agent`
-  call's `model` / `reasoning_effort` parameters; `inherit` = omit the parameter.
+  call's `model` / `reasoning_effort` parameters; `inherit` = omit the parameter. For a
+  **bridged** role, the loop instead spawns a relay: `model` = `SUPER_BRIDGE_RELAY_MODEL`
+  (omit when `inherit`) and a message built from
+  `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` (substituting `<role>`, `<harness>`,
+  `<model>`, `<effort>`, `<bridge-path>` =
+  `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`) followed by the task prompt. Record
+  `dispatch=bridge(<harness>)` in the summary.
 - A leftover `.claude/agents/super-*.md` file from a Claude Code init of the same
   repo belongs to that harness's build: leave it untouched and do not report it as
   stale.
@@ -254,9 +280,9 @@ next tick/session, not the current one.
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one.
 cursor-only:end -->
-Report per-key results (`generated` /
-`regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
-row.
+Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
+`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`, or
+`bridge(<harness>)`.
 
 <!-- cc-only:start -->
 Note: permission layers commonly treat `.claude/` as protected — in a headless or

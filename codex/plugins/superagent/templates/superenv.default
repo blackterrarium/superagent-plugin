@@ -17,6 +17,7 @@ SUPER_MODEL_RE_REVIEWER=gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=gpt-5.6-sol        # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=gpt-5.6-sol            # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
+SUPER_BRIDGE_RELAY_MODEL=haiku          # model of the thin relay subagent that runs role-bridge.sh for a BRIDGED role (native value or inherit)
 
 # ── Reasoning effort per agent role ───────────────────────────────
 # Values are Codex effort names, or "inherit" (= the CLI/model default).

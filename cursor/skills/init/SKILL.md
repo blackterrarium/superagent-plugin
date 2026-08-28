@@ -90,6 +90,15 @@ which is exactly the case Step 2 below fixes by creating one.
    [scripts/README.md](../../scripts/README.md#cron-fallback-instead-of-systemd)). Run
    `uname -s` and say which scheduler this host would use — planning-only usage
    (`supergoal`/`superplan`) is host-independent.
+5. **Bridge targets.** For every harness that appears as a *bridged* role harness in the resolved
+   config (item 5 of the validation below): its CLI must be on PATH — `claude`, `codex`, `agent`
+   (Cursor), `pi` — else **ABORT** with an install hint (claude: `npm install -g
+   @anthropic-ai/claude-code`; codex: `npm install -g @openai/codex`; cursor: the Cursor CLI
+   installer; pi: `npm install -g @earendil-works/pi-coding-agent`). Auth is WARN-only: codex →
+   `OPENAI_API_KEY` set or `~/.codex/auth.json` present; pi → for a `<provider>/` of `openai` or
+   `anthropic`, `OPENAI_API_KEY` / `CURSOR_API_KEY` set; claude/cursor → binary only.
+   Also run `bash "${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh" 2>&1 | head -1` — a usage line
+   proves the bridge shipped with this build; a "not found" is a broken install: ABORT.
 
 ## Step 2 — Config
 
@@ -126,11 +135,22 @@ report-only.
 4. **Numerics** (positive integer, else WARN + template default):
    `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
    `SUPER_TICK_INTERVAL` must parse as an interval span (e.g. `600`, `90s`, `30m`, `2h`).
-5. **Model keys** (each `SUPER_MODEL_*`):
-   valid = a Cursor model name (`agent --list-models`) or `inherit`. Claude tier names
-   and `claude-*` IDs not in that list → WARN, treat as `inherit`.
-6. **Effort keys** (each `SUPER_EFFORT_*`):
-   effort is not supported on Cursor: anything but `inherit` → WARN, treat as `inherit`.
+5. **Model keys** (each `SUPER_MODEL_*`): grammar `inherit | [<harness>:]<model>`, `<harness>` ∈
+   `claude|codex|cursor|pi`. Resolve each key's **harness**: an explicit prefix wins; otherwise infer —
+   `sonnet|opus|haiku|fable|claude-*` → `claude`; `gpt-*|o<digit>*|codex*` → `codex`; a value
+   containing `/` → `pi`; anything else → WARN "unrecognized model value", treat as `inherit`.
+   Strip the prefix to get the **model**. The role is **native** when its harness equals
+   `SUPER_HARNESS`, else **bridged**. `SUPER_MODEL_SUPERVISOR` must be native: a foreign harness
+   there is a **hard error** (stop and report; the tick refuses it too).
+   Native model values are further validated per build:
+   a Cursor model name (`agent --list-models`) or `inherit`.
+   Bridged model values are not validated beyond the grammar (the foreign CLI owns its names), except
+   `pi`, whose model must contain exactly one `/` (`<provider>/<model>`).
+   `SUPER_BRIDGE_RELAY_MODEL` is validated as a native model value.
+6. **Effort keys** (each `SUPER_EFFORT_<ROLE>`): valid in the domain of the ROLE's harness (from
+   item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
+   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high`;
+   cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
 
 ## Step 3 — Role agents (model/effort pins)
 
@@ -157,6 +177,13 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.cursor/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.cursor/agents/super-fix-planner.md` |
 
+- **Bridged role (its harness ≠ `SUPER_HARNESS`):** render
+  `${SUPER_PLUGIN_ROOT}/templates/super-role-bridge-agent.md` to the listed path, substituting
+  `<role>`, `<KEY>` (both keys), `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit`
+  when unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
+  `inherit`), and `<bridge-path>` = the absolute path of
+  `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`. Same marker/ownership rules as below. A bridged
+  panel role ignores `SUPER_PANEL_AGENT_TYPE` (WARN once).
 - **Value is a model name (anything valid other than `inherit`):** render
   `${SUPER_PLUGIN_ROOT}/templates/super-role-agent.md` to the listed path (create
   the agents directory if needed), substituting `<role>` (the path's `super-` suffix,
@@ -173,9 +200,9 @@ Effort keys are not supported on Cursor: any non-inherit SUPER_EFFORT_* value �
 
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one.
-Report per-key results (`generated` /
-`regenerated` / `unchanged` / `removed (stale)` / `conflict` / `n/a`) as one summary
-row.
+Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
+`native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`, or
+`bridge(<harness>)`.
 
 Note: permission layers commonly treat `.cursor/` as protected — in a headless or
 auto-accept session the write may be auto-denied even when other edits sail through.
