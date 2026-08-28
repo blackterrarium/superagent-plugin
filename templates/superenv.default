@@ -55,6 +55,7 @@ SUPER_HEAVY_STEP_LIMIT=6                # heavy skills per session before contex
 SUPER_LOCK_STEAL_MIN=90                 # stale-lock steal window, minutes
 SUPER_TICK_INTERVAL=10m                 # external-driver default when --interval omitted
 SUPER_AUTO_DISARM_ON_DONE=true          # external driver: a tick that finds status DONE uninstalls its own scheduler entry (loop-status + env file kept); false = keep the timer polling
+SUPER_INPUT_GATE=true                   # external driver: a tick that finds WAITING FOR INPUT with no `answer:` exits without launching a session (bash-only poll); false = launch the session every interval as before
 
 # ── CI / test-evidence policy ─────────────────────────────────────
 SUPER_TEST_EVIDENCE=local               # local = SDD's native TDD contract; ci = evidence is CI run ids only

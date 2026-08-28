@@ -15,6 +15,7 @@
 #   TICK_TIMEOUT  optional per-tick wall-clock cap, seconds (default: none/unlimited)
 #   LOG_FILE      driver log path                          (default: /tmp/superagent-<loop>.log)
 set -euo pipefail
+ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -54,6 +55,24 @@ fi
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
 load_superenv "$REPO"
+
+# --- WAITING FOR INPUT gate ---------------------------------------------------
+# A loop parked on WAITING FOR INPUT resumes only when a human writes
+# `answer: <option>` under ## Pending decision. Until then every scheduler fire
+# used to launch a full paid CLI session that read the file, found no answer, and
+# exited — the same no-op-per-interval waste #18 fixed for DONE. Poll the file in
+# bash instead: no answer → log one line, exit 0 (a legal clean no-op under the
+# L2 teardown invariant), no session. The moment an answer appears the next fire
+# runs the session as before (or answer.sh kicks one immediately). Runs BEFORE
+# the gh/CLI preflight so a parked loop costs nothing at all. Opt out with
+# SUPER_INPUT_GATE=false.
+if [[ "${SUPER_INPUT_GATE:-true}" == true && \
+      "$(superagent_loop_status "$LOOP_FILE")" == "WAITING FOR INPUT" ]] && \
+   ! superagent_pending_answer "$LOOP_FILE" >/dev/null; then
+  echo "=== $(ts) superagent-tick: loop is WAITING FOR INPUT with no answer — skipping the session (SUPER_INPUT_GATE). Answer + resume now: $SCRIPT_DIR/answer.sh ${SUPERAGENT_SLUG:-<slug>} \"<option>\" ===" >>"$LOG_FILE"
+  exit 0
+fi
+
 # Which agent CLI drives the tick: SUPER_HARNESS=claude (default) | cursor | codex.
 # Put the right binary on PATH (systemd/cron use a minimal PATH without
 # ~/.local/bin) and fail fast if it's still missing, then verify gh auth.
@@ -142,8 +161,6 @@ else
   [[ "$HARNESS" == codex ]] && SUPERVISOR_SKILL="$SKILLS_ROOT/plugins/superagent/skills/superagent/SKILL.md"
   PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING or RUNNING at exit. Then stop."
 fi
-
-ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 # --- L3 lock safety net (issue #15) -----------------------------------------
 # The overlap lock is acquired/released by the AGENT inside the session
