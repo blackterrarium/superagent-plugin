@@ -25,6 +25,7 @@ printf '%s\n' "\${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-unset}" >"$T/$name.env"
 case "\${SHIM_MODE:-ok}" in
   fail) echo "boom" >&2; exit 9 ;;
   empty) exit 0 ;;
+  slow) sleep 30; echo "RESULT-$name"; exit 0 ;;
 esac
 # codex writes -o <file>; everything else prints to stdout
 out=""; prev=""
@@ -132,6 +133,22 @@ if grep -q "dropped" "$T/errpi1"; then fail "pi: no 'dropped' warning any more";
 "$BRIDGE" --harness pi --model openai/gpt-5:high --effort low --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/errpi2"
 check "pi: no double suffix" [ "$(argv pi)" = "-p --approve --no-session --model openai/gpt-5:high --tools read,edit,write,bash,grep,find,ls " ]
 check "pi: WARN on already-pinned level" grep -q "already pins a level" "$T/errpi2"
+
+# ── bridge-fanout ──
+FANOUT="$ROOT/scripts/bridge-fanout.sh"
+printf 'panel prompt one\n' >"$T/p1.txt"; printf 'panel prompt two\n' >"$T/p2.txt"; printf 'panel prompt three\n' >"$T/p3.txt"
+out="$("$FANOUT" --harness pi --model openai/gpt-5 --effort high --cwd "$T/cwd" --prompt-file "$T/p1.txt" --prompt-file "$T/p2.txt" --prompt-file "$T/p3.txt" 2>"$T/fanerr")"; rc=$?
+check "fanout: exit 0 when all ok" [ "$rc" -eq 0 ]
+check "fanout: three framed results in order" bash -c "printf '%s\n' \"\$1\" | grep -n -E '^=== (PANELIST [123] exit=0|END [123]) ===$' | tr '\n' ' ' | grep -q '^1:=== PANELIST 1 exit=0 === 3:=== END 1 === 4:=== PANELIST 2 exit=0 === 6:=== END 2 === 7:=== PANELIST 3 exit=0 === 9:=== END 3 === $'" _ "$out"
+check "fanout: each block carries the bridge stdout" [ "$(printf '%s\n' "$out" | grep -c '^RESULT-pi$')" -eq 3 ]
+out="$(SHIM_MODE=slow "$FANOUT" --harness pi --model inherit --effort inherit --cwd "$T/cwd" --timeout 2 --prompt-file "$T/p1.txt" --prompt-file "$T/p2.txt" 2>/dev/null)"; rc=$?
+check "fanout: exit 3 on timeout" [ "$rc" -eq 3 ]
+check "fanout: timed-out panelist is BRIDGE-FAILED" bash -c "printf '%s\n' \"\$1\" | grep -q '^BRIDGE-FAILED exit=[0-9]* harness=pi role=panelist-1 log='" _ "$out"
+out="$(SHIM_MODE=fail "$FANOUT" --harness pi --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/p1.txt" 2>/dev/null)"; rc=$?
+check "fanout: exit 3 when a bridge fails" [ "$rc" -eq 3 ]
+check "fanout: failed panelist framed with exit=3" bash -c "printf '%s\n' \"\$1\" | grep -q '^=== PANELIST 1 exit=3 ===$'" _ "$out"
+"$FANOUT" --harness pi --model inherit --effort inherit --cwd "$T/cwd" >/dev/null 2>&1; rc=$?
+check "fanout: usage error without prompt files" [ "$rc" -eq 64 ]
 
 # ── _common.sh role parser ──
 . "$ROOT/scripts/_common.sh"
