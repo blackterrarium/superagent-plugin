@@ -84,8 +84,8 @@ ensure_claude_bin() {
 superagent_harness() {
   local h="${SUPER_HARNESS:-claude}"
   case "$h" in
-    claude|cursor|codex) echo "$h" ;;
-    *) echo "superagent: bad SUPER_HARNESS '$h' (want claude|cursor|codex)" >&2; return 1 ;;
+    claude|cursor|codex|pi) echo "$h" ;;
+    *) echo "superagent: bad SUPER_HARNESS '$h' (want claude|cursor|codex|pi)" >&2; return 1 ;;
   esac
 }
 
@@ -117,7 +117,7 @@ superagent_effort_valid() {
   case "$h" in
     claude) case "$e" in low|medium|high|xhigh|max) return 0 ;; esac ;;
     codex)  case "$e" in none|minimal|low|medium|high|xhigh) return 0 ;; esac ;;
-    pi)     case "$e" in off|minimal|low|medium|high) return 0 ;; esac ;;
+    pi)     case "$e" in off|minimal|low|medium|high|xhigh|max) return 0 ;; esac ;;
   esac
   return 1
 }
@@ -147,12 +147,23 @@ ensure_codex_bin() {
   return 0
 }
 
+# Fatal check: the Pi CLI (`pi`) must be findable.
+ensure_pi_bin() {
+  _superagent_augment_path
+  if ! command -v pi >/dev/null 2>&1; then
+    echo "superagent: Pi CLI not found on PATH (tried: pi; checked incl. ~/.local/bin, /usr/local/bin). Install it (npm install -g @earendil-works/pi-coding-agent) or add its directory to PATH in the scheduler env; aborting." >&2
+    return 1
+  fi
+  return 0
+}
+
 # Fatal check for whichever CLI the resolved harness needs.
 ensure_cli_bin() {
   local h; h="$(superagent_harness)" || return 1
   case "$h" in
     cursor) ensure_cursor_bin ;;
     codex)  ensure_codex_bin ;;
+    pi)     ensure_pi_bin ;;
     *)      ensure_claude_bin ;;
   esac
 }

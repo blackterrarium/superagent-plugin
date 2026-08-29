@@ -142,6 +142,13 @@ if superagent_effort_valid codex max; then fail "effort: codex max rejected"; el
 check "effort: pi off ok"             superagent_effort_valid pi off
 if superagent_effort_valid cursor high; then fail "effort: cursor high rejected"; else ok "effort: cursor high rejected"; fi
 check "effort: inherit always ok"     superagent_effort_valid cursor inherit
+check "effort: pi xhigh ok"           superagent_effort_valid pi xhigh
+check "effort: pi max ok"             superagent_effort_valid pi max
+if superagent_effort_valid pi ultra; then fail "effort: pi ultra rejected"; else ok "effort: pi ultra rejected"; fi
+check "harness: pi accepted"          bash -c "SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; [ \"\$(superagent_harness)\" = pi ]"
+check "harness: bad value rejected"   bash -c "SUPER_HARNESS=hermes; . '$ROOT/scripts/_common.sh'; ! superagent_harness 2>/dev/null"
+check "ensure_cli_bin: pi resolves"   bash -c "SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; ensure_cli_bin"
+check "ensure_pi_bin: missing → hint" bash -c "PATH=/usr/bin:/bin; . '$ROOT/scripts/_common.sh'; ensure_pi_bin 2>&1 | grep -q 'npm install -g @earendil-works/pi-coding-agent'"
 
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]
