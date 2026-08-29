@@ -22,8 +22,10 @@
   run, 2026-08-29, pi CLI 0.84.3, `pi-subagents` NOT installed on the build host): PASS 7 / FAIL 1
   (informational) / SKIPPED 3. P1 (bad-model exit status) is FAIL-as-expected with **exit 1** — pi
   collapses a bad model and a failed turn into the same plain `1`, no distinct exit code, which is
-  the datum `role-bridge.sh`'s exit-3 mapping relies on. P2 (`--skill` delivery) PASSES. P4a/P4b
-  (tool-list probes) are informational and PASS. T1/T2/T3/T5 (bridge → pi, bridge-fanout ×3, tick
+  the datum `role-bridge.sh`'s exit-3 mapping relies on. P2 (`--skill` delivery) PASSES. P4a
+  (tool-list probe, informational) PASSES; P4b is **inconclusive** (no extension tools were
+  installed on the smoke host, so the probe never exercised the case it's meant to check).
+  T1/T2/T3/T5 (bridge → pi, bridge-fanout ×3, tick
   file-read + hard gate, `build-pi-skills.sh --check`) all PASS. P3a/P3c (`pi-subagents` probes)
   and T4 (relay round trip) are **SKIPPED** — `pi-subagents` was not installed on this host, so the
   nested-wait behavior (P3c) is **not verified**; re-run `scripts/pi-smoke.sh` on a host with

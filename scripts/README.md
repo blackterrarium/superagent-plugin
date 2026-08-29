@@ -76,8 +76,9 @@ is always native to `SUPER_HARNESS`. The nine subagent role keys (`SUPER_EFFORT_
 `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
 `_BRANCH_REVIEWER`, `_FIX_PLANNER`) are validated in **their own resolved harness's** domain
 instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
-a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|inherit` (delivered
-as a `:<level>` suffix on the model string). See the main [`README.md`](../README.md#configuration)
+a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|xhigh|max|inherit`
+(a `:<level>` suffix on the model string, or `--thinking` when the model is `inherit`). See the
+main [`README.md`](../README.md#configuration)
 for the full per-role-harness table and defaults.
 
 `CLAUDE_CODE_EFFORT_LEVEL` (a `claude` CLI env var) outranks both `--effort` and any per-role agent

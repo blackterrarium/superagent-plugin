@@ -270,7 +270,7 @@ docs-only PR commit.
 
 Also append the line `.env` to `<repo-root>/.gitignore` unless an identical line is
 already present (same idempotent check, same newline guard). External (unattended) mode
-directs `ANTHROPIC_API_KEY`/`GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
+directs Pi provider credentials (`pi auth`) and `GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
 Prerequisites), and that file must never be committed.
 
 ## Step 6 — Landing
@@ -281,5 +281,5 @@ definitions, `.gitignore` — now covering both the loop-status pattern
 and `.env`) and remind them to follow the repo's own change discipline: if
 `SUPER_PROTECTED_MAIN=true` (the shipped default), that means a feature branch + PR, same
 as every `superauthor`-driven skill's own A7 commit step. `.env` itself (holding
-`ANTHROPIC_API_KEY`/`GH_TOKEN`) stays gitignored and is never committed — only the
+Pi provider credentials (`pi auth`) and `GH_TOKEN`) stays gitignored and is never committed — only the
 `.gitignore` entry that excludes it is.

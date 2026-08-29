@@ -54,6 +54,8 @@ substitute() {
     -e 's/claude -p/pi -p/g' \
     -e 's/claude --model/pi --model/g' \
     -e 's/Claude CLI/Pi CLI/g' \
+    -e 's/`ANTHROPIC_API_KEY`\/`GH_TOKEN`/Pi provider credentials (`pi auth`) and `GH_TOKEN`/g' \
+    -e '/OPENAI_API_KEY` \/ `ANTHROPIC_API_KEY/!s/`ANTHROPIC_API_KEY`/Pi provider credentials (`pi auth`)/g' \
     -e 's/^driver: cron  .*/driver: external                  # the only driver in this build (external scheduler — fresh context per tick)/' \
     -e 's/^cron_id:  .*# CronCreate job id.*/cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty/'
 }
@@ -176,6 +178,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_\([A-Z_]*\)=claude:[a-z]*/SUPER_MODEL_\1=inherit/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=pi\1# this is the Pi build — the external driver fires the Pi CLI (pi -p)/' \
   -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay agent model for a BRIDGED SDD role (.pi\/agents relay definition); inherit = the pi-subagents default; never a weak model — it answers instead of relaying/' \
+  -e '/^SUPER_PANEL_AGENT_TYPE=/d' \
   >"$TMP/templates/superenv.default"
 
 version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -1)"
@@ -219,7 +222,10 @@ the build host): **PASS 7 / FAIL 1 (informational) / SKIPPED 3.**
   failed turn into the same plain `1`, not a distinct code. This is the exit-code mapping
   `role-bridge.sh` relies on for its own exit-3 ("CLI exited non-zero") bucket.
 - **P2** (`--skill` delivery): **PASS.**
-- **P4a/P4b** (`--tools` role-set vs. no-`--tools` tool listing, informational): **PASS** both.
+- **P4a** (`--tools` role-set hides extension tools, informational): **PASS.**
+- **P4b** (no-`--tools` shows extension tools, informational): **inconclusive** — no extension
+  tools were installed on the smoke host, so the probe came back with only the base tool set and
+  never actually exercised the case it's meant to check.
 - **T1** (bridge → pi, role tools + `--skill`): **PASS.**
 - **T2** (bridge-fanout ×3): **PASS.**
 - **T3** (tick file-read + superagent hard gate): **PASS.**
@@ -230,9 +236,20 @@ the build host): **PASS 7 / FAIL 1 (informational) / SKIPPED 3.**
   `scripts/pi-smoke.sh` on a host with `pi-subagents ≥0.58.0` before promoting the pinned-subagent
   SDD path (S1/S4) further.
 
+Note on numbering: this smoke's T1–T5 are not the spec's T1–T6. Spec T3 (a `--thinking` argv
+check) runs offline in `bridge-test.sh` instead, not here; spec T4 (a live multi-tick loop) is
+deferred to Task 10; the spec's T5 (relay round trip) and T6 (`build-pi-skills.sh --check`) shift
+down to this smoke's T4 and T5 above.
+
 ## Known gaps
 
-- No end-to-end multi-tick loop driven to DONE on Pi yet.
+- No tick — single or multi — has been driven end-to-end against a real loop file on Pi: T3 above
+  only verified the file-read + hard-gate rejection path with no `PLAN.md`/loop file supplied.
+- superpowers was NOT installed as a Pi package on the smoke host (`pi-smoke-report.md`:
+  `superpowers package: 0`), so Pi skill listing and superpowers' own Pi SDD mapping are
+  unverified.
+- `superagent:init` has not been run on Pi, and no `superagent-tick.sh` has run against a real
+  loop file on Pi — both pending the deferred Task 10.
 - S3 with `pi-subagents` not exercised inside a real superrun.
 EOF
 

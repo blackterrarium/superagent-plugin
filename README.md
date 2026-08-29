@@ -186,8 +186,12 @@ exactly as it blocked on the subagent. Inside that process SDD's subagents are d
 synchronous wait holds. A CI-PENDING yield ends the process; the resume tick starts a fresh one with
 the recorded packet (the `ci_wait.subagent` field is gone). `superplan` is unchanged (it spawns no
 subagents, so a depth-1 subagent is the right container) — a bridged `superplan` role's relay still
-shells out to `scripts/role-bridge.sh --tools planner` (the skill-invoking allowlist), it just stays
-inside the ordinary Agent-tool subagent rather than becoming its own process.
+shells out to `scripts/role-bridge.sh` with no `--tools` flag (the relay template passes only
+`--harness`/`--model`/`--effort`/`--cwd`/`--prompt-file`/`--role`), it just stays inside the
+ordinary Agent-tool subagent rather than becoming its own process. The `--tools planner` set is a
+Pi-only construct — it's what a Pi supervisor passes when *it* dispatches `superplan` as its own
+bridge process (see the `pi-only` dispatch block in `skills/superagent/SKILL.md`), not something
+the Claude-native relay path above uses.
 
 **Cursor is unverified as a bridge target and as a supervisor for bridged roles** (no live smoke;
 the `agent` CLI is absent on the build host, so smoke T3 skips) — the relay definition's `tools:`
@@ -457,11 +461,17 @@ Model keys are `pi:<provider>/<model>` (or a bare `<provider>/<model>`); effort 
 **Status:** live smoke on 2026-08-29, pi CLI 0.84.3, `pi-subagents` NOT installed on the build
 host — PASS 7 / FAIL 1 (informational) / SKIPPED 3. P1 (bad-model exit status): pi exits a plain
 **1** for both a bad model and a failed turn — no distinct code — which is the datum the bridge's
-exit-3 mapping relies on. P2 (`--skill` delivery): PASS. P4a/P4b (tool-list probes, informational):
-PASS. P3a/P3c (`pi-subagents` probes) and T4 (relay round trip) were **SKIPPED**, not verified —
+exit-3 mapping relies on. P2 (`--skill` delivery): PASS. P4a (tool-list probe, informational):
+PASS. P4b (tool-list probe, informational): **inconclusive** — no extension tools were installed
+on the smoke host, so the probe returned the base tool set and never exercised the case it checks.
+P3a/P3c (`pi-subagents` probes) and T4 (relay round trip) were **SKIPPED**, not verified —
 `pi-subagents` was not installed on this host, so the P3c nested-wait verdict is **unverified**
-pending a re-run on a host with `pi-subagents ≥0.58.0`. Remaining gaps: no multi-tick loop driven
-to DONE on Pi; S3 with `pi-subagents` not exercised inside a real superrun. Re-run:
+pending a re-run on a host with `pi-subagents ≥0.58.0`. Remaining gaps: no tick, single or
+multi, has been driven end-to-end on a real loop file on Pi (T3 only exercised the file-read +
+hard-gate rejection path with no `PLAN.md` supplied); superpowers was not installed as a Pi
+package on the smoke host (`superpowers package: 0`), so Pi skill listing and superpowers' Pi
+SDD mapping are unverified; `superagent:init` has not been run on Pi; S3 with `pi-subagents` not
+exercised inside a real superrun (all pending the deferred Task 10). Re-run:
 `bash scripts/pi-smoke.sh` (`PI_SMOKE_MODEL=<provider>/<id>` to pin a model).
 
 ## Cutting over an existing repo

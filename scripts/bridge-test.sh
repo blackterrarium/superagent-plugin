@@ -156,6 +156,8 @@ check "fanout: exit 3 when a bridge fails" [ "$rc" -eq 3 ]
 check "fanout: failed panelist framed with exit=3" bash -c "printf '%s\n' \"\$1\" | grep -q '^=== PANELIST 1 exit=3 ===$'" _ "$out"
 "$FANOUT" --harness pi --model inherit --effort inherit --cwd "$T/cwd" >/dev/null 2>&1; rc=$?
 check "fanout: usage error without prompt files" [ "$rc" -eq 64 ]
+"$FANOUT" --harness nope --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/p1.txt" >/dev/null 2>&1; rc=$?
+check "fanout: usage error on bad harness" [ "$rc" -eq 64 ]
 
 # ── _common.sh role parser ──
 . "$ROOT/scripts/_common.sh"

@@ -37,6 +37,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$harness" ] || usage "--harness is required"
+case "$harness" in
+  claude|codex|cursor|pi) ;;
+  *) usage "--harness must be claude|codex|cursor|pi (got '$harness')" ;;
+esac
 [ -d "$cwd" ] || usage "--cwd '$cwd' is not a directory"
 [ "${#files[@]}" -ge 1 ] || usage "at least one --prompt-file is required"
 [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || usage "--timeout must be a positive integer (seconds)"
@@ -55,8 +59,12 @@ for f in "${files[@]}"; do
   pids+=($!)
 done
 
-# Watchdog: after --timeout seconds kill every child still running, grandchildren first so a
-# hung CLI does not outlive its bridge. Stdout/stderr are closed here (not just left inherited):
+# Watchdog: after --timeout seconds kill every child still running. `pkill -P "$p"` reaps each
+# bridge's DIRECT children only — it does not recurse into grandchildren. In practice the CLI is
+# that direct child, because bash exec-optimises the last command of the bridge's own command
+# substitution/pipeline, so a hung CLI is killed; but this is not a guarantee for every bridge
+# shape, and a deeper process tree (a CLI that itself forks) is not reliably reaped this way.
+# Stdout/stderr are closed here (not just left inherited):
 # a caller capturing our output via command substitution keeps its pipe open until every process
 # holding the write end exits, and killing $wd does not touch its already-forked `sleep` child —
 # an orphaned, still-sleeping `sleep "$timeout"` holding that fd would hang the caller for the

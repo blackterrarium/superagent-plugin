@@ -109,7 +109,7 @@ the flag — let `launch.sh` apply its defaults.
   for those to resolve; `launch.sh` does **not** preflight this (only the `claude`
   binary and `gh` auth are fail-fast), so a missing/disabled plugin arms a timer
   whose ticks then fail opaquely — confirm it before launching. Also: the `claude`
-  CLI installed, `ANTHROPIC_API_KEY` and ideally `GH_TOKEN` in `.env`, and — for a
+  CLI installed, Pi provider credentials (`pi auth`) and ideally `GH_TOKEN` in `.env`, and — for a
   headless server — user lingering (the installer enables it). If `launch.sh`
   reports a gh-auth or claude-binary failure, fix that and re-invoke; it armed
   nothing.

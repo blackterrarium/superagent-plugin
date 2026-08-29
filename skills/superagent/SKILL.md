@@ -178,7 +178,8 @@ difference is load-bearing:
   full tool access: Bash, Edit/Write, git, `gh` — and `run_in_background: false`; see **Synchronous
   dispatch** below).
 <!-- pi-only:start
-- **On Pi, `superplan` is ALSO its own CLI process.** This harness has no in-process subagent tool
+- **On Pi, `superplan` is INSTEAD its own CLI process — this supersedes the Agent-tool bullet
+  above.** This harness has no in-process subagent tool
   in the supervisor; every heavy dispatch is a blocking `bash` call to the bridge. Dispatch
   `superplan` exactly like `superrun` below, with two differences: `--tools planner` and
   `--role planner`, and the model/effort from `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER`:
@@ -486,8 +487,12 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    this tick.
 2. Set `status: PLANNING`, write the loop file.
 3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Model
-   per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_PLANNER`.
+   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**).
+<!-- pi-only:start
+   On Pi: no Agent tool — dispatch it as a bridge process per **Subagent dispatch** below
+   (`role-bridge.sh --tools planner`).
+pi-only:end -->
+   Model per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_PLANNER`.
    Instruct the subagent to invoke the `superagent:superplan` skill (Skill tool) with
    `<PLAN.md> = master_plan`, **no `<TOPIC>`** — its `supertraverse` descent finds the next deepest
    unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final

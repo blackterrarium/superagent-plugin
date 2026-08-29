@@ -22,7 +22,6 @@ SUPER_MODEL_TASK_REVIEWER=inherit
 SUPER_MODEL_RE_REVIEWER=inherit
 SUPER_MODEL_BRANCH_REVIEWER=inherit # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=inherit     # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=inherit         # relay agent model for a BRIDGED SDD role (.pi/agents relay definition); inherit = the pi-subagents default; never a weak model — it answers instead of relaying
 
 # ── Reasoning effort per agent role ───────────────────────────────
