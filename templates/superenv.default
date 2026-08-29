@@ -33,9 +33,9 @@ SUPER_BRIDGE_RELAY_MODEL=sonnet         # model of the thin relay subagent that 
 #   claude: low | medium | high | xhigh | max
 #   codex:  none | minimal | low | medium | high | xhigh
 #   cursor: not supported — non-inherit values are warned and treated as inherit
-#   pi:     off | minimal | low | medium | high (applied as the :<level> model suffix)
+#   pi:     off | minimal | low | medium | high | xhigh | max (the :<level> model suffix, or --thinking when the model is inherit)
 # SUPER_EFFORT_SUPERVISOR is passed at tick invocation (claude: --effort,
-# codex: -c model_reasoning_effort). Any other non-inherit role key pins via the
+# codex: -c model_reasoning_effort, pi: --thinking). Any other non-inherit role key pins via the
 # generated per-role agent definition (claude) or the subagent-spawn parameter
 # (codex) — on claude, re-run superagent:init after changing one.
 # NOTE (claude): the CLAUDE_CODE_EFFORT_LEVEL env var overrides BOTH the tick
@@ -52,8 +52,9 @@ SUPER_EFFORT_BRANCH_REVIEWER=xhigh      # final whole-branch reviewer
 SUPER_EFFORT_FIX_PLANNER=high           # fix rounds 4-5: diagnose, then hand to fix-applier
 
 # ── Harness ───────────────────────────────────────────────────────
-SUPER_HARNESS=claude                    # claude | cursor | codex — which agent CLI the external driver fires per tick
+SUPER_HARNESS=claude                    # claude | cursor | codex | pi — which agent CLI the external driver fires per tick
 SUPER_CODEX_SANDBOX=danger-full-access  # codex harness only: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write
+SUPER_PI_SUBAGENTS=recommended          # pi harness only: recommended (init WARNs if the pi-subagents package is missing or < 0.58.0; superrun's SDD children then run sequentially in-context without role pins) | required (init ABORTS instead) | off (never generate .pi/agents/ definitions, never use the subagent tool)
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/
