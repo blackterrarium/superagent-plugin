@@ -53,6 +53,8 @@ check "claude: operator bg-wait ceiling respected" [ "$(cat "$T/claude.env")" = 
 # needs the tick's Task/Skill allowlist so SDD's subagents dispatch at depth 1 inside it.
 "$BRIDGE" --harness claude --model opus --effort medium --tools executor --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role executor >/dev/null 2>&1
 check "claude: --tools executor allowlist" [ "$(argv claude)" = "-p --model opus --effort medium --allowedTools Read,Edit,Write,Bash,Grep,Glob,Task,Skill " ]
+"$BRIDGE" --harness claude --model opus --effort high --tools planner --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role planner >/dev/null 2>&1
+check "claude: --tools planner allowlist" [ "$(argv claude)" = "-p --model opus --effort high --allowedTools Read,Edit,Write,Bash,Grep,Glob,Task,Skill " ]
 "$BRIDGE" --harness claude --model inherit --effort inherit --tools "Read,Bash" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
 check "claude: --tools explicit list" [ "$(argv claude)" = "-p --allowedTools Read,Bash " ]
 "$BRIDGE" --harness claude --model inherit --effort inherit --tools role --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
@@ -79,9 +81,18 @@ check "cursor: argv"    bash -c "a=\"\$(cat '$T/agent.argv' | tr '\n' ' ')\"; [[
 # ── pi ──
 out="$("$BRIDGE" --harness pi --model openai/gpt-5 --effort high --cwd "$T/cwd" --prompt-file "$T/prompt.txt" 2>/dev/null)"
 check "pi: stdout"  [ "$out" = "RESULT-pi" ]
-check "pi: model with level suffix" [ "$(argv pi)" = "-p --model openai/gpt-5:high " ]
+check "pi: model with level suffix + role tools" [ "$(argv pi)" = "-p --approve --no-session --model openai/gpt-5:high --tools read,edit,write,bash,grep,find,ls " ]
+check "pi: prompt on stdin" cmp -s "$T/pi.stdin" "$T/prompt.txt"
 "$BRIDGE" --harness pi --model openai/gpt-5 --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
-check "pi: no suffix when effort inherit" [ "$(argv pi)" = "-p --model openai/gpt-5 " ]
+check "pi: no suffix when effort inherit" [ "$(argv pi)" = "-p --approve --no-session --model openai/gpt-5 --tools read,edit,write,bash,grep,find,ls " ]
+"$BRIDGE" --harness pi --model inherit --effort inherit --tools planner --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "pi: --tools planner = role set" [ "$(argv pi)" = "-p --approve --no-session --tools read,edit,write,bash,grep,find,ls " ]
+"$BRIDGE" --harness pi --model inherit --effort inherit --tools executor --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "pi: --tools executor = no --tools flag" [ "$(argv pi)" = "-p --approve --no-session " ]
+"$BRIDGE" --harness pi --model inherit --effort inherit --tools "read,bash" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "pi: --tools explicit list" [ "$(argv pi)" = "-p --approve --no-session --tools read,bash " ]
+SUPERAGENT_PI_SKILLS="$T/skills" "$BRIDGE" --harness pi --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "pi: SUPERAGENT_PI_SKILLS → --skill" [ "$(argv pi)" = "-p --approve --no-session --skill $T/skills --tools read,edit,write,bash,grep,find,ls " ]
 
 # ── exit codes ──
 SHIM_MODE=fail "$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
@@ -114,12 +125,12 @@ check "role sanitised: log stays in logdir" bash -c "[ \"\$(dirname '$logpath')\
 check "role sanitised: no path chars in name" bash -c "b=\"\$(basename '$logpath')\"; [[ \"\$b\" == ___x-* ]]"
 check "role sanitised: log file exists" [ -f "$logpath" ]
 
-# ── pi effort-suffix edge cases ──
+# ── pi effort edge cases ──
 "$BRIDGE" --harness pi --model inherit --effort high --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/errpi1"
-check "pi: WARN when effort dropped under inherit model" grep -q "warning — --effort 'high' dropped" "$T/errpi1"
-check "pi: no --model when inherit" [ "$(argv pi)" = "-p " ]
+check "pi: --thinking when model inherit" [ "$(argv pi)" = "-p --approve --no-session --thinking high --tools read,edit,write,bash,grep,find,ls " ]
+if grep -q "dropped" "$T/errpi1"; then fail "pi: no 'dropped' warning any more"; else ok "pi: no 'dropped' warning any more"; fi
 "$BRIDGE" --harness pi --model openai/gpt-5:high --effort low --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/errpi2"
-check "pi: no double suffix" [ "$(argv pi)" = "-p --model openai/gpt-5:high " ]
+check "pi: no double suffix" [ "$(argv pi)" = "-p --approve --no-session --model openai/gpt-5:high --tools read,edit,write,bash,grep,find,ls " ]
 check "pi: WARN on already-pinned level" grep -q "already pins a level" "$T/errpi2"
 
 # ── _common.sh role parser ──
