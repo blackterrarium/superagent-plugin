@@ -293,18 +293,23 @@ Validation: `pi:` model values must contain exactly one `/`; efforts in the wide
 
 ### Role agent definitions (S3 only)
 
-Generated only when `pi-subagents` is present and `SUPER_PI_SUBAGENTS != off`, into the agent
-directory `pi-subagents` reads for the project (probe P3 fixes the path; the `docs/agents.md`
-reference is the source of truth — the template records it as `<agents-dir>`):
+Generated only when `pi-subagents` is present and `SUPER_PI_SUBAGENTS != off`, into the
+project agent directory `pi-subagents` reads: `.pi/agents/super-<role>.md` (verified in its
+`docs/agents.md`; project definitions override user/builtin ones of the same name). Its
+frontmatter supports `model`, `thinking` (appended as the `:level` suffix), `tools` (Pi built-in
+names), `async` (default foreground/background), `inheritSkills`, `inheritGlobalContext`,
+`systemPromptMode: append` — two new Pi-specific templates render these
+(`templates/super-role-pi-agent.md`, `templates/super-role-pi-bridge-agent.md`); the Claude
+templates keep their Claude frontmatter untouched:
 
-- Native `pi:` role → `templates/super-role-agent.md` rendered with `model: <provider>/<id>`,
-  optional `thinking: <e>`, `tools: read,edit,write,bash,grep,find,ls`, and `inheritGlobalContext`
-  left at its ≥0.58 default (false). No model allow-list, so the definition's own model is always
-  admissible.
-- Foreign-harness role → `templates/super-role-bridge-agent.md` rendered as a `pi-subagents`
-  agent: `tools: bash`, `model: SUPER_BRIDGE_RELAY_MODEL` (or omitted for `inherit`), body = the
-  relay instructions (already harness-neutral: "Bash" → "the `bash` tool" substitution). The
-  haiku short-circuit caveat carries over verbatim — a weak relay model answers instead of relaying.
+- Native `pi:` role → `templates/super-role-pi-agent.md` rendered with `model: <provider>/<id>`,
+  optional `thinking: <e>`, `tools: read, edit, write, bash, grep, find, ls`, `async: false`,
+  `inheritSkills: true`, `systemPromptMode: append`; `inheritGlobalContext` left at its ≥0.58
+  default (false). No model allow-list, so the definition's own model is always admissible.
+- Foreign-harness role → `templates/super-role-pi-bridge-agent.md`: `tools: bash`, `async: false`,
+  `model: SUPER_BRIDGE_RELAY_MODEL` (line omitted for `inherit`), body = the relay instructions
+  worded for Pi's `bash` tool. The haiku short-circuit caveat carries over verbatim — a weak relay
+  model answers instead of relaying.
 - Stale-delete rule unchanged. On Pi with `pi-subagents` absent, `init` generates nothing for S3
   and says so.
 
@@ -327,10 +332,10 @@ design detail and is recorded in `pi/README.md` with the CLI/package version it 
   `superagent/SKILL.md`, and superpowers skills are listed (package installed).
 - **P3** (`pi-subagents` present) `subagent` with `async:false`: (a) returns the child's final
   output as the tool result; (b) a definition's `model: provider/id:level` is honoured (assert via
-  the child's self-reported model); (c) a child may itself run a blocking `subagent` and get the
-  grandchild's result (nested foreground wait) — **this is the probe that could later promote
-  `pi-subagents` to the S1/S4 path; a failure changes nothing in this design**; (d) the agents
-  directory path. Skipped, not failed, when the package is absent.
+  the child's self-reported model); (c) a child with `allowNestedSubagents: true` may itself run a
+  blocking `subagent` and get the grandchild's result (nested foreground wait) — **this is the
+  probe that could later promote `pi-subagents` to the S1/S4 path; a failure changes nothing in
+  this design**. Skipped, not failed, when the package is absent.
 - **P4** `--tools read,edit,write,bash,grep,find,ls` in `-p` mode excludes an extension tool
   (`subagent` absent from the child's toolset) and the executor set (no flag) includes it.
 
