@@ -212,7 +212,23 @@ repository root. **Do not edit by hand.**
 
 ## Validated
 
-(Filled in by `scripts/pi-smoke.sh` runs — see the repository README's Pi section.)
+**Live smoke, 2026-08-29** (`scripts/pi-smoke.sh`, pi CLI 0.84.3; `pi-subagents` NOT installed on
+the build host): **PASS 7 / FAIL 1 (informational) / SKIPPED 3.**
+
+- **P1** (bad-model exit status, informational): **FAIL — exit 1.** pi collapses a bad model and a
+  failed turn into the same plain `1`, not a distinct code. This is the exit-code mapping
+  `role-bridge.sh` relies on for its own exit-3 ("CLI exited non-zero") bucket.
+- **P2** (`--skill` delivery): **PASS.**
+- **P4a/P4b** (`--tools` role-set vs. no-`--tools` tool listing, informational): **PASS** both.
+- **T1** (bridge → pi, role tools + `--skill`): **PASS.**
+- **T2** (bridge-fanout ×3): **PASS.**
+- **T3** (tick file-read + superagent hard gate): **PASS.**
+- **T5** (`build-pi-skills.sh --check`): **PASS.**
+- **P3a/P3c** (`pi-subagents` probes) and **T4** (relay round trip): **SKIPPED** —
+  `pi-subagents` was not installed on this host. In particular, **P3c (the nested-wait verdict) is
+  unverified**, not confirmed passing — do not treat it as validated. Re-run
+  `scripts/pi-smoke.sh` on a host with `pi-subagents ≥0.58.0` before promoting the pinned-subagent
+  SDD path (S1/S4) further.
 
 ## Known gaps
 
@@ -222,9 +238,10 @@ EOF
 
 grep -q 'GENERATED FILE — Pi build' "$TMP/skills/superloop/SKILL.md" || { echo "build-pi-skills: banner missing" >&2; exit 1; }
 # NOTE: match actual unprocessed marker SYNTAX (an HTML-comment open, or a bare ":start"/":end"
-# tag), not the bare words — those legitimately appear in the Pi build notes banner ("the
-# `pi-only` text in those skills") and in pi-smoke-probe's own descriptive prose (it quotes
-# "cc-only"/"cursor-only"/"codex-only" as the strings it checks a *deployed* build for).
+# tag), not the bare words — those legitimately appear in pi-smoke-probe's own descriptive prose
+# (step 3 of its generated skill body: 'does it contain "cc-only", "cursor-only", or "codex-only"
+# (a correct Pi build must NOT — marker leakage)'), which quotes the strings it checks a
+# *deployed* build for.
 if grep -rqE '<!--[[:space:]]*(cc|cursor|codex|pi)-only|(cc|cursor|codex|pi)-only:(start|end)' "$TMP/skills"; then
   echo "build-pi-skills: marker leakage" >&2; exit 1
 fi

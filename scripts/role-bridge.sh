@@ -2,7 +2,7 @@
 # role-bridge.sh — run ONE agent role on a foreign harness CLI, headless.
 #
 #   role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit>
-#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|executor|<list>]
+#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|planner|executor|<list>]
 #
 # --tools picks the child's tool allowlist (claude: --allowedTools; pi: --tools; codex/cursor: ignored):
 #   role     (default) claude Read,Edit,Write,Bash,Grep,Glob · pi read,edit,write,bash,grep,find,ls —

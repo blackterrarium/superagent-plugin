@@ -53,6 +53,16 @@ the model/effort key domains are covered in the [Codex section](#codex-experimen
 Install via Cursor's marketplace flow (the root `.cursor-plugin/marketplace.json` points at the
 generated [`cursor/`](cursor/README.md) build), or locally with `agent --plugin-dir <repo>/cursor`.
 
+### Pi
+
+No install step for the plugin itself: the external driver passes `--skill <repo>/pi/skills` on
+every headless run (or `pi install /path/to/superagent-plugin/pi` for interactive use). Install
+superpowers as a Pi package and, recommended, `pi-subagents`:
+
+    npm install -g @earendil-works/pi-coding-agent
+    pi install git:github.com/obra/superpowers
+    pi install npm:pi-subagents        # ≥ 0.58.0 — recommended; see the Pi section below
+
 ### Bootstrap (all harnesses)
 
 Then, in **each** target repo, bootstrap it once:
@@ -175,7 +185,9 @@ bridged) with the tick's `Read,Edit,Write,Bash,Grep,Glob,Task,Skill` allowlist �
 exactly as it blocked on the subagent. Inside that process SDD's subagents are depth 1 and the
 synchronous wait holds. A CI-PENDING yield ends the process; the resume tick starts a fresh one with
 the recorded packet (the `ci_wait.subagent` field is gone). `superplan` is unchanged (it spawns no
-subagents, so a depth-1 subagent is the right container).
+subagents, so a depth-1 subagent is the right container) — a bridged `superplan` role's relay still
+shells out to `scripts/role-bridge.sh --tools planner` (the skill-invoking allowlist), it just stays
+inside the ordinary Agent-tool subagent rather than becoming its own process.
 
 **Cursor is unverified as a bridge target and as a supervisor for bridged roles** (no live smoke;
 the `agent` CLI is absent on the build host, so smoke T3 skips) — the relay definition's `tools:`
@@ -187,7 +199,7 @@ necessarily `SUPER_HARNESS`'s: on `claude`, `low | medium | high | xhigh | max |
 (`--effort` when bridged, the agent definition's `effort:` frontmatter when native); on `codex`,
 `none | minimal | low | medium | high | xhigh | inherit` (no `max`; `-c
 model_reasoning_effort=` bridged, the `reasoning_effort` spawn param native); on `pi`, `off |
-minimal | low | medium | high | inherit` (a `:<level>` suffix on the model string); on `cursor`,
+minimal | low | medium | high | xhigh | max | inherit` (a `:<level>` suffix on the model string); on `cursor`,
 `inherit` only — the CLI has no effort control at all, so any other value is a no-op and both
 `superagent:init`'s validation pass and the tick itself WARN and fall back to `inherit`.
 Out-of-domain values always WARN and fall back to `inherit` the same way, regardless of harness.
@@ -234,6 +246,7 @@ its default and why it must not be weakened to `haiku`.
 | SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Reasoning effort for the final whole-branch reviewer. |
 | SUPER_EFFORT_FIX_PLANNER | `high` | Reasoning effort for fix rounds 4–5. |
 | SUPER_CODEX_SANDBOX | `danger-full-access` | Sandbox posture for the Codex harness, and for any codex-bridged role on other harnesses: `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`) or `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; note codex keeps the repo's top-level `.git/` read-only in this mode, so git fetch/commit fail and the sync gate parks the loop). Out-of-domain values abort the tick. |
+| SUPER_PI_SUBAGENTS | recommended | Pi harness only: recommended (WARN if pi-subagents is missing/old; SDD children then run sequentially without pins) · required (init aborts) · off. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Subagent type used for the L7 panel (or `Explore`). |
 | SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory name; a sibling of each goal's `master-plans/`. |
@@ -417,6 +430,39 @@ multi-tick loop has been driven to DONE on Codex. To re-run the smoke:
 git clone https://github.com/blackterrarium/superagent-plugin && cd superagent-plugin
 bash scripts/codex-smoke.sh
 ```
+
+## Pi (experimental)
+
+A generated Pi build lives in [`pi/`](pi/README.md) — external (unattended) driver only, laid out
+as a Pi package but delivered per run by `--skill`. `scripts/build-pi-skills.sh` derives it from
+the same markers as the other builds plus a `pi-only` marker.
+
+**Dispatch is hybrid.** The supervisor never uses a subagent tool: `superplan` and `superrun` are
+blocking `bash` calls to `scripts/role-bridge.sh` (child `pi -p` — or `codex`/`claude`/`agent` for a
+bridged role — with `--tools planner` / `--tools executor`), and the L7 panel is one blocking call
+to `scripts/bridge-fanout.sh` (three concurrent bridge runs, 1800 s timeout, framed output).
+superrun's SDD children go through superpowers' own Pi mapping — the `pi-subagents` `subagent`
+tool with `async: false` — and their model/thinking pins ride `.pi/agents/super-<role>.md`
+definitions `init` generates (native: `templates/super-role-pi-agent.md`; a role bridged to
+another harness: `templates/super-role-pi-bridge-agent.md`, a relay). Without `pi-subagents`,
+SDD runs sequentially in-context and pins are not applied (`SUPER_PI_SUBAGENTS=required` makes
+init abort instead).
+
+Every headless run passes `--approve` (the operator armed the loop on this repo — Cursor `--trust`
+parity). Auth is the CLI's `~/.pi/agent/auth.json` or provider keys in the target repo's `.env`.
+Model keys are `pi:<provider>/<model>` (or a bare `<provider>/<model>`); effort keys
+`off | minimal | low | medium | high | xhigh | max` — the tick passes `--thinking`, the bridge the
+`:<level>` suffix (or `--thinking` when the model is `inherit`).
+
+**Status:** live smoke on 2026-08-29, pi CLI 0.84.3, `pi-subagents` NOT installed on the build
+host — PASS 7 / FAIL 1 (informational) / SKIPPED 3. P1 (bad-model exit status): pi exits a plain
+**1** for both a bad model and a failed turn — no distinct code — which is the datum the bridge's
+exit-3 mapping relies on. P2 (`--skill` delivery): PASS. P4a/P4b (tool-list probes, informational):
+PASS. P3a/P3c (`pi-subagents` probes) and T4 (relay round trip) were **SKIPPED**, not verified —
+`pi-subagents` was not installed on this host, so the P3c nested-wait verdict is **unverified**
+pending a re-run on a host with `pi-subagents ≥0.58.0`. Remaining gaps: no multi-tick loop driven
+to DONE on Pi; S3 with `pi-subagents` not exercised inside a real superrun. Re-run:
+`bash scripts/pi-smoke.sh` (`PI_SMOKE_MODEL=<provider>/<id>` to pin a model).
 
 ## Cutting over an existing repo
 

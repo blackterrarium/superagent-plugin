@@ -78,6 +78,7 @@ ensure_claude_bin() {
 #   SUPER_HARNESS=claude (default) -> the Claude CLI (`claude`)
 #   SUPER_HARNESS=cursor           -> the Cursor CLI (`agent`, older `cursor-agent`)
 #   SUPER_HARNESS=codex            -> the OpenAI Codex CLI (`codex`)
+#   SUPER_HARNESS=pi               -> the Pi CLI (`pi`)
 # Resolution: process env > <repo>/.superenv > plugin default (via load_superenv).
 # ---------------------------------------------------------------------------
 
