@@ -5,42 +5,29 @@ license: all rights reserved
 related skills: supertraverse, superfinish, superplan
 ---
 
-<!-- GENERATED FILE — Codex build. Do not edit by hand: edit the canonical skill under skills/
-     in the plugin repository and re-run scripts/build-codex-skills.sh. -->
+<!-- GENERATED FILE — Pi build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-pi-skills.sh. -->
 
-> **Codex build notes.**
+> **Pi build notes.**
 > - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
->   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Codex — treat
->   any residual mention of them as inapplicable and NEVER attempt those tool calls.
-> - Tool mapping: "Agent tool" / "spawn a subagent" = the `spawn_agent` tool (multi-agent v2 —
->   wait for the child's result). Role pins from `.superenv` map to its parameters:
->   `SUPER_MODEL_<ROLE>` → `model`, `SUPER_EFFORT_<ROLE>` → `reasoning_effort`
->   (`inherit` = omit the parameter). There are NO `.claude/agents/` definition files in this
->   build — where a skill says "dispatch via subagent_type: super-<role>", pass the role's
->   resolved model/effort as spawn parameters instead — and any accompanying "missing definition =
->   hard error / re-run `superagent:init`" clause does not apply in this build (there is nothing to
->   generate; a bridged role's relay spawn needs no definition either). A role whose value names
->   another harness (`claude:sonnet`, `pi:openai/gpt-5`, …) is BRIDGED: spawn a relay child
->   (`model` = `SUPER_BRIDGE_RELAY_MODEL`, omit when `inherit`) whose message is
->   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for that role followed by the task
->   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
->   CLI's result verbatim. "Skill tool" = reference the skill by
->   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
->   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
->   install that is the plugin cache copy; in the source repository it is
->   `<repo>/codex/plugins/superagent`). Substitute its absolute path wherever it appears.
->   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
->   not packaged inside the plugin — they live in the plugin source repository. Read
->   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
->   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
->   path for it.
-> - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
->   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
->   directly (the external tick's file-read prompt), never invoked by name.
+>   `CronCreate` / `CronList` / `CronDelete` / `Monitor` / `AskUserQuestion` tools do **not** exist
+>   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
+>   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
+>   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
+> - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
+>   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
+>   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
+>   sequential fallback and report it.
+> - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
+>   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
+>   installed `superpowers` package — reference them by name.
+> - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
+>   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
+>   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
+> - `EnterWorktree` = not available; use `git worktree` via `bash`.
 
 # Superrun
 
@@ -84,7 +71,6 @@ closeout by hand: each phase is owned by an existing skill, and superrun must in
 | "I'll pause before each CI push to confirm" | NO. Run fully autonomously — let subagent-driven-development run end-to-end per its no-check-in-between-tasks rule. |
 | "I found the target, I'll execute the next one too while I'm here" | NO. One leaf per invocation. After closeout, report and exit. |
 | "A long CI push is queued — I'll wait for it to finish before pushing the next one" | NO. If `SUPER_CI_RUNNERS > 1`, queue every independent long push back-to-back (**CI scheduling**, Step 3) — the next free runner picks up the next job; serialize only across a named procedural gate. If `SUPER_CI_RUNNERS=1`, there is no runner contention to exploit, but a shardable batch's pushes still queue together and wait together. |
-| "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **parked** (Step 3a): standalone → report the queued run ids and end the turn (resume later via **Resume entry — post-CI**); under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. |
 
 ## Input — `<PLAN.md>` (Gate 1)
 
@@ -132,6 +118,12 @@ repo profile below**.
 > "superrun was dispatched as a subagent; it must run as a top-level process — see superagent
 > **Subagent dispatch**." Never nudge backgrounded children along by hand.
 
+> **On Pi, SDD's subagents are the `pi-subagents` `subagent` tool** (superpowers' own Pi mapping,
+> `references/pi-tools.md`). Dispatch every SDD child with `async: false` — one child per call,
+> foreground, the tool result is the child's final output. If no `subagent` tool is available in
+> this session, follow SDD's documented fallback (execute the task sequentially in this context)
+> and record `sdd-dispatch: sequential (no pi-subagents)` under Findings in the closeout so the
+> operator sees the degraded mode. Never launch background, parallel, chain, or workflow runs.
 
 - **Read the target leaf plan yourself** and extract its **full task list** plus scene-setting
   context. subagent-driven-development expects you to hand each implementer the **full task text**
@@ -182,14 +174,15 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    `log=` path in the BLOCKED report. Missing definition = hard error (re-run `superagent:init`).
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
    model keys). `inherit` = no override.
-   In this build the effort pin dispatches at spawn time: pass the role's resolved value
-   as the spawn call's `reasoning_effort` parameter (`inherit` = omit it), alongside the
-   role's model key as `model`. There are no per-role definition files on Codex and
-   nothing for `superagent:init` to generate — a bad effort value fails in the spawn
-   call itself. A **bridged** role (harness ≠ codex) is spawned as a relay: `model` =
-   `SUPER_BRIDGE_RELAY_MODEL` (omit when `inherit`), message =
-   `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for the role + the full
-   task prompt; a `BRIDGE-FAILED` reply is a failed subagent.
+   In this build a role's pins ride the `pi-subagents` agent definition `superagent:init`
+   generated at `.pi/agents/super-<role>.md`: dispatch the role with `agent: super-<role>` and
+   no model/thinking override on the call (native definition = model/thinking pins; bridged
+   definition = a relay that runs the foreign CLI and returns its result verbatim — a reply
+   beginning `BRIDGE-FAILED` is a crashed child: retry once, then the skill's normal escalation,
+   quoting the `log=` path). A role with both keys `inherit` has no definition: dispatch a plain
+   `subagent` call with no `agent`. A missing definition for a pinned role is a hard error (re-run
+   `superagent:init`) — unless the `subagent` tool itself is unavailable, in which case the
+   sequential fallback above applies and the pins are reported as not applied.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or
@@ -272,11 +265,6 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
    When a wait is needed (either of the first two branches above), never wait with `gh run watch`,
    foreground sleeps, or backgrounded re-poll loops — every poll iteration re-enters your context and
    a long lane (60–120 min) burns it for nothing. Instead:
-   - **Standalone (superrun is the top-level session's task):** there is no Monitor tool in this
-     build, so do not wait in-session at all. Report the queued run ids, the worktree/branch/PR
-     packet, and how to check the runs (`gh run list --branch <branch>`), then **end the turn**.
-     Once every run is terminal, re-invoke superrun via its **Resume entry — post-CI** with that
-     packet and the conclusions to finish the leaf.
    - **Dispatched by a `superagent` loop (a headless process the supervisor is blocking on):** do
      NOT arm the wait yourself (a Monitor cannot outlive your process) and do NOT emit interim
      "still waiting" notifications. Return a **CI-PENDING report** (format below) as your final

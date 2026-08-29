@@ -1,0 +1,6 @@
+{
+  "name": "superagent-pi",
+  "version": "0.5.2",
+  "description": "superagent plugin — Pi build (external unattended driver only)",
+  "pi": { "skills": ["skills"] }
+}

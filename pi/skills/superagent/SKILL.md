@@ -7,30 +7,29 @@ license: all rights reserved
 related skills: superloop, superplan, superrun, supertraverse, superfinish
 ---
 
-<!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
-     in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
+<!-- GENERATED FILE — Pi build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-pi-skills.sh. -->
 
-> **Cursor build notes.**
+> **Pi build notes.**
 > - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
->   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat
->   any residual mention of them as inapplicable and NEVER attempt those tool calls.
-> - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
->   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
->   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
->   not available — use an OS scheduler. A role whose `.superenv` value names another harness
->   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
->   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
->   reply beginning `BRIDGE-FAILED` as a failed subagent.
-> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
->   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
->   path wherever it appears.
-> - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
->   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
->   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
->   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
->   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
->   invoked by name.
+>   `CronCreate` / `CronList` / `CronDelete` / `Monitor` / `AskUserQuestion` tools do **not** exist
+>   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
+>   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
+>   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
+> - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
+>   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
+>   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
+>   sequential fallback and report it.
+> - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
+>   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
+>   installed `superpowers` package — reference them by name.
+> - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
+>   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
+>   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
+> - `EnterWorktree` = not available; use `git worktree` via `bash`.
 
 # Superagent
 
@@ -68,13 +67,11 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 | "I'll plan this step and then run it in the same tick while I'm here" | NO. **One skill per tick.** Set the next status and let the next cron tick run it. superplan and superrun contexts must never intermix. |
 | "I'll just invoke `superplan`/`superrun` via the Skill tool here — it's simpler" | NO. **Every `superplan`/`superrun` invocation runs in its own `general-purpose` subagent** (see **Subagent dispatch**). superagent's own context ingests only the returned Final Report (which it then relays verbatim to the caller), never the full skill execution — that is what keeps the supervisor lean and the per-session threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6) meaningful. |
 | "I'll detect the next step / execute the plan myself" | NO. superagent never traverses, plans, or executes. It dispatches `superplan` / `superrun` (each in its own subagent) and reacts to their Final Reports. |
-| "/superagent was run again — I'll start the loop" | NO. Check first. A non-terminal loop file = the scheduler entry is already the driver; report state and re-print setup, don't arm anything. Never start a second loop. |
 | "A fresh/empty context means I lost the loop state" | NO. All state is in the loop file. A `--tick` works identically in a clean context (external driver) or an accumulating one (cron). Acquire the lock, read the file, run one tick. |
 | "A skill raised a question — I'll just ask the user" | NO. First run the **subagent panel** (Decision-escalation ladder). Ask the user only if the panel cannot converge. |
 | "The work is blocked — terminate the loop" | NO. Run the panel on the blocker first (retry / re-plan / decline / escalate). Stop the driver only when DONE or an escalation pauses the loop. |
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
-| "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, release the lock, end the tick. Each later scheduled tick does ONE batched `curl` over the recorded run ids and exits unless every run is terminal. Per-tick heavy polling is the context waste the parked state exists to eliminate. |
-| "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. |
+| "I'll dispatch `superplan` with the `subagent` tool — it's right there" | NO. On Pi the supervisor NEVER uses a subagent tool. `superplan`, `superrun`, and every panelist are bridge processes started from your `bash` tool (see **Subagent dispatch**); `pi-subagents` is for `superrun`'s SDD children only. |
 | "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false` on the Agent call for `superplan`; a blocking Bash call for `superrun`): the blocked call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
 | "I'll dispatch `superrun` as an Agent-tool subagent like `superplan`" | NO. **`superrun` runs in its own CLI process** (`role-bridge.sh --tools executor` from your Bash tool — see **Subagent dispatch**). `superrun` is the SDD controller and must dispatch its own implementer/reviewer subagents; a subagent cannot foreground-wait on its children (superloop L7's depth-1 constraint), so as an Agent-tool subagent it degrades into a `SendMessage`-nudge spiral and never converges (issue #25). |
 | "My dispatch was interrupted mid-flight (API lost, host slept) — I'll ask the operator whether to resume or pause" | NO. **A tick never ends with a question — not via a tool, not as the final chat message** (in an unattended session no one can answer; the questioning turn exits 0 and strands `status: PLANNING`/`RUNNING` + the held lock). Self-heal immediately per superloop L2's tick teardown invariant: log the interruption, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, `release_lock()`, end the tick with a normal report. The next scheduled tick retries the step. |
@@ -168,6 +165,16 @@ difference is load-bearing:
   `WAITING FOR PLAN` branch, dispatch it with the **Agent tool** (`subagent_type: general-purpose` —
   full tool access: Bash, Edit/Write, git, `gh` — and `run_in_background: false`; see **Synchronous
   dispatch** below).
+- **On Pi, `superplan` is ALSO its own CLI process.** This harness has no in-process subagent tool
+  in the supervisor; every heavy dispatch is a blocking `bash` call to the bridge. Dispatch
+  `superplan` exactly like `superrun` below, with two differences: `--tools planner` and
+  `--role planner`, and the model/effort from `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER`:
+  `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools planner --cwd "<primary root>" --prompt-file "$f" --role planner`
+  A native (`pi:`/inherit) planner runs with `--harness pi` — native and bridged are the same code
+  path on this harness. The child inherits `SUPERAGENT_PI_SKILLS` from the tick, so `superplan`
+  and the `superpowers:*` skills resolve inside it. Exit 0 → stdout is the Final Report; non-zero
+  → the crashed-dispatch path (retry once, then the crash-recovery mapping: restore the ready
+  status, `release_lock()`, end the tick, quoting the `log=` path in `Findings & issues`).
 - **`superrun` → its own CLI process.** `superrun` is the `subagent-driven-development` controller:
   it dispatches implementer / reviewer / fix-applier subagents and foreground-waits on each. **A
   subagent cannot foreground-wait on its own children** (superloop L7's depth-1 constraint): run as
@@ -199,9 +206,11 @@ difference is load-bearing:
   `[ "${BASH_MAX_TIMEOUT_MS:-0}" -ge 7200000 ]` in Bash; if it fails, do **not** dispatch — reset
   `RUNNING → WAITING FOR RUN`, `stop_driver()`, `release_lock()`, and report the missing env var in
   `Findings & issues` (a dispatch that gets guillotined at 600 s strands a half-done worktree).
+  On Pi there is no `BASH_MAX_TIMEOUT_MS` env; pass the largest `timeout` the `bash` tool accepts on
+  the call itself and skip the env check.
 
   The child process shares this host's CLI login and plugin set, so `superagent:superrun` and
-  `superpowers:*` resolve there exactly as here; the `.cursor/agents/super-<role>.md` definitions
+  `superpowers:*` resolve there exactly as here; the `.claude/agents/super-<role>.md` definitions
   `superagent:init` generated resolve from the `--cwd` root as usual.
 
 Either way, instruct the executor/subagent to:
@@ -225,7 +234,7 @@ agent definition is involved. In Bash, `. "${SUPER_PLUGIN_ROOT}/scripts/_common.
 foreign harness's model — all pass through unchanged; `inherit` omits the flag) and
 `--effort "$SUPER_EFFORT_EXECUTOR"` (`inherit` omits it). A bridged executor (harness ≠
 `SUPER_HARNESS`) is the same command with the foreign `--harness`; the bridge runs that CLI. A
-`.cursor/agents/super-executor.md` definition, if `superagent:init` generated one, is unused by this
+`.claude/agents/super-executor.md` definition, if `superagent:init` generated one, is unused by this
 path.
 
 *`superplan` (Agent-tool dispatch):*
@@ -234,7 +243,7 @@ path.
 - A tier name (`sonnet` | `opus` | `haiku` | `fable`) → pass it as `model:`.
 - A **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) → the Agent tool's `model:`
   parameter is tier-enum-only and rejects it; instead dispatch with `subagent_type: super-planner`
-  — the per-role agent definition `superagent:init` generates in `.cursor/agents/`,
+  — the per-role agent definition `superagent:init` generates in `.claude/agents/`,
   whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
   that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
 - A **bridged** value (harness prefix or inference ≠ `SUPER_HARNESS`, e.g. `codex:gpt-5.6-sol`,
@@ -243,6 +252,9 @@ path.
   `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
   crashed subagent, quoting its `log=` path.
 
+*`superplan` on Pi (process dispatch):* identical to the `superrun` rule above with
+`SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER` and `--tools planner`. No agent definition is
+involved for planner, executor, or panel on this harness.
 
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and
@@ -344,10 +356,6 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    `superrun` (Step 2); the park and resume ticks increment `iteration` but **not**
    `session_skill_count` again.
 
-**RESUME / restart while parked (form B):** a persisted `WAITING FOR CI` is recovered on the standard
-RESUME path — check the recorded runs once (batched curl or `gh run view`): all terminal → run the
-resume flow above this tick; any still running → report the parked state (the scheduler's ticks keep
-checking) and exit.
 
 ---
 
@@ -371,7 +379,7 @@ block.
     answer, proceed as above. If it genuinely can't be answered, **pause** (`stop_driver()`),
     `release_lock()` — a later `/superagent <PLAN.md>` resumes.
   - **Non-interactive scheduled tick (external Desktop/headless CLI, fresh session — no one to
-    prompt):** do **not** block on `AskUserQuestion` (in a headless `agent -p` tick
+    prompt):** do **not** block on `AskUserQuestion` (in a headless `pi -p` tick
     there is no TTY to answer, so it would stall the one-shot session). Ensure `## Pending decision`
     holds the question + an explicit *"write your choice as `answer: <option>` under this block"*
     instruction, `release_lock()`, and exit.
@@ -499,8 +507,6 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    Write — no commit, no PR (the file is gitignored).
 2. **Terminal** (`DONE`, hard error, or `WAITING FOR INPUT` unanswered in an unattended run): print a
    final summary (plus the pending question + resume instructions for the input case) and
-   `stop_driver()` (on `DONE` a shipped-script-driven scheduler entry self-disarms after the session;
-   otherwise instruct the user to disable the scheduler entry). No more
    ticks fire.
 3. **Otherwise**: do nothing to the driver — the next `--tick <loop-file>` fires on its own (the
    in-session `cron` job, or the external Desktop routine / OS-cron entry, depending on `driver`).
@@ -525,16 +531,17 @@ The two drivers (Driver A `cron`, Driver B `external`), the context model, the o
 (`acquire_lock()` / `release_lock()`), and `stop_driver()` are **superloop L2 + L3**. superagent arms
 `/superagent --tick <loop-file>` as its tick prompt (`<consumer>` = `superagent`).
 
-**Running from the Cursor CLI.** For `external` mode the tick fires in a fresh headless `agent -p`
-session per interval; the scheduler drives it by asking the CLI to *read `skills/superagent/SKILL.md`
-directly (at the plugin's installed location) and run exactly one `--tick`* (superloop L2, Driver B).
-The loop's own internal `superagent:superplan` / `superagent:superrun` dispatches still go through the
-skill mechanism once the session is running, so the plugin must be installed and enabled for headless
-sessions (or passed via `--plugin-dir`). **Port status:** the shipped `scripts/` wrappers still invoke
-the Cursor CLI — until they are ported, schedule the Driver B `agent -p` recipe directly. The driver
-must never `--resume` (fresh context per tick — L4 is a no-op in `external` mode, so the loop runs
-straight to `DONE`); an interactive monitoring/answering console is a separate plane that can be
-started/stopped independently.
+**Running from the Pi CLI.** For `external` mode the tick fires in a fresh headless `pi -p` session
+per interval; the scheduler drives it by asking the CLI to *read `pi/skills/superagent/SKILL.md`
+directly (in the plugin repository's generated Pi build) and run exactly one `--tick`* (superloop
+L2, Driver B). The plugin's skills are delivered per run with `--skill <plugin-repo>/pi/skills` —
+no install step; superpowers must be installed as a Pi package (`pi install
+git:github.com/obra/superpowers`). The shipped `scripts/` wrappers are harness-aware:
+`SUPER_HARNESS=pi` makes `superagent-tick.sh` fire `pi -p --approve --skill … [--model] [--thinking]`
+and export `SUPERAGENT_BRIDGE`, `SUPERAGENT_FANOUT`, and `SUPERAGENT_PI_SKILLS` for the bridge
+children. The driver must never resume a prior session (fresh context per tick — L4 is a no-op in
+`external` mode, so the loop runs straight to `DONE`); an interactive monitoring/answering console is
+a separate plane that can be started/stopped independently.
 
 ---
 
@@ -586,8 +593,4 @@ tick, even one the loop already resolved itself.
     (interactive prompt, or `answer.sh <slug> "<option>"` for a scheduled loop)>
 
 On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
-and confirmation the driver was stopped — shipped-script loops: note that the tick wrapper
-self-disarms the scheduler entry when this session ends (`SUPER_AUTO_DISARM_ON_DONE`); otherwise
-remind the user to disable the scheduler entry. Include the final tick's
-verbatim **Delegated skill
 report** and any still-open `Findings & issues`.

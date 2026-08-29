@@ -255,6 +255,7 @@ path.
   `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
   crashed subagent, quoting its `log=` path.
 
+
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and
 invites `TaskOutput`/`TaskList` status checks while the work runs — for a long `superplan`/`superrun`
