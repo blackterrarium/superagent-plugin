@@ -107,8 +107,8 @@ pi-only:end -->
    `OPENAI_API_KEY` set or `~/.codex/auth.json` present; pi → for a `<provider>/` of `openai` or
    `anthropic`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` set; claude/cursor → binary only.
 <!-- pi-only:start
-   ; on the Pi harness also run `pi auth check --provider <p>` for each distinct provider a `pi:`
-   role names (WARN on failure)
+   On the Pi harness, also run `pi auth check --provider <p>` for each distinct provider a `pi:`
+   role names (WARN on failure).
 pi-only:end -->
    Also run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/role-bridge.sh" 2>&1 | head -1` — a usage line
    proves the bridge shipped with this build; a "not found" is a broken install: ABORT.
