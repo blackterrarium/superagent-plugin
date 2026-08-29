@@ -77,6 +77,10 @@ for p in "${pids[@]}"; do
   echo "$rc" >"$work/$i.rc"
   [ "$rc" -eq 0 ] || failed=$((failed + 1))
 done
+# Reap the watchdog's own `sleep "$timeout"` too: on the happy path (every child already
+# finished) $wd is still asleep, and killing only the $wd subshell wrapper leaves that `sleep`
+# reparented to init, lingering for the rest of --timeout (up to 1800s default).
+pkill -P "$wd" 2>/dev/null || true
 kill "$wd" 2>/dev/null || true
 wait "$wd" 2>/dev/null || true
 

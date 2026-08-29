@@ -141,6 +141,13 @@ out="$("$FANOUT" --harness pi --model openai/gpt-5 --effort high --cwd "$T/cwd" 
 check "fanout: exit 0 when all ok" [ "$rc" -eq 0 ]
 check "fanout: three framed results in order" bash -c "printf '%s\n' \"\$1\" | grep -n -E '^=== (PANELIST [123] exit=0|END [123]) ===$' | tr '\n' ' ' | grep -q '^1:=== PANELIST 1 exit=0 === 3:=== END 1 === 4:=== PANELIST 2 exit=0 === 6:=== END 2 === 7:=== PANELIST 3 exit=0 === 9:=== END 3 === $'" _ "$out"
 check "fanout: each block carries the bridge stdout" [ "$(printf '%s\n' "$out" | grep -c '^RESULT-pi$')" -eq 3 ]
+# Watchdog reaping: on a happy path the watchdog's own `sleep --timeout` must not survive the run
+# (it is a forked child of $wd, not killed by `kill "$wd"` alone). Use a distinctive timeout value
+# so a stray sleep from elsewhere can't collide with the check, and confirm none is already running.
+pgrep -f '^sleep 600$' >/dev/null && fail "fanout: pre-existing sleep 600 would poison the reap check" || true
+out="$("$FANOUT" --harness pi --model inherit --effort inherit --cwd "$T/cwd" --timeout 600 --prompt-file "$T/p1.txt" --prompt-file "$T/p2.txt" --prompt-file "$T/p3.txt" 2>/dev/null)"; rc=$?
+check "fanout: exit 0 with --timeout 600" [ "$rc" -eq 0 ]
+check "fanout: watchdog sleep reaped on success" bash -c '! pgrep -f "^sleep 600$" >/dev/null'
 out="$(SHIM_MODE=slow "$FANOUT" --harness pi --model inherit --effort inherit --cwd "$T/cwd" --timeout 2 --prompt-file "$T/p1.txt" --prompt-file "$T/p2.txt" 2>/dev/null)"; rc=$?
 check "fanout: exit 3 on timeout" [ "$rc" -eq 3 ]
 check "fanout: timed-out panelist is BRIDGE-FAILED" bash -c "printf '%s\n' \"\$1\" | grep -q '^BRIDGE-FAILED exit=[0-9]* harness=pi role=panelist-1 log='" _ "$out"
