@@ -101,6 +101,15 @@ repo profile below**.
 > "superrun was dispatched as a subagent; it must run as a top-level process — see superagent
 > **Subagent dispatch**." Never nudge backgrounded children along by hand.
 
+<!-- pi-only:start
+> **On Pi, SDD's subagents are the `pi-subagents` `subagent` tool** (superpowers' own Pi mapping,
+> `references/pi-tools.md`). Dispatch every SDD child with `async: false` — one child per call,
+> foreground, the tool result is the child's final output. If no `subagent` tool is available in
+> this session, follow SDD's documented fallback (execute the task sequentially in this context)
+> and record `sdd-dispatch: sequential (no pi-subagents)` under Findings in the closeout so the
+> operator sees the degraded mode. Never launch background, parallel, chain, or workflow runs.
+pi-only:end -->
+
 - **Read the target leaf plan yourself** and extract its **full task list** plus scene-setting
   context. subagent-driven-development expects you to hand each implementer the **full task text**
   (it does not make the subagent read the plan file). Provide the context about where each task fits.
@@ -172,6 +181,17 @@ cursor-only:end -->
    `${SUPER_PLUGIN_ROOT}/templates/relay-preamble.md` rendered for the role + the full
    task prompt; a `BRIDGE-FAILED` reply is a failed subagent.
 codex-only:end -->
+<!-- pi-only:start
+   In this build a role's pins ride the `pi-subagents` agent definition `superagent:init`
+   generated at `.pi/agents/super-<role>.md`: dispatch the role with `agent: super-<role>` and
+   no model/thinking override on the call (native definition = model/thinking pins; bridged
+   definition = a relay that runs the foreign CLI and returns its result verbatim — a reply
+   beginning `BRIDGE-FAILED` is a crashed child: retry once, then the skill's normal escalation,
+   quoting the `log=` path). A role with both keys `inherit` has no definition: dispatch a plain
+   `subagent` call with no `agent`. A missing definition for a pinned role is a hard error (re-run
+   `superagent:init`) — unless the `subagent` tool itself is unavailable, in which case the
+   sequential fallback above applies and the pins are reported as not applied.
+pi-only:end -->
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or

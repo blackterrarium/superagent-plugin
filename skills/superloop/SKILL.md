@@ -725,6 +725,19 @@ agent-definition files in this build — the pins ride the spawn call itself, an
 Wait for all three children's results before proceeding; never
 fire-and-forget the panel).
 codex-only:end -->
+<!-- pi-only:start
+Dispatch **3 panelists in one blocking `bash` call** to the fan-out script — this harness has no
+blocking parallel subagent tool, and the supervisor never uses a subagent tool at all. Write the
+identical packet to three temp files (`mktemp "${TMPDIR:-/tmp}/super-panel.XXXXXX"` ×3, quoted
+heredocs), resolve the panel's harness/model/effort from `SUPER_MODEL_PANEL` / `SUPER_EFFORT_PANEL`
+(`. "${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh"`; `superagent_role_harness`, an `inherit` harness →
+`pi`; `superagent_role_model`), then run with the largest `timeout` the `bash` tool accepts:
+`"${SUPERAGENT_FANOUT:-${CLAUDE_PLUGIN_ROOT}/scripts/bridge-fanout.sh}" --harness <h> --model "<m>" --effort "<e>" --tools role --cwd "$PWD" --role panelist --timeout 1800 --prompt-file "$f1" --prompt-file "$f2" --prompt-file "$f3"`
+stdout carries the three verdicts framed `=== PANELIST <n> exit=<rc> === … === END <n> ===`; a
+block whose body begins `BRIDGE-FAILED` (bridge error or the 1800 s timeout) is that panelist
+returning `insufficient-info`. `SUPER_PANEL_AGENT_TYPE` is ignored on Pi. The call blocks until
+all three return — never launch panelists as background `pi-subagents` runs and poll them.
+pi-only:end -->
 Give each the **same packet**: the decision/blocker statement, the relevant plan +
 report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
 from independent reasoning, not framing. Require each to return a structured verdict —
