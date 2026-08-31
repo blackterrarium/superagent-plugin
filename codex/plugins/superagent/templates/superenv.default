@@ -46,6 +46,7 @@ SUPER_EFFORT_FIX_PLANNER=high           # fix rounds 4-5: diagnose, then hand to
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=codex                    # this is the Codex build — the external driver fires the Codex CLI (codex exec)
 SUPER_CODEX_SANDBOX=danger-full-access  # codex harness only: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write
+SUPER_PI_SUBAGENTS=recommended          # pi harness only: recommended (init WARNs if the pi-subagents package is missing or < 0.58.0; superrun's SDD children then run sequentially in-context without role pins) | required (init ABORTS instead) | off (never generate .pi/agents/ definitions, never use the subagent tool)
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/

@@ -13,6 +13,7 @@
 #   cursor-only:end -->                                dropped and the content is ACTIVATED
 #   <!-- codex-only:start --> ... <!-- codex-only:end --> block kept in the Codex build, DROPPED
 #                                                      here (wrapper AND content, like cc-only)
+#   <!-- pi-only:start … pi-only:end -->   block DROPPED here (wrapper AND content)
 #
 # After marker filtering, harness-specific text substitutions are applied (see seds below), and a
 # generated-file banner is inserted after each SKILL.md's frontmatter.
@@ -58,6 +59,9 @@ filter_markers() {
     cdrop                     { next }
     /^[[:space:]]*<!-- cursor-only:start[[:space:]]*$/ { next }
     /^[[:space:]]*cursor-only:end -->[[:space:]]*$/    { next }
+    /^[[:space:]]*<!-- pi-only:start[[:space:]]*$/ { pdrop=1; next }
+    /^[[:space:]]*pi-only:end -->[[:space:]]*$/    { pdrop=0; next }
+    pdrop                     { next }
     { print }
   '
 }

@@ -141,11 +141,12 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
    a legitimate key in a portable `.superenv`: report it as `ignored (other-harness
    key)`, not as a typo.)
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
-   `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
+   `SUPER_HARNESS` ∈ claude|cursor|codex|pi; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
-   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller.
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈
+   recommended|required|off.
 3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
    `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
    `SUPER_GH_DISABLE_SANDBOX`.
@@ -175,7 +176,7 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
    `inherit`).
 6. **Effort keys** (each `SUPER_EFFORT_<ROLE>`): valid in the domain of the ROLE's harness (from
    item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
-   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high`;
+   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high|xhigh|max`;
    cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
 
 ## Step 3 — Role agents (model/effort pins)
@@ -202,6 +203,7 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+
 
 (`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch
 `superrun` through it: the executor always runs as the top-level agent of its own CLI process via

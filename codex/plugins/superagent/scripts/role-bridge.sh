@@ -2,16 +2,22 @@
 # role-bridge.sh — run ONE agent role on a foreign harness CLI, headless.
 #
 #   role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit>
-#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|executor|<list>]
+#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|planner|executor|<list>]
 #
-# --tools (claude harness only; accepted and ignored elsewhere) picks the `--allowedTools` set:
-#   role     (default) Read,Edit,Write,Bash,Grep,Glob — a leaf role (implementer/reviewer/...)
-#   executor           the tick's own set plus Grep/Glob: Read,Edit,Write,Bash,Grep,Glob,Task,Skill —
-#                      for a controller role (superrun) that must dispatch subagents and invoke
-#                      skills itself. This is how superagent runs superrun as the TOP-LEVEL agent of
-#                      its own `claude -p` process (issue #25): a subagent cannot foreground-wait on
-#                      its own children, so the SDD controller has to be depth 0 in some process.
-#   <list>             an explicit comma-separated allowlist.
+# --tools picks the child's tool allowlist (claude: --allowedTools; pi: --tools; codex/cursor: ignored):
+#   role     (default) claude Read,Edit,Write,Bash,Grep,Glob · pi read,edit,write,bash,grep,find,ls —
+#            a leaf role (implementer/reviewer/panelist)
+#   planner  a superplan dispatch: claude adds Task,Skill (it invokes skills); pi = the role set
+#   executor a controller role (superrun) that must dispatch subagents and invoke skills itself:
+#            claude Read,Edit,Write,Bash,Grep,Glob,Task,Skill; pi = NO --tools flag (built-ins plus
+#            extension tools such as pi-subagents' `subagent`). This is how superagent runs superrun
+#            as the TOP-LEVEL agent of its own CLI process (issue #25): a subagent cannot
+#            foreground-wait on its own children, so the SDD controller has to be depth 0 in some process.
+#   <list>   an explicit comma-separated allowlist in the harness's own tool names.
+# Pi children always run with --approve (project trust for one run; the operator chose the repo)
+# and --no-session (a bridged run is ephemeral; the log file is its record). When
+# SUPERAGENT_PI_SKILLS is set (exported by superagent-tick.sh on the pi harness) it is passed as
+# --skill so the child sees the plugin's skills.
 # For --harness claude the print-mode background-wait ceiling is lifted (CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS
 # defaults to 0 = wait indefinitely, mirroring superagent-tick.sh; an operator-set value is kept),
 # so a nested controller's subagents are never guillotined mid-flight (issue #15).
@@ -33,6 +39,7 @@ BRIDGE_UNSET_CLAUDECODE=false   # T5 probe passed under CLAUDECODE=1; no need to
 harness=""; model="inherit"; effort="inherit"; cwd=""; prompt_file=""; role="role"; tools="role"
 TOOLS_ROLE="Read,Edit,Write,Bash,Grep,Glob"
 TOOLS_EXECUTOR="Read,Edit,Write,Bash,Grep,Glob,Task,Skill"
+TOOLS_PI_ROLE="read,edit,write,bash,grep,find,ls"
 while [ $# -gt 0 ]; do
   case "$1" in
     --harness)     [ $# -ge 2 ] || { echo "role-bridge: --harness requires a value" >&2; exit 64; }; harness="$2"; shift 2 ;;
@@ -49,10 +56,11 @@ case "$harness" in claude|codex|cursor|pi) ;; *) echo "role-bridge: --harness mu
 [ -d "$cwd" ] || { echo "role-bridge: --cwd '$cwd' is not a directory" >&2; exit 64; }
 [ -f "$prompt_file" ] || { echo "role-bridge: --prompt-file '$prompt_file' not found" >&2; exit 64; }
 case "$tools" in
-  role)     allowed="$TOOLS_ROLE" ;;
-  executor) allowed="$TOOLS_EXECUTOR" ;;
-  "")       echo "role-bridge: --tools must be role|executor|<comma-separated list> (got '')" >&2; exit 64 ;;
-  *)        allowed="$tools" ;;
+  role)     allowed="$TOOLS_ROLE";     pi_allowed="$TOOLS_PI_ROLE" ;;
+  planner)  allowed="$TOOLS_EXECUTOR"; pi_allowed="$TOOLS_PI_ROLE" ;;
+  executor) allowed="$TOOLS_EXECUTOR"; pi_allowed="" ;;
+  "")       echo "role-bridge: --tools must be role|planner|executor|<comma-separated list> (got '')" >&2; exit 64 ;;
+  *)        allowed="$tools";          pi_allowed="$tools" ;;
 esac
 
 # SUPER_CODEX_SANDBOX is read below for --harness codex; reject an out-of-domain value here
@@ -108,14 +116,15 @@ case "$harness" in
     result="$(cd "$cwd" && agent "${args[@]}" 2>>"$log")" || rc=$?
     ;;
   pi)
-    args=(-p)
-    # pi carries the thinking level as a ":<level>" suffix on the model string, so with no
-    # model there is nowhere to put it: warn instead of dropping it silently. An explicit
-    # level already on the model ("openai/gpt-5:high") wins — never suffix twice.
+    args=(-p --approve --no-session)
+    [ -n "${SUPERAGENT_PI_SKILLS:-}" ] && args+=(--skill "$SUPERAGENT_PI_SKILLS")
+    # pi carries the thinking level as a ":<level>" suffix on the model string. With no model
+    # the CLI's --thinking flag carries it instead. An explicit level already on the model
+    # ("openai/gpt-5:high") wins — never suffix twice.
     m="$model"
     if [ "$effort" != inherit ]; then
       if [ "$model" = inherit ]; then
-        echo "role-bridge: warning — --effort '$effort' dropped: pi carries the level on the model string and --model is 'inherit'" >&2
+        args+=(--thinking "$effort")
       elif printf '%s' "$m" | grep -q ':[A-Za-z0-9_-]*$'; then
         echo "role-bridge: warning — --model '$m' already pins a level; ignoring --effort '$effort'" >&2
       else
@@ -123,6 +132,7 @@ case "$harness" in
       fi
     fi
     [ "$model" != inherit ] && args+=(--model "$m")
+    [ -n "$pi_allowed" ] && args+=(--tools "$pi_allowed")
     result="$(cd "$cwd" && pi "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
     ;;
 esac

@@ -76,23 +76,26 @@ is always native to `SUPER_HARNESS`. The nine subagent role keys (`SUPER_EFFORT_
 `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
 `_BRANCH_REVIEWER`, `_FIX_PLANNER`) are validated in **their own resolved harness's** domain
 instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
-a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|inherit` (delivered
-as a `:<level>` suffix on the model string). See the main [`README.md`](../README.md#configuration)
+a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|xhigh|max|inherit`
+(a `:<level>` suffix on the model string, or `--thinking` when the model is `inherit`). See the
+main [`README.md`](../README.md#configuration)
 for the full per-role-harness table and defaults.
 
 `CLAUDE_CODE_EFFORT_LEVEL` (a `claude` CLI env var) outranks both `--effort` and any per-role agent
 frontmatter effort pin, so the tick never sets it itself; if the scheduler environment already
 carries it, the tick logs a warning rather than silently letting it shadow the configured effort.
 
-## Harness (Claude CLI vs Cursor CLI vs Codex CLI)
+## Harness (Claude CLI vs Cursor CLI vs Codex CLI vs Pi CLI)
 
 Every tick fires one agent-CLI session; **which** CLI is the harness: `SUPER_HARNESS=claude`
 (default — `claude -p`), `SUPER_HARNESS=cursor` (the Cursor CLI: `agent -p --trust --force
---plugin-dir <plugin-repo>/cursor`, reading the generated Cursor build of the skills), or
+--plugin-dir <plugin-repo>/cursor`, reading the generated Cursor build of the skills),
 `SUPER_HARNESS=codex` (the OpenAI Codex CLI: `codex exec <prompt>`, reading the generated Codex
-plugin-marketplace build under `<plugin-repo>/codex`). Set it via `--harness claude|cursor|codex`
-on `launch.sh` / `install-timer.sh` (pinned into the per-goal `~/.config/superagent/<slug>.env` at
-install time), the target repo's `.superenv`, or the environment.
+plugin-marketplace build under `<plugin-repo>/codex`), or `SUPER_HARNESS=pi` (the Pi CLI: `pi -p
+--approve --skill <plugin-repo>/pi/skills`, reading the generated Pi build). Set it via `--harness
+claude|cursor|codex|pi` on `launch.sh` / `install-timer.sh` (pinned into the per-goal
+`~/.config/superagent/<slug>.env` at install time), the target repo's `.superenv`, or the
+environment.
 
 - **cursor:** auth is the CLI's stored login or `CURSOR_API_KEY` in the target repo's `.env`; model
   values are Cursor model names (`agent --list-models`), with `inherit` resolving to the CLI's own
@@ -111,6 +114,15 @@ install time), the target repo's `.superenv`, or the environment.
   read-only in that mode, so git fetch/commit fail and the L5 sync gate parks the loop) — an
   out-of-domain value aborts the tick (exit 8; see Exit codes below) rather than silently picking a
   posture.
+- **pi:** skills are delivered per run via `--skill <plugin-repo>/pi/skills` — no install step
+  (build/refresh the tree with `scripts/build-pi-skills.sh`). Auth is the CLI's own
+  `~/.pi/agent/auth.json` or provider API keys in the target repo's `.env`. Model values are
+  `<provider>/<model>` (e.g. `openai/gpt-5`), with `inherit` omitting `--model` (the CLI's own
+  configured default applies); effort maps to `--thinking <level>` (the bridge instead suffixes
+  `:<level>` onto a pinned model string), with `inherit` omitting it. Every run passes `--approve`
+  (the operator armed the loop on this repo). Exports `SUPERAGENT_FANOUT` (path to
+  `bridge-fanout.sh`, for the L7 panel) and `SUPERAGENT_PI_SKILLS` (the `--skill` path, so a
+  bridged relay's child sees the plugin's skills too).
 
 ### `.superenv` layer
 
@@ -134,10 +146,11 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
   those in-session dispatches fail opaquely deep inside the tick, not as a wrapper-level preflight error.
   The tick log header names this requirement as a hint — check it first if a tick fails with no clear
   cause. Confirm the plugin is installed/enabled before installing the timer.
-- The `claude` CLI installed. A systemd user service, launchd job, or cron runs with a minimal `PATH`
-  that omits the common user bin dirs, so the wrapper prepends `~/.local/bin`, `/opt/homebrew/bin`, and
-  `/usr/local/bin` and **fails fast** if the binary is
-  still not found. If your `claude` lives elsewhere, add its directory to `PATH` in the scheduler env.
+- The resolved harness's CLI installed (`claude` by default; `agent`/`cursor-agent` for `cursor`,
+  `codex` for `codex`, `pi` for `pi`). A systemd user service, launchd job, or cron runs with a
+  minimal `PATH` that omits the common user bin dirs, so the wrapper prepends `~/.local/bin`,
+  `/opt/homebrew/bin`, and `/usr/local/bin` and **fails fast** (exit 5) if the binary is still not
+  found. If your CLI lives elsewhere, add its directory to `PATH` in the scheduler env.
 - `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only; the wrapper
   sources `.env`) — **or** a `claude` CLI already logged in (subscription/OAuth hosts): when no key is
   set the tick logs a note and relies on the CLI's own stored login instead of aborting.
@@ -162,14 +175,14 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
 | 1 | `REPO` unset and the wrapper isn't running inside a git repo. |
 | 2 | `LOOP_FILE` not provided (env or `$1`). |
 | 4 | `gh` preflight failed — not authenticated (see Prerequisites above). |
-| 5 | The harness's agent CLI binary (`claude` / `agent` / `codex`) not found on `PATH`. |
-| 6 | `SUPER_HARNESS` is set to something other than `claude`/`cursor`/`codex`. |
-| 7 | The harness's generated build tree is missing (`cursor/` or `codex/` — run the matching `scripts/build-*-skills.sh`). |
-| 8 | `SUPER_CODEX_SANDBOX` (codex harness only) is set to something other than `workspace-write`/`danger-full-access`. |
+| 5 | The harness's agent CLI binary (`claude` / `agent` / `codex` / `pi`) not found on `PATH`. |
+| 6 | `SUPER_HARNESS` is set to something other than `claude`/`cursor`/`codex`/`pi`. |
+| 7 | The harness's generated build tree is missing (`cursor/`, `codex/`, or `pi/` — run the matching `scripts/build-*-skills.sh`). |
+| 8 | `SUPER_CODEX_SANDBOX` (codex harness only) is set to something other than `workspace-write`/`danger-full-access`, or, on the pi harness, `SUPER_MODEL_SUPERVISOR` is not a `<provider>/<model>` string. |
 | 9 | The session was terminated at a print-mode background-task wait ceiling (claude harness, operator-set `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`) — subagents killed mid-flight while the CLI exited 0. |
 | 10 | The session exited 0 but left a **transient** `status` (`PLANNING`/`RUNNING`) in the loop file — the tick completed without advancing or parking (e.g. an interrupted dispatch that ended its turn with a question; issue #17). The next tick self-heals via crash recovery. |
 | 11 | `SUPER_MODEL_SUPERVISOR` (or `TICK_MODEL`) names a harness prefix (`[harness:]<model>`) other than the resolved `SUPER_HARNESS` — the supervisor must run natively; it cannot be bridged. |
-| *other* | Propagated verbatim from the underlying CLI's (`claude`/`agent`/`codex`) own exit status. |
+| *other* | Propagated verbatim from the underlying CLI's (`claude`/`agent`/`codex`/`pi`) own exit status. |
 
 Code 3 is unused.
 
@@ -233,7 +246,8 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   gated by `SUPER_AUTO_DISARM_ON_DONE` (default `true`). Without this, a completed loop would keep
   burning a full CLI session per interval forever.
 - `_common.sh` — sourced helpers: `ensure_gh_auth` (loads/exports `GH_TOKEN`, fatal preflight),
-  `ensure_claude_bin` (fatal binary preflight), and `gh_auth_state` (non-fatal report used by `status.sh`).
+  `ensure_cli_bin` (fatal binary preflight for whichever harness CLI is resolved — `claude`, `agent`,
+  `codex`, or `pi`), and `gh_auth_state` (non-fatal report used by `status.sh`).
 - `launch.sh <PLAN.md> [--interval ..] [--timeout ..] [--slug ..] [--output stream|text] [--model <slug>] [--dry-run]`
   — one-step launcher: derive the goal slug, create/reuse the loop file, and arm the timer (what the
   `superagent-external` skill invokes). `--dry-run` previews without creating or arming anything.
@@ -278,18 +292,30 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   exits 0 and writes `codex-smoke-report.md` at the repo root — failures are the data, not a script
   bug.
 - `role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit> --cwd <dir>
-  --prompt-file <file> [--role <name>] [--tools role|executor|<list>]` — runs one agent role on a
-  harness CLI, headless: reads the prompt from `<file>`, runs the target CLI in `<dir>`, prints its
-  final message on stdout and nothing else (CLI chatter goes to a log file, path printed on stderr).
-  The relay definitions a bridged role dispatches through (`templates/super-role-bridge-agent.md` on
-  Claude/Cursor, `templates/relay-preamble.md` on Codex) shell out to this script; it is also copied
-  into the `codex/` and `cursor/` builds. `--tools` (claude only) selects the `--allowedTools` set:
-  `role` (default: `Read,Edit,Write,Bash,Grep,Glob`) for a leaf role, `executor`
-  (`…,Task,Skill` — the tick's own set) for a controller that dispatches subagents itself — this is
-  how `superagent` runs `superrun` as the top-level agent of its own process, native or bridged, so
-  the SDD controller's children can be foreground-waited on (issue #25). For claude the print-mode
+  --prompt-file <file> [--role <name>] [--tools role|planner|executor|<list>]` — runs one agent role
+  on a harness CLI, headless: reads the prompt from `<file>`, runs the target CLI in `<dir>`, prints
+  its final message on stdout and nothing else (CLI chatter goes to a log file, path printed on
+  stderr). The relay definitions a bridged role dispatches through (`templates/super-role-bridge-agent.md`
+  on Claude/Cursor, `templates/relay-preamble.md` on Codex, `templates/super-role-pi-bridge-agent.md`
+  on Pi) shell out to this script; it is also copied into the `codex/`, `cursor/`, and `pi/` builds.
+  `--tools` selects the child's tool allowlist (claude: `--allowedTools`; pi: `--tools`; codex/cursor:
+  ignored): `role` (default: claude `Read,Edit,Write,Bash,Grep,Glob` · pi
+  `read,edit,write,bash,grep,find,ls`) for a leaf role, `planner` (a `superplan` dispatch: claude adds
+  `Task,Skill`; pi = the role set) for a skill-invoking dispatch, `executor` (claude
+  `…,Task,Skill` — the tick's own set; pi = no `--tools` flag, so extension tools such as
+  `pi-subagents`' `subagent` stay available) for a controller that dispatches subagents itself — this
+  is how `superagent` runs `superrun` as the top-level agent of its own process, native or bridged,
+  so the SDD controller's children can be foreground-waited on (issue #25). For claude the print-mode
   background-wait ceiling is lifted (`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS` defaults to 0) like the
-  tick does.
+  tick does. Pi children always run with `--approve --no-session`, plus `--skill` from
+  `SUPERAGENT_PI_SKILLS` when set.
+- `bridge-fanout.sh --harness <h> --model <m|inherit> --effort <e|inherit> --cwd <dir>
+  [--tools role|planner|executor|<list>] [--role <name>] [--timeout <sec>] --prompt-file <f> [--prompt-file <f> ...]`
+  — runs N `role-bridge.sh` invocations CONCURRENTLY and blocks until all finish; the L7 panel
+  primitive for a harness with no blocking parallel subagent tool (pi): one blocking shell call
+  returns every panelist's verdict, framed `=== PANELIST <n> exit=<rc> ===` / `=== END <n> ===`.
+  Default timeout 1800 s (still-running children killed and reported failed past it). Exit: 0 every
+  child ok · 3 any child failed/timed out · 64 usage.
 - `bridge-test.sh` — offline tests for `role-bridge.sh` and the `_common.sh` role-grammar parser,
   using `PATH` shims in place of the real CLIs (no network, no live CLI needed); prints `bridge-test:
   N failure(s)` and exits 1 on any failure.
@@ -297,6 +323,15 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   the host (T1–T7: each harness native, plus Claude↔Codex relay round trips); missing CLIs are
   reported as SKIP, not FAIL. Always exits 0 and writes `bridge-smoke-report.md` at the repo root —
   failures are the data, not a script bug.
+- `build-pi-skills.sh [--check]` — derives the committed `pi/` Pi-package build from the canonical
+  skills (single source of truth, plus a `pi-only` marker for content inert on the other harnesses;
+  `--check` rebuilds to a temp dir and diffs against the committed tree, exit 1 if stale).
+- `pi-smoke.sh` — smoke-tests the `pi/` build against a live Pi CLI (P1–P4 live probes: bad-model
+  exit status, `--skill` delivery, `pi-subagents` presence, `--tools` allowlisting; T1–T5 tests:
+  bridge → pi, bridge-fanout ×3, the tick file-read entry + hard gate, a relay round trip, and
+  `build-pi-skills.sh --check`); missing `pi-subagents` SKIPs the tests that need it rather than
+  failing. Always exits 0 and writes `pi-smoke-report.md` at the repo root — failures are the data,
+  not a script bug.
 
 ## Monitoring multiple concurrent loops
 

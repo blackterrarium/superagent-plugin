@@ -77,6 +77,16 @@ which is exactly the case Step 2 below fixes by creating one.
    (`/plugin marketplace add obra/superpowers-marketplace`, `/plugin install superpowers`)
    — planning skills (`supergoal`, `superplan`) work without it, but `superrun` requires
    `superpowers:subagent-driven-development` to execute a plan and will refuse.
+<!-- pi-only:start
+   On Pi, superpowers is a Pi package: `pi list` must show `superpowers` (install:
+   `pi install git:github.com/obra/superpowers`). Then check the `pi-subagents` package per
+   `SUPER_PI_SUBAGENTS` (validated below): read its installed version from
+   `~/.pi/agent/npm/node_modules/pi-subagents/package.json` or `.pi/npm/node_modules/pi-subagents/package.json`
+   (whichever exists); missing or `< 0.58.0` → `recommended`: WARN "pi-subagents missing/old —
+   superrun's SDD children will run sequentially in-context without role pins; install:
+   `pi install npm:pi-subagents`"; `required`: ABORT with the same hint; `off`: skip the check.
+   Record the version (or `absent`) in the summary — Step 3 keys off it.
+pi-only:end -->
 3. `gh auth status` succeeds — else WARN (PR-based flows need it; planning artifacts are
    drafted either way, but `superauthor`'s A7 commit-and-merge step and every CI/PR
    operation in `superplan`/`superrun` need it). On a macOS host, a sandboxed `gh auth
@@ -96,6 +106,10 @@ which is exactly the case Step 2 below fixes by creating one.
    installer; pi: `npm install -g @earendil-works/pi-coding-agent`). Auth is WARN-only: codex →
    `OPENAI_API_KEY` set or `~/.codex/auth.json` present; pi → for a `<provider>/` of `openai` or
    `anthropic`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` set; claude/cursor → binary only.
+<!-- pi-only:start
+   On the Pi harness, also run `pi auth check --provider <p>` for each distinct provider a `pi:`
+   role names (WARN on failure).
+pi-only:end -->
    Also run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/role-bridge.sh" 2>&1 | head -1` — a usage line
    proves the bridge shipped with this build; a "not found" is a broken install: ABORT.
 
@@ -124,11 +138,16 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
    a legitimate key in a portable `.superenv`: report it as `ignored (other-harness
    key)`, not as a typo.)
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
-   `SUPER_HARNESS` ∈ claude|cursor|codex; `SUPER_CODEX_SANDBOX` ∈
+   `SUPER_HARNESS` ∈ claude|cursor|codex|pi; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
-   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller.
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈
+   recommended|required|off.
+<!-- pi-only:start
+   On Pi `SUPER_PANEL_AGENT_TYPE` is ignored (the panel is a bridge fan-out, not typed subagents) —
+   WARN once if it is set to anything.
+pi-only:end -->
 3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
    `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
    `SUPER_GH_DISABLE_SANDBOX`.
@@ -175,13 +194,19 @@ cursor-only:end -->
    a Codex model name or `inherit`; anything else → WARN, treat as `inherit` (catches typos before
    they become a spawn-time failure).
 codex-only:end -->
+<!-- pi-only:start
+   a Pi model string — exactly one `/` (`<provider>/<model>`, an optional `:<level>` suffix allowed)
+   — or `inherit`; anything else → WARN, treat as `inherit`. A bare Claude tier / `claude-*` /
+   `gpt-*` value infers its own harness under arm (c) and is therefore **bridged** (its CLI must be
+   present per Step 1 item 5), never a Pi model.
+pi-only:end -->
    Bridged model values are not validated beyond the grammar (the foreign CLI owns its names), except
    `pi`, whose model must contain exactly one `/` (`<provider>/<model>`).
    `SUPER_BRIDGE_RELAY_MODEL` is validated as a native model value (invalid → WARN, treat as
    `inherit`).
 6. **Effort keys** (each `SUPER_EFFORT_<ROLE>`): valid in the domain of the ROLE's harness (from
    item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
-   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high`;
+   codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high|xhigh|max`;
    cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
 
 ## Step 3 — Role agents (model/effort pins)
@@ -215,6 +240,16 @@ therefore **generates nothing**; per the design spec it resolves the effective
 model/effort per role and REPORTS them, so a misconfigured pin surfaces here instead
 of at spawn time.
 codex-only:end -->
+<!-- pi-only:start
+Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
+which the external tick passes straight to `pi --model`. On Pi the supervisor's OWN dispatches
+(planner, executor, panel) are bridge processes that take the pins as CLI flags and need no
+definition; only superrun's SDD roles (implementer, fix-applier, task-reviewer, re-reviewer,
+branch-reviewer, fix-planner) dispatch through the `pi-subagents` `subagent` tool, and THOSE ride
+generated `.pi/agents/super-<role>.md` definitions. Generation happens only when Step 1 found
+`pi-subagents` ≥ 0.58.0 and `SUPER_PI_SUBAGENTS` ≠ `off`; otherwise this step generates nothing
+and reports `dispatch=sequential (no pi-subagents)` for the six SDD roles.
+pi-only:end -->
 
 Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
@@ -229,6 +264,11 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+
+<!-- pi-only:start
+On Pi the listed path is `.pi/agents/super-<role>.md` for the six SDD roles; planner/executor/panel
+never get a file.
+pi-only:end -->
 
 (`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch
 `superrun` through it: the executor always runs as the top-level agent of its own CLI process via
@@ -316,6 +356,26 @@ cursor-only:end -->
   repo belongs to that harness's build: leave it untouched and do not report it as
   stale.
 codex-only:end -->
+<!-- pi-only:start
+- **SDD role, native (`pi:` or inherit) — generate when** the model is non-`inherit` OR the effort is
+  non-`inherit`: render `${CLAUDE_PLUGIN_ROOT}/templates/super-role-pi-agent.md` to
+  `.pi/agents/super-<role>.md` (create `.pi/agents/` if needed), substituting `<role>`, `<KEY>`,
+  `<model>` (prefix stripped; drop the `model:` line when `inherit`) and `<effort>` (drop the
+  `thinking:` line when `inherit`). A role with both keys `inherit` needs no file.
+- **SDD role, bridged (harness ≠ pi):** render
+  `${CLAUDE_PLUGIN_ROOT}/templates/super-role-pi-bridge-agent.md` to the same path, substituting
+  `<role>`, `<KEY>`, `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit` when
+  unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
+  `inherit`) and `<bridge-path>` = the absolute path of `${CLAUDE_PLUGIN_ROOT}/scripts/role-bridge.sh`.
+- **Planner / executor / panel:** never a file; record `dispatch=bridge(<harness>)` (native roles
+  show `bridge(pi)`).
+- Ownership rules are the Claude build's: files carry the `generated-by: superagent:init` marker;
+  rewrite marked files whose pins drifted; never touch an unmarked file (report `conflict`);
+  delete a marked file no key requires (`removed (stale)`). When `pi-subagents` is absent/`off`,
+  existing marked files are left in place and reported `unused (no pi-subagents)`.
+- A leftover `.claude/agents/super-*.md` from a Claude Code init of the same repo belongs to that
+  harness's build: leave it untouched and do not report it as stale.
+pi-only:end -->
 
 <!-- cc-only:start -->
 Agent definitions load at session start, so files written here take effect from the
@@ -325,6 +385,10 @@ next tick/session, not the current one.
 Agent definitions load at session start, so files written here take effect from the
 next tick/session, not the current one.
 cursor-only:end -->
+<!-- pi-only:start
+Agent definitions are read by pi-subagents at child launch, so files written here take effect from
+the next superrun dispatch.
+pi-only:end -->
 Report one summary row per role: `role · harness · model · effort · dispatch` where dispatch is
 `native`, `native (definition: generated|regenerated|unchanged|removed (stale)|conflict)`,
 `bridge(<harness>)`, or `bridge(<harness>, definition: conflict)` — a bridged role whose

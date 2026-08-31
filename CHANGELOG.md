@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.6.0 — 2026-08-30
+
+- **Pi harness (`SUPER_HARNESS=pi`).** The Pi CLI can drive the external loop: `superagent-tick.sh`
+  fires `pi -p --approve --skill <repo>/pi/skills [--model] [--thinking] [--mode json]`
+  (new generated `pi/` build, `scripts/build-pi-skills.sh`, `pi-only` markers). Hybrid dispatch:
+  the supervisor runs `superplan`/`superrun` through `role-bridge.sh` and the L7 panel through
+  the new `scripts/bridge-fanout.sh` (child CLI processes — the supervisor never uses a subagent
+  tool); superrun's SDD roles dispatch through the `pi-subagents` `subagent` tool (`async: false`)
+  with pins on `init`-generated `.pi/agents/super-<role>.md` definitions
+  (`templates/super-role-pi-agent.md`, `templates/super-role-pi-bridge-agent.md`).
+  `pi-subagents` is recommended, not required — new key `SUPER_PI_SUBAGENTS=recommended|required|off`;
+  floor `>=0.58.0`, verified against 0.59.0.
+- `role-bridge.sh` pi branch: `--tools role|planner|executor` sets (`planner` is new on every
+  harness), `--approve --no-session`, `--skill` from `SUPERAGENT_PI_SKILLS`, `--thinking` when the
+  model is `inherit` (the 0.5.0 "effort dropped" warning is gone).
+- Pi effort domain widened to `off|minimal|low|medium|high|xhigh|max` everywhere.
+- Tick exit 8 now also covers a malformed Pi supervisor model; new exports `SUPERAGENT_FANOUT`,
+  `SUPERAGENT_PI_SKILLS`.
+- **Update (2026-08-31): fully verified.** With `pi-subagents` 0.61.0 and superpowers installed as
+  Pi packages, the smoke is PASS 10 / FAIL 1 (P1 informational): P3a, **P3c (nested foreground
+  wait)**, T4 (pi→codex relay round trip) and P4b all PASS. A live loop ran to **`DONE`** in 4
+  manual ticks on a throwaway repo (init → supergoal → superplan tick → superrun tick with the
+  pinned `pi-subagents` implementer and two codex relay reviews, code + closeout PRs merged →
+  plan-exhausted → DONE + notification). Also fixed: `TICK_TIMEOUT` now falls back to `gtimeout`
+  and otherwise WARNs and runs uncapped (macOS has no `timeout`; the unconditional wrapper made
+  any capped tick/bootstrap exit 127).
+- Tests: `bridge-test.sh` (fan-out + pi flags), `pi-smoke.sh` (P1–P4, T1–T5). Smoke result (live
+  run, 2026-08-29, pi CLI 0.84.3, `pi-subagents` NOT installed on the build host): PASS 7 / FAIL 1
+  (informational) / SKIPPED 3. P1 (bad-model exit status) is FAIL-as-expected with **exit 1** — pi
+  collapses a bad model and a failed turn into the same plain `1`, no distinct exit code, which is
+  the datum `role-bridge.sh`'s exit-3 mapping relies on. P2 (`--skill` delivery) PASSES. P4a
+  (tool-list probe, informational) PASSES; P4b is **inconclusive** (no extension tools were
+  installed on the smoke host, so the probe never exercised the case it's meant to check).
+  T1/T2/T3/T5 (bridge → pi, bridge-fanout ×3, tick
+  file-read + hard gate, `build-pi-skills.sh --check`) all PASS. P3a/P3c (`pi-subagents` probes)
+  and T4 (relay round trip) are **SKIPPED** — `pi-subagents` was not installed on this host, so the
+  nested-wait behavior (P3c) is **not verified**; re-run `scripts/pi-smoke.sh` on a host with
+  `pi-subagents ≥0.58.0` before promoting the pinned-subagent path further.
+
 ## 0.5.2 — 2026-08-29
 
 - **`templates/superenv.default` now spells every `SUPER_MODEL_<ROLE>` value in the 0.5.0

@@ -255,6 +255,7 @@ path.
   `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
   crashed subagent, quoting its `log=` path.
 
+
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and
 invites `TaskOutput`/`TaskList` status checks while the work runs — for a long `superplan`/`superrun`
@@ -431,8 +432,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    this tick.
 2. Set `status: PLANNING`, write the loop file.
 3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**). Model
-   per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_PLANNER`.
+   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**).
+   Model per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_PLANNER`.
    Instruct the subagent to invoke the `superagent:superplan` skill (Skill tool) with
    `<PLAN.md> = master_plan`, **no `<TOPIC>`** — its `supertraverse` descent finds the next deepest
    unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final

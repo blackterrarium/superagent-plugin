@@ -28,7 +28,12 @@ fi
 TICK_TIMEOUT="${TICK_TIMEOUT:-}"
 TIMEOUT_CMD=()
 if [[ "$TICK_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
-  TIMEOUT_CMD=(timeout "$TICK_TIMEOUT")
+  # macOS ships no `timeout`; fall back to coreutils' gtimeout, else WARN and run uncapped
+  # (running uncapped matches the unset-TICK_TIMEOUT default; the L3 lock still serializes ticks).
+  if command -v timeout >/dev/null 2>&1; then TIMEOUT_CMD=(timeout "$TICK_TIMEOUT")
+  elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_CMD=(gtimeout "$TICK_TIMEOUT")
+  else echo "superagent: warning — TICK_TIMEOUT=$TICK_TIMEOUT ignored: no timeout/gtimeout on PATH (install coreutils)" >&2
+  fi
 fi
 
 if [[ -f "$REPO/.env" ]]; then
@@ -53,6 +58,12 @@ if [[ "$HARNESS" == cursor ]]; then
     echo "bootstrap: Cursor build missing at $SKILLS_ROOT (run scripts/build-cursor-skills.sh)" >&2
     exit 7
   fi
+elif [[ "$HARNESS" == pi ]]; then
+  SKILLS_ROOT="$PLUGIN_ROOT/pi"
+  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+    echo "bootstrap: Pi build missing at $SKILLS_ROOT (run scripts/build-pi-skills.sh)" >&2
+    exit 7
+  fi
 else
   SKILLS_ROOT="$PLUGIN_ROOT"
 fi
@@ -74,6 +85,9 @@ if [[ "$HARNESS" == cursor ]]; then
   fi
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" "$SUPERAGENT_CURSOR_BIN" -p "$PROMPT" \
       --trust --force --plugin-dir "$SKILLS_ROOT" --output-format text )
+elif [[ "$HARNESS" == pi ]]; then
+  export SUPERAGENT_BRIDGE="$PLUGIN_ROOT/scripts/role-bridge.sh" SUPERAGENT_FANOUT="$PLUGIN_ROOT/scripts/bridge-fanout.sh" SUPERAGENT_PI_SKILLS="$SKILLS_ROOT/skills"
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" pi -p --approve --skill "$SKILLS_ROOT/skills" <<<"$PROMPT" )
 else
   if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
     echo "bootstrap: ANTHROPIC_API_KEY not set (expected in $REPO/.env)" >&2
