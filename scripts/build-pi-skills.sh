@@ -215,7 +215,25 @@ repository root. **Do not edit by hand.**
 
 ## Validated
 
-**Live smoke, 2026-08-29** (`scripts/pi-smoke.sh`, pi CLI 0.84.3; `pi-subagents` NOT installed on
+**Full verification, 2026-08-31** (pi CLI 0.84.3, `pi-subagents` 0.61.0, superpowers installed as
+a Pi package, codex CLI 0.150.1):
+
+- **Live smoke** (`scripts/pi-smoke.sh`): **PASS 10 / FAIL 1 (P1, informational)** — every
+  previously skipped probe now passes: **P3a** (`subagent` `async:false` returns the child's
+  output), **P3c** (**nested foreground wait works** — the probe that can later promote
+  `pi-subagents` to the S1/S4 path), **T4** (relay round trip pi→codex, RELAY-PROVEN), and
+  **P4b** is a real PASS (extension tools present without `--tools`).
+- **End-to-end loop driven to `DONE` on Pi** (throwaway repo, 4 manual ticks):
+  `superagent:init` generated the six `.pi/agents/super-<role>.md` definitions (native pins + a
+  codex relay) and reported planner/executor/panel as `bridge(pi)`; `supergoal` created the goal
+  vault (docs PR merged); tick 1 dispatched `superplan` through `role-bridge.sh --tools planner`
+  (plan PR merged, `WAITING FOR RUN`); tick 2 dispatched `superrun` as its own process
+  (`--tools executor`) — SDD ran with the pinned `super-implementer` via `pi-subagents` and two
+  live codex `super-task-reviewer` relay round trips — code PR + closeout PR merged; tick 3 set
+  `plan_exhausted`; tick 4 reached **`status: DONE`** and fired the done notification. The
+  delivered scripts pass their own test.
+
+**First smoke, 2026-08-29** (same pi CLI; `pi-subagents` NOT installed on
 the build host): **PASS 7 / FAIL 1 (informational) / SKIPPED 3.**
 
 - **P1** (bad-model exit status, informational): **FAIL — exit 1.** pi collapses a bad model and a
@@ -243,14 +261,14 @@ down to this smoke's T4 and T5 above.
 
 ## Known gaps
 
-- No tick — single or multi — has been driven end-to-end against a real loop file on Pi: T3 above
-  only verified the file-read + hard-gate rejection path with no `PLAN.md`/loop file supplied.
-- superpowers was NOT installed as a Pi package on the smoke host (`pi-smoke-report.md`:
-  `superpowers package: 0`), so Pi skill listing and superpowers' own Pi SDD mapping are
-  unverified.
-- `superagent:init` has not been run on Pi, and no `superagent-tick.sh` has run against a real
-  loop file on Pi — both pending the deferred Task 10.
-- S3 with `pi-subagents` not exercised inside a real superrun.
+- The scheduler path (`install-timer.sh` → launchd/systemd firing `superagent-tick.sh`) has not
+  been exercised on Pi — the DONE loop above was driven by invoking the tick manually per
+  iteration. The tick script itself is what the timer runs, so the residual risk is scheduler
+  plumbing, not harness behavior.
+- `pi-subagents` behavior verified at 0.61.0 (floor `>=0.58.0`); its release cadence is ~daily —
+  re-run `scripts/pi-smoke.sh` after upgrading it.
+- `TICK_TIMEOUT` requires `timeout`/`gtimeout` on PATH; on hosts with neither (stock macOS) the
+  driver now WARNs and runs uncapped.
 EOF
 
 grep -q 'GENERATED FILE — Pi build' "$TMP/skills/superloop/SKILL.md" || { echo "build-pi-skills: banner missing" >&2; exit 1; }

@@ -458,21 +458,18 @@ Model keys are `pi:<provider>/<model>` (or a bare `<provider>/<model>`); effort 
 `off | minimal | low | medium | high | xhigh | max` — the tick passes `--thinking`, the bridge the
 `:<level>` suffix (or `--thinking` when the model is `inherit`).
 
-**Status:** live smoke on 2026-08-29, pi CLI 0.84.3, `pi-subagents` NOT installed on the build
-host — PASS 7 / FAIL 1 (informational) / SKIPPED 3. P1 (bad-model exit status): pi exits a plain
-**1** for both a bad model and a failed turn — no distinct code — which is the datum the bridge's
-exit-3 mapping relies on. P2 (`--skill` delivery): PASS. P4a (tool-list probe, informational):
-PASS. P4b (tool-list probe, informational): **inconclusive** — no extension tools were installed
-on the smoke host, so the probe returned the base tool set and never exercised the case it checks.
-P3a/P3c (`pi-subagents` probes) and T4 (relay round trip) were **SKIPPED**, not verified —
-`pi-subagents` was not installed on this host, so the P3c nested-wait verdict is **unverified**
-pending a re-run on a host with `pi-subagents ≥0.58.0`. Remaining gaps: no tick, single or
-multi, has been driven end-to-end on a real loop file on Pi (T3 only exercised the file-read +
-hard-gate rejection path with no `PLAN.md` supplied); superpowers was not installed as a Pi
-package on the smoke host (`superpowers package: 0`), so Pi skill listing and superpowers' Pi
-SDD mapping are unverified; `superagent:init` has not been run on Pi; S3 with `pi-subagents` not
-exercised inside a real superrun (all pending the deferred Task 10). Re-run:
-`bash scripts/pi-smoke.sh` (`PI_SMOKE_MODEL=<provider>/<id>` to pin a model).
+**Status: verified end-to-end on Pi (2026-08-31)** — pi CLI 0.84.3, `pi-subagents` 0.61.0,
+superpowers installed as a Pi package. Live smoke: PASS 10 / FAIL 1 (P1 informational — pi exits a
+plain **1** for both a bad model and a failed turn, the datum the bridge's exit-3 mapping relies
+on); P3a/P3c/T4 all PASS (blocking `subagent` child, **nested foreground wait**, and the pi→codex
+relay round trip), P4b a real PASS. A full loop was driven to **`DONE`** in 4 manual ticks on a
+throwaway repo: `init` (six `.pi/agents/` definitions, planner/executor/panel `bridge(pi)`) →
+`supergoal` → `superplan` tick (bridge `--tools planner`, plan PR merged) → `superrun` tick
+(own process via `--tools executor`; SDD used the pinned `pi-subagents` implementer and two live
+codex task-reviewer relays; code + closeout PRs merged) → plan-exhausted → `DONE` + notification.
+Remaining gaps: the launchd/systemd timer path has not fired a Pi tick (ticks were invoked
+manually), and `TICK_TIMEOUT` needs `timeout`/`gtimeout` on PATH (else the driver WARNs and runs
+uncapped). Re-run: `bash scripts/pi-smoke.sh` (`PI_SMOKE_MODEL=<provider>/<id>` to pin a model).
 
 ## Cutting over an existing repo
 

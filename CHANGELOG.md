@@ -18,6 +18,14 @@
 - Pi effort domain widened to `off|minimal|low|medium|high|xhigh|max` everywhere.
 - Tick exit 8 now also covers a malformed Pi supervisor model; new exports `SUPERAGENT_FANOUT`,
   `SUPERAGENT_PI_SKILLS`.
+- **Update (2026-08-31): fully verified.** With `pi-subagents` 0.61.0 and superpowers installed as
+  Pi packages, the smoke is PASS 10 / FAIL 1 (P1 informational): P3a, **P3c (nested foreground
+  wait)**, T4 (pi→codex relay round trip) and P4b all PASS. A live loop ran to **`DONE`** in 4
+  manual ticks on a throwaway repo (init → supergoal → superplan tick → superrun tick with the
+  pinned `pi-subagents` implementer and two codex relay reviews, code + closeout PRs merged →
+  plan-exhausted → DONE + notification). Also fixed: `TICK_TIMEOUT` now falls back to `gtimeout`
+  and otherwise WARNs and runs uncapped (macOS has no `timeout`; the unconditional wrapper made
+  any capped tick/bootstrap exit 127).
 - Tests: `bridge-test.sh` (fan-out + pi flags), `pi-smoke.sh` (P1–P4, T1–T5). Smoke result (live
   run, 2026-08-29, pi CLI 0.84.3, `pi-subagents` NOT installed on the build host): PASS 7 / FAIL 1
   (informational) / SKIPPED 3. P1 (bad-model exit status) is FAIL-as-expected with **exit 1** — pi

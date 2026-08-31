@@ -35,7 +35,12 @@ fi
 TICK_TIMEOUT="${TICK_TIMEOUT:-}"
 TIMEOUT_CMD=()
 if [[ "$TICK_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
-  TIMEOUT_CMD=(timeout "$TICK_TIMEOUT")
+  # macOS ships no `timeout`; fall back to coreutils' gtimeout, else WARN and run uncapped
+  # (running uncapped matches the unset-TICK_TIMEOUT default; the L3 lock still serializes ticks).
+  if command -v timeout >/dev/null 2>&1; then TIMEOUT_CMD=(timeout "$TICK_TIMEOUT")
+  elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_CMD=(gtimeout "$TICK_TIMEOUT")
+  else echo "superagent: warning — TICK_TIMEOUT=$TICK_TIMEOUT ignored: no timeout/gtimeout on PATH (install coreutils)" >&2
+  fi
 fi
 LOG_FILE="${LOG_FILE:-/tmp/superagent-$(basename "$LOOP_FILE" .md).log}"
 # Output format: stream (default) = live incremental console output; text = final only.
