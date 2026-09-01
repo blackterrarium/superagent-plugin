@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 — 2026-09-01
+
+- **Fix: `superagent` skill frontmatter failed strict YAML parsing on Pi.** `skills/superagent/SKILL.md`
+  had an unquoted `argument-hint` containing `(or: --tick …)`; the `: ` inside a plain scalar reads as a
+  nested mapping, so Pi's `yaml` parser rejected the file (`Nested mappings are not allowed in compact
+  mappings at line 3, column 16`) and reported it under `[Skill conflicts]`. Claude Code's lenient parser
+  masked it. The value is now quoted like every other skill's hint; the generated `pi/`, `codex/`, and
+  `cursor/` trees are rebuilt.
+
 ## 0.6.0 — 2026-08-30
 
 - **Pi harness (`SUPER_HARNESS=pi`).** The Pi CLI can drive the external loop: `superagent-tick.sh`

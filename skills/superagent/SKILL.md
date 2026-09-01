@@ -1,7 +1,7 @@
 ---
 name: superagent
 description: Use when asked to drive a goal's root seed/master plan (PLAN.md) to completion unattended, or when a scheduler fires `--tick` on an existing loop-status file — the autonomy supervisor for the super* plan-tree lifecycle, driven in-session (cron) or by an external scheduler in a fresh context per tick.
-argument-hint: <PLAN.md> [--driver=cron|desktop]   (or: --tick <loop-file>)
+argument-hint: "<PLAN.md> [--driver=cron|desktop]   (or: --tick <loop-file>)"
 disable-model-invocation: true
 license: all rights reserved
 related skills: superloop, superplan, superrun, supertraverse, superfinish
