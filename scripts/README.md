@@ -515,10 +515,12 @@ aborts after cleanup:
    (`SUPER_HARNESS=pi`, `SUPER_TICK_INTERVAL`, `SUPER_NOTIFY_CMD` pointed at the run's
    `events.log`) is force-pushed to `main`, stale branches deleted, stale PRs closed. The repo is
    **never deleted** (no `delete_repo` scope needed); its PR numbers just keep counting.
-2. **init** and 3. **supergoal** — headless `pi -p --approve --no-session --skill <plugin>/pi/skills
-   "Read …/SKILL.md and run it…"`, exactly as the tick delivers skills. Asserts `.superenv` was left
-   alone, the `.pi/agents/super-*.md` definitions exist, exactly one `vault/*/PLAN.md` landed on
-   `main`, and supergoal merged its PR.
+2. **init** and 3. **supergoal** — headless `pi -p --approve --skill <plugin>/pi/skills
+   "Read …/SKILL.md and run it…"`, exactly as the tick delivers skills. `supergoal` runs as **two
+   turns in one persistent Pi session**: it drafts and, by design, stops at its confirmation gate
+   ("Write this goal folder and root plan to the vault and open the PR?"); the second turn is the
+   scripted operator's "yes". Asserts `.superenv` was left alone, the `.pi/agents/super-*.md`
+   definitions exist, exactly one `vault/*/PLAN.md` landed on `main`, and supergoal merged its PR.
 4. **Arm** — `launch.sh <PLAN.md> --harness pi --interval $PI_E2E_INTERVAL --slug pi-e2e-<stamp>`.
    Asserts via `status.sh --json` that the timer is active and that the per-goal env file pins
    `SUPER_HARNESS=pi` and `SUPERAGENT_CLI_PATH` (0.6.3).

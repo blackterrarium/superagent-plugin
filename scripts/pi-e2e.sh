@@ -240,8 +240,11 @@ SUPERENV
 # ---------------------------------------------------------------------------
 # Phase 2 — init (headless Pi, the plugin's Pi build delivered with --skill)
 # ---------------------------------------------------------------------------
-pi_run() {  # pi_run <prompt> — one headless Pi session in the clone
+pi_run() {  # pi_run <prompt> — one ephemeral headless Pi session in the clone
   ( cd "$CLONE" && pi -p --approve --no-session --skill "$ROOT/pi/skills" "$1" </dev/null )
+}
+pi_turn() {  # pi_turn <session-id> <prompt> — a turn in a PERSISTENT session (the next turn continues it)
+  ( cd "$CLONE" && pi -p --approve --session-dir "$RUN_DIR/pi-sessions" --session-id "$1" --skill "$ROOT/pi/skills" "$2" </dev/null )
 }
 phase_init() {
   report_section "2. init"
@@ -256,9 +259,15 @@ phase_init() {
 # ---------------------------------------------------------------------------
 # Phase 3 — supergoal (creates the goal vault + root PLAN.md, merges its own PR)
 # ---------------------------------------------------------------------------
+# supergoal's confirmation gate (its §7 "overrides A5") is REQUIRED by design: after drafting it
+# asks "Write this goal folder and root plan to the vault and open the PR?" and stops. An operator
+# answers that interactively; the testbench answers it with a second turn in the same session —
+# the scripted equivalent of the operator's "yes". Both turns are recorded.
 phase_goal() {
-  report_section "3. supergoal"
-  report_cmd "" pi_run "Read $ROOT/pi/skills/supergoal/SKILL.md and run it with this goal: $GOAL" || return 1
+  report_section "3. supergoal (turn 1: draft — stops at its confirmation gate)"
+  report_cmd "" pi_turn e2e-supergoal "Read $ROOT/pi/skills/supergoal/SKILL.md and run it with this goal: $GOAL" || return 1
+  report_section "3b. supergoal (turn 2: the operator's \"yes\" at the confirmation gate)"
+  report_cmd "" pi_turn e2e-supergoal "Yes — confirmed. Write the goal folder and root plan to the vault exactly as drafted, commit them, open the PR and merge it now, then print the Final Report." || return 1
   ( cd "$CLONE" && git checkout -q main && git pull -q --ff-only origin main ) || { report_fail "git pull main after supergoal"; return 1; }
   local plans; plans="$(ls "$CLONE"/vault/*/PLAN.md 2>/dev/null || true)"
   [[ -n "$plans" && "$(printf '%s\n' "$plans" | wc -l | tr -d ' ')" == 1 ]] || { report_fail "expected exactly one vault/*/PLAN.md on main, found: ${plans:-none}"; return 1; }
