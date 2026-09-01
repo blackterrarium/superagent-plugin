@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.5 — 2026-09-01
+
+- **`scripts/mix-e2e.sh` — scripted end-to-end testbench for multi-harness role mixing.** From an
+  empty repository: `init` → `supergoal` → `launch.sh` arms the real scheduler → scheduler-fired
+  ticks → `DONE`, with the roles split across three harness CLIs — supervisor / planner / executor
+  on **Claude**, implementer + fix-applier bridged to **Codex** (`codex:gpt-5.6-terra`),
+  task-reviewer + re-reviewer bridged to **Pi** (`pi:openai-codex/gpt-5.6-sol`; Pi on the build host
+  is OpenAI-only). The goal is a real one (a POSIX-sh key-value store with tests, 2–3 SDD tasks) so the
+  mixed roles fire several times. Besides the `pi-e2e.sh` assertions (≥2 ticks, deliverables, PRs,
+  self-disarm, notify) it asserts **harness evidence**: from `role-bridge.sh`'s log header/trailer
+  lines, ≥1 successful `implementer` on codex with the pinned model, ≥1 `task-reviewer` on pi, ≥1
+  `executor` on claude, no pinned role on a foreign harness, no `BRIDGE-FAILED`. A report-only
+  *Evaluation* section tallies ticks, minutes, PRs, bridge calls per harness (count / secs), fix
+  rounds and L7 escalations. Knobs: `MIX_E2E_REPO`, `MIX_E2E_INTERVAL`, `MIX_E2E_MAX_MIN`,
+  `MIX_E2E_GOAL`, `MIX_E2E_IMPLEMENTER`, `MIX_E2E_REVIEWER`, `MIX_E2E_SUPERENV_EXTRA`; `--dry-run`,
+  `--keep`. Preflight also requires the superagent plugin to be installed and enabled in the local
+  `claude` (the claude tick's in-session skill dispatches resolve through the installed plugin) and
+  WARNs when its version differs from the checkout. Pure helpers unit-tested offline in
+  `bridge-test.sh`. Design: `docs/superpowers/specs/2026-09-01-mix-e2e-testbench-design.md`.
+- **`scripts/role-bridge.sh` writes a header and a trailer into its own log.** A bridged pi or claude
+  role used to leave a 0-byte log (only the CLI's stderr was captured), so nothing proved which
+  harness had run a role. The log now starts with `role-bridge: start=<utc> harness=… model=… effort=…
+  tools=… role=… cwd=…` and ends with `role-bridge: end=<utc> exit=<0|3|4> secs=<n> result_bytes=<n>`
+  (no trailer = killed mid-run). stdout is unchanged. Offline cases in `bridge-test.sh`; the
+  `codex/`, `pi/`, `cursor/` trees (which ship the bridge) are rebuilt.
+
 ## 0.6.4 — 2026-09-01
 
 - **`scripts/pi-e2e.sh` — scripted Pi end-to-end testbench.** From an empty repository: `init` →
