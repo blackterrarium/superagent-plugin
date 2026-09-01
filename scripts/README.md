@@ -198,7 +198,7 @@ in the background with no separate console:
 
 ```bash
 $SUPERAGENT_SCRIPTS/launch.sh vault/<STAMP>-<slug>/master-plans/<seed>.md
-# optional: --interval 30m (default)
+# optional: --interval 10m (default, SUPER_TICK_INTERVAL)
 ```
 
 It derives the goal slug + loop file, fails fast if the `claude` binary or `gh` auth is missing (arming
