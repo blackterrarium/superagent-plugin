@@ -54,7 +54,7 @@ fetch/commit fail and the sync gate parks the loop).
   `"AVAILABLE"` / `"ON_INSTALL"`.
 - Codex CLI defaults observed: `codex exec` runs sandbox `read-only`, approval `never`, and the
   configured default model at reasoning effort `low` — which is why this build's shipped
-  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=gpt-5.6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
+  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
   instead of leaving them `inherit`.
 
 ## Known gaps
