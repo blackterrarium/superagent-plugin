@@ -342,6 +342,8 @@ check "mix: legacy rows are never proof"  bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$
 rm -f "$T/blog/implementer-20260901T121400Z-1.log" "$T/blog/task-reviewer-20260901T121500Z-2.log" "$T/blog/task-reviewer-20260901T100000Z-3.log"
 printf 'x\n{"text":"A Final Report that begins `BRIDGE-FAILED` is a failed dispatch"}\n{"text":"BRIDGE-FAILED exit=3 harness=pi role=task-reviewer log=/x"}\n' >"$T/ticklog"
 check "mix: bridge_failed_count matches reports, not prose" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_bridge_failed_count '$T/ticklog')\" = 1 ] && [ \"\$(mix_bridge_failed_count '$T/nope')\" = 0 ]"
+printf 'prose mentions BRIDGE-FAILED but no result\n' >"$T/ticklog0"
+check "mix: bridge_failed_count = single 0 on a match-free file (grep -c prints 0 AND exits 1)" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_bridge_failed_count '$T/ticklog0')\" = 0 ]"
 PL=$'Installed plugins:\n\n  ❯ other@m\n    Version: 1.0.0\n    Scope: user\n    Status: ✘ disabled\n\n  ❯ superagent@superagent-marketplace\n    Version: 0.6.4\n    Scope: user\n    Status: ✔ enabled\n\n  ❯ zzz@m\n    Version: 9\n'
 check "mix: plugin_field reads the superagent block only" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_plugin_field \"\$1\" Version)\" = 0.6.4 ] && mix_plugin_field \"\$1\" Status | grep -q enabled" _ "$PL"
 check "mix: plugin_field empty when the plugin is absent" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ -z \"\$(mix_plugin_field 'Installed plugins:' Version)\" ]"

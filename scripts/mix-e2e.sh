@@ -150,8 +150,12 @@ mix_installed_bridge() {
   echo "${MIX_E2E_PLUGIN_CACHE:-$HOME/.claude/plugins/cache}/$mkt/superagent/$ver/scripts/role-bridge.sh"
 }
 # mix_bridge_failed_count <tick_log> — relay failures reported as results (the prose in SKILL.md also
-# contains the word, so match the report's shape, not the word).
-mix_bridge_failed_count() { grep -c 'BRIDGE-FAILED exit=[0-9]' "$1" 2>/dev/null || echo 0; }
+# contains the word, so match the report's shape, not the word). NB `grep -c` PRINTS 0 and exits 1 on
+# zero matches, so `|| echo 0` would print "0" twice (found by run 2: the doubled value failed the
+# comparison and aborted the evidence phase of an otherwise-clean run).
+mix_bridge_failed_count() {
+  if [[ -f "$1" ]]; then grep -c 'BRIDGE-FAILED exit=[0-9]' "$1" || true; else echo 0; fi
+}
 
 # ---------------------------------------------------------------------------
 [[ "${MIX_E2E_LIB:-}" == 1 ]] && return 0

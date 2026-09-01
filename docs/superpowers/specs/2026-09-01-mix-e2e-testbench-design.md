@@ -233,3 +233,13 @@ Also observed, not a defect: pi's task reviewer raised an Important finding ("`t
 non-POSIX") that the Claude executor rejected with a cited POSIX reference — the cross-harness
 review disagreement was adjudicated and recorded in the closeout, which is the intended behaviour
 of `SUPER_REVIEW_CONFIDENCE_FILTER=controller`.
+
+## Live run 2 (2026-09-01, slug `mix-e2e-20260901-175009`)
+
+With the checkout's bridge + relay template staged over the installed 0.6.4 cache: DONE in 4
+scheduler-fired ticks / 125 min, 4 PRs, deliverables pass, **zero** worktree-isolation refusals
+(template fix verified), and a complete evidence table — 14 bridge calls, all exit 0: codex ×6
+(implementer ×5, fix-applier ×1), pi ×6 (task-reviewer ×2, re-reviewer ×4), claude executor ×2; no
+pinned role strayed; 0 BRIDGE-FAILED. The phase still printed FAIL because `grep -c … || echo 0`
+returns `"0\n0"` on a match-free file (`grep -c` prints the 0 *and* exits 1) — fixed with a
+regression case; 6b re-evaluated PASS on the run's artifacts.

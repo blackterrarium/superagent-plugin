@@ -30,6 +30,9 @@
   so the `SUPERAGENT_BRIDGE` export from the tick does not redirect them. `mix-e2e.sh` therefore
   requires the installed bridge to carry the evidence header (preflight, exit 2 with the fix) and shows
   header-less logs as `legacy` rows.
+- **Fix (found by run 2): `grep -c … || echo 0` prints two zeros.** `grep -c` PRINTS `0` *and* exits 1
+  on zero matches, so `mix_bridge_failed_count` returned `"0\n0"` and aborted the evidence phase of an
+  otherwise-clean run. Regression case in `bridge-test.sh`.
 - **Fix: `role-bridge.sh --harness cursor` no longer inherits stdin.** The prompt rides argv, so an open
   stdin only made the CLI (and `bridge-test.sh`'s cursor shim) wait on it forever — the parked 0.5.0
   follow-up; the bridge now passes `</dev/null`.
