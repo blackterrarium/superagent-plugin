@@ -185,6 +185,14 @@ EOF
 run_test "T6 strict YAML frontmatter (skills/ + pi/skills/)" "frontmatter OK" \
   node -e "$T6_JS" "$(command -v "$BIN")" "$ROOT"/skills/*/SKILL.md "$ROOT"/pi/skills/*/SKILL.md
 
+# T7 — pi resolvable under a scheduler-minimal PATH (offline). A launchd job / systemd user
+# service / cron never has the operator's shell PATH, and a pi installed under a Node version
+# manager (nvm/fnm/volta) lives outside the dirs the tick prepends by itself. install-timer.sh
+# records superagent_cli_path_dirs as SUPERAGENT_CLI_PATH; this runs the tick's own preflight with
+# exactly that under `env -i PATH=/usr/bin:/bin` and then execs the real pi through it.
+run_test "T7 pi found under a scheduler-minimal PATH via SUPERAGENT_CLI_PATH" "pi-resolved" \
+  bash -c "cli_path=\$(. '$ROOT/scripts/_common.sh'; superagent_cli_path_dirs); echo \"SUPERAGENT_CLI_PATH=\$cli_path\"; env -i HOME='$HOME' PATH=/usr/bin:/bin SUPERAGENT_CLI_PATH=\"\$cli_path\" bash -c '. \"$ROOT/scripts/_common.sh\"; ensure_pi_bin && echo \"pi=\$(command -v pi) version=\$(pi --version 2>&1 | head -1)\" && echo pi-resolved'"
+
 {
   echo "## Summary"
   echo

@@ -187,5 +187,20 @@ check "harness: bad value rejected"   bash -c "SUPER_HARNESS=hermes; . '$ROOT/sc
 check "ensure_cli_bin: pi resolves"   bash -c "SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; ensure_cli_bin"
 check "ensure_pi_bin: missing → hint" bash -c "PATH=/usr/bin:/bin; . '$ROOT/scripts/_common.sh'; ensure_pi_bin 2>&1 | grep -q 'npm install -g @earendil-works/pi-coding-agent'"
 
+# --- scheduler PATH: CLIs under a Node version manager (nvm/fnm/volta) live outside the dirs
+# _superagent_augment_path hard-codes, so install-timer.sh records their dirs at install time
+# (SUPERAGENT_CLI_PATH in the per-goal env file) and the augment prepends them under the scheduler.
+NVMBIN="$T/nvm/versions/node/v0.0.0/bin"; mkdir -p "$NVMBIN"; cp "$SHIM/pi" "$NVMBIN/pi"
+check "cli_path: SUPERAGENT_CLI_PATH dir searched under a minimal PATH" \
+  bash -c "PATH=/usr/bin:/bin SUPERAGENT_CLI_PATH='$NVMBIN'; . '$ROOT/scripts/_common.sh'; ensure_pi_bin"
+check "cli_path: minimal PATH without it still fails (control)" \
+  bash -c "PATH=/usr/bin:/bin; unset SUPERAGENT_CLI_PATH; . '$ROOT/scripts/_common.sh'; ! ensure_pi_bin 2>/dev/null"
+check "cli_path: augment is idempotent (dir appears once)" \
+  bash -c "PATH=/usr/bin:/bin SUPERAGENT_CLI_PATH='$NVMBIN'; . '$ROOT/scripts/_common.sh'; _superagent_augment_path; _superagent_augment_path; [ \"\$(tr ':' '\\n' <<<\"\$PATH\" | grep -cx '$NVMBIN')\" = 1 ]"
+check "cli_path_dirs: reports the dir of every resolvable CLI, deduped, standard dirs omitted" \
+  bash -c ". '$ROOT/scripts/_common.sh'; [ \"\$(superagent_cli_path_dirs)\" = '$SHIM' ]"
+check "ensure_pi_bin: missing → names SUPERAGENT_CLI_PATH" \
+  bash -c "PATH=/usr/bin:/bin; . '$ROOT/scripts/_common.sh'; ensure_pi_bin 2>&1 | grep -q SUPERAGENT_CLI_PATH"
+
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]
