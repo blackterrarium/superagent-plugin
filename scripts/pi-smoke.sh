@@ -156,6 +156,35 @@ fi
 # T5 — build freshness (offline).
 run_test "T5 build-pi-skills --check" "up to date" bash "$ROOT/scripts/build-pi-skills.sh" --check
 
+# T6 — strict YAML frontmatter (offline). Parse every SKILL.md in skills/ (what a git-installed
+# package loads) and pi/skills/ (what the tick passes to --skill) with the `yaml` library the Pi
+# CLI itself bundles, resolved from the pi binary's own node_modules. Claude Code's frontmatter
+# parser is lenient; Pi's is not — an unquoted value containing ": " (0.6.1: `(or: --tick …)`)
+# reads as a nested mapping and Pi reports it under "[Skill conflicts]" on every load. Catch
+# that here instead.
+T6_JS=$(cat <<'EOF'
+const fs = require("fs"), path = require("path");
+const bin = fs.realpathSync(process.argv[1]);
+let YAML;
+try { YAML = require(require.resolve("yaml", { paths: [path.dirname(bin)] })); }
+catch (e) { console.log("cannot resolve the yaml library bundled with " + bin + ": " + e.message); process.exit(2); }
+let ok = 0, bad = 0;
+for (const f of process.argv.slice(2)) {
+  const m = fs.readFileSync(f, "utf8").match(/^---\n([\s\S]*?)\n---(\n|$)/);
+  if (!m) { console.log("FAIL " + f + ": no frontmatter block"); bad++; continue; }
+  try {
+    const d = YAML.parse(m[1]);
+    if (!d || typeof d !== "object" || !d.name) throw new Error("frontmatter is not a mapping with a name");
+    ok++;
+  } catch (e) { console.log("FAIL " + f + ": " + e.message.split("\n")[0]); bad++; }
+}
+console.log(bad ? bad + " frontmatter FAIL, " + ok + " OK" : ok + " frontmatter OK");
+process.exit(bad ? 1 : 0);
+EOF
+)
+run_test "T6 strict YAML frontmatter (skills/ + pi/skills/)" "frontmatter OK" \
+  node -e "$T6_JS" "$(command -v "$BIN")" "$ROOT"/skills/*/SKILL.md "$ROOT"/pi/skills/*/SKILL.md
+
 {
   echo "## Summary"
   echo

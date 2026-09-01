@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 — 2026-09-01
+
+- **`pi-smoke.sh` T6 — strict YAML frontmatter check (offline).** Every `SKILL.md` in `skills/` and
+  `pi/skills/` is parsed with the `yaml` library the pi binary itself bundles (resolved from the
+  binary's own `node_modules`), so a frontmatter that Claude Code's lenient parser accepts but Pi
+  rejects (the 0.6.1 `argument-hint` bug) fails the smoke instead of surfacing as
+  `[Skill conflicts]` at Pi load time. Verified red on the pre-0.6.1 file, green now
+  (`27 frontmatter OK`); full smoke PASS 11 / FAIL 1 (P1, informational).
+
 ## 0.6.1 — 2026-09-01
 
 - **Fix: `superagent` skill frontmatter failed strict YAML parsing on Pi.** `skills/superagent/SKILL.md`
