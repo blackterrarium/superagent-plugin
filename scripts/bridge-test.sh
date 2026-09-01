@@ -222,8 +222,17 @@ check "e2e: deliverables pass"                    bash -c "PI_E2E_LIB=1; . '$E2E
 check "e2e: deliverables fail when hello.sh is wrong" bash -c "PI_E2E_LIB=1; . '$E2E'; rm -rf '$T/deliv2'; cp -R '$T/deliv' '$T/deliv2'; echo 'echo nope' >'$T/deliv2/scripts/hello.sh'; ! e2e_assert_deliverables '$T/deliv2'"
 mkshim gh; mkshim launchctl; mkshim systemctl
 check "e2e: --dry-run exits 0 and prints the plan" bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r '$E2E' --dry-run 2>&1 | grep -q 'nothing created or armed'"
-check "e2e: --dry-run writes no report"           bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r '$E2E' --dry-run >/dev/null 2>&1; [ ! -f '$ROOT/pi-e2e-report.md' ]"
+check "e2e: --dry-run writes no report"           bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r PI_E2E_REPORT='$T/dry-report.md' '$E2E' --dry-run >/dev/null 2>&1; [ ! -f '$T/dry-report.md' ]"
 check "e2e: bad flag → exit 2"                    bash -c "'$E2E' --bogus >/dev/null 2>&1; [ \$? = 2 ]"
+check "e2e: kill_tree kills a child and its grandchild" bash -c "PI_E2E_LIB=1; . '$E2E'; bash -c 'sleep 57; true' & p=\$!; sleep 0.3; c=\$(pgrep -P \$p | head -1); e2e_kill_tree \$p; sleep 0.3; ! kill -0 \$p 2>/dev/null && ! kill -0 \$c 2>/dev/null"
+# gh shim that hangs only on `repo view` — everything else answers instantly (preflight must pass)
+cat >"$SHIM/gh" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = repo ] && [ "$2" = view ]; then sleep 31; fi
+echo RESULT-gh
+EOF
+chmod +x "$SHIM/gh"
+check "e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s" bash -c "cd '$T/cwd'; PI_E2E_REPO=o/r PI_E2E_REPORT='$T/e2e-term-report.md' '$E2E' >'$T/e2e-term.out' 2>&1 & p=\$!; sleep 3; t0=\$(date +%s); kill -TERM \$p; wait \$p; rc=\$?; el=\$(( \$(date +%s) - t0 )); [ \$rc = 143 ] && [ \$el -lt 10 ] && grep -q 'interrupted' '$T/e2e-term.out' && ! pgrep -f '^sleep 31\$' >/dev/null"
 
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]

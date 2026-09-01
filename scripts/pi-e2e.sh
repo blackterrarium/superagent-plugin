@@ -82,6 +82,26 @@ e2e_assert_deliverables() {
   return 0
 }
 
+# e2e_kill_tree <pid> — SIGTERM a process and every descendant (children first).
+e2e_kill_tree() {
+  local p
+  for p in $(pgrep -P "$1" 2>/dev/null); do e2e_kill_tree "$p"; done
+  kill -TERM "$1" 2>/dev/null || true
+}
+
+# e2e_run <cmd...> — run a child in the background and `wait` for it. bash defers trap handlers
+# while a FOREGROUND child runs (a 30-minute pi session would swallow a SIGTERM), but `wait` is
+# interruptible, so this is how every long-running child is started. CHILD_PID lets the signal
+# handler tear the child's tree down.
+CHILD_PID=""
+e2e_run() {
+  local rc
+  "$@" & CHILD_PID=$!
+  wait "$CHILD_PID"; rc=$?
+  CHILD_PID=""
+  return $rc
+}
+
 # ---------------------------------------------------------------------------
 [[ "${PI_E2E_LIB:-}" == 1 ]] && return 0
 
@@ -104,7 +124,7 @@ INTERVAL="${PI_E2E_INTERVAL:-2m}"
 MAX_MIN="${PI_E2E_MAX_MIN:-90}"
 GOAL="${PI_E2E_GOAL:-Add scripts/hello.sh (POSIX sh) that prints exactly: hello, world — and scripts/test.sh (POSIX sh) that runs it and exits non-zero unless the output matches exactly. Keep it to ONE implementation plan; no other files beyond the two scripts and the plan-tree bookkeeping.}"
 RUN_DIR="${TMPDIR:-/tmp}"; RUN_DIR="${RUN_DIR%/}/pi-e2e-$STAMP"
-REPORT="$ROOT/pi-e2e-report.md"
+REPORT="${PI_E2E_REPORT:-$ROOT/pi-e2e-report.md}"
 CLONE="$RUN_DIR/repo"
 REPO_SLUG="${PI_E2E_REPO:-}"
 PLAN=""; LOOP_FILE=""; ENV_FILE=""; TICK_LOG=""; PR_BASE=0
@@ -138,7 +158,9 @@ report_cmd() {
   local expect="$1"; shift
   local out rc
   { echo '```'; printf '$ %s\n' "$*"; echo '```'; } >>"$REPORT"
-  out="$("$@" 2>&1)"; rc=$?
+  local tmp; tmp="$(mktemp)"
+  e2e_run "$@" >"$tmp" 2>&1; rc=$?          # not a $(…) substitution: that would be a foreground child again
+  out="$(cat "$tmp")"; rm -f "$tmp"
   if [[ "${#out}" -gt 6000 ]]; then out="${out:0:3000}
   [... truncated ...]
 ${out: -2500}"; fi
@@ -188,7 +210,7 @@ print_plan() {
 # ---------------------------------------------------------------------------
 phase_provision() {
   report_section "1. Provision $REPO_SLUG"
-  if ! gh repo view "$REPO_SLUG" >/dev/null 2>&1; then
+  if ! e2e_run gh repo view "$REPO_SLUG" >/dev/null 2>&1; then
     report_cmd "" gh repo create "$REPO_SLUG" --private --description "superagent Pi e2e testbench (reset per run by scripts/pi-e2e.sh)" || return 1
   fi
   mkdir -p "$RUN_DIR"
@@ -289,7 +311,7 @@ phase_drive() {
     fi
     [[ -n "$st" ]] || { report_note '```'; report_fail "loop vanished from status.sh"; return 1; }
     if (( $(date +%s) > deadline )); then report_note '```'; report_fail "ceiling ${MAX_MIN}m reached at status '$st' iter=$it"; return 1; fi
-    sleep 30
+    e2e_run sleep 30
   done
 }
 
@@ -324,11 +346,21 @@ phase_cleanup() {
       "$SCRIPTS/stop.sh" "$PLAN" --hard --slug "$SLUG" >/dev/null 2>&1 || true
     fi
     "$SCRIPTS/uninstall-timer.sh" "$SLUG" --purge >/dev/null 2>&1 || true
-    echo "pi-e2e: cleanup — scheduler entry + env file for $SLUG removed"
+    echo "pi-e2e: cleanup — scheduler entry + env file for $SLUG removed" >&3
   fi
   [[ -n "$TICK_LOG" && -f "$TICK_LOG" ]] && cp "$TICK_LOG" "$RUN_DIR/tick.log" 2>/dev/null
-  if [[ "$KEEP" == 1 ]]; then echo "pi-e2e: clone kept at $CLONE"; else rm -rf "$CLONE"; fi
+  if [[ "$KEEP" == 1 ]]; then echo "pi-e2e: clone kept at $CLONE" >&3; else rm -rf "$CLONE"; fi
   return 0
+}
+
+# on_signal <name> <exit-code> — INT/TERM: kill the running child's tree, clean up, exit.
+on_signal() {
+  trap - INT TERM
+  echo "pi-e2e: interrupted by SIG$1 — stopping the running child and cleaning up" >&3
+  [[ -n "$CHILD_PID" ]] && e2e_kill_tree "$CHILD_PID"
+  [[ "$REPORT_OPEN" == 1 ]] && report_fail "interrupted by SIG$1"
+  phase_cleanup
+  exit "$2"
 }
 
 # ---------------------------------------------------------------------------
@@ -336,7 +368,10 @@ main() {
   phase_preflight || exit $?
   print_plan
   if [[ "$DRY" == 1 ]]; then echo "[dry-run] nothing created or armed."; exit 0; fi
-  trap phase_cleanup EXIT INT TERM
+  exec 3>&2                                   # the handler may fire inside a >/dev/null call; keep a real stderr
+  trap 'on_signal INT 130' INT
+  trap 'on_signal TERM 143' TERM
+  trap phase_cleanup EXIT
   report_open
   local rc=0
   phase_provision && phase_init && phase_goal && phase_arm && phase_drive && phase_assert || rc=1
