@@ -234,5 +234,11 @@ EOF
 chmod +x "$SHIM/gh"
 check "e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s" bash -c "cd '$T/cwd'; PI_E2E_REPO=o/r PI_E2E_REPORT='$T/e2e-term-report.md' '$E2E' >'$T/e2e-term.out' 2>&1 & p=\$!; sleep 3; t0=\$(date +%s); kill -TERM \$p; wait \$p; rc=\$?; el=\$(( \$(date +%s) - t0 )); [ \$rc = 143 ] && [ \$el -lt 10 ] && grep -q 'interrupted' '$T/e2e-term.out' && ! pgrep -f '^sleep 31\$' >/dev/null"
 
+# --- launch.sh: a repo reached through a symlinked path (macOS /var → /private/var, /tmp → /private/tmp)
+# must still accept its plan: REPO comes from git (physical) while the plan path must not be logical.
+mkdir -p "$T/real/vault/g/master-plans" "$T/real/vault/g/loop-status"; ( cd "$T/real" && git init -q && printf '# plan\n' >vault/g/master-plans/p.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm init )
+ln -s "$T/real" "$T/link"
+check "launch: plan under a symlinked repo path accepted (--dry-run)" bash -c "cd '$T/link' && SUPER_HARNESS=pi '$ROOT/scripts/launch.sh' '$T/link/vault/g/master-plans/p.md' --harness pi --dry-run 2>&1 | grep -q 'nothing created or armed'"
+
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]

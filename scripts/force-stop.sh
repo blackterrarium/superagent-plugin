@@ -49,7 +49,7 @@ done
 find_slug_by_plan() {
   local plan_abs plan_rel envf lf mp
   [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; return 2; }
-  plan_abs="$(cd "$(dirname "$PLAN")" && pwd)/$(basename "$PLAN")"
+  plan_abs="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
   case "$plan_abs" in "$REPO"/*) plan_rel="${plan_abs#"$REPO"/}" ;; *) plan_rel="$plan_abs" ;; esac
   shopt -s nullglob
   for envf in "$CONF_DIR"/*.env; do

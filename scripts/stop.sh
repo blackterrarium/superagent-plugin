@@ -40,9 +40,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; exit 2; }
-PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd)/$(basename "$PLAN")"
+PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
 case "$PLAN_ABS" in "$REPO"/*) PLAN_REL="${PLAN_ABS#"$REPO"/}" ;; *) PLAN_REL="$PLAN_ABS" ;; esac
-GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd)"
+GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd -P)"
 
 # Prefer the registered loop whose LOOP_FILE records this master plan (robust to a
 # custom --slug used at launch). PLAN_REL is repo-relative, so it matches the loop

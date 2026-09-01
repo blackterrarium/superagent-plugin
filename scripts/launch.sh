@@ -59,14 +59,14 @@ else MODEL_SHOWN="opus (default)"; fi
 # Resolve the plan to an absolute path, then to a repo-relative path (superloop
 # stores master_plan repo-relative).
 [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; exit 2; }
-PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd)/$(basename "$PLAN")"
+PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
 case "$PLAN_ABS" in
   "$REPO"/*) PLAN_REL="${PLAN_ABS#"$REPO"/}" ;;
   *) echo "plan must live inside the repo checkout ($REPO): $PLAN_ABS" >&2; exit 2 ;;
 esac
 
 # Goal folder = parent of the master-plans/ dir holding the plan (superloop L1).
-GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd)"
+GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd -P)"
 LOOP_DIR="$GOAL_FOLDER/${SUPER_LOOP_STATUS_DIRNAME:-loop-status}"
 
 # Default slug = goal-folder basename with a leading YYYY-MM-DD-hh_mm- stamp stripped.

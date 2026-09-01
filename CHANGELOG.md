@@ -9,8 +9,14 @@
   `SUPER_NOTIFY_CMD`; cleans up via a trap; writes `pi-e2e-report.md` (gitignored). The remote
   (`PI_E2E_REPO`, default `<gh user>/superagent-pi-e2e`) is reset to an orphan commit per run and
   never deleted. Knobs: `PI_E2E_INTERVAL`, `PI_E2E_MAX_MIN`, `PI_E2E_GOAL`, `PI_E2E_SUPERENV_EXTRA`;
-  `--dry-run`, `--keep`. Pure helpers unit-tested offline in `bridge-test.sh` (16 cases). Design:
-  `docs/superpowers/specs/2026-09-01-pi-e2e-testbench-design.md`.
+  `--dry-run`, `--keep`. `supergoal` runs as two turns in one persistent Pi session (its confirmation
+  gate is by design; the second turn is the scripted operator's "yes"). Pure helpers unit-tested offline
+  in `bridge-test.sh`. Design: `docs/superpowers/specs/2026-09-01-pi-e2e-testbench-design.md`.
+- **Fix (found by the testbench): `launch.sh` / `stop.sh` / `force-stop.sh` rejected a plan in a repo
+  reached through a symlinked path** (macOS `/var` → `/private/var`, `/tmp` → `/private/tmp`): `REPO`
+  comes from `git rev-parse --show-toplevel` (physical) while the plan path was resolved with a logical
+  `pwd`, so the "plan must live inside the repo checkout" check failed. All plan/loop-file resolutions
+  now use `pwd -P` (`install-timer.sh` too, for consistency). Offline case in `bridge-test.sh`.
 
 ## 0.6.3 — 2026-09-01
 
