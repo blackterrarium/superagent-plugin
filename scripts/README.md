@@ -520,7 +520,7 @@ aborts after cleanup:
    turns in one persistent Pi session**: it drafts and, by design, stops at its confirmation gate
    ("Write this goal folder and root plan to the vault and open the PR?"); the second turn is the
    scripted operator's "yes". Asserts `.superenv` was left alone, the `.pi/agents/super-*.md`
-   definitions exist, exactly one `vault/*/PLAN.md` landed on `main`, and supergoal merged its PR.
+   definitions exist, exactly one root master plan (`vault/*/master-plans/*.md`) landed on `main`, and supergoal merged its PR.
 4. **Arm** — `launch.sh <PLAN.md> --harness pi --interval $PI_E2E_INTERVAL --slug pi-e2e-<stamp>`.
    Asserts via `status.sh --json` that the timer is active and that the per-goal env file pins
    `SUPER_HARNESS=pi` and `SUPERAGENT_CLI_PATH` (0.6.3).

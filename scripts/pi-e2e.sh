@@ -269,8 +269,10 @@ phase_goal() {
   report_section "3b. supergoal (turn 2: the operator's \"yes\" at the confirmation gate)"
   report_cmd "" pi_turn e2e-supergoal "Yes — confirmed. Write the goal folder and root plan to the vault exactly as drafted, commit them, open the PR and merge it now, then print the Final Report." || return 1
   ( cd "$CLONE" && git checkout -q main && git pull -q --ff-only origin main ) || { report_fail "git pull main after supergoal"; return 1; }
-  local plans; plans="$(ls "$CLONE"/vault/*/PLAN.md 2>/dev/null || true)"
-  [[ -n "$plans" && "$(printf '%s\n' "$plans" | wc -l | tr -d ' ')" == 1 ]] || { report_fail "expected exactly one vault/*/PLAN.md on main, found: ${plans:-none}"; return 1; }
+  # The root master plan lands at vault/<goal>/master-plans/<stamp>-<slug>.md ("PLAN.md" in the
+  # skills' prose is the placeholder for that path).
+  local plans; plans="$(ls "$CLONE"/vault/*/master-plans/*.md 2>/dev/null || true)"
+  [[ -n "$plans" && "$(printf '%s\n' "$plans" | wc -l | tr -d ' ')" == 1 ]] || { report_fail "expected exactly one vault/*/master-plans/*.md on main, found: ${plans:-none}"; return 1; }
   PLAN="$plans"
   local merged; merged="$(gh pr list -R "$REPO_SLUG" --state merged --json number -q 'length')"
   [[ "$merged" -gt "$PR_BASE" ]] || { report_fail "supergoal merged no PR (merged=$merged base=$PR_BASE)"; return 1; }

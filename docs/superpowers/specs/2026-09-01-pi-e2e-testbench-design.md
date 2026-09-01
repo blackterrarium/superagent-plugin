@@ -63,7 +63,7 @@ The first FAIL aborts the run (after cleanup); the report is the deliverable eit
    turns: the goal text (supergoal drafts, then by design stops at its §7 confirmation gate —
    *"Write this goal folder and root plan to the vault and open the PR?"*), then the scripted
    operator's "yes". A single headless turn can never pass that gate; on 2026-08-31 a human
-   typed the yes. Assert exactly one `vault/*/PLAN.md` appeared on `main` after `git pull`
+   typed the yes. Assert exactly one root master plan (`vault/*/master-plans/*.md`) appeared on `main` after `git pull`
    (supergoal merges its own PR) and at least one merged PR exists.
 4. **Arm** — `scripts/launch.sh <PLAN.md> --harness pi --interval $PI_E2E_INTERVAL --slug
    <slug>`. Assert via `status.sh --json`: the slug is registered, `timer_active`, the loop file
