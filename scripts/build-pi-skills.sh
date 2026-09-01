@@ -227,6 +227,11 @@ mechanism was also exercised under a throwaway launchd job (real launchd `PATH` 
 `/usr/bin:/bin:/usr/sbin:/sbin`): with the variable `pi --version` runs, without it the preflight
 fails exactly as a pre-0.6.3 tick did.
 
+**Testbench** (`scripts/pi-e2e.sh`, 0.6.4): the scripted end-to-end run — empty repo → `init` →
+`supergoal` → `launch.sh` → the OS scheduler fires every tick → `DONE` → assertions (≥2 ticks,
+deliverables, merged PRs, self-disarm, notify) → cleanup; report in `pi-e2e-report.md`. See
+`scripts/README.md` "Pi e2e testbench". Latest result: see the line below this paragraph.
+
 **Full verification, 2026-08-31** (pi CLI 0.84.3, `pi-subagents` 0.61.0, superpowers installed as
 a Pi package, codex CLI 0.150.1):
 

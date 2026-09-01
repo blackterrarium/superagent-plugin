@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.4 — 2026-09-01
+
+- **`scripts/pi-e2e.sh` — scripted Pi end-to-end testbench.** From an empty repository: `init` →
+  `supergoal` → `launch.sh` arms the real scheduler (launchd / systemd user timer) → the scheduler
+  fires every tick → `DONE`; then asserts ≥2 ticks (so at least one fired on the interval), the goal's
+  deliverables, ≥3 merged / 0 open PRs, `SUPER_AUTO_DISARM_ON_DONE`, and the `done` event through
+  `SUPER_NOTIFY_CMD`; cleans up via a trap; writes `pi-e2e-report.md` (gitignored). The remote
+  (`PI_E2E_REPO`, default `<gh user>/superagent-pi-e2e`) is reset to an orphan commit per run and
+  never deleted. Knobs: `PI_E2E_INTERVAL`, `PI_E2E_MAX_MIN`, `PI_E2E_GOAL`, `PI_E2E_SUPERENV_EXTRA`;
+  `--dry-run`, `--keep`. Pure helpers unit-tested offline in `bridge-test.sh` (16 cases). Design:
+  `docs/superpowers/specs/2026-09-01-pi-e2e-testbench-design.md`.
+
 ## 0.6.3 — 2026-09-01
 
 - **Fix: external ticks could not find a CLI installed under a Node version manager.** The
