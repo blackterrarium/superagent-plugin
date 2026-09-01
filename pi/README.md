@@ -21,12 +21,17 @@ repository root. **Do not edit by hand.**
 
 ## Validated
 
-**Smoke re-run, 2026-09-01** (pi CLI 0.84.4, `pi-subagents` 0.62.0, repo at 0.6.2):
-**PASS 11 / FAIL 1 (P1, informational)** — every 2026-08-31 verdict holds, plus the new offline
-**T6** (strict YAML frontmatter): every `SKILL.md` in `skills/` and `pi/skills/` is parsed with the
-`yaml` library the pi binary itself bundles (`27 frontmatter OK`). Added after 0.6.1, where an
-unquoted `argument-hint` that Claude Code's lenient parser accepted made Pi print
-`[Skill conflicts] … Nested mappings are not allowed in compact mappings` on every load.
+**Smoke re-run, 2026-09-01** (pi CLI 0.84.4, `pi-subagents` 0.62.0, repo at 0.6.3):
+**PASS 12 / FAIL 1 (P1, informational)** — every 2026-08-31 verdict holds, plus two new offline
+probes. **T6** (strict YAML frontmatter): every `SKILL.md` in `skills/` and `pi/skills/` is parsed
+with the `yaml` library the pi binary itself bundles (`27 frontmatter OK`); added after 0.6.1, where
+an unquoted `argument-hint` that Claude Code's lenient parser accepted made Pi print
+`[Skill conflicts] … Nested mappings are not allowed in compact mappings` on every load. **T7**
+(scheduler PATH): the tick's preflight plus the real `pi` under `env -i PATH=/usr/bin:/bin` with the
+recorded `SUPERAGENT_CLI_PATH` (`~/.nvm/versions/node/v24.16.0/bin` on this host); the same
+mechanism was also exercised under a throwaway launchd job (real launchd `PATH` =
+`/usr/bin:/bin:/usr/sbin:/sbin`): with the variable `pi --version` runs, without it the preflight
+fails exactly as a pre-0.6.3 tick did.
 
 **Full verification, 2026-08-31** (pi CLI 0.84.3, `pi-subagents` 0.61.0, superpowers installed as
 a Pi package, codex CLI 0.150.1):
@@ -76,9 +81,12 @@ no spec counterpart.
 ## Known gaps
 
 - The scheduler path (`install-timer.sh` → launchd/systemd firing `superagent-tick.sh`) has not
-  been exercised on Pi — the DONE loop above was driven by invoking the tick manually per
-  iteration. The tick script itself is what the timer runs, so the residual risk is scheduler
-  plumbing, not harness behavior.
+  fired a full Pi tick on its own — the DONE loop above was driven by invoking the tick manually per
+  iteration. The one concrete defect on that path is fixed in 0.6.3: a `pi` installed under a Node
+  version manager (nvm/fnm/volta) was invisible to the scheduler's minimal `PATH`; the tick now
+  prepends the dirs `install-timer.sh` recorded as `SUPERAGENT_CLI_PATH` (smoke T7 proves the
+  preflight + real `pi` under `env -i PATH=/usr/bin:/bin`). A live scheduler-fired loop remains
+  unexercised.
 - `pi-subagents` behavior verified at 0.61.0 (floor `>=0.58.0`); its release cadence is ~daily —
   re-run `scripts/pi-smoke.sh` after upgrading it.
 - `TICK_TIMEOUT` requires `timeout`/`gtimeout` on PATH; on hosts with neither (stock macOS) the

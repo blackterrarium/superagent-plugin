@@ -149,8 +149,12 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
 - The resolved harness's CLI installed (`claude` by default; `agent`/`cursor-agent` for `cursor`,
   `codex` for `codex`, `pi` for `pi`). A systemd user service, launchd job, or cron runs with a
   minimal `PATH` that omits the common user bin dirs, so the wrapper prepends `~/.local/bin`,
-  `/opt/homebrew/bin`, and `/usr/local/bin` and **fails fast** (exit 5) if the binary is still not
-  found. If your CLI lives elsewhere, add its directory to `PATH` in the scheduler env.
+  `/opt/homebrew/bin`, and `/usr/local/bin`, plus the directories `install-timer.sh` recorded as
+  `SUPERAGENT_CLI_PATH` in the per-goal env file (the dirs of every agent CLI resolvable in the
+  shell that armed the loop — this is what makes a CLI installed under a Node version manager such
+  as nvm/fnm/volta, e.g. `~/.nvm/versions/node/<v>/bin/pi`, findable), and **fails fast** (exit 5)
+  if the binary is still not found. If you move or reinstall a CLI, re-arm the loop from a shell
+  where it resolves so the recorded directory is refreshed.
 - `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only; the wrapper
   sources `.env`) — **or** a `claude` CLI already logged in (subscription/OAuth hosts): when no key is
   set the tick logs a note and relies on the CLI's own stored login instead of aborting.

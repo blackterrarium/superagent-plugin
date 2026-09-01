@@ -82,6 +82,12 @@ mkdir -p "$CONF_DIR"
   # Only pin TICK_MODEL when explicitly given; otherwise the wrapper's default
   # (claude: opus; cursor: the CLI's auto; codex/pi: the CLI's configured default) applies.
   [[ -n "$MODEL" ]] && echo "TICK_MODEL=$MODEL"
+  # Dirs of the agent CLIs resolvable in THIS (the operator's) shell. The scheduler runs the
+  # tick with a minimal PATH, and a CLI under a Node version manager (nvm/fnm/volta) lives
+  # outside the dirs the tick prepends by itself; _superagent_augment_path prepends these.
+  # All CLIs, not only the harness's — bridged roles run foreign CLIs from the same tick.
+  _cli_path="$(superagent_cli_path_dirs)"
+  [[ -n "$_cli_path" ]] && echo "SUPERAGENT_CLI_PATH=$_cli_path"
   # Which agent CLI the tick fires (claude | cursor | codex | pi) — pinned at install time so
   # the detached scheduler unit doesn't depend on the repo's .superenv resolving.
   echo "SUPER_HARNESS=$HARNESS"

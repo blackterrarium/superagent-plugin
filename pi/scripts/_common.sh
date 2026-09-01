@@ -59,6 +59,36 @@ _superagent_augment_path() {
     *":$HOME/.local/bin:"*) ;;               # already present
     *) export PATH="$extra:$PATH" ;;
   esac
+  # CLI dirs recorded at install time (install-timer.sh writes SUPERAGENT_CLI_PATH into the
+  # per-goal env file, from superagent_cli_path_dirs below). A CLI installed under a Node
+  # version manager (nvm/fnm/volta) lives outside the fixed dirs above — e.g.
+  # ~/.nvm/versions/node/<v>/bin/pi — and the scheduler never has the operator's shell PATH,
+  # so without this the tick dies with exit 127 before any session starts. Prepend each once.
+  local d
+  local IFS=':'
+  for d in ${SUPERAGENT_CLI_PATH:-}; do
+    [[ -n "$d" ]] || continue
+    case ":$PATH:" in *":$d:"*) ;; *) export PATH="$d:$PATH" ;; esac
+  done
+}
+
+# Dirs of every harness CLI resolvable in the CURRENT shell (claude, codex, agent/cursor-agent,
+# pi), colon-joined and deduped, omitting the dirs _superagent_augment_path adds anyway and the
+# system defaults — i.e. exactly what a detached tick could NOT find on its own. install-timer.sh
+# records it as SUPERAGENT_CLI_PATH. Every CLI is recorded, not only the harness's, because a
+# tick also spawns bridged roles that run foreign CLIs. The UNresolved `command -v` dir is
+# deliberate: under nvm the binary is a symlink into lib/node_modules/…, and it is the symlink's
+# bin/ dir that also holds `node`.
+superagent_cli_path_dirs() {
+  local c p d out=""
+  for c in claude codex agent cursor-agent pi; do
+    p="$(command -v "$c" 2>/dev/null)" || continue
+    [[ "$p" == /* ]] || continue          # a function/alias, not a file
+    d="$(dirname "$p")"
+    case "$d" in "$HOME/.local/bin"|/opt/homebrew/bin|/usr/local/bin|/usr/bin|/bin|/usr/sbin|/sbin) continue ;; esac
+    case ":$out:" in *":$d:"*) ;; *) out="${out:+$out:}$d" ;; esac
+  done
+  printf '%s\n' "$out"
 }
 
 # Fatal check: ensure the claude CLI binary is on PATH (after augmentation).
@@ -67,7 +97,7 @@ _superagent_augment_path() {
 ensure_claude_bin() {
   _superagent_augment_path
   if ! command -v claude >/dev/null 2>&1; then
-    echo "superagent: 'claude' not found on PATH (checked incl. ~/.local/bin, /usr/local/bin). Install it or add its directory to PATH in the scheduler env; aborting." >&2
+    echo "superagent: 'claude' not found on PATH (checked incl. ~/.local/bin, /opt/homebrew/bin, /usr/local/bin and SUPERAGENT_CLI_PATH). Install it or, if it lives under a Node version manager (nvm/fnm/volta), re-arm the loop (install-timer.sh / superagent-external) from a shell where it resolves so its directory is recorded as SUPERAGENT_CLI_PATH in the per-goal env file; aborting." >&2
     return 1
   fi
   return 0
@@ -134,7 +164,7 @@ ensure_cursor_bin() {
       return 0
     fi
   done
-  echo "superagent: Cursor CLI not found on PATH (tried: agent, cursor-agent; checked incl. ~/.local/bin, /usr/local/bin). Install it (curl https://cursor.com/install -fsS | bash) or add its directory to PATH in the scheduler env; aborting." >&2
+  echo "superagent: Cursor CLI not found on PATH (tried: agent, cursor-agent; checked incl. ~/.local/bin, /opt/homebrew/bin, /usr/local/bin and SUPERAGENT_CLI_PATH). Install it (curl https://cursor.com/install -fsS | bash) or, if it lives under a Node version manager (nvm/fnm/volta), re-arm the loop (install-timer.sh / superagent-external) from a shell where it resolves so its directory is recorded as SUPERAGENT_CLI_PATH in the per-goal env file; aborting." >&2
   return 1
 }
 
@@ -142,7 +172,7 @@ ensure_cursor_bin() {
 ensure_codex_bin() {
   _superagent_augment_path
   if ! command -v codex >/dev/null 2>&1; then
-    echo "superagent: Codex CLI not found on PATH (tried: codex; checked incl. ~/.local/bin, /usr/local/bin). Install it (npm install -g @openai/codex, or brew install codex) or add its directory to PATH in the scheduler env; aborting." >&2
+    echo "superagent: Codex CLI not found on PATH (tried: codex; checked incl. ~/.local/bin, /opt/homebrew/bin, /usr/local/bin and SUPERAGENT_CLI_PATH). Install it (npm install -g @openai/codex, or brew install codex) or, if it lives under a Node version manager (nvm/fnm/volta), re-arm the loop (install-timer.sh / superagent-external) from a shell where it resolves so its directory is recorded as SUPERAGENT_CLI_PATH in the per-goal env file; aborting." >&2
     return 1
   fi
   return 0
@@ -152,7 +182,7 @@ ensure_codex_bin() {
 ensure_pi_bin() {
   _superagent_augment_path
   if ! command -v pi >/dev/null 2>&1; then
-    echo "superagent: Pi CLI not found on PATH (tried: pi; checked incl. ~/.local/bin, /usr/local/bin). Install it (npm install -g @earendil-works/pi-coding-agent) or add its directory to PATH in the scheduler env; aborting." >&2
+    echo "superagent: Pi CLI not found on PATH (tried: pi; checked incl. ~/.local/bin, /opt/homebrew/bin, /usr/local/bin and SUPERAGENT_CLI_PATH). Install it (npm install -g @earendil-works/pi-coding-agent) or, if it lives under a Node version manager (nvm/fnm/volta), re-arm the loop (install-timer.sh / superagent-external) from a shell where it resolves so its directory is recorded as SUPERAGENT_CLI_PATH in the per-goal env file; aborting." >&2
     return 1
   fi
   return 0

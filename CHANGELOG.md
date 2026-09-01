@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.3 — 2026-09-01
+
+- **Fix: external ticks could not find a CLI installed under a Node version manager.** The
+  scheduler (launchd / systemd user service / cron) runs the tick with a minimal `PATH`, and the
+  tick's preflight only prepended `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin` — so a `pi`
+  (or any CLI) living under nvm/fnm/volta, e.g. `~/.nvm/versions/node/<v>/bin/pi`, failed with exit
+  127 before any session started. This is why the Pi harness's scheduler path was still listed as a
+  known gap. `install-timer.sh` now records the directories of every agent CLI resolvable in the
+  arming shell as `SUPERAGENT_CLI_PATH` in the per-goal env file (new `_common.sh` helper
+  `superagent_cli_path_dirs`; every CLI, not only the harness's, since bridged roles run foreign CLIs
+  from the same tick), and `_superagent_augment_path` prepends them once. The `ensure_*_bin` messages
+  name the mechanism. **Loops armed before 0.6.3 have no `SUPERAGENT_CLI_PATH` line — re-arm them
+  from a normal shell to pick it up.** Tests: 5 offline cases in `bridge-test.sh`; `pi-smoke.sh` T7
+  runs the preflight plus the real `pi` under `env -i PATH=/usr/bin:/bin`.
+
 ## 0.6.2 — 2026-09-01
 
 - **`pi-smoke.sh` T6 — strict YAML frontmatter check (offline).** Every `SKILL.md` in `skills/` and
