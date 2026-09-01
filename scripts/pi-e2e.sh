@@ -84,3 +84,110 @@ e2e_assert_deliverables() {
 
 # ---------------------------------------------------------------------------
 [[ "${PI_E2E_LIB:-}" == 1 ]] && return 0
+
+# ---------------------------------------------------------------------------
+# Arguments and run identity
+# ---------------------------------------------------------------------------
+usage() { echo "usage: scripts/pi-e2e.sh [--dry-run] [--keep]   (env: PI_E2E_REPO PI_E2E_INTERVAL PI_E2E_MAX_MIN PI_E2E_GOAL PI_E2E_SUPERENV_EXTRA)" >&2; exit 2; }
+DRY=0; KEEP=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY=1; shift ;;
+    --keep)    KEEP=1; shift ;;
+    *) echo "pi-e2e: unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+STAMP="$(date -u +%Y%m%d-%H%M%S)"
+SLUG="pi-e2e-$STAMP"
+INTERVAL="${PI_E2E_INTERVAL:-2m}"
+MAX_MIN="${PI_E2E_MAX_MIN:-90}"
+GOAL="${PI_E2E_GOAL:-Add scripts/hello.sh (POSIX sh) that prints exactly: hello, world — and scripts/test.sh (POSIX sh) that runs it and exits non-zero unless the output matches exactly. Keep it to ONE implementation plan; no other files beyond the two scripts and the plan-tree bookkeeping.}"
+RUN_DIR="${TMPDIR:-/tmp}/pi-e2e-$STAMP"
+REPORT="$ROOT/pi-e2e-report.md"
+CLONE="$RUN_DIR/repo"
+REPO_SLUG="${PI_E2E_REPO:-}"
+PLAN=""; LOOP_FILE=""; ENV_FILE=""; TICK_LOG=""; PR_BASE=0
+T0=$(date +%s)
+
+# ---------------------------------------------------------------------------
+# Report framing (same shape as pi-smoke.sh: sections, fenced output, a Result line)
+# ---------------------------------------------------------------------------
+PASS=0; FAIL=0; REPORT_OPEN=0
+report_open() {
+  [[ "$REPORT_OPEN" == 1 ]] && return 0
+  REPORT_OPEN=1; mkdir -p "$RUN_DIR"
+  {
+    echo "# superagent Pi e2e report"
+    echo
+    echo "- date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+    echo "- host: $(uname -a)"
+    echo "- plugin repo: $ROOT ($(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo 'no git'))"
+    echo "- pi: $(pi --version 2>&1 | head -1)   pi-subagents: ${SUBAGENTS_VERSION:-absent}"
+    echo "- remote: $REPO_SLUG   slug: $SLUG   interval: $INTERVAL   ceiling: ${MAX_MIN}m"
+    echo "- run dir: $RUN_DIR"
+    echo
+  } >"$REPORT"
+}
+report_section() { report_open; { echo "## $1"; echo; } >>"$REPORT"; echo "pi-e2e: == $1"; }
+report_note()    { report_open; echo "$1" >>"$REPORT"; }
+report_pass()    { PASS=$((PASS+1)); { echo; echo "**Result: PASS** — $1"; echo; } >>"$REPORT"; echo "pi-e2e: PASS — $1"; }
+report_fail()    { FAIL=$((FAIL+1)); { echo; echo "**Result: FAIL** — $1"; echo; } >>"$REPORT"; echo "pi-e2e: FAIL — $1" >&2; }
+# report_cmd <expected-substring-or-empty> <cmd...> — runs, records, returns non-zero on failure.
+report_cmd() {
+  local expect="$1"; shift
+  local out rc
+  { echo '```'; printf '$ %s\n' "$*"; echo '```'; } >>"$REPORT"
+  out="$("$@" 2>&1)"; rc=$?
+  if [[ "${#out}" -gt 6000 ]]; then out="${out:0:3000}
+  [... truncated ...]
+${out: -2500}"; fi
+  { echo; echo '```'; printf '%s\n' "$out"; echo '```'; echo; } >>"$REPORT"
+  [[ $rc -ne 0 ]] && { report_fail "exit $rc: $*"; return 1; }
+  if [[ -n "$expect" ]] && ! printf '%s' "$out" | grep -qi -- "$expect"; then report_fail "expected output containing: $expect"; return 1; fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Phase 0 — preflight (nothing created)
+# ---------------------------------------------------------------------------
+SUBAGENTS_VERSION=""
+phase_preflight() {
+  local missing=() c
+  for c in pi gh git python3; do command -v "$c" >/dev/null 2>&1 || missing+=("$c"); done
+  if [[ "$(uname -s)" == Darwin ]]; then command -v launchctl >/dev/null 2>&1 || missing+=(launchctl)
+  else command -v systemctl >/dev/null 2>&1 || missing+=(systemctl); fi
+  [[ ${#missing[@]} -eq 0 ]] || { echo "pi-e2e: missing prerequisite(s): ${missing[*]}" >&2; return 2; }
+  gh auth status >/dev/null 2>&1 || { echo "pi-e2e: gh is not authenticated (gh auth login)" >&2; return 2; }
+  "$SCRIPTS/build-pi-skills.sh" --check >/dev/null 2>&1 || { echo "pi-e2e: pi/ build is stale — run scripts/build-pi-skills.sh" >&2; return 2; }
+  if [[ -z "$REPO_SLUG" ]]; then
+    local owner; owner="$(gh api user -q .login 2>/dev/null || true)"
+    [[ -n "$owner" ]] || { echo "pi-e2e: cannot resolve the gh user for the default PI_E2E_REPO" >&2; return 2; }
+    REPO_SLUG="$owner/superagent-pi-e2e"
+  fi
+  [[ "$REPO_SLUG" == */* ]] || { echo "pi-e2e: PI_E2E_REPO must be <owner>/<name> (got '$REPO_SLUG')" >&2; return 2; }
+  SUBAGENTS_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.pi/agent/npm/node_modules/pi-subagents/package.json" 2>/dev/null | head -1)"
+  [[ -n "$SUBAGENTS_VERSION" ]] || echo "pi-e2e: WARN pi-subagents not installed — SDD children run sequentially without pins (SUPER_PI_SUBAGENTS=recommended)" >&2
+  local js; js="$("$SCRIPTS/status.sh" --json 2>/dev/null || echo '[]')"
+  [[ -z "$(e2e_status_field "$js" "$SLUG" status)" ]] || { echo "pi-e2e: a loop is already registered under $SLUG" >&2; return 2; }
+  return 0
+}
+
+print_plan() {
+  echo "pi-e2e: would run:"
+  echo "  remote:    $REPO_SLUG  (reset to an orphan commit; never deleted)"
+  echo "  slug:      $SLUG"
+  echo "  interval:  $INTERVAL   ceiling: ${MAX_MIN}m   keep clone: $KEEP"
+  echo "  run dir:   $RUN_DIR"
+  echo "  goal:      $GOAL"
+  echo "  phases:    provision → init → supergoal → launch.sh (arm) → watch status.sh until DONE → assert → cleanup"
+}
+
+# ---------------------------------------------------------------------------
+main() {
+  phase_preflight || exit $?
+  print_plan
+  if [[ "$DRY" == 1 ]]; then echo "[dry-run] nothing created or armed."; exit 0; fi
+  echo "pi-e2e: phases not implemented yet" >&2; exit 1
+}
+main
