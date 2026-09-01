@@ -620,7 +620,7 @@ cleanup:
 8. **Cleanup** (trap, always) — `stop.sh --hard` if a tick is in flight, `uninstall-timer.sh --purge`,
    copy the tick log **and the run's bridge logs** into the run dir, delete the clone unless `--keep`.
 
-Knobs: `MIX_E2E_REPO`, `MIX_E2E_INTERVAL` (`2m`), `MIX_E2E_MAX_MIN` (`150`), `MIX_E2E_GOAL` (change
+Knobs: `MIX_E2E_REPO`, `MIX_E2E_INTERVAL` (`2m`), `MIX_E2E_MAX_MIN` (`240` — run 3 measured a legitimate L7 panel + re-plan cycle overshooting 150), `MIX_E2E_GOAL` (change
 it only together with `mix_assert_deliverables`), `MIX_E2E_IMPLEMENTER` (must name codex),
 `MIX_E2E_REVIEWER` (must name pi; its provider must appear in `pi --list-models`),
 `MIX_E2E_SUPERENV_EXTRA` (extra `.superenv` lines appended last, e.g. `SUPER_MODEL_PANEL=pi:…`).

@@ -30,6 +30,11 @@
   so the `SUPERAGENT_BRIDGE` export from the tick does not redirect them. `mix-e2e.sh` therefore
   requires the installed bridge to carry the evidence header (preflight, exit 2 with the fix) and shows
   header-less logs as `legacy` rows.
+- **Calibration (found by run 3): default loop ceiling 150 → 240 min.** Run 3's branch reviewer found a
+  real seed-level design gap (an unguarded rewrite failure could silently promote a short temp file over
+  the store), the L7 panel adopted a re-plan, and the loop executed a second implementation plan — a
+  legitimate escalation cycle that was still 1–2 exhaustion ticks from `DONE` when the 150-min ceiling
+  aborted the run. The ceiling must fit the escalation path; it costs nothing when the loop finishes early.
 - **Fix (found by run 2): `grep -c … || echo 0` prints two zeros.** `grep -c` PRINTS `0` *and* exits 1
   on zero matches, so `mix_bridge_failed_count` returned `"0\n0"` and aborted the evidence phase of an
   otherwise-clean run. Regression case in `bridge-test.sh`.

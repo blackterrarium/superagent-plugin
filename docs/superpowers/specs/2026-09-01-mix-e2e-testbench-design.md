@@ -40,7 +40,7 @@ WAITING FOR INPUT / CI parks, multi-goal concurrency.
 scripts/mix-e2e.sh [--dry-run] [--keep]
   MIX_E2E_REPO=<owner>/<name>     remote to (re)use   (default: <gh user>/superagent-mix-e2e)
   MIX_E2E_INTERVAL=2m             scheduler interval
-  MIX_E2E_MAX_MIN=150             wall-clock ceiling for the loop phase
+  MIX_E2E_MAX_MIN=240             wall-clock ceiling for the loop phase
   MIX_E2E_GOAL="…"                goal text (default: the kv-store goal below)
   MIX_E2E_IMPLEMENTER=codex:gpt-5.6-terra          role pins for the two mixed pairs
   MIX_E2E_REVIEWER=pi:openai-codex/gpt-5.6-sol
@@ -186,7 +186,7 @@ integration test; its result is recorded in `scripts/README.md`.
    nothing to stderr on success; a header is the only honest evidence and costs two lines.
 4. **A real goal, not hello-world** — the operator asked to evaluate superagent "in building an
    actual supergoal". The kv store is the smallest goal with real branching logic and several tasks.
-   Ceiling 150 min (the Pi hello-world took 61 min in 4 ticks).
+   Ceiling 240 min: run 1 took 77 min, run 2 125, and run 3's legitimate L7-panel + re-plan cycle was still 1–2 ticks from DONE at 150 — the ceiling must fit the escalation path, and costs nothing when the loop finishes early.
 5. **Version mismatch between the installed plugin and the checkout is a WARN, not a FAIL** — the
    skills exercised in-session come from the installed plugin, the scripts from the checkout; a
    report that records both versions is more useful than a refusal. Missing/disabled plugin is a
@@ -243,3 +243,13 @@ scheduler-fired ticks / 125 min, 4 PRs, deliverables pass, **zero** worktree-iso
 pinned role strayed; 0 BRIDGE-FAILED. The phase still printed FAIL because `grep -c … || echo 0`
 returns `"0\n0"` on a match-free file (`grep -c` prints the 0 *and* exits 1) — fixed with a
 regression case; 6b re-evaluated PASS on the run's artifacts.
+
+## Live run 3 (2026-09-01, slug `mix-e2e-20260901-195728`)
+
+The loop's richest run: task-reviewer/branch-review surfaced that the seed's Locked "temp file +
+`mv -f`" rewrite promotes an incomplete temp file over the good store when a write fails mid-rewrite
+(silent total loss) — a defect in the *settled design*, not the implementation; the L7 panel fired
+live (3 `super-panel` agents, native Claude), the seed was amended, and iteration 3 planned and
+iteration 4 executed a second plan (`guarded-store-rewrite`). 15 bridge calls, all exit 0, mixed as
+pinned. The run FAILed only on the 150-min ceiling with the loop healthy, mid-exhaustion, 1–2 ticks
+from `DONE` — the calibration finding that moved the default ceiling to 240.

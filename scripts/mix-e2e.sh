@@ -14,7 +14,7 @@
 #     MIX_E2E_REPO=<owner>/<name>   remote to (re)use; NEVER deleted, reset to an orphan commit per
 #                                   run (default: <gh user>/superagent-mix-e2e)
 #     MIX_E2E_INTERVAL=2m           scheduler interval (launchd StartInterval / systemd timer)
-#     MIX_E2E_MAX_MIN=150           wall-clock ceiling for the loop phase
+#     MIX_E2E_MAX_MIN=240           wall-clock ceiling for the loop phase (sized for an L7 re-plan cycle, run 3)
 #     MIX_E2E_GOAL="…"              goal text (default: the POSIX-sh key-value store below)
 #     MIX_E2E_IMPLEMENTER=codex:gpt-5.6-terra           pin for implementer + fix-applier
 #     MIX_E2E_REVIEWER=pi:openai-codex/gpt-5.6-sol      pin for task-reviewer + re-reviewer
@@ -177,7 +177,7 @@ STAMP="$(date -u +%Y%m%d-%H%M%S)"
 T0_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"          # bridge logs with start= ≥ this belong to the run
 SLUG="mix-e2e-$STAMP"
 INTERVAL="${MIX_E2E_INTERVAL:-2m}"
-MAX_MIN="${MIX_E2E_MAX_MIN:-150}"
+MAX_MIN="${MIX_E2E_MAX_MIN:-240}"
 IMPL_PIN="${MIX_E2E_IMPLEMENTER:-codex:gpt-5.6-terra}"
 REV_PIN="${MIX_E2E_REVIEWER:-pi:openai-codex/gpt-5.6-sol}"
 IMPL_H="$(superagent_role_harness "$IMPL_PIN")"; IMPL_M="$(superagent_role_model "$IMPL_PIN")"
