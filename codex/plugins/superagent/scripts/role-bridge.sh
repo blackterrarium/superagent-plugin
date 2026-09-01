@@ -129,7 +129,8 @@ case "$harness" in
     args=(-p "$(cat "$prompt_file")" --trust --force)
     [ "$model" != inherit ] && args+=(--model "$model")
     args+=(--output-format text)
-    result="$(cd "$cwd" && agent "${args[@]}" 2>>"$log")" || rc=$?
+    # </dev/null: the prompt rides argv, and an inherited open stdin makes the CLI wait on it.
+    result="$(cd "$cwd" && agent "${args[@]}" </dev/null 2>>"$log")" || rc=$?
     ;;
   pi)
     args=(-p --approve --no-session)

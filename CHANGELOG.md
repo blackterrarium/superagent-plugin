@@ -19,6 +19,20 @@
   `claude` (the claude tick's in-session skill dispatches resolve through the installed plugin) and
   WARNs when its version differs from the checkout. Pure helpers unit-tested offline in
   `bridge-test.sh`. Design: `docs/superpowers/specs/2026-09-01-mix-e2e-testbench-design.md`.
+- **Fix (found by the testbench): the Claude relay template fought Claude Code's worktree isolation.**
+  `templates/super-role-bridge-agent.md` step 1 (`mktemp "${TMPDIR:-/tmp}/…"` + heredoc) was refused in
+  every relay of the live run ("too complex to verify that it stays inside the worktree"), costing each
+  relay 1–3 improvised turns (the fix-applier ~10). The relay now writes `.superpowers/relay/<role>.prompt`
+  inside its cwd with relative paths and removes it after the bridge returns. Re-run `superagent:init`
+  to regenerate `.claude/agents/super-*.md`.
+- **Observed (found by the testbench): relays run the INSTALLED plugin's `role-bridge.sh`.** The relay
+  definition says `"${SUPERAGENT_BRIDGE:-<bridge-path>}"` but the relay types the baked path literally,
+  so the `SUPERAGENT_BRIDGE` export from the tick does not redirect them. `mix-e2e.sh` therefore
+  requires the installed bridge to carry the evidence header (preflight, exit 2 with the fix) and shows
+  header-less logs as `legacy` rows.
+- **Fix: `role-bridge.sh --harness cursor` no longer inherits stdin.** The prompt rides argv, so an open
+  stdin only made the CLI (and `bridge-test.sh`'s cursor shim) wait on it forever — the parked 0.5.0
+  follow-up; the bridge now passes `</dev/null`.
 - **`scripts/role-bridge.sh` writes a header and a trailer into its own log.** A bridged pi or claude
   role used to leave a 0-byte log (only the CLI's stderr was captured), so nothing proved which
   harness had run a role. The log now starts with `role-bridge: start=<utc> harness=… model=… effort=…

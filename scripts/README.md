@@ -578,7 +578,11 @@ cleanup:
    (WARN); the superagent plugin **installed and enabled** in the local `claude` — the claude tick's
    in-session `superagent:superplan` / `superrun` dispatches resolve through the *installed* plugin
    while the scripts run from this checkout, so a version mismatch is recorded and WARNed
-   (`claude plugin update superagent@superagent-marketplace`); all three `build-*-skills.sh --check`
+   (`claude plugin update superagent@superagent-marketplace`); the **installed** plugin's
+   `scripts/role-bridge.sh` must carry the evidence header (`role-bridge: start=`) — the relay
+   definitions bake that path and run it literally, so an older installed bridge makes the evidence
+   phase unwinnable and preflight refuses with the fix (update the plugin, or for a pre-merge run copy
+   the checkout's `scripts/role-bridge.sh` over the cached one); all three `build-*-skills.sh --check`
    clean; no loop registered under the run's slug.
 1. **Provision** — the remote `MIX_E2E_REPO` (default `<gh user>/superagent-mix-e2e`) is created if
    absent and otherwise **reset** to an orphan commit with `README.md` + the mix `.superenv`; stale
@@ -605,9 +609,11 @@ cleanup:
    `role harness model effort exit secs`; the table goes into the report and the run must show ≥1
    successful `implementer` on codex with the pinned model, ≥1 `task-reviewer` on pi with the pinned
    model, ≥1 `executor` on claude (the executor is always a bridge process, issue #25), no
-   implementer/fix-applier/task-reviewer/re-reviewer row on a foreign harness, and no `BRIDGE-FAILED`
-   in the tick log. A bridged relay that answered the prompt itself instead of shelling out leaves
-   **no** row — which is exactly how it fails.
+   implementer/fix-applier/task-reviewer/re-reviewer row on a foreign harness, and no
+   `BRIDGE-FAILED exit=<n>` result in the tick log. A bridged relay that answered the prompt itself
+   instead of shelling out leaves **no** row — which is exactly how it fails. A header-less log from
+   a pre-0.6.5 bridge shows up as a `legacy` (or `legacy-codex` + banner model) row: visible, never
+   proof.
 7. **Evaluation** (report-only) — elapsed minutes, ticks, loop iterations, merged PRs, bridge calls per
    harness (count / total secs / longest), per-role counts (fix-applier calls = fix rounds, panelist
    calls / 3 = L7 escalations), non-zero bridge exits, tick ERROR lines, the loop log's tail.

@@ -330,9 +330,25 @@ check "mix: evidence killed row → exit=killed secs=-"    bash -c "MIX_E2E_LIB=
 check "mix: evidence_has matches role+harness+model with exit 0" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); mix_evidence_has \"\$r\" implementer codex gpt-5.6-terra && mix_evidence_has \"\$r\" task-reviewer pi && mix_evidence_has \"\$r\" executor claude"
 check "mix: evidence_has rejects wrong harness/model and non-zero exit" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); ! mix_evidence_has \"\$r\" implementer pi && ! mix_evidence_has \"\$r\" implementer codex gpt-5.6-sol && ! mix_evidence_has \"\$r\" fix-applier codex && ! mix_evidence_has \"\$r\" re-reviewer pi"
 check "mix: evidence_count by role regex and harness" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); [ \"\$(mix_evidence_count \"\$r\" 'implementer|fix-applier')\" = 2 ] && [ \"\$(mix_evidence_count \"\$r\" '.*' pi)\" = 2 ] && [ \"\$(mix_evidence_count \"\$r\" 'panelist.*')\" = 0 ] && [ \"\$(mix_evidence_count '' '.*')\" = 0 ]"
+# Header-less logs (a pre-0.6.5 bridge): role + start from the file name, harness "legacy" — or "legacy-codex"
+# with the model from codex's banner — never counted as proof (found by mix-e2e.sh run 1: the relays ran the
+# INSTALLED plugin's bridge, not the checkout's).
+printf 'OpenAI Codex v0.152.0\n--------\nworkdir: /w\nmodel: gpt-5.6-terra\nprovider: openai\n' >"$T/blog/implementer-20260901T121400Z-1.log"
+: >"$T/blog/task-reviewer-20260901T121500Z-2.log"
+: >"$T/blog/task-reviewer-20260901T100000Z-3.log"   # older than since
+check "mix: legacy codex log → legacy-codex row with banner model" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_bridge_evidence 20260901T115900Z '$T/blog' | grep -q '^implementer legacy-codex gpt-5.6-terra - - - 20260901T121400Z '"
+check "mix: legacy empty log → legacy row; older-than-since excluded" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); grep -q '^task-reviewer legacy - - - - 20260901T121500Z ' <<<\"\$r\" && ! grep -q 20260901T100000Z <<<\"\$r\""
+check "mix: legacy rows are never proof"  bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); ! mix_evidence_has \"\$r\" implementer legacy-codex && [ \"\$(mix_evidence_count \"\$r\" '.*' legacy)\" = 1 ]"
+rm -f "$T/blog/implementer-20260901T121400Z-1.log" "$T/blog/task-reviewer-20260901T121500Z-2.log" "$T/blog/task-reviewer-20260901T100000Z-3.log"
+printf 'x\n{"text":"A Final Report that begins `BRIDGE-FAILED` is a failed dispatch"}\n{"text":"BRIDGE-FAILED exit=3 harness=pi role=task-reviewer log=/x"}\n' >"$T/ticklog"
+check "mix: bridge_failed_count matches reports, not prose" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_bridge_failed_count '$T/ticklog')\" = 1 ] && [ \"\$(mix_bridge_failed_count '$T/nope')\" = 0 ]"
 PL=$'Installed plugins:\n\n  ❯ other@m\n    Version: 1.0.0\n    Scope: user\n    Status: ✘ disabled\n\n  ❯ superagent@superagent-marketplace\n    Version: 0.6.4\n    Scope: user\n    Status: ✔ enabled\n\n  ❯ zzz@m\n    Version: 9\n'
 check "mix: plugin_field reads the superagent block only" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_plugin_field \"\$1\" Version)\" = 0.6.4 ] && mix_plugin_field \"\$1\" Status | grep -q enabled" _ "$PL"
 check "mix: plugin_field empty when the plugin is absent" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ -z \"\$(mix_plugin_field 'Installed plugins:' Version)\" ]"
+check "mix: plugin_marketplace + installed_bridge path" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_plugin_marketplace \"\$1\")\" = superagent-marketplace ] && [ \"\$(MIX_E2E_PLUGIN_CACHE=/c mix_installed_bridge \"\$1\")\" = /c/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh ]" _ "$PL"
+# The shimmed dry-runs below need an "installed" bridge with the evidence header.
+mkdir -p "$T/cache/superagent-marketplace/superagent/0.6.4/scripts"; cp "$BRIDGE" "$T/cache/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh"
+export MIX_E2E_PLUGIN_CACHE="$T/cache"
 # --dry-run under shims: claude must list the plugin, pi must list the reviewer's provider.
 cat >"$SHIM/claude" <<EOF
 #!/usr/bin/env bash
@@ -353,7 +369,10 @@ check "mix: --dry-run writes no report"          bash -c "cd '$T/cwd' && MIX_E2E
 check "mix: preflight refuses a pin outside claude+codex+pi" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REVIEWER=codex:gpt-5.6-sol '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'must name pi' '$T/mix-err'"
 check "mix: preflight refuses when pi lacks the reviewer's provider" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REVIEWER=pi:openai/gpt-5 '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q \"provider 'openai'\" '$T/mix-err'"
 check "mix: preflight refuses when the plugin is disabled" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/✔ enabled/✘ disabled/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'not enabled' '$T/mix-err'"
+mkdir -p "$T/cache/superagent-marketplace/superagent/0.1.0/scripts"; cp "$BRIDGE" "$T/cache/superagent-marketplace/superagent/0.1.0/scripts/role-bridge.sh"   # the mismatching version still ships a header-carrying bridge
 check "mix: preflight WARNs (not fails) on a plugin version mismatch" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/0.6.4/0.1.0/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 0 ] && grep -q 'WARN installed claude plugin is 0.1.0' '$T/mix-err'"
+check "mix: preflight refuses an installed bridge without the evidence header" bash -c "mkdir -p '$T/cache-old/superagent-marketplace/superagent/0.6.4/scripts'; printf '#!/bin/sh\necho old\n' >'$T/cache-old/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh'; cd '$T/cwd' && MIX_E2E_PLUGIN_CACHE='$T/cache-old' MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'predates the evidence header' '$T/mix-err'"
+check "mix: preflight refuses when the installed bridge is missing" bash -c "cd '$T/cwd' && MIX_E2E_PLUGIN_CACHE='$T/cache-none' MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'installed bridge not found' '$T/mix-err'"
 check "mix: bad flag → exit 2"                   bash -c "'$MIX' --bogus >/dev/null 2>&1; [ \$? = 2 ]"
 
 echo "bridge-test: $FAILS failure(s)"

@@ -111,7 +111,12 @@ table `role harness model effort exit secs`, copies the logs into the run dir, a
 - no row for `implementer|fix-applier|task-reviewer|re-reviewer` with a harness other than the
   pinned one (a relay that answered itself instead of bridging leaves *no* row — caught by the
   first two bullets — but a wrong-harness row is a routing bug)
-- the tick log contains no `BRIDGE-FAILED`
+- the tick log contains no `BRIDGE-FAILED exit=<n>` *result* (the bare word also appears in the
+  SKILL.md prose the supervisor reads, which the stream-json log echoes — run 1 finding)
+
+A header-less log (a bridge older than 0.6.5) still becomes a row — harness `legacy`, or
+`legacy-codex` plus the model from codex's own banner — so the table shows the call happened, but
+such rows never count as proof and are excluded from the "foreign harness" check.
 
 Corroboration, not asserted: a codex log also carries codex's own `model: gpt-5.6-terra` header;
 the claude tick log (stream-json) shows the `super-implementer` / `super-task-reviewer` Agent
@@ -130,8 +135,12 @@ SIGINT/SIGTERM reach the handler.
    installed **and enabled** in the local `claude` (`claude plugin list`) — the claude tick's
    in-session `superagent:superplan` / `superrun` dispatches resolve through the *installed*
    plugin, while the scripts run from this checkout — and its version is recorded next to the
-   repo's `plugin.json` version with a WARN when they differ; `build-*-skills.sh --check` clean; no
-   loop registered under the run's slug. `--dry-run` stops here.
+   repo's `plugin.json` version with a WARN when they differ; **the installed plugin's
+   `scripts/role-bridge.sh` carries the evidence header** (`role-bridge: start=`) — the relay
+   definitions bake that path and the relay runs it literally (run 1 finding below), so without it
+   the evidence phase cannot pass and preflight refuses (exit 2) with the fix
+   (`claude plugin update …`, or copy the checkout's bridge over the cached one for a pre-merge run);
+   `build-*-skills.sh --check` clean; no loop registered under the run's slug. `--dry-run` stops here.
 1. **Provision** — as `pi-e2e.sh` (reused remote, orphan reset, stale branches/PRs cleared) with
    the mix `.superenv` above.
 2. **Init** — `claude -p` (prompt on **stdin** — `--allowedTools` is variadic and swallows a
@@ -195,3 +204,32 @@ integration test; its result is recorded in `scripts/README.md`.
   not exist (→ empty table → the assertions fail with "no bridge logs since T0", which is the
   right verdict).
 - `SIGINT`/`SIGTERM` → kill the running child's tree, mark the report FAIL, cleanup, exit 130/143.
+
+## Findings from live run 1 (2026-09-01, slug `mix-e2e-20260901-163123`)
+
+The mix itself worked: the executor's session dispatched `super-implementer` ×2, `super-task-reviewer`
+×2, `super-fix-applier`, `super-re-reviewer` (and the native `super-branch-reviewer`); every relay
+shelled out — codex wrote both tasks and the fix wave, pi reviewed both tasks and the fix wave — and
+the loop merged goal, plan, code and closeout PRs. Three defects surfaced, all fixed on the branch:
+
+1. **The relays ran the installed plugin's bridge, not `$SUPERAGENT_BRIDGE`.** The template says
+   `"${SUPERAGENT_BRIDGE:-<bridge-path>}"`; every sonnet relay typed the baked `<bridge-path>` (the
+   0.6.4 cache copy) literally. Consequence: the implementer/task-reviewer logs were header-less
+   (pi's 0 bytes), so the evidence phase had nothing to prove them with. Fix: preflight requires the
+   header in the *installed* bridge; header-less logs are surfaced as `legacy` rows. The
+   environment-variable override is therefore documentation-only until the relay is a script, which
+   is out of scope here.
+2. **Claude Code's worktree isolation refused the template's step 1.** `f="$(mktemp
+   "${TMPDIR:-/tmp}/super-<role>.XXXXXX")"; cat >"$f" <<'…'` was rejected in all six relays with
+   "This session is isolated in the worktree … too complex to verify that it stays inside the
+   worktree. Refusing to run it"; each relay then improvised (1–3 turns; the fix-applier ~10,
+   appending the 10 KB prompt in chunks). Fix: `templates/super-role-bridge-agent.md` now writes
+   `.superpowers/relay/<role>.prompt` inside the cwd with relative paths and removes it after the
+   bridge returns. (The pi and codex relay templates keep the `$TMPDIR` form — neither harness has
+   this guard.)
+3. **`BRIDGE-FAILED` grep false positive** — see the assertion list.
+
+Also observed, not a defect: pi's task reviewer raised an Important finding ("`trap … EXIT` is
+non-POSIX") that the Claude executor rejected with a cited POSIX reference — the cross-harness
+review disagreement was adjudicated and recorded in the closeout, which is the intended behaviour
+of `SUPER_REVIEW_CONFIDENCE_FILTER=controller`.

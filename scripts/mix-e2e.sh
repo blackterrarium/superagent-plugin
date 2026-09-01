@@ -81,6 +81,8 @@ mix_assert_deliverables() {
 # after <since-stamp> (compact UTC, e.g. 20260901T120000Z; string order == time order), sorted by start:
 #   <role> <harness> <model> <effort> <exit> <secs> <start> <file>
 # exit is the trailer's exit code, or "killed" when the log has a header but no trailer (secs "-").
+# A header-less log (a bridge older than 0.6.5) becomes a row with harness "legacy" (or "legacy-codex"
+# + the model from codex's banner) and "-" elsewhere — visible in the table, never counted as proof.
 mix_bridge_evidence() {
   local since="$1"; shift
   python3 - "$since" "$@" <<'PY'
@@ -88,6 +90,7 @@ import os, re, sys
 since, dirs = sys.argv[1], sys.argv[2:]
 hdr = re.compile(r'^role-bridge: start=(\S+) harness=(\S+) model=(\S+) effort=(\S+) tools=(\S+) role=(\S+) cwd=')
 tr  = re.compile(r'^role-bridge: end=(\S+) exit=(\d+) secs=(\d+)')
+fn  = re.compile(r'^(.+)-(\d{8}T\d{6}Z)-\d+\.log$')
 rows = []
 for d in dirs:
     if not os.path.isdir(d): continue
@@ -97,12 +100,24 @@ for d in dirs:
         try:
             with open(p, errors='replace') as f: lines = f.read().splitlines()
         except OSError: continue
-        if not lines: continue
-        m = hdr.match(lines[0])
-        if not m or m.group(1) < since: continue
-        t = tr.match(lines[-1]) if len(lines) > 1 else None
-        ex, secs = (t.group(2), t.group(3)) if t else ('killed', '-')
-        rows.append((m.group(1), m.group(6), m.group(2), m.group(3), m.group(4), ex, secs, p))
+        m = hdr.match(lines[0]) if lines else None
+        if m:
+            if m.group(1) < since: continue
+            t = tr.match(lines[-1]) if len(lines) > 1 else None
+            ex, secs = (t.group(2), t.group(3)) if t else ('killed', '-')
+            rows.append((m.group(1), m.group(6), m.group(2), m.group(3), m.group(4), ex, secs, p))
+            continue
+        # No header: a log written by a bridge that predates the evidence lines (< 0.6.5). Its role and
+        # start come from the file name; codex's own banner still tells the harness and model, any other
+        # harness is unprovable ("legacy").
+        f = fn.match(name)
+        if not f or f.group(2) < since: continue
+        h, model = 'legacy', '-'
+        if lines and lines[0].startswith('OpenAI Codex'):
+            h = 'legacy-codex'
+            for l in lines[1:12]:
+                if l.startswith('model: '): model = l[7:].strip(); break
+        rows.append((f.group(2), f.group(1), h, model, '-', '-', '-', p))
 for start, role, h, model, eff, ex, secs, p in sorted(rows):
     print(role, h, model, eff, ex, secs, start, p)
 PY
@@ -121,6 +136,22 @@ mix_evidence_count() {
 mix_plugin_field() {
   printf '%s\n' "$1" | awk -v f="$2" '/^[[:space:]]*(❯[[:space:]]*)?superagent@/ {inb=1; next} inb && $1==f":" {sub(/^[[:space:]]*[A-Za-z]+:[[:space:]]*/, ""); print; exit} inb && /^[[:space:]]*(❯[[:space:]]*)?[a-z0-9-]+@/ {exit}'
 }
+
+# mix_plugin_marketplace <claude plugin list output> — the marketplace half of "superagent@<marketplace>".
+mix_plugin_marketplace() {
+  printf '%s\n' "$1" | sed -n 's/^[[:space:]]*\(❯[[:space:]]*\)\{0,1\}superagent@\([A-Za-z0-9_.-]*\).*/\2/p' | head -1
+}
+# mix_installed_bridge <claude plugin list output> — the role-bridge.sh the RELAYS actually run. The relay
+# definitions superagent:init renders bake the installed plugin's bridge path (measured: the relay inlines
+# the "${SUPERAGENT_BRIDGE:-<path>}" fallback literally), so the evidence lines must exist THERE.
+mix_installed_bridge() {
+  local mkt ver; mkt="$(mix_plugin_marketplace "$1")"; ver="$(mix_plugin_field "$1" Version)"
+  [[ -n "$mkt" && -n "$ver" ]] || return 1
+  echo "${MIX_E2E_PLUGIN_CACHE:-$HOME/.claude/plugins/cache}/$mkt/superagent/$ver/scripts/role-bridge.sh"
+}
+# mix_bridge_failed_count <tick_log> — relay failures reported as results (the prose in SKILL.md also
+# contains the word, so match the report's shape, not the word).
+mix_bridge_failed_count() { grep -c 'BRIDGE-FAILED exit=[0-9]' "$1" 2>/dev/null || echo 0; }
 
 # ---------------------------------------------------------------------------
 [[ "${MIX_E2E_LIB:-}" == 1 ]] && return 0
@@ -154,7 +185,7 @@ CLONE="$RUN_DIR/repo"
 REPO_SLUG="${MIX_E2E_REPO:-}"
 BRIDGE_DIRS=("${TMPDIR:-/tmp}/superagent-bridge" /tmp/superagent-bridge)   # where role-bridge.sh logs (per-user TMPDIR under launchd too; /tmp as fallback)
 PLAN=""; LOOP_FILE=""; ENV_FILE=""; TICK_LOG=""; PR_BASE=0; ROWS=""
-PLUGIN_INSTALLED=""; PLUGIN_REPO="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -1)"
+INSTALLED_BRIDGE=""; PLUGIN_INSTALLED=""; PLUGIN_REPO="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -1)"
 T0=$(date +%s)
 
 # ---------------------------------------------------------------------------
@@ -169,7 +200,7 @@ report_open() {
     echo
     echo "- date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     echo "- host: $(uname -a)"
-    echo "- plugin repo: $ROOT ($(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo 'no git')) version $PLUGIN_REPO; installed claude plugin: ${PLUGIN_INSTALLED:-?}"
+    echo "- plugin repo: $ROOT ($(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo 'no git')) version $PLUGIN_REPO; installed claude plugin: ${PLUGIN_INSTALLED:-?} (relays run \`$INSTALLED_BRIDGE\`)"
     echo "- claude: $(claude --version 2>&1 | head -1)   codex: $(codex --version 2>&1 | head -1)   pi: $(pi --version 2>&1 | head -1)"
     echo "- mix: supervisor/planner/executor=claude · implementer+fix-applier=$IMPL_PIN · task-reviewer+re-reviewer=$REV_PIN"
     echo "- remote: $REPO_SLUG   slug: $SLUG   interval: $INTERVAL   ceiling: ${MAX_MIN}m"
@@ -219,6 +250,9 @@ phase_preflight() {
   [[ -n "$PLUGIN_INSTALLED" ]] || { echo "mix-e2e: the superagent plugin is not installed in claude (claude plugin list)" >&2; return 2; }
   mix_plugin_field "$pl" Status | grep -q enabled || { echo "mix-e2e: the superagent plugin is installed but not enabled in claude" >&2; return 2; }
   [[ "$PLUGIN_INSTALLED" == "$PLUGIN_REPO" ]] || echo "mix-e2e: WARN installed claude plugin is $PLUGIN_INSTALLED, this checkout is $PLUGIN_REPO — skills run from the installed version, scripts from the checkout (claude plugin update superagent@superagent-marketplace)" >&2
+  INSTALLED_BRIDGE="$(mix_installed_bridge "$pl")" || { echo "mix-e2e: cannot derive the installed plugin's cache path from 'claude plugin list'" >&2; return 2; }
+  [[ -f "$INSTALLED_BRIDGE" ]] || { echo "mix-e2e: installed bridge not found at $INSTALLED_BRIDGE" >&2; return 2; }
+  grep -q 'role-bridge: start=' "$INSTALLED_BRIDGE" || { echo "mix-e2e: the INSTALLED plugin's $INSTALLED_BRIDGE predates the evidence header (0.6.5) — the relays run that copy, so the harness-evidence phase cannot pass. Update the plugin (claude plugin update superagent@superagent-marketplace) or, for a pre-merge run, copy this checkout's scripts/role-bridge.sh over it." >&2; return 2; }
   for c in pi codex cursor; do
     "$SCRIPTS/build-$c-skills.sh" --check >/dev/null 2>&1 || { echo "mix-e2e: $c/ build is stale — run scripts/build-$c-skills.sh" >&2; return 2; }
   done
@@ -238,7 +272,7 @@ print_plan() {
   echo "  remote:    $REPO_SLUG  (reset to an orphan commit; never deleted)"
   echo "  slug:      $SLUG"
   echo "  mix:       supervisor/planner/executor=claude  implementer+fix-applier=$IMPL_PIN  task-reviewer+re-reviewer=$REV_PIN"
-  echo "  plugin:    checkout $PLUGIN_REPO, installed in claude $PLUGIN_INSTALLED"
+  echo "  plugin:    checkout $PLUGIN_REPO, installed in claude $PLUGIN_INSTALLED (relays run $INSTALLED_BRIDGE)"
   echo "  interval:  $INTERVAL   ceiling: ${MAX_MIN}m   keep clone: $KEEP"
   echo "  run dir:   $RUN_DIR"
   echo "  goal:      $GOAL"
@@ -418,13 +452,15 @@ phase_assert() {
   ROWS="$(mix_bridge_evidence "$T0_STAMP" "${BRIDGE_DIRS[@]}")"
   { echo; evidence_table "$ROWS"; echo; } >>"$REPORT"
   [[ -n "$ROWS" ]] || { report_fail "no bridge logs since $T0_STAMP in ${BRIDGE_DIRS[*]}"; return 1; }
+  local legacy; legacy=$(( $(mix_evidence_count "$ROWS" '.*' legacy) + $(mix_evidence_count "$ROWS" '.*' legacy-codex) ))
+  [[ "$legacy" == 0 ]] || report_note "- $legacy header-less (pre-0.6.5) bridge log(s): the relays ran a bridge without the evidence lines — see preflight's installed-bridge check"
   mix_evidence_has "$ROWS" implementer codex "$IMPL_M" || { report_fail "no successful implementer run on codex/$IMPL_M"; return 1; }
   mix_evidence_has "$ROWS" task-reviewer pi "$REV_M"   || { report_fail "no successful task-reviewer run on pi/$REV_M"; return 1; }
   mix_evidence_has "$ROWS" executor claude             || { report_fail "no successful executor (superrun) process on claude"; return 1; }
-  local stray; stray="$(printf '%s\n' "$ROWS" | awk -v ih="$IMPL_H" -v rh="$REV_H" 'NF && ((($1=="implementer"||$1=="fix-applier") && $2!=ih) || (($1=="task-reviewer"||$1=="re-reviewer") && $2!=rh)) {print $1"→"$2}' | sort -u | tr '\n' ' ')"
+  local stray; stray="$(printf '%s\n' "$ROWS" | awk -v ih="$IMPL_H" -v rh="$REV_H" 'NF && $2 !~ /^legacy/ && ((($1=="implementer"||$1=="fix-applier") && $2!=ih) || (($1=="task-reviewer"||$1=="re-reviewer") && $2!=rh)) {print $1"→"$2}' | sort -u | tr '\n' ' ')"
   [[ -z "$stray" ]] || { report_fail "pinned role(s) ran on the wrong harness: $stray"; return 1; }
-  local bf; bf="$(grep -c 'BRIDGE-FAILED' "$TICK_LOG" 2>/dev/null || true)"
-  [[ "${bf:-0}" == 0 ]] || { report_fail "$bf BRIDGE-FAILED line(s) in the tick log"; return 1; }
+  local bf; bf="$(mix_bridge_failed_count "$TICK_LOG")"
+  [[ "$bf" == 0 ]] || { report_fail "$bf BRIDGE-FAILED result(s) in the tick log"; return 1; }
   local wrong; wrong="$(printf '%s\n' "$ROWS" | awk 'NF && $5!="0" {print $1"("$2")exit="$5}' | tr '\n' ' ')"
   [[ -z "$wrong" ]] && report_note "- every bridge call exited 0" || report_note "- non-zero bridge calls (not asserted — the loop recovered): $wrong"
   report_pass "codex ran implementer, pi ran task-reviewer, claude ran the executor; no pinned role strayed; no BRIDGE-FAILED"
@@ -445,11 +481,11 @@ phase_evaluate() {
     done
     echo "- roles: implementer=$(mix_evidence_count "$rows" implementer) fix-applier=$(mix_evidence_count "$rows" fix-applier) task-reviewer=$(mix_evidence_count "$rows" task-reviewer) re-reviewer=$(mix_evidence_count "$rows" re-reviewer) executor=$(mix_evidence_count "$rows" executor) planner=$(mix_evidence_count "$rows" planner) panelists=$(mix_evidence_count "$rows" 'panelist.*')"
     echo "- fix rounds (fix-applier calls): $(mix_evidence_count "$rows" fix-applier); L7 escalations (panelist calls / 3): $(( $(mix_evidence_count "$rows" 'panelist.*') / 3 ))"
-    echo "- bridge calls that did not exit 0: $(printf '%s\n' "$rows" | awk 'NF && $5!="0"' | wc -l | tr -d ' ')"
-    echo "- tick log: $(grep -c 'superagent-tick ERROR' "$TICK_LOG" 2>/dev/null || echo 0) tick ERROR line(s); $(grep -c 'BRIDGE-FAILED' "$TICK_LOG" 2>/dev/null || echo 0) BRIDGE-FAILED"
+    echo "- bridge calls that did not exit 0: $(printf '%s\n' "$rows" | awk 'NF && $5!="0" && $5!="-"' | wc -l | tr -d ' ')   header-less (legacy) rows: $(printf '%s\n' "$rows" | awk 'NF && $2 ~ /^legacy/' | wc -l | tr -d ' ')"
+    echo "- tick log: $(grep -c 'superagent-tick ERROR' "$TICK_LOG" 2>/dev/null || echo 0) tick ERROR line(s); $(mix_bridge_failed_count "$TICK_LOG") BRIDGE-FAILED result(s)"
     echo
     echo "Loop log tail:"; echo; echo '```'
-    sed -n '/^## Log/,$p' "$LOOP_FILE" 2>/dev/null | tail -25
+    sed -n '/^## Iteration log/,$p' "$LOOP_FILE" 2>/dev/null | tail -25
     echo '```'
   } >>"$REPORT"
   echo "mix-e2e: evaluation written"
