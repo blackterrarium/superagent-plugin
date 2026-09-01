@@ -202,5 +202,24 @@ check "cli_path_dirs: reports the dir of every resolvable CLI, deduped, standard
 check "ensure_pi_bin: missing → names SUPERAGENT_CLI_PATH" \
   bash -c "PATH=/usr/bin:/bin; . '$ROOT/scripts/_common.sh'; ensure_pi_bin 2>&1 | grep -q SUPERAGENT_CLI_PATH"
 
+# --- pi-e2e.sh helpers (sourced as a library with PI_E2E_LIB=1; no phases run) ---
+E2E="$ROOT/scripts/pi-e2e.sh"
+E2E_JSON='[{"slug":"other","status":"DONE","iteration":"9","timer_active":"inactive","tick_running":"inactive","lock_held":false,"pending_input":0,"answer_recorded":false,"done":1,"loop_file":"/x","loop_file_exists":true,"next_fire":"","gh_auth":"ok"},{"slug":"pi-e2e-1","status":"WAITING FOR RUN","iteration":"2","timer_active":"active","tick_running":"inactive","lock_held":false,"pending_input":0,"answer_recorded":false,"done":0,"loop_file":"/y","loop_file_exists":true,"next_fire":"soon","gh_auth":"ok"}]'
+check "e2e: sources as a library"                 bash -c "PI_E2E_LIB=1; . '$E2E'"
+check "e2e: status_field picks the right slug"    bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_status_field '$E2E_JSON' pi-e2e-1 status)\" = 'WAITING FOR RUN' ]"
+check "e2e: status_field numeric field"           bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_status_field '$E2E_JSON' other done)\" = 1 ]"
+check "e2e: status_field absent slug → empty"     bash -c "PI_E2E_LIB=1; . '$E2E'; [ -z \"\$(e2e_status_field '$E2E_JSON' nope status)\" ]"
+check "e2e: status_field empty array → empty"     bash -c "PI_E2E_LIB=1; . '$E2E'; [ -z \"\$(e2e_status_field '[]' x status)\" ]"
+check "e2e: superenv has harness, interval, single-quoted notify" bash -c "PI_E2E_LIB=1; . '$E2E'; out=\$(e2e_render_superenv 2m /tmp/ev.log); grep -qx 'SUPER_HARNESS=pi' <<<\"\$out\" && grep -qx 'SUPER_TICK_INTERVAL=2m' <<<\"\$out\" && grep -q \"^SUPER_NOTIFY_CMD='.*SUPERAGENT_EVENT.*/tmp/ev.log.*'\$\" <<<\"\$out\""
+check "e2e: superenv appends extra lines"         bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_render_superenv 2m /tmp/ev.log 'SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol' | grep -qx 'SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol'"
+check "e2e: superenv sources under set -u and notify appends the event" bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_render_superenv 2m '$T/ev.log' >'$T/se'; bash -uc 'set -a; . \"$T/se\"; set +a; [ \"\$SUPER_HARNESS\" = pi ] && SUPERAGENT_EVENT=done bash -c \"\$SUPER_NOTIFY_CMD\"' && grep -qx done '$T/ev.log'"
+printf '=== t superagent-tick harness=pi model=x ===\nblah\n=== t superagent-tick exit=0 ===\n=== t superagent-tick harness=pi model=x ===\n=== t superagent-tick exit=10 ===\n' >"$T/tick.log"
+check "e2e: count_ticks counts session headers"   bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_count_ticks '$T/tick.log')\" = 2 ]"
+check "e2e: count_ticks missing log → 0"          bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_count_ticks '$T/nope.log')\" = 0 ]"
+check "e2e: transition prints only on change"     bash -c "PI_E2E_LIB=1; . '$E2E'; a=\$(e2e_transition PLANNING 1); e2e_transition PLANNING 1 >/dev/null; b=\$(e2e_transition PLANNING 1); c=\$(e2e_transition RUNNING 1); [ -n \"\$a\" ] && [ -z \"\$b\" ] && [[ \"\$c\" == *'RUNNING iter=1' ]]"
+mkdir -p "$T/deliv/scripts"; printf '#!/bin/sh\necho "hello, world"\n' >"$T/deliv/scripts/hello.sh"; printf '#!/bin/sh\n[ "$(sh "$(dirname "$0")/hello.sh")" = "hello, world" ]\n' >"$T/deliv/scripts/test.sh"; chmod +x "$T/deliv/scripts/"*.sh
+check "e2e: deliverables pass"                    bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_assert_deliverables '$T/deliv'"
+check "e2e: deliverables fail when hello.sh is wrong" bash -c "PI_E2E_LIB=1; . '$E2E'; rm -rf '$T/deliv2'; cp -R '$T/deliv' '$T/deliv2'; echo 'echo nope' >'$T/deliv2/scripts/hello.sh'; ! e2e_assert_deliverables '$T/deliv2'"
+
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]
