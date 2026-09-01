@@ -253,3 +253,11 @@ live (3 `super-panel` agents, native Claude), the seed was amended, and iteratio
 iteration 4 executed a second plan (`guarded-store-rewrite`). 15 bridge calls, all exit 0, mixed as
 pinned. The run FAILed only on the 150-min ceiling with the loop healthy, mid-exhaustion, 1–2 ticks
 from `DONE` — the calibration finding that moved the default ceiling to 240.
+
+## Live run 4 (2026-09-01, slug `mix-e2e-20260901-223801`) — PASS 7/7, exit 0
+
+73 min, 4 scheduler-fired ticks, 4 merged PRs, deliverables verified behaviourally, timer
+self-disarmed, `done` notify. Evidence: 8 bridge calls, all exit 0 — claude executor ×2 (2567 s +
+30 s), codex implementer ×2 + fix-applier ×1 (366 s total), pi task-reviewer ×2 + re-reviewer ×1
+(453 s total); one fix round, no escalation, no strays, no BRIDGE-FAILED, no legacy rows. First
+clean live pass of the testbench.

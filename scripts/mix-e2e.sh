@@ -486,7 +486,7 @@ phase_evaluate() {
     echo "- roles: implementer=$(mix_evidence_count "$rows" implementer) fix-applier=$(mix_evidence_count "$rows" fix-applier) task-reviewer=$(mix_evidence_count "$rows" task-reviewer) re-reviewer=$(mix_evidence_count "$rows" re-reviewer) executor=$(mix_evidence_count "$rows" executor) planner=$(mix_evidence_count "$rows" planner) panelists=$(mix_evidence_count "$rows" 'panelist.*')"
     echo "- fix rounds (fix-applier calls): $(mix_evidence_count "$rows" fix-applier); L7 escalations (panelist calls / 3): $(( $(mix_evidence_count "$rows" 'panelist.*') / 3 ))"
     echo "- bridge calls that did not exit 0: $(printf '%s\n' "$rows" | awk 'NF && $5!="0" && $5!="-"' | wc -l | tr -d ' ')   header-less (legacy) rows: $(printf '%s\n' "$rows" | awk 'NF && $2 ~ /^legacy/' | wc -l | tr -d ' ')"
-    echo "- tick log: $(grep -c 'superagent-tick ERROR' "$TICK_LOG" 2>/dev/null || echo 0) tick ERROR line(s); $(mix_bridge_failed_count "$TICK_LOG") BRIDGE-FAILED result(s)"
+    echo "- tick log: $(if [[ -f "$TICK_LOG" ]]; then grep -c 'superagent-tick ERROR' "$TICK_LOG" || true; else echo 0; fi) tick ERROR line(s); $(mix_bridge_failed_count "$TICK_LOG") BRIDGE-FAILED result(s)"
     echo
     echo "Loop log tail:"; echo; echo '```'
     sed -n '/^## Iteration log/,$p' "$LOOP_FILE" 2>/dev/null | tail -25

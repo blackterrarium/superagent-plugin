@@ -627,3 +627,14 @@ it only together with `mix_assert_deliverables`), `MIX_E2E_IMPLEMENTER` (must na
 Artifacts land in `$TMPDIR/mix-e2e-<stamp>/` (`tick.log`, `events.log`, `transitions.log`,
 `bridge/`). The pure helpers are unit-tested offline in `bridge-test.sh` (`MIX_E2E_LIB=1` sources the
 script without running it); the shared drive/report helpers come from `pi-e2e.sh` (`PI_E2E_LIB=1`).
+
+**Live results, 2026-09-01** (build host; installed-plugin cache carrying this branch's bridge +
+relay template): **run 4 — PASS 7/7, exit 0, 73 min**: 4 scheduler-fired ticks to `DONE`, 4 merged
+PRs, deliverables verified, 8 bridge calls all exit 0 (claude executor ×2, codex implementer ×2 +
+fix-applier, pi task-reviewer ×2 + re-reviewer), one fix round, no strays, no `BRIDGE-FAILED`.
+Earlier the same day: run 1 (77 min, loop PASS) caught the relays running the *installed* bridge —
+now a preflight requirement; run 2 (125 min) produced a complete 14-call evidence table and caught
+the `grep -c` double-zero; run 3 (aborted at the then-150-min ceiling) was the richest loop: the
+branch reviewer found a seed-level design gap (unguarded rewrite failure → silent store loss), the
+L7 panel adopted a re-plan, and a second plan was executed — the run that moved the default ceiling
+to 240 min.

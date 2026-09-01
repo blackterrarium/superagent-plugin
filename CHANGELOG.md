@@ -19,6 +19,11 @@
   `claude` (the claude tick's in-session skill dispatches resolve through the installed plugin) and
   WARNs when its version differs from the checkout. Pure helpers unit-tested offline in
   `bridge-test.sh`. Design: `docs/superpowers/specs/2026-09-01-mix-e2e-testbench-design.md`.
+  **Result on the build host:** run 4 — **PASS 7/7, exit 0, 73 min**: 4 scheduler-fired ticks to
+  `DONE`, 4 merged PRs, 8 bridge calls all exit 0 (claude executor ×2 · codex implementer ×2 +
+  fix-applier · pi task-reviewer ×2 + re-reviewer), one fix round, no strays. Runs 1–3 each caught a
+  real defect (see the fix entries below); run 3 additionally exercised the L7 panel + re-plan cycle
+  live on a seed-level design gap the branch reviewer found.
 - **Fix (found by the testbench): the Claude relay template fought Claude Code's worktree isolation.**
   `templates/super-role-bridge-agent.md` step 1 (`mktemp "${TMPDIR:-/tmp}/…"` + heredoc) was refused in
   every relay of the live run ("too complex to verify that it stays inside the worktree"), costing each
