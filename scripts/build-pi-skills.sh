@@ -215,6 +215,13 @@ repository root. **Do not edit by hand.**
 
 ## Validated
 
+**Smoke re-run, 2026-09-01** (pi CLI 0.84.4, `pi-subagents` 0.62.0, repo at 0.6.2):
+**PASS 11 / FAIL 1 (P1, informational)** — every 2026-08-31 verdict holds, plus the new offline
+**T6** (strict YAML frontmatter): every `SKILL.md` in `skills/` and `pi/skills/` is parsed with the
+`yaml` library the pi binary itself bundles (`27 frontmatter OK`). Added after 0.6.1, where an
+unquoted `argument-hint` that Claude Code's lenient parser accepted made Pi print
+`[Skill conflicts] … Nested mappings are not allowed in compact mappings` on every load.
+
 **Full verification, 2026-08-31** (pi CLI 0.84.3, `pi-subagents` 0.61.0, superpowers installed as
 a Pi package, codex CLI 0.150.1):
 
@@ -254,10 +261,11 @@ the build host): **PASS 7 / FAIL 1 (informational) / SKIPPED 3.**
   `scripts/pi-smoke.sh` on a host with `pi-subagents ≥0.58.0` before promoting the pinned-subagent
   SDD path (S1/S4) further.
 
-Note on numbering: this smoke's T1–T5 are not the spec's T1–T6. Spec T3 (a `--thinking` argv
+Note on numbering: this smoke's T1–T6 are not the spec's T1–T6. Spec T3 (a `--thinking` argv
 check) runs offline in `bridge-test.sh` instead, not here; spec T4 (a live multi-tick loop) is
 deferred to Task 10; the spec's T5 (relay round trip) and T6 (`build-pi-skills.sh --check`) shift
-down to this smoke's T4 and T5 above.
+down to this smoke's T4 and T5 above. This smoke's T6 (strict YAML frontmatter, added 0.6.2) has
+no spec counterpart.
 
 ## Known gaps
 
