@@ -252,5 +252,11 @@ check "superenv: no .superenv → Claude template defaults"       bash -c "unset
 check "superenv: process env SUPER_HARNESS=pi wins and layers"  bash -c "export SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = inherit ]"
 check "superenv: repo .superenv still overrides the harness template" bash -c "printf 'SUPER_HARNESS=pi\nSUPER_MODEL_SUPERVISOR=pi:openai-codex/gpt-5.6-sol\n' >'$T/se-pi/.superenv'; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ]"
 
+# --- role-bridge: --harness inherit (a SUPER_MODEL_* of `inherit` resolves to harness `inherit` via
+# superagent_role_harness) must run on SUPER_HARNESS, not be rejected (exit 64). Found by pi-e2e.sh run 5:
+# the supervisor passed the literal through and superplan's dispatch failed on both attempts.
+check "bridge: --harness inherit runs SUPER_HARNESS (pi)"     bash -c "rm -f '$T/pi.argv'; SUPER_HARNESS=pi '$BRIDGE' --harness inherit --model inherit --effort inherit --cwd '$T/cwd' --prompt-file '$T/prompt.txt' >/dev/null 2>&1 && [ -f '$T/pi.argv' ]"
+check "bridge: --harness inherit defaults to claude when SUPER_HARNESS unset" bash -c "rm -f '$T/claude.argv'; unset SUPER_HARNESS; '$BRIDGE' --harness inherit --model inherit --effort inherit --cwd '$T/cwd' --prompt-file '$T/prompt.txt' >/dev/null 2>&1 && [ -f '$T/claude.argv' ]"
+
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]

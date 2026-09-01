@@ -19,6 +19,11 @@
   (`pi/`, `cursor/`, `codex/plugins/superagent/`) now layers over the Claude one — resolved from the
   process env, else the repo's `.superenv` — and the repo's `.superenv` still overrides both. Offline
   cases in `bridge-test.sh`.
+- **Fix (found by the testbench): `role-bridge.sh --harness inherit` was rejected (exit 64).** A
+  `SUPER_MODEL_*` of `inherit` resolves to harness `inherit` via `superagent_role_harness`; the
+  supervisor is told to map that to `SUPER_HARNESS` but passed the literal through, and superplan's
+  dispatch failed on both attempts (one lost tick). The bridge now resolves `inherit`/empty to
+  `SUPER_HARNESS` (default `claude`) itself. Offline cases in `bridge-test.sh`.
 - **Fix (found by the testbench): `launch.sh` / `stop.sh` / `force-stop.sh` rejected a plan in a repo
   reached through a symlinked path** (macOS `/var` → `/private/var`, `/tmp` → `/private/tmp`): `REPO`
   comes from `git rev-parse --show-toplevel` (physical) while the plan path was resolved with a logical

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # role-bridge.sh — run ONE agent role on a foreign harness CLI, headless.
 #
-#   role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit>
+#   role-bridge.sh --harness claude|codex|cursor|pi|inherit --model <m|inherit> --effort <e|inherit>
 #                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|planner|executor|<list>]
 #
 # --tools picks the child's tool allowlist (claude: --allowedTools; pi: --tools; codex/cursor: ignored):
@@ -52,6 +52,9 @@ while [ $# -gt 0 ]; do
     *) echo "role-bridge: unknown argument '$1'" >&2; exit 64 ;;
   esac
 done
+# `inherit` (what superagent_role_harness returns for a SUPER_MODEL_* of inherit) and an empty
+# value mean "this harness": resolve to SUPER_HARNESS here so no caller has to remember to.
+case "$harness" in inherit|"") harness="${SUPER_HARNESS:-claude}" ;; esac
 case "$harness" in claude|codex|cursor|pi) ;; *) echo "role-bridge: --harness must be claude|codex|cursor|pi (got '$harness')" >&2; exit 64 ;; esac
 [ -d "$cwd" ] || { echo "role-bridge: --cwd '$cwd' is not a directory" >&2; exit 64; }
 [ -f "$prompt_file" ] || { echo "role-bridge: --prompt-file '$prompt_file' not found" >&2; exit 64; }

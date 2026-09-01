@@ -317,7 +317,15 @@ phase_drive() {
       printf '%s\n' "$line" | tee -a "$RUN_DIR/transitions.log" >>"$REPORT"; echo "pi-e2e:   $line"
     fi
     if [[ "$(e2e_status_field "$js" "$SLUG" done)" == 1 ]]; then
-      report_note '```'; report_pass "DONE after $(e2e_count_ticks "$TICK_LOG") tick(s), $(( ($(date +%s) - T0) / 60 )) min since start"; return 0
+      # The loop file says DONE before the tick process finishes — its LAST act is the self-disarm
+      # (uninstall-timer.sh --from-tick, ~seconds later). Let it settle before phase 6 asserts.
+      local i
+      for i in $(seq 1 24); do
+        js="$("$SCRIPTS/status.sh" --json 2>/dev/null || echo '[]')"
+        [[ "$(e2e_status_field "$js" "$SLUG" tick_running)" == active ]] || break
+        e2e_run sleep 5
+      done
+      report_note '```'; report_pass "DONE after $(e2e_count_ticks "$TICK_LOG") tick(s), $(( ($(date +%s) - T0) / 60 )) min since start (tick settled after $(( (i - 1) * 5 ))s)"; return 0
     fi
     if [[ "$(e2e_status_field "$js" "$SLUG" pending_input)" == 1 ]]; then
       report_note '```'; report_fail "parked WAITING FOR INPUT — $(sed -n '/## Pending decision/,$p' "$LOOP_FILE" | head -15 | tr '\n' ' ')"; return 1
@@ -341,7 +349,13 @@ phase_assert() {
   merged="$(gh pr list -R "$REPO_SLUG" --state merged --json number -q 'length')"
   open="$(gh pr list -R "$REPO_SLUG" --state open --json number -q 'length')"
   [[ $(( merged - PR_BASE )) -ge 3 && "$open" == 0 ]] || { report_fail "PRs this run: merged=$(( merged - PR_BASE )) open=$open (want ≥3 merged, 0 open)"; return 1; }
-  [[ "$(e2e_status_field "$("$SCRIPTS/status.sh" --json)" "$SLUG" timer_active)" != active ]] || { report_fail "timer still active after DONE (SUPER_AUTO_DISARM_ON_DONE)"; return 1; }
+  local i timer=active
+  for i in $(seq 1 24); do   # the self-disarm is the tick's final act; allow up to 2 min after DONE
+    timer="$(e2e_status_field "$("$SCRIPTS/status.sh" --json 2>/dev/null || echo '[]')" "$SLUG" timer_active)"
+    [[ "$timer" == active ]] || break
+    e2e_run sleep 5
+  done
+  [[ "$timer" != active ]] || { report_fail "timer still active 2 min after DONE (SUPER_AUTO_DISARM_ON_DONE)"; return 1; }
   grep -qx done "$RUN_DIR/events.log" 2>/dev/null || { report_fail "no 'done' event in $RUN_DIR/events.log (SUPER_NOTIFY_CMD)"; return 1; }
   gh pr list -R "$REPO_SLUG" --state merged --json number,title -q '.[] | "- #\(.number) \(.title)"' | head -n $(( merged - PR_BASE )) >>"$REPORT"
   report_pass "ticks=$ticks merged=$(( merged - PR_BASE )) open=0 deliverables ok, timer disarmed, notify=done"
