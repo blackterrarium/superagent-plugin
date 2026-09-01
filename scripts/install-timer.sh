@@ -52,7 +52,7 @@ if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then
   echo "loop-file directory does not exist: $(dirname "$LOOP_FILE_IN") (run bootstrap.sh first)" >&2
   exit 2
 fi
-LOOP_FILE="$(cd "$(dirname "$LOOP_FILE_IN")" && pwd)/$(basename "$LOOP_FILE_IN")"
+LOOP_FILE="$(cd "$(dirname "$LOOP_FILE_IN")" && pwd -P)/$(basename "$LOOP_FILE_IN")"
 
 SCHEDULER="$(superagent_scheduler)"
 # Validate the interval up front on launchd (StartInterval takes seconds only),

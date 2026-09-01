@@ -256,6 +256,8 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   — one-step launcher: derive the goal slug, create/reuse the loop file, and arm the timer (what the
   `superagent-external` skill invokes). `--dry-run` previews without creating or arming anything.
 - `bootstrap.sh <PLAN.md>` — one-time `--driver=external` bootstrap; prints the `LOOP_FILE=` path.
+- `pi-e2e.sh [--dry-run] [--keep]` — the Pi end-to-end testbench (see the last section): empty repo →
+  `init` → `supergoal` → scheduler-fired external loop → `DONE`, with assertions and a report.
 - `systemd/superagent-tick@.service` / `systemd/superagent-tick@.timer` — templated user units
   (instance `%i` = goal slug); read `~/.config/superagent/<slug>.env`.
 - `launchd/com.superagent.tick.plist.template` — the macOS equivalent; `install-timer.sh` renders it
@@ -490,3 +492,52 @@ SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/cache/<marketplace-name>/superag
 
 Overlap is handled by the L3 lock regardless of scheduler, so a short interval is fine even if a tick
 runs long — the next fire no-ops until the lock releases.
+
+## Pi e2e testbench (`pi-e2e.sh`)
+
+`scripts/pi-e2e.sh` is the only thing that runs the whole framework on the Pi harness end to end,
+unattended, with the **real OS scheduler firing every tick** (launchd on macOS, the systemd user
+timer elsewhere). `pi-smoke.sh` probes mechanisms in isolation; this drives a real goal to `DONE`.
+
+```bash
+bash scripts/pi-e2e.sh --dry-run       # preflight + print what would happen; nothing created
+bash scripts/pi-e2e.sh                 # the run (~20–40 min, ≈6 Pi sessions of model cost)
+bash scripts/pi-e2e.sh --keep          # keep the local clone for inspection
+```
+
+Phases, each a section of `pi-e2e-report.md` (gitignored) with a PASS/FAIL line — the first FAIL
+aborts after cleanup:
+
+0. **Preflight** — `pi`, `gh` (authenticated), `git`, `python3`, `launchctl`/`systemctl`;
+   `build-pi-skills.sh --check` up to date; `pi-subagents` present (WARN only).
+1. **Provision** — the remote `PI_E2E_REPO` (default `<gh user>/superagent-pi-e2e`) is created if
+   absent and otherwise **reset**: an orphan commit with `README.md` + the run's `.superenv`
+   (`SUPER_HARNESS=pi`, `SUPER_TICK_INTERVAL`, `SUPER_NOTIFY_CMD` pointed at the run's
+   `events.log`) is force-pushed to `main`, stale branches deleted, stale PRs closed. The repo is
+   **never deleted** (no `delete_repo` scope needed); its PR numbers just keep counting.
+2. **init** and 3. **supergoal** — headless `pi -p --approve --skill <plugin>/pi/skills
+   "Read …/SKILL.md and run it…"`, exactly as the tick delivers skills. `supergoal` runs as **two
+   turns in one persistent Pi session**: it drafts and, by design, stops at its confirmation gate
+   ("Write this goal folder and root plan to the vault and open the PR?"); the second turn is the
+   scripted operator's "yes". Asserts `.superenv` was left alone, the `.pi/agents/super-*.md`
+   definitions exist, exactly one root master plan (`vault/*/master-plans/*.md`) landed on `main`, and supergoal merged its PR.
+4. **Arm** — `launch.sh <PLAN.md> --harness pi --interval $PI_E2E_INTERVAL --slug pi-e2e-<stamp>`.
+   Asserts via `status.sh --json` that the timer is active and that the per-goal env file pins
+   `SUPER_HARNESS=pi` and `SUPERAGENT_CLI_PATH` (0.6.3).
+5. **Drive** — polls `status.sh --json` every 30 s and logs every `(status, iteration)` transition
+   with the tick count. **The script never runs a tick itself.** `done` → PASS; a
+   `WAITING FOR INPUT` park or the `PI_E2E_MAX_MIN` ceiling → FAIL with the reason recorded.
+6. **Assert** — on `main`: ≥2 ticks in the tick log (so at least one fired on the interval, not just
+   the kickstart), the goal's deliverables (`scripts/hello.sh` prints `hello, world`,
+   `scripts/test.sh` exits 0), ≥3 merged PRs and 0 open, the timer self-disarmed
+   (`SUPER_AUTO_DISARM_ON_DONE`), and the `done` event reached `SUPER_NOTIFY_CMD`.
+7. **Cleanup** (trap, always) — `stop.sh --hard` if a tick is in flight, `uninstall-timer.sh --purge`,
+   copy the tick log into the run dir, delete the clone unless `--keep`.
+
+Knobs: `PI_E2E_REPO`, `PI_E2E_INTERVAL` (`2m`), `PI_E2E_MAX_MIN` (`90`), `PI_E2E_GOAL` (change it
+only together with the deliverable assertions in `e2e_assert_deliverables`), `PI_E2E_SUPERENV_EXTRA`
+(extra `.superenv` lines — e.g. `SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol` to put a codex relay
+back in the loop; pure Pi is the default so one CLI suffices). Artifacts land in
+`$TMPDIR/pi-e2e-<stamp>/` (`tick.log`, `events.log`, `transitions.log`). The pure helpers are
+unit-tested offline in `bridge-test.sh` (`PI_E2E_LIB=1` sources the script without running it).
+

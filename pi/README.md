@@ -33,6 +33,25 @@ mechanism was also exercised under a throwaway launchd job (real launchd `PATH` 
 `/usr/bin:/bin:/usr/sbin:/sbin`): with the variable `pi --version` runs, without it the preflight
 fails exactly as a pre-0.6.3 tick did.
 
+**Testbench** (`scripts/pi-e2e.sh`, 0.6.4): the scripted end-to-end run — empty repo → `init` →
+`supergoal` → `launch.sh` → the OS scheduler fires every tick → `DONE` → assertions (≥2 ticks,
+deliverables, merged PRs, self-disarm, notify) → cleanup; report in `pi-e2e-report.md`. See
+`scripts/README.md` "Pi e2e testbench". **Run 6, 2026-09-01 — PASS 6/6, 61 min:** `DONE` in 4
+launchd-fired ticks (plan PR, code PR, closeout; 4 merged / 0 open), deliverables verified, tick
+self-disarmed 25 s after `DONE`, `done` notification received, cleanup left no scheduler entry —
+the first fully clean scripted run, with the `role-bridge --harness inherit` fix confirmed live (no
+lost tick). **Run 5, 2026-09-01** (pi 0.84.4, `pi-subagents` 0.62.0,
+all roles `inherit` → `gpt-5.6-sol`, no codex): **loop driven to `DONE` by launchd in 5
+scheduler-fired ticks, 68 min** — `WAITING FOR PLAN → PLANNING → WAITING FOR RUN (plan PR #9) →
+RUNNING (superrun 25 min: code PR #10 + closeout #11, and the **L7 panel fired live** via
+`bridge-fanout.sh`, 3/3 "re-plan") → plan_exhausted → DONE`; the `done` notification reached
+`SUPER_NOTIFY_CMD`; deliverables and PR assertions passed; the tick self-disarmed 4 s after writing
+DONE (the testbench's first version asserted too early — fixed to wait for the tick to settle).
+Runs 1–4 each found and fixed something first: supergoal's mandatory confirmation gate (now a second
+turn), the root-plan path, `launch.sh` under a symlinked checkout (`pwd -P`), and `load_superenv`
+ignoring the harness (exit 11 on the kickstart tick); run 5 additionally found `role-bridge.sh`
+rejecting `--harness inherit` (one lost tick; fixed).
+
 **Full verification, 2026-08-31** (pi CLI 0.84.3, `pi-subagents` 0.61.0, superpowers installed as
 a Pi package, codex CLI 0.150.1):
 
@@ -80,13 +99,12 @@ no spec counterpart.
 
 ## Known gaps
 
-- The scheduler path (`install-timer.sh` → launchd/systemd firing `superagent-tick.sh`) has not
-  fired a full Pi tick on its own — the DONE loop above was driven by invoking the tick manually per
-  iteration. The one concrete defect on that path is fixed in 0.6.3: a `pi` installed under a Node
+- ~~The scheduler path has not fired a full Pi tick on its own~~ — the 2026-08-31 DONE loop was
+  driven by invoking the tick manually per iteration. The one concrete defect on that path is fixed in 0.6.3: a `pi` installed under a Node
   version manager (nvm/fnm/volta) was invisible to the scheduler's minimal `PATH`; the tick now
   prepends the dirs `install-timer.sh` recorded as `SUPERAGENT_CLI_PATH` (smoke T7 proves the
-  preflight + real `pi` under `env -i PATH=/usr/bin:/bin`). A live scheduler-fired loop remains
-  unexercised.
+  preflight + real `pi` under `env -i PATH=/usr/bin:/bin`). **Closed 2026-09-01 (0.6.4):**
+  `scripts/pi-e2e.sh` run 5 drove a loop to `DONE` with every tick fired by launchd (see Validated).
 - `pi-subagents` behavior verified at 0.61.0 (floor `>=0.58.0`); its release cadence is ~daily —
   re-run `scripts/pi-smoke.sh` after upgrading it.
 - `TICK_TIMEOUT` requires `timeout`/`gtimeout` on PATH; on hosts with neither (stock macOS) the

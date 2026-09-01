@@ -267,8 +267,21 @@ load_superenv() {
   { compgen -A variable | grep -E '^(SUPER_|TICK_)' | while read -r v; do
     printf '%s=%q\n' "$v" "${!v}"
   done ; } >"$snapshot" || true
+  # Which harness this repo runs on — process env first, else the repo's .superenv — resolved
+  # BEFORE the Claude template is sourced (it would set SUPER_HARNESS=claude and shadow it).
+  local harness="${SUPER_HARNESS:-}"
+  if [[ -z "$harness" && -f "$repo/.superenv" ]]; then
+    harness="$(sed -n 's/^SUPER_HARNESS=[[:space:]]*\([a-z]*\).*/\1/p' "$repo/.superenv" | tail -1)"
+  fi
+  local harness_dir=""
+  case "$harness" in pi) harness_dir=pi ;; cursor) harness_dir=cursor ;; codex) harness_dir=codex/plugins/superagent ;; esac
   set -a
   [[ -f "$plugin_root/templates/superenv.default" ]] && . "$plugin_root/templates/superenv.default"
+  # The harness build's own template layers over the Claude default, so a repo whose .superenv
+  # says only SUPER_HARNESS=pi gets that harness's defaults (SUPER_MODEL_SUPERVISOR=inherit, …)
+  # instead of claude:opus — which the pi tick refuses with exit 11. When the tick already runs
+  # from a harness build (plugin_root IS pi/), the nested path does not exist and this is a no-op.
+  [[ -n "$harness_dir" && -f "$plugin_root/$harness_dir/templates/superenv.default" ]] && . "$plugin_root/$harness_dir/templates/superenv.default"
   [[ -f "$repo/.superenv" ]] && . "$repo/.superenv"
   . "$snapshot"
   set +a
