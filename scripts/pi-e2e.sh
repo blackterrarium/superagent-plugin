@@ -62,14 +62,16 @@ e2e_count_ticks() {
   if [[ -f "$1" ]]; then grep -c '^=== .* superagent-tick harness=' "$1" || true; else echo 0; fi
 }
 
-# e2e_transition <status> <iteration> — prints "<utc-time> <status> iter=<n>" only when the
-# pair changed since the previous call (state kept in _E2E_LAST).
-_E2E_LAST=""
+# e2e_transition <status> <iteration> — sets E2E_LINE to "<utc-time> <status> iter=<n>" when the
+# pair changed since the previous call, else to "". A variable, not stdout: calling this inside
+# $(…) would run it in a subshell and lose the dedupe state (_E2E_LAST).
+_E2E_LAST=""; E2E_LINE=""
 e2e_transition() {
   local key="$1|$2"
+  E2E_LINE=""
   [[ "$key" == "$_E2E_LAST" ]] && return 0
   _E2E_LAST="$key"
-  printf '%s %s iter=%s\n' "$(date -u +%H:%M:%S)" "$1" "$2"
+  E2E_LINE="$(date -u +%H:%M:%S) $1 iter=$2"
 }
 
 # e2e_assert_deliverables <repo_dir> — the default goal's contract: scripts/hello.sh prints
@@ -309,7 +311,7 @@ phase_drive() {
   while :; do
     js="$("$SCRIPTS/status.sh" --json 2>/dev/null || echo '[]')"
     st="$(e2e_status_field "$js" "$SLUG" status)"; it="$(e2e_status_field "$js" "$SLUG" iteration)"
-    line="$(e2e_transition "$st" "$it")"
+    e2e_transition "$st" "$it"; line="$E2E_LINE"
     if [[ -n "$line" ]]; then
       line="$line ticks=$(e2e_count_ticks "$TICK_LOG")"
       printf '%s\n' "$line" | tee -a "$RUN_DIR/transitions.log" >>"$REPORT"; echo "pi-e2e:   $line"

@@ -11,7 +11,10 @@ export TMPDIR="$T/tmp"; mkdir -p "$TMPDIR"
 FAILS=0
 ok()   { echo "ok   - $1"; }
 fail() { echo "FAIL - $1"; FAILS=$((FAILS+1)); }
-check() { local name="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$name"; else fail "$name"; fi; }
+check() {  # on failure, show the command's last output lines — otherwise a FAIL is unexplainable
+  local name="$1"; shift; local out
+  if out="$("$@" 2>&1)"; then ok "$name"; else fail "$name"; printf '%s\n' "$out" | tail -5 | sed 's/^/       | /'; fi
+}
 
 # Each shim records argv (one per line) to $T/<name>.argv, stdin to $T/<name>.stdin, then
 # behaves per $SHIM_MODE: ok (print/write result) | fail (exit 9) | empty (exit 0, nothing).
@@ -216,7 +219,7 @@ check "e2e: superenv sources under set -u and notify appends the event" bash -c 
 printf '=== t superagent-tick harness=pi model=x ===\nblah\n=== t superagent-tick exit=0 ===\n=== t superagent-tick harness=pi model=x ===\n=== t superagent-tick exit=10 ===\n' >"$T/tick.log"
 check "e2e: count_ticks counts session headers"   bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_count_ticks '$T/tick.log')\" = 2 ]"
 check "e2e: count_ticks missing log → 0"          bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_count_ticks '$T/nope.log')\" = 0 ]"
-check "e2e: transition prints only on change"     bash -c "PI_E2E_LIB=1; . '$E2E'; a=\$(e2e_transition PLANNING 1); e2e_transition PLANNING 1 >/dev/null; b=\$(e2e_transition PLANNING 1); c=\$(e2e_transition RUNNING 1); [ -n \"\$a\" ] && [ -z \"\$b\" ] && [[ \"\$c\" == *'RUNNING iter=1' ]]"
+check "e2e: transition sets E2E_LINE only on change (no subshell)" bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_transition PLANNING 1; a=\$E2E_LINE; e2e_transition PLANNING 1; b=\$E2E_LINE; e2e_transition RUNNING 1; c=\$E2E_LINE; e2e_transition RUNNING 2; d=\$E2E_LINE; [ -n \"\$a\" ] && [ -z \"\$b\" ] && [[ \"\$c\" == *'RUNNING iter=1' ]] && [[ \"\$d\" == *'RUNNING iter=2' ]]"
 mkdir -p "$T/deliv/scripts"; printf '#!/bin/sh\necho "hello, world"\n' >"$T/deliv/scripts/hello.sh"; printf '#!/bin/sh\n[ "$(sh "$(dirname "$0")/hello.sh")" = "hello, world" ]\n' >"$T/deliv/scripts/test.sh"; chmod +x "$T/deliv/scripts/"*.sh
 check "e2e: deliverables pass"                    bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_assert_deliverables '$T/deliv'"
 check "e2e: deliverables fail when hello.sh is wrong" bash -c "PI_E2E_LIB=1; . '$E2E'; rm -rf '$T/deliv2'; cp -R '$T/deliv' '$T/deliv2'; echo 'echo nope' >'$T/deliv2/scripts/hello.sh'; ! e2e_assert_deliverables '$T/deliv2'"
@@ -232,13 +235,22 @@ if [ "$1" = repo ] && [ "$2" = view ]; then sleep 31; fi
 echo RESULT-gh
 EOF
 chmod +x "$SHIM/gh"
-check "e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s" bash -c "cd '$T/cwd'; PI_E2E_REPO=o/r PI_E2E_REPORT='$T/e2e-term-report.md' '$E2E' >'$T/e2e-term.out' 2>&1 & p=\$!; sleep 3; t0=\$(date +%s); kill -TERM \$p; wait \$p; rc=\$?; el=\$(( \$(date +%s) - t0 )); [ \$rc = 143 ] && [ \$el -lt 10 ] && grep -q 'interrupted' '$T/e2e-term.out' && ! pgrep -f '^sleep 31\$' >/dev/null"
+check "e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s" bash -c "cd '$T/cwd'; PI_E2E_REPO=o/r PI_E2E_REPORT='$T/e2e-term-report.md' '$E2E' >'$T/e2e-term.out' 2>&1 & p=\$!; for i in \$(seq 1 40); do grep -q Provision '$T/e2e-term.out' && break; sleep 0.5; done; t0=\$(date +%s); kill -TERM \$p; wait \$p; rc=\$?; el=\$(( \$(date +%s) - t0 )); [ \$rc = 143 ] && [ \$el -lt 10 ] && grep -q 'interrupted' '$T/e2e-term.out' && ! pgrep -f '^sleep 31\$' >/dev/null"
 
 # --- launch.sh: a repo reached through a symlinked path (macOS /var → /private/var, /tmp → /private/tmp)
 # must still accept its plan: REPO comes from git (physical) while the plan path must not be logical.
 mkdir -p "$T/real/vault/g/master-plans" "$T/real/vault/g/loop-status"; ( cd "$T/real" && git init -q && printf '# plan\n' >vault/g/master-plans/p.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm init )
 ln -s "$T/real" "$T/link"
 check "launch: plan under a symlinked repo path accepted (--dry-run)" bash -c "cd '$T/link' && SUPER_HARNESS=pi '$ROOT/scripts/launch.sh' '$T/link/vault/g/master-plans/p.md' --harness pi --dry-run 2>&1 | grep -q 'nothing created or armed'"
+
+# --- load_superenv: the harness build's own template layers over the Claude default. A Pi-harness repo
+# whose .superenv sets only SUPER_HARNESS=pi must get the Pi template's supervisor model (inherit), not
+# the Claude template's claude:opus — which the pi tick refuses with exit 11 (found by pi-e2e.sh run 4).
+mkdir -p "$T/se-pi" "$T/se-none"; printf 'SUPER_HARNESS=pi\n' >"$T/se-pi/.superenv"
+check "superenv: harness=pi in .superenv → Pi template defaults" bash -c ". '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = inherit ] && [ \"\$SUPER_HARNESS\" = pi ]"
+check "superenv: no .superenv → Claude template defaults"       bash -c "unset SUPER_HARNESS; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = claude:opus ]"
+check "superenv: process env SUPER_HARNESS=pi wins and layers"  bash -c "export SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = inherit ]"
+check "superenv: repo .superenv still overrides the harness template" bash -c "printf 'SUPER_HARNESS=pi\nSUPER_MODEL_SUPERVISOR=pi:openai-codex/gpt-5.6-sol\n' >'$T/se-pi/.superenv'; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ]"
 
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]
