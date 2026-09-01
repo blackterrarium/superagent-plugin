@@ -230,7 +230,11 @@ fails exactly as a pre-0.6.3 tick did.
 **Testbench** (`scripts/pi-e2e.sh`, 0.6.4): the scripted end-to-end run — empty repo → `init` →
 `supergoal` → `launch.sh` → the OS scheduler fires every tick → `DONE` → assertions (≥2 ticks,
 deliverables, merged PRs, self-disarm, notify) → cleanup; report in `pi-e2e-report.md`. See
-`scripts/README.md` "Pi e2e testbench". **Run 5, 2026-09-01** (pi 0.84.4, `pi-subagents` 0.62.0,
+`scripts/README.md` "Pi e2e testbench". **Run 6, 2026-09-01 — PASS 6/6, 61 min:** `DONE` in 4
+launchd-fired ticks (plan PR, code PR, closeout; 4 merged / 0 open), deliverables verified, tick
+self-disarmed 25 s after `DONE`, `done` notification received, cleanup left no scheduler entry —
+the first fully clean scripted run, with the `role-bridge --harness inherit` fix confirmed live (no
+lost tick). **Run 5, 2026-09-01** (pi 0.84.4, `pi-subagents` 0.62.0,
 all roles `inherit` → `gpt-5.6-sol`, no codex): **loop driven to `DONE` by launchd in 5
 scheduler-fired ticks, 68 min** — `WAITING FOR PLAN → PLANNING → WAITING FOR RUN (plan PR #9) →
 RUNNING (superrun 25 min: code PR #10 + closeout #11, and the **L7 panel fired live** via

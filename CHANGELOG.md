@@ -12,6 +12,9 @@
   `--dry-run`, `--keep`. `supergoal` runs as two turns in one persistent Pi session (its confirmation
   gate is by design; the second turn is the scripted operator's "yes"). Pure helpers unit-tested offline
   in `bridge-test.sh`. Design: `docs/superpowers/specs/2026-09-01-pi-e2e-testbench-design.md`.
+  **Result on the build host:** run 6 PASS 6/6 — `DONE` in 4 launchd-fired ticks, 61 min; run 5 had
+  already reached `DONE` in 5 ticks and additionally exercised the L7 panel live. This closes the
+  "scheduler path never exercised on Pi" gap.
 - **Fix (found by the testbench): `load_superenv` ignored the harness when choosing its default layer.**
   It always sourced `templates/superenv.default` (the Claude defaults) next to the running `_common.sh`,
   so a repo whose `.superenv` said only `SUPER_HARNESS=pi` inherited `SUPER_MODEL_SUPERVISOR=claude:opus`
