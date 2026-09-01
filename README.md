@@ -1,11 +1,12 @@
 # superagent
 
-A plugin for **plan-tree authoring and autonomy-loop execution** — for **Claude Code, Cursor, and
-OpenAI Codex**. Claude Code is the primary harness with the full feature set; Cursor and Codex run
-the external (unattended) driver from generated builds derived from the same canonical skills. It
-ships two things: a family of `super*` skills that turn a goal description into a self-contained,
-self-reviewed vault of plans and closeout reports, and a driver (in-session or an unattended
-external scheduler) that walks that tree to completion without a human babysitting every step.
+A plugin for **plan-tree authoring and autonomy-loop execution** — for **Claude Code, Cursor,
+OpenAI Codex, and Pi**. Claude Code is the primary harness with the full feature set; Cursor, Codex,
+and Pi run the external (unattended) driver from generated builds derived from the same canonical
+skills. It ships two things: a family of `super*` skills that turn a goal description into a
+self-contained, self-reviewed vault of plans and closeout reports, and a driver (in-session or an
+unattended external scheduler) that walks that tree to completion without a human babysitting every
+step.
 
 ## What this is
 
@@ -21,7 +22,7 @@ supervisor** drives a goal's root plan through repeated ticks of this cycle — 
 `superrun` dispatch per tick, unattended, until every step in the tree is both planned and executed —
 either as an in-session `cron` job or as an external, unattended loop driven by an OS scheduler
 (systemd user timer on Linux, launchd on macOS) firing fresh headless sessions — `claude -p`,
-`agent -p` (Cursor), or `codex exec`, per the repo's configured harness.
+`agent -p` (Cursor), `codex exec`, or `pi -p`, per the repo's configured harness (`SUPER_HARNESS`).
 
 ## Install
 
@@ -103,7 +104,8 @@ superagent:superagent <PLAN.md>
 `superagent` carries `disable-model-invocation`, so it will **never auto-trigger** from a plain-English
 request — it must be invoked by name, exactly like `superagent:init` above. For an unattended loop
 (no console session babysitting it), use `superagent:superagent-external` instead, which wraps the
-same supervisor with a systemd-timer-driven external driver.
+same supervisor with an OS-scheduler-driven external driver (systemd user timer on Linux, launchd
+LaunchAgent on macOS).
 
 ## Prerequisites
 
@@ -116,12 +118,13 @@ same supervisor with a systemd-timer-driven external driver.
   `superrun` opens/merges the code PR the same way. On a sandboxed macOS host, `gh auth status` can fail
   even when `gh` is actually authenticated, because `gh` needs keychain access the tool sandbox blocks —
   see `SUPER_GH_DISABLE_SANDBOX` below.
-- **Linux + systemd user timers, for the external (unattended) driver.** `superagent-external` /
-  `launch.sh` install a per-goal `systemd --user` timer that fires a fresh headless tick on an interval.
-  A crontab fallback is documented in
-  [`scripts/README.md`](scripts/README.md#cron-fallback-instead-of-systemd) for hosts without systemd.
-  Planning-only usage (`supergoal`/`superplan`) and the in-session `cron` driver are host-independent —
-  only the external driver's systemd path is Linux-specific.
+- **A per-user OS scheduler, for the external (unattended) driver.** `superagent-external` /
+  `launch.sh` install a per-goal scheduler entry that fires a fresh headless tick on an interval — a
+  `systemd --user` timer on Linux, a launchd LaunchAgent on macOS (which fires only while the user is
+  logged in and the Mac is awake — see [`scripts/README.md`](scripts/README.md#launchd-macos)). A
+  crontab fallback is documented in
+  [`scripts/README.md`](scripts/README.md#cron-fallback-instead-of-systemd) for hosts with neither.
+  Planning-only usage (`supergoal`/`superplan`) and the in-session `cron` driver are host-independent.
 
 ## Configuration
 
@@ -158,10 +161,10 @@ error in both `init` and the tick itself (exit 11) — the supervisor can never 
 **Security posture.** The bridge runs the foreign CLI with approvals bypassed — codex
 `--dangerously-bypass-approvals-and-sandbox` (or `--sandbox workspace-write -c
 sandbox_workspace_write.network_access=true` when `SUPER_CODEX_SANDBOX=workspace-write`), cursor
-`--trust --force`, claude `--allowedTools Read,Edit,Write,Bash,Grep,Glob` — i.e. exactly the same
-unattended posture the tick itself runs under. A bridged role therefore has the foreign CLI's full
-write access to the worktree it is pointed at; bridge only to a CLI you would let run unattended
-there anyway.
+`--trust --force`, claude `--allowedTools Read,Edit,Write,Bash,Grep,Glob`, pi `--approve
+--no-session` — i.e. exactly the same unattended posture the tick itself runs under. A bridged role
+therefore has the foreign CLI's full write access to the worktree it is pointed at; bridge only to a
+CLI you would let run unattended there anyway.
 
 **Timeouts.** A relay subagent shells out to `role-bridge.sh` and then blocks on the foreign CLI for
 as long as the real task takes. Claude Code's Bash tool caps that at 120 s by default and refuses
@@ -181,7 +184,7 @@ an Agent-tool subagent — the pre-0.5.1 design — decayed into a `SendMessage`
 writers racing on the worktree and ticks that never converged (issue #25). Since 0.5.1 the
 supervisor starts `superrun` through `scripts/role-bridge.sh --tools executor` from its own Bash tool
 — a fresh top-level `claude -p` (or the executor's harness CLI, when `SUPER_MODEL_EXECUTOR` is
-bridged) with the tick's `Read,Edit,Write,Bash,Grep,Glob,Task,Skill` allowlist — and blocks on it
+bridged) with the executor allowlist `Read,Edit,Write,Bash,Grep,Glob,Task,Skill` — and blocks on it
 exactly as it blocked on the subagent. Inside that process SDD's subagents are depth 1 and the
 synchronous wait holds. A CI-PENDING yield ends the process; the resume tick starts a fresh one with
 the recorded packet (the `ci_wait.subagent` field is gone). `superplan` is unchanged (it spawns no
@@ -228,20 +231,20 @@ its default and why it must not be weakened to `haiku`.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_MODEL_SUPERVISOR | `opus` | Model for the superagent tick itself. (`inherit` = the session model; a headless tick has no session, so `inherit` resolves to `opus` there.) |
-| SUPER_MODEL_PLANNER | `opus` | Model for the `superplan` / `supergoal` dispatch subagent — plan quality has the most downstream leverage, so this stays on a strong model. |
-| SUPER_MODEL_EXECUTOR | `opus` | Model for the `superrun` dispatch subagent (the SDD controller) — it applies the review confidence filter itself, so it needs judgment. |
-| SUPER_MODEL_PANEL | `opus` | Model for the L7 escalation panel (3 read-only agents). |
-| SUPER_MODEL_IMPLEMENTER | `sonnet` | Model for SDD implementer tasks. |
-| SUPER_MODEL_FIX_APPLIER | `sonnet` | Model for SDD fix-applier tasks. |
-| SUPER_MODEL_TASK_REVIEWER | `opus` | Model for the per-task SDD reviewer. |
-| SUPER_MODEL_RE_REVIEWER | `opus` | Model for the SDD re-reviewer (post-fix). |
-| SUPER_MODEL_BRANCH_REVIEWER | `opus` | Model for the final whole-branch reviewer. |
-| SUPER_MODEL_FIX_PLANNER | `opus` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
+| SUPER_MODEL_SUPERVISOR | `claude:opus` | Model for the superagent tick itself. (`inherit` = the session model; a headless tick has no session, so `inherit` resolves to `opus` there.) |
+| SUPER_MODEL_PLANNER | `claude:opus` | Model for the `superplan` / `supergoal` dispatch subagent — plan quality has the most downstream leverage, so this stays on a strong model. |
+| SUPER_MODEL_EXECUTOR | `claude:opus` | Model for `superrun` (the SDD controller), which runs as its own CLI process via `role-bridge.sh --tools executor`, never as a subagent (issue #25) — it applies the review confidence filter itself, so it needs judgment. |
+| SUPER_MODEL_PANEL | `claude:opus` | Model for the L7 escalation panel (3 read-only agents). |
+| SUPER_MODEL_IMPLEMENTER | `claude:sonnet` | Model for SDD implementer tasks. |
+| SUPER_MODEL_FIX_APPLIER | `claude:sonnet` | Model for SDD fix-applier tasks. |
+| SUPER_MODEL_TASK_REVIEWER | `claude:opus` | Model for the per-task SDD reviewer. |
+| SUPER_MODEL_RE_REVIEWER | `claude:opus` | Model for the SDD re-reviewer (post-fix). |
+| SUPER_MODEL_BRANCH_REVIEWER | `claude:opus` | Model for the final whole-branch reviewer. |
+| SUPER_MODEL_FIX_PLANNER | `claude:opus` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
 | SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex/Cursor builds: `inherit`) | Model of the thin relay subagent that runs `role-bridge.sh` for a bridged role — it only copies a prompt and returns a result, so keep it cheap; do not weaken to `haiku` — measured to answer the prompt itself instead of relaying. |
-| SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; `inherit` passes no effort flag). Ticks fire on an interval, so per-tick cost compounds — `medium` covers the routing work. |
+| SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; pi: `--thinking`; `inherit` passes no effort flag). Ticks fire on an interval, so per-tick cost compounds — `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Reasoning effort for the `superplan` / `supergoal` dispatch subagent. |
-| SUPER_EFFORT_EXECUTOR | `medium` | Reasoning effort for the `superrun` dispatch subagent (the SDD controller) — the hard thinking is delegated to the reviewers and fix planner. |
+| SUPER_EFFORT_EXECUTOR | `medium` | Reasoning effort for `superrun` (the SDD controller), passed to its own CLI process — the hard thinking is delegated to the reviewers and fix planner. |
 | SUPER_EFFORT_PANEL | `xhigh` | Reasoning effort for the L7 escalation panel — it fires rarely and only when everything cheaper has failed. |
 | SUPER_EFFORT_IMPLEMENTER | `medium` | Reasoning effort for SDD implementer tasks. |
 | SUPER_EFFORT_FIX_APPLIER | `medium` | Reasoning effort for SDD fix-applier tasks. |
@@ -249,6 +252,7 @@ its default and why it must not be weakened to `haiku`.
 | SUPER_EFFORT_RE_REVIEWER | `high` | Reasoning effort for the SDD re-reviewer (post-fix). |
 | SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Reasoning effort for the final whole-branch reviewer. |
 | SUPER_EFFORT_FIX_PLANNER | `high` | Reasoning effort for fix rounds 4–5. |
+| SUPER_HARNESS | `claude` | `claude` \| `cursor` \| `codex` \| `pi` — which agent CLI the external driver fires per tick (`claude -p` / `agent -p` / `codex exec` / `pi -p`). |
 | SUPER_CODEX_SANDBOX | `danger-full-access` | Sandbox posture for the Codex harness, and for any codex-bridged role on other harnesses: `danger-full-access` (`--dangerously-bypass-approvals-and-sandbox`) or `workspace-write` (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`; note codex keeps the repo's top-level `.git/` read-only in this mode, so git fetch/commit fail and the sync gate parks the loop). Out-of-domain values abort the tick. |
 | SUPER_PI_SUBAGENTS | recommended | Pi harness only: recommended (WARN if pi-subagents is missing/old; SDD children then run sequentially without pins) · required (init aborts) · off. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Subagent type used for the L7 panel (or `Explore`). |
@@ -257,6 +261,11 @@ its default and why it must not be weakened to `haiku`.
 | SUPER_HEAVY_STEP_LIMIT | `6` | Heavy skills (one `superplan`/`superrun` dispatch each) per `cron` session before the context-handoff gate hands off for a fresh context. |
 | SUPER_LOCK_STEAL_MIN | `90` | Minutes before a stale overlap lock (a crashed tick) is auto-stolen. |
 | SUPER_TICK_INTERVAL | `10m` | External-driver tick interval when `--interval` is omitted. |
+| SUPER_AUTO_DISARM_ON_DONE | `true` | External driver: a tick that finds status `DONE` uninstalls its own scheduler entry (loop-status + env file kept); `false` keeps the timer polling. |
+| SUPER_INPUT_GATE | `true` | External driver: a tick that finds `WAITING FOR INPUT` with no `answer:` line exits without launching a session (bash-only poll); `false` launches the session every interval. |
+| SUPER_CI_GATE | `true` | External driver: a tick that finds `WAITING FOR CI` checks `ci_wait.runs` with `gh run view` in bash and exits without a session while any run is still running; `false` launches the session every interval. |
+| SUPER_CI_MAX_WAIT_MIN | `180` | External driver: once a `WAITING FOR CI` park is older than this many minutes with runs still not completed, notify once (`ci-stale`) and let the session run each interval instead of gating; `0` = gate until every run is completed. |
+| SUPER_NOTIFY_CMD | *(empty)* | External driver: shell snippet run when a loop parks on `WAITING FOR INPUT`, reaches `DONE`, or a CI park goes stale (`SUPERAGENT_EVENT=waiting-for-input\|done\|ci-stale`; also `SUPERAGENT_SLUG`, `LOOP_FILE`, `SUPERAGENT_TITLE`, `SUPERAGENT_BODY` — the body carries the `## Pending decision` text). **Single-quote it** — `.superenv` is sourced under `set -u`, so an unquoted `$SUPERAGENT_BODY` aborts every tick. Empty = desktop notification (`osascript` / `notify-send`) when available. |
 | SUPER_TEST_EVIDENCE | `local` | `local` = SDD's native local TDD contract; `ci` = the only accepted test evidence is a CI run id + conclusion. |
 | SUPER_CI_FLAG_TEMPLATE | *(empty)* | Commit-message CI flag grammar, e.g. `[test:%s]`; empty means the repo has no commit-flag system. |
 | SUPER_CI_ONE_FLAG_PER_PUSH | `true` | Stamp exactly one CI flag per push — sharding means more pushes, never more flags on one push. |
@@ -301,19 +310,23 @@ event-fired `Monitor` and suspends its driver for the wait; an `external` tick d
 fires are free — the wrapper checks the recorded run ids in bash and starts no session until they are
 terminal.
 
-Each tick dispatches **at most one** of `superplan` / `superrun`, always in its **own subagent**
-(`Agent` tool, synchronous — the supervisor waits on the tool result, it never polls a background
-subagent), never inline in the supervisor's own context. The subagent invokes the named skill and
-returns its Final Report verbatim; the supervisor relays that report to the caller, advances the state
-machine, and (unless terminal) lets the driver fire the next tick.
+Each tick dispatches **at most one** of `superplan` / `superrun`, never inline in the supervisor's own
+context, and always **synchronously** — the supervisor blocks on the call and never polls a background
+task. `superplan` runs in its own subagent (`Agent` tool, on Claude Code); `superrun` runs as the
+top-level agent of its **own CLI process** (`scripts/role-bridge.sh --tools executor` from the
+supervisor's Bash tool — see **Configuration** above; on Pi, `superplan` is a bridge process too, via
+`--tools planner`). The dispatched skill returns its Final Report verbatim; the supervisor relays that
+report to the caller, advances the state machine, and (unless terminal) lets the driver fire the next
+tick.
 
 **Two drivers:**
 - **`cron`** (default, attended) — an in-session `CronCreate` job re-fires `--tick <loop-file>` between
   turns of the same session, so context accumulates. A per-session heavy-step budget
   (`SUPER_HEAVY_STEP_LIMIT`, default 6) hands off for a fresh context before the window fills.
-- **`external`** (unattended) — a systemd user timer (or cron) fires a **fresh headless session per
-  tick**, so context never accumulates and the loop runs straight to `DONE`. Because a headless
-  `claude -p` session cannot run slash commands, and Skill-tool semantics for a
+- **`external`** (unattended) — a systemd user timer on Linux, a launchd LaunchAgent on macOS (or
+  cron) fires a **fresh headless session per tick** (`claude -p` / `agent -p` / `codex exec` / `pi -p`
+  per `SUPER_HARNESS`), so context never accumulates and the loop runs straight to `DONE`. Because a
+  headless `claude -p` session cannot run slash commands, and Skill-tool semantics for a
   `disable-model-invocation` skill in headless print mode are unverified, the tick's prompt is a
   **file read**, not a Skill-tool invocation:
   `Read ${PLUGIN_ROOT}/skills/superagent/SKILL.md and run exactly ONE --tick on loop file <loop-file>`.
@@ -360,7 +373,7 @@ directory: [`scripts/README.md`](scripts/README.md).
 - **`supertraverse`** — shared plan-tree navigation used by `superplan`/`superrun`/`superfinish`:
   descent to find the next task, ascent to update ancestor rows.
 - **`superagent-external`** — one-step launcher for an unattended loop: prepares the loop file and arms
-  the per-goal systemd user timer.
+  the per-goal scheduler entry (systemd user timer on Linux, launchd LaunchAgent on macOS).
 - **`superagent-stop`** — graceful (default) or hard stopper for a healthy unattended loop; the
   loop-status file is always preserved so the loop can be relaunched.
 - **`superagent-force-stop`** — recovery for a genuinely HUNG tick: halts it, reaps the stale overlap
@@ -414,7 +427,7 @@ login`). Sandbox posture is a separate `.superenv` knob, `SUPER_CODEX_SANDBOX`:
 unsandboxed claude harness) or `workspace-write` (`--sandbox workspace-write -c
 sandbox_workspace_write.network_access=true`; codex keeps the repo's top-level `.git/` read-only
 in this mode, so git fetch/commit fail and the sync gate parks the loop). Model keys (`SUPER_MODEL_*`)
-take Codex model names (e.g. `gpt-5.1-codex`) or `inherit` when native, or `[<harness>:]<model>`
+take Codex model names (e.g. `gpt-5.6-sol`) or `inherit` when native, or `[<harness>:]<model>`
 to bridge a role to another harness's CLI (`claude` | `cursor` | `pi`) via `scripts/role-bridge.sh`,
 shipped in this build; effort keys (`SUPER_EFFORT_*`) take `none | minimal | low | medium | high |
 xhigh | inherit` when the role is native to Codex, or the bridged role's own harness domain — see
@@ -492,6 +505,7 @@ plugin), cut it over once the plugin covers the same behavior:
    plugin's new script location so future ticks resolve `superagent-tick.sh` there instead of the
    deleted in-repo copy. `install-timer.sh` writes `REPO` and `LOOP_FILE` fresh into
    `~/.config/superagent/<slug>.env` each time it runs, but the tick **interval** is not stored in that
-   file (it lives in the systemd timer drop-in) — read it back from the prior install (or
-   `systemctl --user list-timers`) and **re-pass it explicitly** with `--interval`, or the re-install
-   silently falls back to `SUPER_TICK_INTERVAL`'s default (`30m`).
+   file (it lives in the systemd timer drop-in / the launchd plist's `StartInterval`) — read it back
+   from the prior install (`systemctl --user list-timers`, or `status.sh`) and **re-pass it explicitly**
+   with `--interval`, or the re-install silently falls back to `SUPER_TICK_INTERVAL` (shipped default
+   `10m`; `30m` if the key is unset everywhere).
