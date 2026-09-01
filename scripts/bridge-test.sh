@@ -220,6 +220,10 @@ check "e2e: transition prints only on change"     bash -c "PI_E2E_LIB=1; . '$E2E
 mkdir -p "$T/deliv/scripts"; printf '#!/bin/sh\necho "hello, world"\n' >"$T/deliv/scripts/hello.sh"; printf '#!/bin/sh\n[ "$(sh "$(dirname "$0")/hello.sh")" = "hello, world" ]\n' >"$T/deliv/scripts/test.sh"; chmod +x "$T/deliv/scripts/"*.sh
 check "e2e: deliverables pass"                    bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_assert_deliverables '$T/deliv'"
 check "e2e: deliverables fail when hello.sh is wrong" bash -c "PI_E2E_LIB=1; . '$E2E'; rm -rf '$T/deliv2'; cp -R '$T/deliv' '$T/deliv2'; echo 'echo nope' >'$T/deliv2/scripts/hello.sh'; ! e2e_assert_deliverables '$T/deliv2'"
+mkshim gh; mkshim launchctl; mkshim systemctl
+check "e2e: --dry-run exits 0 and prints the plan" bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r '$E2E' --dry-run 2>&1 | grep -q 'nothing created or armed'"
+check "e2e: --dry-run writes no report"           bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r '$E2E' --dry-run >/dev/null 2>&1; [ ! -f '$ROOT/pi-e2e-report.md' ]"
+check "e2e: bad flag → exit 2"                    bash -c "'$E2E' --bogus >/dev/null 2>&1; [ \$? = 2 ]"
 
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]

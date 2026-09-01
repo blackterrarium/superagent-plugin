@@ -47,5 +47,40 @@ for r in rows if isinstance(rows, list) else []:
 ' "$2" "$3" 2>/dev/null || true
 }
 
+# e2e_render_superenv <interval> <events_log> [extra-lines]
+# The throwaway repo's .superenv. SUPER_NOTIFY_CMD is SINGLE-quoted on purpose: .superenv is
+# sourced under `set -u`, and an expanded $SUPERAGENT_EVENT would abort every tick (0.4.10).
+e2e_render_superenv() {
+  printf 'SUPER_HARNESS=pi\nSUPER_TICK_INTERVAL=%s\n' "$1"
+  printf "SUPER_NOTIFY_CMD='printf \"%%s\\\\n\" \"\$SUPERAGENT_EVENT\" >>\"%s\"'\n" "$2"
+  [[ -n "${3:-}" ]] && printf '%s\n' "$3"
+  return 0
+}
+
+# e2e_count_ticks <tick_log> — sessions the tick wrapper actually started (its header line).
+e2e_count_ticks() {
+  if [[ -f "$1" ]]; then grep -c '^=== .* superagent-tick harness=' "$1" || true; else echo 0; fi
+}
+
+# e2e_transition <status> <iteration> — prints "<utc-time> <status> iter=<n>" only when the
+# pair changed since the previous call (state kept in _E2E_LAST).
+_E2E_LAST=""
+e2e_transition() {
+  local key="$1|$2"
+  [[ "$key" == "$_E2E_LAST" ]] && return 0
+  _E2E_LAST="$key"
+  printf '%s %s iter=%s\n' "$(date -u +%H:%M:%S)" "$1" "$2"
+}
+
+# e2e_assert_deliverables <repo_dir> — the default goal's contract: scripts/hello.sh prints
+# exactly "hello, world" and scripts/test.sh exits 0. Prints the reason on failure.
+e2e_assert_deliverables() {
+  local d="$1"
+  [[ -f "$d/scripts/hello.sh" && -f "$d/scripts/test.sh" ]] || { echo "missing scripts/hello.sh or scripts/test.sh"; return 1; }
+  [[ "$(cd "$d" && sh scripts/hello.sh 2>&1)" == "hello, world" ]] || { echo "scripts/hello.sh output != 'hello, world'"; return 1; }
+  (cd "$d" && sh scripts/test.sh >/dev/null 2>&1) || { echo "scripts/test.sh exited non-zero"; return 1; }
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 [[ "${PI_E2E_LIB:-}" == 1 ]] && return 0
