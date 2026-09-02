@@ -258,6 +258,11 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `bootstrap.sh <PLAN.md>` — one-time `--driver=external` bootstrap; prints the `LOOP_FILE=` path.
 - `pi-e2e.sh [--dry-run] [--keep]` — the Pi end-to-end testbench (see the last section): empty repo →
   `init` → `supergoal` → scheduler-fired external loop → `DONE`, with assertions and a report.
+- `mix-e2e.sh [--dry-run] [--keep]` — the multi-harness **mixing** end-to-end testbench (see the last
+  section): the same empty-repo → `init` → `supergoal` → scheduler-fired loop → `DONE` drive as
+  `pi-e2e.sh`, but with Claude supervising, the implementer/fix-applier bridged to Codex and the
+  task-/re-reviewer bridged to Pi, plus a **harness-evidence** assertion built from `role-bridge.sh`'s
+  log header/trailer lines. Writes `mix-e2e-report.md` (gitignored).
 - `systemd/superagent-tick@.service` / `systemd/superagent-tick@.timer` — templated user units
   (instance `%i` = goal slug); read `~/.config/superagent/<slug>.env`.
 - `launchd/com.superagent.tick.plist.template` — the macOS equivalent; `install-timer.sh` renders it
@@ -541,3 +546,95 @@ back in the loop; pure Pi is the default so one CLI suffices). Artifacts land in
 `$TMPDIR/pi-e2e-<stamp>/` (`tick.log`, `events.log`, `transitions.log`). The pure helpers are
 unit-tested offline in `bridge-test.sh` (`PI_E2E_LIB=1` sources the script without running it).
 
+## Multi-harness mixing e2e testbench (`mix-e2e.sh`)
+
+`scripts/mix-e2e.sh` is the only thing that runs a goal to `DONE` with the roles split across
+**three** harness CLIs, unattended, with the real OS scheduler firing every tick — and the only thing
+that *proves* which harness ran which role. `bridge-test.sh` checks the bridge offline and
+`bridge-smoke.sh` does one relay round-trip; this drives a real goal through the whole loop.
+
+```bash
+bash scripts/mix-e2e.sh --dry-run       # preflight + print the mix and the plan; nothing created
+bash scripts/mix-e2e.sh                 # the run (~60–120 min; Claude ticks + Codex + Pi sessions)
+bash scripts/mix-e2e.sh --keep          # keep the local clone for inspection
+```
+
+The mix (every other key is the Claude build's default):
+
+| role | harness / model | why |
+|---|---|---|
+| supervisor, planner, executor (`superrun`), branch-reviewer, fix-planner, panel | claude (native) | the supervisor cannot be bridged; controller roles stay on the full-feature harness |
+| implementer, fix-applier | `MIX_E2E_IMPLEMENTER` = `codex:gpt-5.6-terra` | runs on every SDD task |
+| task-reviewer, re-reviewer | `MIX_E2E_REVIEWER` = `pi:openai-codex/gpt-5.6-sol` | runs on every SDD task; Pi on the build host authenticates through the OpenAI Codex subscription, so its model strings are `openai-codex/<id>` |
+
+So every task is controlled by Claude, written by Codex and judged by Pi. The plugin routes per
+**role**, not per task — that is the feature under test.
+
+Phases, each a section of `mix-e2e-report.md` with a PASS/FAIL line — the first FAIL aborts after
+cleanup:
+
+0. **Preflight** — `claude`, `codex`, `pi`, `gh` (authenticated), `git`, `python3`,
+   `launchctl`/`systemctl`; `pi --list-models` lists the reviewer pin's provider; `codex login status`
+   (WARN); the superagent plugin **installed and enabled** in the local `claude` — the claude tick's
+   in-session `superagent:superplan` / `superrun` dispatches resolve through the *installed* plugin
+   while the scripts run from this checkout, so a version mismatch is recorded and WARNed
+   (`claude plugin update superagent@superagent-marketplace`); the **installed** plugin's
+   `scripts/role-bridge.sh` must carry the evidence header (`role-bridge: start=`) — the relay
+   definitions bake that path and run it literally, so an older installed bridge makes the evidence
+   phase unwinnable and preflight refuses with the fix (update the plugin, or for a pre-merge run copy
+   the checkout's `scripts/role-bridge.sh` over the cached one); all three `build-*-skills.sh --check`
+   clean; no loop registered under the run's slug.
+1. **Provision** — the remote `MIX_E2E_REPO` (default `<gh user>/superagent-mix-e2e`) is created if
+   absent and otherwise **reset** to an orphan commit with `README.md` + the mix `.superenv`; stale
+   branches deleted, stale PRs closed. Never deleted.
+2. **init** — headless `claude -p` (prompt on **stdin**: `--allowedTools` is variadic and swallows a
+   positional prompt) invoking `superagent:init` through the Skill tool. Asserts `.superenv` was left
+   alone and that `.claude/agents/super-implementer.md` / `super-fix-applier.md` are **codex relays**
+   (`--harness codex --model "gpt-5.6-terra"`) and `super-task-reviewer.md` / `super-re-reviewer.md`
+   are **pi relays** (`--harness pi --model "openai-codex/gpt-5.6-sol"`), all carrying the
+   `generated-by: superagent:init` marker.
+3. **supergoal** — two `claude -p` turns in one session (`--session-id`, then `--resume`): the goal,
+   then the scripted operator's "yes" at its confirmation gate. Asserts exactly one root master plan on
+   `main` and a merged PR.
+4. **Arm** — `launch.sh <PLAN.md> --harness claude --interval $MIX_E2E_INTERVAL --slug mix-e2e-<stamp>`;
+   asserts the timer is active and the env file pins `SUPER_HARNESS=claude` and `SUPERAGENT_CLI_PATH`
+   (the codex/pi bridges from a scheduler tick depend on it — `pi` lives under nvm on the build host).
+5. **Drive** — watch only (`status.sh --json` every 30 s), logging every `(status, iteration)`
+   transition with the tick and bridge-call counts. `done` → PASS; a `WAITING FOR INPUT` park or the
+   `MIX_E2E_MAX_MIN` ceiling → FAIL.
+6. **Assert** — ≥2 ticks; the goal's deliverables (the default goal is a POSIX-sh key-value store,
+   `scripts/kv.sh set|get|del|list` against `$KV_FILE`, checked behaviourally, plus `scripts/test.sh`
+   exit 0); ≥3 merged / 0 open PRs; self-disarm; the `done` event. **6b. Harness evidence** — every
+   `$TMPDIR/superagent-bridge/*.log` whose header `start=` is at or after the run start becomes a row
+   `role harness model effort exit secs`; the table goes into the report and the run must show ≥1
+   successful `implementer` on codex with the pinned model, ≥1 `task-reviewer` on pi with the pinned
+   model, ≥1 `executor` on claude (the executor is always a bridge process, issue #25), no
+   implementer/fix-applier/task-reviewer/re-reviewer row on a foreign harness, and no
+   `BRIDGE-FAILED exit=<n>` result in the tick log. A bridged relay that answered the prompt itself
+   instead of shelling out leaves **no** row — which is exactly how it fails. A header-less log from
+   a pre-0.6.5 bridge shows up as a `legacy` (or `legacy-codex` + banner model) row: visible, never
+   proof.
+7. **Evaluation** (report-only) — elapsed minutes, ticks, loop iterations, merged PRs, bridge calls per
+   harness (count / total secs / longest), per-role counts (fix-applier calls = fix rounds, panelist
+   calls / 3 = L7 escalations), non-zero bridge exits, tick ERROR lines, the loop log's tail.
+8. **Cleanup** (trap, always) — `stop.sh --hard` if a tick is in flight, `uninstall-timer.sh --purge`,
+   copy the tick log **and the run's bridge logs** into the run dir, delete the clone unless `--keep`.
+
+Knobs: `MIX_E2E_REPO`, `MIX_E2E_INTERVAL` (`2m`), `MIX_E2E_MAX_MIN` (`240` — run 3 measured a legitimate L7 panel + re-plan cycle overshooting 150), `MIX_E2E_GOAL` (change
+it only together with `mix_assert_deliverables`), `MIX_E2E_IMPLEMENTER` (must name codex),
+`MIX_E2E_REVIEWER` (must name pi; its provider must appear in `pi --list-models`),
+`MIX_E2E_SUPERENV_EXTRA` (extra `.superenv` lines appended last, e.g. `SUPER_MODEL_PANEL=pi:…`).
+Artifacts land in `$TMPDIR/mix-e2e-<stamp>/` (`tick.log`, `events.log`, `transitions.log`,
+`bridge/`). The pure helpers are unit-tested offline in `bridge-test.sh` (`MIX_E2E_LIB=1` sources the
+script without running it); the shared drive/report helpers come from `pi-e2e.sh` (`PI_E2E_LIB=1`).
+
+**Live results, 2026-09-01** (build host; installed-plugin cache carrying this branch's bridge +
+relay template): **run 4 — PASS 7/7, exit 0, 73 min**: 4 scheduler-fired ticks to `DONE`, 4 merged
+PRs, deliverables verified, 8 bridge calls all exit 0 (claude executor ×2, codex implementer ×2 +
+fix-applier, pi task-reviewer ×2 + re-reviewer), one fix round, no strays, no `BRIDGE-FAILED`.
+Earlier the same day: run 1 (77 min, loop PASS) caught the relays running the *installed* bridge —
+now a preflight requirement; run 2 (125 min) produced a complete 14-call evidence table and caught
+the `grep -c` double-zero; run 3 (aborted at the then-150-min ceiling) was the richest loop: the
+branch reviewer found a seed-level design gap (unguarded rewrite failure → silent store loss), the
+L7 panel adopted a re-plan, and a second plan was executed — the run that moved the default ceiling
+to 240 min.

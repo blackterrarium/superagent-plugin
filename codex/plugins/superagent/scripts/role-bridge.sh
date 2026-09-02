@@ -24,7 +24,10 @@
 #
 # Reads the prompt from <file>, runs the harness CLI in <dir>, prints the CLI's final message on
 # stdout and NOTHING else. CLI chatter/stderr goes to $TMPDIR/superagent-bridge/<role>-<stamp>.log
-# (path printed on stderr as "role-bridge: log=<path>").
+# (path printed on stderr as "role-bridge: log=<path>"), bracketed by two evidence lines this
+# script writes itself: "role-bridge: start=<utc> harness=… model=… effort=… tools=… role=… cwd=…"
+# first and "role-bridge: end=<utc> exit=<0|3|4> secs=<n> result_bytes=<n>" last (no trailer =
+# killed mid-run). mix-e2e.sh builds its per-role harness evidence table from these.
 # Exit: 0 ok · 2 CLI binary not found · 3 CLI exited non-zero · 4 CLI exited 0 with empty result ·
 #       64 usage. "inherit" omits the corresponding flag.
 # Env: SUPER_CODEX_SANDBOX (danger-full-access default | workspace-write) for --harness codex;
@@ -85,6 +88,16 @@ bin=""; case "$harness" in claude) bin=claude ;; codex) bin=codex ;; cursor) bin
 command -v "$bin" >/dev/null 2>&1 || { echo "role-bridge: '$bin' not found on PATH (harness=$harness)" >&2; exit 2; }
 # Announced only once the binary exists, so an exit-2 run never advertises a log nobody wrote.
 echo "role-bridge: log=$log" >&2
+# Header + trailer lines in the log: the evidence of WHICH harness/model/effort actually ran this
+# role (a pi or claude CLI prints nothing to stderr on success, so the log used to be 0 bytes and
+# proved nothing). The header goes in before the CLI starts — a bridge killed mid-run leaves a
+# header with no trailer, which is itself the evidence. stdout is untouched: still the CLI's final
+# message and nothing else. scripts/mix-e2e.sh parses both lines; bridge-test.sh pins their shape.
+start_epoch="$(date +%s)"
+echo "role-bridge: start=$(date -u '+%Y%m%dT%H%M%SZ') harness=$harness model=$model effort=$effort tools=$tools role=$role cwd=$cwd" >>"$log"
+trailer() {  # trailer <exit-code>
+  echo "role-bridge: end=$(date -u '+%Y%m%dT%H%M%SZ') exit=$1 secs=$(( $(date +%s) - start_epoch )) result_bytes=$(printf '%s' "$result" | wc -c | tr -d ' ')" >>"$log"
+}
 
 result=""; rc=0
 case "$harness" in
@@ -116,7 +129,8 @@ case "$harness" in
     args=(-p "$(cat "$prompt_file")" --trust --force)
     [ "$model" != inherit ] && args+=(--model "$model")
     args+=(--output-format text)
-    result="$(cd "$cwd" && agent "${args[@]}" 2>>"$log")" || rc=$?
+    # </dev/null: the prompt rides argv, and an inherited open stdin makes the CLI wait on it.
+    result="$(cd "$cwd" && agent "${args[@]}" </dev/null 2>>"$log")" || rc=$?
     ;;
   pi)
     args=(-p --approve --no-session)
@@ -140,6 +154,7 @@ case "$harness" in
     ;;
 esac
 
-if [ "$rc" -ne 0 ]; then echo "role-bridge: $bin exited $rc (see $log)" >&2; exit 3; fi
-if [ -z "$result" ]; then echo "role-bridge: $bin returned an empty result (see $log)" >&2; exit 4; fi
+if [ "$rc" -ne 0 ]; then trailer 3; echo "role-bridge: $bin exited $rc (see $log)" >&2; exit 3; fi
+if [ -z "$result" ]; then trailer 4; echo "role-bridge: $bin returned an empty result (see $log)" >&2; exit 4; fi
+trailer 0
 printf '%s\n' "$result"

@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.6.5 — 2026-09-01
+
+- **`scripts/mix-e2e.sh` — scripted end-to-end testbench for multi-harness role mixing.** From an
+  empty repository: `init` → `supergoal` → `launch.sh` arms the real scheduler → scheduler-fired
+  ticks → `DONE`, with the roles split across three harness CLIs — supervisor / planner / executor
+  on **Claude**, implementer + fix-applier bridged to **Codex** (`codex:gpt-5.6-terra`),
+  task-reviewer + re-reviewer bridged to **Pi** (`pi:openai-codex/gpt-5.6-sol`; Pi on the build host
+  is OpenAI-only). The goal is a real one (a POSIX-sh key-value store with tests, 2–3 SDD tasks) so the
+  mixed roles fire several times. Besides the `pi-e2e.sh` assertions (≥2 ticks, deliverables, PRs,
+  self-disarm, notify) it asserts **harness evidence**: from `role-bridge.sh`'s log header/trailer
+  lines, ≥1 successful `implementer` on codex with the pinned model, ≥1 `task-reviewer` on pi, ≥1
+  `executor` on claude, no pinned role on a foreign harness, no `BRIDGE-FAILED`. A report-only
+  *Evaluation* section tallies ticks, minutes, PRs, bridge calls per harness (count / secs), fix
+  rounds and L7 escalations. Knobs: `MIX_E2E_REPO`, `MIX_E2E_INTERVAL`, `MIX_E2E_MAX_MIN`,
+  `MIX_E2E_GOAL`, `MIX_E2E_IMPLEMENTER`, `MIX_E2E_REVIEWER`, `MIX_E2E_SUPERENV_EXTRA`; `--dry-run`,
+  `--keep`. Preflight also requires the superagent plugin to be installed and enabled in the local
+  `claude` (the claude tick's in-session skill dispatches resolve through the installed plugin) and
+  WARNs when its version differs from the checkout. Pure helpers unit-tested offline in
+  `bridge-test.sh`. Design: `docs/superpowers/specs/2026-09-01-mix-e2e-testbench-design.md`.
+  **Result on the build host:** run 4 — **PASS 7/7, exit 0, 73 min**: 4 scheduler-fired ticks to
+  `DONE`, 4 merged PRs, 8 bridge calls all exit 0 (claude executor ×2 · codex implementer ×2 +
+  fix-applier · pi task-reviewer ×2 + re-reviewer), one fix round, no strays. Runs 1–3 each caught a
+  real defect (see the fix entries below); run 3 additionally exercised the L7 panel + re-plan cycle
+  live on a seed-level design gap the branch reviewer found.
+- **Fix (found by the testbench): the Claude relay template fought Claude Code's worktree isolation.**
+  `templates/super-role-bridge-agent.md` step 1 (`mktemp "${TMPDIR:-/tmp}/…"` + heredoc) was refused in
+  every relay of the live run ("too complex to verify that it stays inside the worktree"), costing each
+  relay 1–3 improvised turns (the fix-applier ~10). The relay now writes `.superpowers/relay/<role>.prompt`
+  inside its cwd with relative paths and removes it after the bridge returns. Re-run `superagent:init`
+  to regenerate `.claude/agents/super-*.md`.
+- **Observed (found by the testbench): relays run the INSTALLED plugin's `role-bridge.sh`.** The relay
+  definition says `"${SUPERAGENT_BRIDGE:-<bridge-path>}"` but the relay types the baked path literally,
+  so the `SUPERAGENT_BRIDGE` export from the tick does not redirect them. `mix-e2e.sh` therefore
+  requires the installed bridge to carry the evidence header (preflight, exit 2 with the fix) and shows
+  header-less logs as `legacy` rows.
+- **Calibration (found by run 3): default loop ceiling 150 → 240 min.** Run 3's branch reviewer found a
+  real seed-level design gap (an unguarded rewrite failure could silently promote a short temp file over
+  the store), the L7 panel adopted a re-plan, and the loop executed a second implementation plan — a
+  legitimate escalation cycle that was still 1–2 exhaustion ticks from `DONE` when the 150-min ceiling
+  aborted the run. The ceiling must fit the escalation path; it costs nothing when the loop finishes early.
+- **Fix (found by run 2): `grep -c … || echo 0` prints two zeros.** `grep -c` PRINTS `0` *and* exits 1
+  on zero matches, so `mix_bridge_failed_count` returned `"0\n0"` and aborted the evidence phase of an
+  otherwise-clean run. Regression case in `bridge-test.sh`.
+- **Fix: `role-bridge.sh --harness cursor` no longer inherits stdin.** The prompt rides argv, so an open
+  stdin only made the CLI (and `bridge-test.sh`'s cursor shim) wait on it forever — the parked 0.5.0
+  follow-up; the bridge now passes `</dev/null`.
+- **`scripts/role-bridge.sh` writes a header and a trailer into its own log.** A bridged pi or claude
+  role used to leave a 0-byte log (only the CLI's stderr was captured), so nothing proved which
+  harness had run a role. The log now starts with `role-bridge: start=<utc> harness=… model=… effort=…
+  tools=… role=… cwd=…` and ends with `role-bridge: end=<utc> exit=<0|3|4> secs=<n> result_bytes=<n>`
+  (no trailer = killed mid-run). stdout is unchanged. Offline cases in `bridge-test.sh`; the
+  `codex/`, `pi/`, `cursor/` trees (which ship the bridge) are rebuilt.
+
 ## 0.6.4 — 2026-09-01
 
 - **`scripts/pi-e2e.sh` — scripted Pi end-to-end testbench.** From an empty repository: `init` →

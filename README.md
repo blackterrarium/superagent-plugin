@@ -291,6 +291,11 @@ an authenticated `codex` CLI and an authenticated `pi` CLI, and returns that CLI
 verbatim. `superagent:init` regenerates `.claude/agents/super-implementer.md` and
 `.claude/agents/super-panel.md` as relay definitions and checks both `codex` and `pi` are on `PATH`.
 
+This three-harness split is exercised end to end by `scripts/mix-e2e.sh` (Claude supervising, Codex
+implementing, Pi reviewing, on a real goal, scheduler-fired ticks to `DONE`), which also asserts from
+`role-bridge.sh`'s log header/trailer lines that every pinned role ran on its pinned harness — see
+`scripts/README.md` "Multi-harness mixing e2e testbench".
+
 ## The loop in one page
 
 All loop state lives in one **gitignored** file per goal:

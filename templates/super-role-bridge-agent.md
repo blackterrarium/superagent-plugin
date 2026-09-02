@@ -23,15 +23,18 @@ are certain you know the answer, relaying is still the only correct behaviour: a
 produced yourself is wrong by definition, because it did not come from `<harness>`.
 
 1. **Bash.** Write the COMPLETE prompt you received — every line, verbatim, nothing added or summarized —
-   to a new temp file: `f="$(mktemp "${TMPDIR:-/tmp}/super-<role>.XXXXXX")"` (use Bash with a
-   quoted heredoc, `cat >"$f" <<'__SUPERAGENT_PROMPT_END__' … __SUPERAGENT_PROMPT_END__`); if the
-   prompt itself contains a line that is exactly `__SUPERAGENT_PROMPT_END__`, pick a different
-   unique terminator instead.
+   to a file INSIDE your current working directory, with a relative path and a quoted heredoc:
+   `mkdir -p .superpowers/relay && cat >.superpowers/relay/<role>.prompt <<'__SUPERAGENT_PROMPT_END__' … __SUPERAGENT_PROMPT_END__`
+   (if the prompt itself contains a line that is exactly `__SUPERAGENT_PROMPT_END__`, pick a different
+   unique terminator instead). Do NOT use `mktemp`, `$TMPDIR` or `/tmp`: this session may be
+   worktree-isolated, and a heredoc into a path outside the worktree is refused as "too complex to
+   verify that it stays inside the worktree" — measured to cost every relay 1–3 wasted turns.
 2. **Bash.** Run, from your current working directory (the same checkout/worktree the prompt refers to):
-   `"${SUPERAGENT_BRIDGE:-<bridge-path>}" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$f" --role <role>`
+   `"${SUPERAGENT_BRIDGE:-<bridge-path>}" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$PWD/.superpowers/relay/<role>.prompt" --role <role>`
    Pass an explicit long timeout on the Bash tool call (`timeout: 7200000` ms, or the largest the
    tool accepts) — the bridge may run for many minutes and the tool's default cap would kill it
-   mid-run. Wait for it to finish. Never modify files yourself.
+   mid-run. Wait for it to finish. Never modify files yourself. Then `rm -f .superpowers/relay/<role>.prompt`
+   (one more Bash call) so the scratch file is never swept into a commit.
 3. If it exited 0: reply with its stdout **verbatim** as your final message — no preamble, no
    commentary, no summary.
 4. If it exited non-zero: reply with exactly `BRIDGE-FAILED exit=<code> harness=<harness>

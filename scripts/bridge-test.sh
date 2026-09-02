@@ -258,5 +258,124 @@ check "superenv: repo .superenv still overrides the harness template" bash -c "p
 check "bridge: --harness inherit runs SUPER_HARNESS (pi)"     bash -c "rm -f '$T/pi.argv'; SUPER_HARNESS=pi '$BRIDGE' --harness inherit --model inherit --effort inherit --cwd '$T/cwd' --prompt-file '$T/prompt.txt' >/dev/null 2>&1 && [ -f '$T/pi.argv' ]"
 check "bridge: --harness inherit defaults to claude when SUPER_HARNESS unset" bash -c "rm -f '$T/claude.argv'; unset SUPER_HARNESS; '$BRIDGE' --harness inherit --model inherit --effort inherit --cwd '$T/cwd' --prompt-file '$T/prompt.txt' >/dev/null 2>&1 && [ -f '$T/claude.argv' ]"
 
+# --- role-bridge: header + trailer lines in its own log (the evidence mix-e2e.sh asserts on). A bridged
+# pi/claude role used to leave a 0-byte log (only the CLI's stderr was captured), so nothing proved which
+# harness ran which role. stdout must stay exactly the CLI's final message.
+"$BRIDGE" --harness codex --model gpt-5.6-terra --effort medium --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role implementer >"$T/hdr.out" 2>"$T/hdr.err"
+hlog="$(sed -n 's/^role-bridge: log=//p' "$T/hdr.err")"
+check "bridge log: header is the first line"   bash -c "head -1 '$hlog' | grep -Eq '^role-bridge: start=[0-9]{8}T[0-9]{6}Z harness=codex model=gpt-5.6-terra effort=medium tools=role role=implementer cwd=$T/cwd\$'"
+check "bridge log: trailer is the last line"   bash -c "tail -1 '$hlog' | grep -Eq '^role-bridge: end=[0-9]{8}T[0-9]{6}Z exit=0 secs=[0-9]+ result_bytes=12\$'"
+check "bridge log: CLI chatter kept in between" grep -q 'progress chatter' "$hlog"
+check "bridge log: stdout unchanged"           [ "$(cat "$T/hdr.out")" = "RESULT-codex" ]
+"$BRIDGE" --harness pi --model openai-codex/gpt-5.6-sol --effort high --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role task-reviewer >/dev/null 2>"$T/hdr.err"
+hlog="$(sed -n 's/^role-bridge: log=//p' "$T/hdr.err")"
+check "bridge log (pi): header records the pin as given, effort separate" bash -c "head -1 '$hlog' | grep -q ' harness=pi model=openai-codex/gpt-5.6-sol effort=high tools=role role=task-reviewer '"
+check "bridge log (pi): exactly header + trailer when the CLI is silent" [ "$(wc -l <"$hlog" | tr -d ' ')" = 2 ]
+"$BRIDGE" --harness claude --model opus --effort medium --tools executor --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role executor >/dev/null 2>"$T/hdr.err"
+hlog="$(sed -n 's/^role-bridge: log=//p' "$T/hdr.err")"
+check "bridge log (claude): tools=executor recorded" bash -c "head -1 '$hlog' | grep -q ' harness=claude model=opus effort=medium tools=executor role=executor '"
+SHIM_MODE=fail "$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/hdr.err"
+hlog="$(sed -n 's/^role-bridge: log=//p' "$T/hdr.err")"
+check "bridge log: trailer exit=3 when the CLI fails"  bash -c "tail -1 '$hlog' | grep -Eq '^role-bridge: end=.* exit=3 secs=[0-9]+ result_bytes=0\$'"
+SHIM_MODE=empty "$BRIDGE" --harness claude --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>"$T/hdr.err"
+hlog="$(sed -n 's/^role-bridge: log=//p' "$T/hdr.err")"
+check "bridge log: trailer exit=4 on an empty result" bash -c "tail -1 '$hlog' | grep -Eq '^role-bridge: end=.* exit=4 '"
+check "bridge log: inherit model/effort recorded literally" bash -c "head -1 '$hlog' | grep -q ' model=inherit effort=inherit '"
+# A bridge killed mid-run leaves the header and no trailer — mix-e2e reports that row as exit=killed.
+SHIM_MODE=slow "$BRIDGE" --harness pi --model inherit --effort inherit --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role panelist >/dev/null 2>"$T/hdr.err" & bp=$!
+for i in $(seq 1 20); do grep -q 'log=' "$T/hdr.err" 2>/dev/null && break; sleep 0.1; done
+sleep 0.3
+kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill -TERM "$1" 2>/dev/null || true; }   # children first: the shim's `sleep 30` holds the bridge's $(…) pipe open
+kill_tree "$bp"; wait "$bp" 2>/dev/null
+hlog="$(sed -n 's/^role-bridge: log=//p' "$T/hdr.err")"
+check "bridge log: killed mid-run → header, no trailer" bash -c "[ \"\$(wc -l <'$hlog' | tr -d ' ')\" = 1 ] && head -1 '$hlog' | grep -q '^role-bridge: start='"
+
+# --- mix-e2e.sh helpers (sourced as a library with MIX_E2E_LIB=1; no phases run) ---
+MIX="$ROOT/scripts/mix-e2e.sh"
+check "mix: sources as a library (pulls in pi-e2e helpers + _common)" bash -c "MIX_E2E_LIB=1; . '$MIX'; type e2e_status_field >/dev/null && type superagent_role_model >/dev/null"
+check "mix: superenv pins claude supervisor, both pairs, single-quoted notify, extra last" bash -c "MIX_E2E_LIB=1; . '$MIX'; out=\$(mix_render_superenv 2m /tmp/ev.log codex:gpt-5.6-terra pi:openai-codex/gpt-5.6-sol 'SUPER_MODEL_PANEL=pi:openai-codex/gpt-5.6-sol'); grep -qx 'SUPER_HARNESS=claude' <<<\"\$out\" && grep -qx 'SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra' <<<\"\$out\" && grep -qx 'SUPER_MODEL_FIX_APPLIER=codex:gpt-5.6-terra' <<<\"\$out\" && grep -qx 'SUPER_MODEL_TASK_REVIEWER=pi:openai-codex/gpt-5.6-sol' <<<\"\$out\" && grep -qx 'SUPER_MODEL_RE_REVIEWER=pi:openai-codex/gpt-5.6-sol' <<<\"\$out\" && grep -q \"^SUPER_NOTIFY_CMD='.*SUPERAGENT_EVENT.*/tmp/ev.log.*'\$\" <<<\"\$out\" && [ \"\$(tail -1 <<<\"\$out\")\" = 'SUPER_MODEL_PANEL=pi:openai-codex/gpt-5.6-sol' ]"
+check "mix: superenv sources under set -u and notify appends the event" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_render_superenv 2m '$T/mev.log' codex:x pi:p/m >'$T/mse'; bash -uc 'set -a; . \"$T/mse\"; set +a; [ \"\$SUPER_HARNESS\" = claude ] && SUPERAGENT_EVENT=done bash -c \"\$SUPER_NOTIFY_CMD\"' && grep -qx done '$T/mev.log'"
+# A reference kv.sh that meets the default goal's contract → the deliverable check passes; break it → fails.
+mkdir -p "$T/kv/scripts"
+cat >"$T/kv/scripts/kv.sh" <<'EOF'
+#!/bin/sh
+f="${KV_FILE:-.kv}"; [ -f "$f" ] || : >"$f"
+case "$1" in
+  set) grep -v "^$2=" "$f" >"$f.tmp"; printf '%s=%s\n' "$2" "$3" >>"$f.tmp"; mv "$f.tmp" "$f" ;;
+  get) v=$(grep "^$2=" "$f" | cut -d= -f2-); [ -n "$v" ] || exit 1; printf '%s\n' "$v" ;;
+  del) grep -v "^$2=" "$f" >"$f.tmp"; mv "$f.tmp" "$f" ;;
+  list) sort "$f" ;;
+  *) exit 2 ;;
+esac
+EOF
+printf '#!/bin/sh\nexit 0\n' >"$T/kv/scripts/test.sh"
+check "mix: deliverables pass on a conforming kv.sh" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_assert_deliverables '$T/kv'"
+check "mix: deliverables leave no KV_FILE in the caller's env" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_assert_deliverables '$T/kv' >/dev/null; [ -z \"\${KV_FILE:-}\" ]"
+rm -rf "$T/kv2"; cp -R "$T/kv" "$T/kv2"; sed -i.bak 's/exit 1;/:;/' "$T/kv2/scripts/kv.sh"   # missing key no longer exits 1 (prints an empty line, exit 0)
+check "mix: deliverables fail when a missing key exits 0" bash -c "MIX_E2E_LIB=1; . '$MIX'; ! mix_assert_deliverables '$T/kv2' && mix_assert_deliverables '$T/kv2' | grep -q 'missing key'"
+rm -rf "$T/kv3"; cp -R "$T/kv" "$T/kv3"; printf '#!/bin/sh\nexit 1\n' >"$T/kv3/scripts/test.sh"
+check "mix: deliverables fail when test.sh fails" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_assert_deliverables '$T/kv3' | grep -q 'test.sh'"
+# Evidence table from a fixture bridge-log dir: three harnesses, one row older than `since`, one killed (no trailer).
+mkdir -p "$T/blog"
+printf 'role-bridge: start=20260901T120000Z harness=codex model=gpt-5.6-terra effort=medium tools=role role=implementer cwd=/w\nOpenAI Codex v0.152.0\nrole-bridge: end=20260901T120500Z exit=0 secs=300 result_bytes=40\n' >"$T/blog/implementer-a.log"
+printf 'role-bridge: start=20260901T120600Z harness=pi model=openai-codex/gpt-5.6-sol effort=high tools=role role=task-reviewer cwd=/w\nrole-bridge: end=20260901T120900Z exit=0 secs=180 result_bytes=90\n' >"$T/blog/task-reviewer-a.log"
+printf 'role-bridge: start=20260901T115900Z harness=claude model=opus effort=medium tools=executor role=executor cwd=/w\nrole-bridge: end=20260901T121000Z exit=0 secs=660 result_bytes=500\n' >"$T/blog/executor-a.log"
+printf 'role-bridge: start=20260901T110000Z harness=codex model=gpt-5.6-terra effort=medium tools=role role=implementer cwd=/w\nrole-bridge: end=20260901T110100Z exit=0 secs=60 result_bytes=1\n' >"$T/blog/implementer-old.log"
+printf 'role-bridge: start=20260901T121100Z harness=pi model=openai-codex/gpt-5.6-sol effort=high tools=role role=re-reviewer cwd=/w\n' >"$T/blog/re-reviewer-killed.log"
+printf 'role-bridge: start=20260901T121200Z harness=codex model=gpt-5.6-terra effort=medium tools=role role=fix-applier cwd=/w\nboom\nrole-bridge: end=20260901T121300Z exit=3 secs=60 result_bytes=0\n' >"$T/blog/fix-applier-fail.log"
+: >"$T/blog/empty-legacy.log"; printf 'not a bridge log\n' >"$T/blog/junk.log"
+check "mix: evidence rows sorted by start, older-than-since and non-bridge logs excluded" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog' '$T/nonexistent'); [ \"\$(wc -l <<<\"\$r\" | tr -d ' ')\" = 5 ] && [ \"\$(awk 'NR==1{print \$1}' <<<\"\$r\")\" = executor ] && ! grep -q implementer-old <<<\"\$r\""
+check "mix: evidence row fields role harness model effort exit secs" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_bridge_evidence 20260901T115900Z '$T/blog' | grep -q '^implementer codex gpt-5.6-terra medium 0 300 20260901T120000Z $T/blog/implementer-a.log\$'"
+check "mix: evidence killed row → exit=killed secs=-"    bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_bridge_evidence 20260901T115900Z '$T/blog' | grep -q '^re-reviewer pi openai-codex/gpt-5.6-sol high killed - '"
+check "mix: evidence_has matches role+harness+model with exit 0" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); mix_evidence_has \"\$r\" implementer codex gpt-5.6-terra && mix_evidence_has \"\$r\" task-reviewer pi && mix_evidence_has \"\$r\" executor claude"
+check "mix: evidence_has rejects wrong harness/model and non-zero exit" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); ! mix_evidence_has \"\$r\" implementer pi && ! mix_evidence_has \"\$r\" implementer codex gpt-5.6-sol && ! mix_evidence_has \"\$r\" fix-applier codex && ! mix_evidence_has \"\$r\" re-reviewer pi"
+check "mix: evidence_count by role regex and harness" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); [ \"\$(mix_evidence_count \"\$r\" 'implementer|fix-applier')\" = 2 ] && [ \"\$(mix_evidence_count \"\$r\" '.*' pi)\" = 2 ] && [ \"\$(mix_evidence_count \"\$r\" 'panelist.*')\" = 0 ] && [ \"\$(mix_evidence_count '' '.*')\" = 0 ]"
+# Header-less logs (a pre-0.6.5 bridge): role + start from the file name, harness "legacy" — or "legacy-codex"
+# with the model from codex's banner — never counted as proof (found by mix-e2e.sh run 1: the relays ran the
+# INSTALLED plugin's bridge, not the checkout's).
+printf 'OpenAI Codex v0.152.0\n--------\nworkdir: /w\nmodel: gpt-5.6-terra\nprovider: openai\n' >"$T/blog/implementer-20260901T121400Z-1.log"
+: >"$T/blog/task-reviewer-20260901T121500Z-2.log"
+: >"$T/blog/task-reviewer-20260901T100000Z-3.log"   # older than since
+check "mix: legacy codex log → legacy-codex row with banner model" bash -c "MIX_E2E_LIB=1; . '$MIX'; mix_bridge_evidence 20260901T115900Z '$T/blog' | grep -q '^implementer legacy-codex gpt-5.6-terra - - - 20260901T121400Z '"
+check "mix: legacy empty log → legacy row; older-than-since excluded" bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); grep -q '^task-reviewer legacy - - - - 20260901T121500Z ' <<<\"\$r\" && ! grep -q 20260901T100000Z <<<\"\$r\""
+check "mix: legacy rows are never proof"  bash -c "MIX_E2E_LIB=1; . '$MIX'; r=\$(mix_bridge_evidence 20260901T115900Z '$T/blog'); ! mix_evidence_has \"\$r\" implementer legacy-codex && [ \"\$(mix_evidence_count \"\$r\" '.*' legacy)\" = 1 ]"
+rm -f "$T/blog/implementer-20260901T121400Z-1.log" "$T/blog/task-reviewer-20260901T121500Z-2.log" "$T/blog/task-reviewer-20260901T100000Z-3.log"
+printf 'x\n{"text":"A Final Report that begins `BRIDGE-FAILED` is a failed dispatch"}\n{"text":"BRIDGE-FAILED exit=3 harness=pi role=task-reviewer log=/x"}\n' >"$T/ticklog"
+check "mix: bridge_failed_count matches reports, not prose" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_bridge_failed_count '$T/ticklog')\" = 1 ] && [ \"\$(mix_bridge_failed_count '$T/nope')\" = 0 ]"
+printf 'prose mentions BRIDGE-FAILED but no result\n' >"$T/ticklog0"
+check "mix: bridge_failed_count = single 0 on a match-free file (grep -c prints 0 AND exits 1)" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_bridge_failed_count '$T/ticklog0')\" = 0 ]"
+PL=$'Installed plugins:\n\n  ❯ other@m\n    Version: 1.0.0\n    Scope: user\n    Status: ✘ disabled\n\n  ❯ superagent@superagent-marketplace\n    Version: 0.6.4\n    Scope: user\n    Status: ✔ enabled\n\n  ❯ zzz@m\n    Version: 9\n'
+check "mix: plugin_field reads the superagent block only" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_plugin_field \"\$1\" Version)\" = 0.6.4 ] && mix_plugin_field \"\$1\" Status | grep -q enabled" _ "$PL"
+check "mix: plugin_field empty when the plugin is absent" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ -z \"\$(mix_plugin_field 'Installed plugins:' Version)\" ]"
+check "mix: plugin_marketplace + installed_bridge path" bash -c "MIX_E2E_LIB=1; . '$MIX'; [ \"\$(mix_plugin_marketplace \"\$1\")\" = superagent-marketplace ] && [ \"\$(MIX_E2E_PLUGIN_CACHE=/c mix_installed_bridge \"\$1\")\" = /c/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh ]" _ "$PL"
+# The shimmed dry-runs below need an "installed" bridge with the evidence header.
+mkdir -p "$T/cache/superagent-marketplace/superagent/0.6.4/scripts"; cp "$BRIDGE" "$T/cache/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh"
+export MIX_E2E_PLUGIN_CACHE="$T/cache"
+# --dry-run under shims: claude must list the plugin, pi must list the reviewer's provider.
+cat >"$SHIM/claude" <<EOF
+#!/usr/bin/env bash
+case "\$1 \$2" in "plugin list") printf '%s\n' "\$MIX_PLUGIN_LIST" ;; *) echo "2.1.252 (Claude Code)" ;; esac
+EOF
+cat >"$SHIM/pi" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in --list-models) printf 'openai-codex  gpt-5.6-sol  272K\n' ;; *) echo 0.84.4 ;; esac
+EOF
+cat >"$SHIM/codex" <<'EOF'
+#!/usr/bin/env bash
+echo ok
+EOF
+chmod +x "$SHIM/claude" "$SHIM/pi" "$SHIM/codex"
+export MIX_PLUGIN_LIST="$PL"
+check "mix: --dry-run exits 0 and prints the mix" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r '$MIX' --dry-run 2>&1 | tee '$T/mix-dry.out' | grep -q 'nothing created or armed' && grep -q 'implementer+fix-applier=codex:gpt-5.6-terra' '$T/mix-dry.out'"
+check "mix: --dry-run writes no report"          bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REPORT='$T/mix-dry-report.md' '$MIX' --dry-run >/dev/null 2>&1; [ ! -f '$T/mix-dry-report.md' ]"
+check "mix: preflight refuses a pin outside claude+codex+pi" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REVIEWER=codex:gpt-5.6-sol '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'must name pi' '$T/mix-err'"
+check "mix: preflight refuses when pi lacks the reviewer's provider" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REVIEWER=pi:openai/gpt-5 '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q \"provider 'openai'\" '$T/mix-err'"
+check "mix: preflight refuses when the plugin is disabled" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/✔ enabled/✘ disabled/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'not enabled' '$T/mix-err'"
+mkdir -p "$T/cache/superagent-marketplace/superagent/0.1.0/scripts"; cp "$BRIDGE" "$T/cache/superagent-marketplace/superagent/0.1.0/scripts/role-bridge.sh"   # the mismatching version still ships a header-carrying bridge
+check "mix: preflight WARNs (not fails) on a plugin version mismatch" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/0.6.4/0.1.0/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 0 ] && grep -q 'WARN installed claude plugin is 0.1.0' '$T/mix-err'"
+check "mix: preflight refuses an installed bridge without the evidence header" bash -c "mkdir -p '$T/cache-old/superagent-marketplace/superagent/0.6.4/scripts'; printf '#!/bin/sh\necho old\n' >'$T/cache-old/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh'; cd '$T/cwd' && MIX_E2E_PLUGIN_CACHE='$T/cache-old' MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'predates the evidence header' '$T/mix-err'"
+check "mix: preflight refuses when the installed bridge is missing" bash -c "cd '$T/cwd' && MIX_E2E_PLUGIN_CACHE='$T/cache-none' MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'installed bridge not found' '$T/mix-err'"
+check "mix: bad flag → exit 2"                   bash -c "'$MIX' --bogus >/dev/null 2>&1; [ \$? = 2 ]"
+
 echo "bridge-test: $FAILS failure(s)"
 [ "$FAILS" -eq 0 ]
