@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.6 — 2026-09-01
+
+- **Fix: model defaults pin full IDs, and the Pi build gets real defaults.** `templates/superenv.default`
+  pinned the Claude dispatch and review roles to the `opus` *alias*, which floats to whatever the CLI
+  currently maps it to; they now pin `claude:claude-opus-4-8` (the implementer/fix-applier `sonnet`
+  tier is unchanged). The tick's own fallback for an unset or `inherit` supervisor on the Claude harness
+  is `claude-opus-4-8` too. The Pi build's generated `superenv.default` shipped every `SUPER_MODEL_*`
+  as `inherit` (whatever `pi`'s settings.json says); it now mirrors the Codex build through the
+  `openai-codex` provider — `pi:openai-codex/gpt-5.6-sol` for supervisor/planner/executor/panel and
+  the reviewers/fix-planner, `pi:openai-codex/gpt-5.6-terra` for implementer/fix-applier. The three
+  build scripts' model seds matched the literal tier names and would have left a full ID through
+  untouched (Pi's would have produced `inherit-opus-4-8`); they now match any `claude:<value>`.
+  `bridge-test.sh` expectations, README tables and `scripts/README.md` updated. **Re-run
+  `superagent:init`** in repos that rely on the plugin defaults: the Claude per-role agent definitions
+  carry the model pin, and a repo whose `.superenv` says only `SUPER_HARNESS=pi` now gets pinned
+  models instead of `inherit`.
+
 ## 0.6.5 — 2026-09-01
 
 - **`scripts/mix-e2e.sh` — scripted end-to-end testbench for multi-harness role mixing.** From an

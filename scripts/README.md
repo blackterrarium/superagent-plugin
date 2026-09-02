@@ -44,8 +44,9 @@ scheduler (systemd/launchd/cron) ──> superagent-tick.sh ──> claude -p (O
 
 The tick **always passes `--model` explicitly**, so it uses the pinned model regardless of the
 CLI's own configured default. Resolution order: `TICK_MODEL` env var (if set) > `SUPER_MODEL_SUPERVISOR`
-(from the `.superenv` layer below) > `opus`. A headless tick has no session to inherit from, so a
-`SUPER_MODEL_SUPERVISOR` value of `inherit` also resolves to `opus`.
+(from the `.superenv` layer below) > `claude-opus-4-8`. A headless tick has no session to inherit from, so a
+`SUPER_MODEL_SUPERVISOR` value of `inherit` also resolves to `claude-opus-4-8` (the full ID; the `opus`
+alias floats with the CLI).
 Override with `--model <slug>` on `launch.sh` / `install-timer.sh`
 (stored per goal as `TICK_MODEL`) or the `TICK_MODEL` env var. The value passes verbatim to
 `claude --model`, so a tier name (`opus`) and a full model ID (`claude-fable-5`) both work — no
@@ -99,7 +100,7 @@ environment.
 
 - **cursor:** auth is the CLI's stored login or `CURSOR_API_KEY` in the target repo's `.env`; model
   values are Cursor model names (`agent --list-models`), with `inherit` resolving to the CLI's own
-  default (`auto`) rather than `opus`; the `cursor/` build must exist in the plugin repo
+  default (`auto`) rather than `claude-opus-4-8`; the `cursor/` build must exist in the plugin repo
   (`scripts/build-cursor-skills.sh`).
 - **codex:** skills load via the *installed* Codex plugin, not a `--plugin-dir` flag — install once
   with `codex plugin marketplace add <plugin-repo>/codex && codex plugin add

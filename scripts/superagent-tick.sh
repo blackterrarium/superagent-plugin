@@ -192,10 +192,11 @@ else
   SKILLS_ROOT="$PLUGIN_ROOT"
   # Model: always passed explicitly (--model) so the tick uses THIS model regardless
   # of the CLI's own configured default.
-  # TICK_MODEL > SUPER_MODEL_SUPERVISOR > opus; a headless tick has no session
-  # model, so "inherit" also resolves to opus.
-  TICK_MODEL="${TICK_MODEL:-${SUPER_MODEL_SUPERVISOR:-opus}}"
-  [[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL="opus"
+  # TICK_MODEL > SUPER_MODEL_SUPERVISOR > claude-opus-4-8; a headless tick has no session
+  # model, so "inherit" also resolves to claude-opus-4-8 (the full ID, never the "opus" alias,
+  # which floats to whatever the CLI currently maps it to).
+  TICK_MODEL="${TICK_MODEL:-${SUPER_MODEL_SUPERVISOR:-claude-opus-4-8}}"
+  [[ "$TICK_MODEL" == "inherit" ]] && TICK_MODEL="claude-opus-4-8"
 fi
 
 # Role-value grammar ([harness:]<model>) — the supervisor must be native to this harness:
@@ -209,10 +210,10 @@ if [[ -n "$TICK_MODEL" ]]; then
   TICK_MODEL="$(superagent_role_model "$TICK_MODEL")"
   # A same-harness prefix on an inherit value ("claude:inherit") strips to the literal
   # string "inherit", which would reach the CLI as a model NAME. Re-apply this harness's
-  # inherit mapping after the strip (claude: a headless tick has no session model -> opus;
+  # inherit mapping after the strip (claude: a headless tick has no session model -> claude-opus-4-8;
   # codex/cursor: empty -> omit the model flag, the CLI's own default applies).
   if [[ "$TICK_MODEL" == "inherit" ]]; then
-    if [[ "$HARNESS" == claude ]]; then TICK_MODEL="opus"; else TICK_MODEL=""; fi
+    if [[ "$HARNESS" == claude ]]; then TICK_MODEL="claude-opus-4-8"; else TICK_MODEL=""; fi
   fi
 fi
 # A Pi supervisor model must be <provider>/<id> (an optional ":<level>" suffix is allowed) —

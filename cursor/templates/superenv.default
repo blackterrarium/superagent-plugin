@@ -13,16 +13,16 @@
 # (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=inherit      # the superagent tick itself
-SUPER_MODEL_PLANNER=inherit         # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit        # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
-SUPER_MODEL_PANEL=inherit           # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_SUPERVISOR=inherit       # the superagent tick itself
+SUPER_MODEL_PLANNER=inherit          # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=inherit         # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_PANEL=inherit            # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=inherit
 SUPER_MODEL_FIX_APPLIER=inherit
 SUPER_MODEL_TASK_REVIEWER=inherit
 SUPER_MODEL_RE_REVIEWER=inherit
-SUPER_MODEL_BRANCH_REVIEWER=inherit # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=inherit     # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_BRANCH_REVIEWER=inherit  # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=inherit      # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED roles; inherit = the CLI default subagent model
 
