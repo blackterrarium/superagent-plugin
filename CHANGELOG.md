@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.7 — 2026-09-01
+
+- **Codex and Pi builds pin the bridge relay model instead of `inherit`.** `SUPER_BRIDGE_RELAY_MODEL`
+  in the generated `superenv.default` shipped as `inherit` on both builds, so the relay subagent for a
+  bridged role ran on whatever the CLI's default subagent model happened to be. It now pins the
+  sonnet-tier peer the builds already use for implementer/fix-applier: `gpt-5.6-terra` on Codex and
+  `openai-codex/gpt-5.6-terra` on Pi (bare native name, no harness prefix, as the key requires). The
+  Claude build stays `sonnet`; the Cursor build stays `inherit` (its CLI has no relay-model choice
+  beyond `auto`). README key table and the Codex README updated. **Re-run `superagent:init`** on Pi
+  repos that bridge an SDD role: the `.pi/agents/super-<role>.md` relay definition carries the
+  `model:` line.
+
 ## 0.6.6 — 2026-09-01
 
 - **Fix: model defaults pin full IDs, and the Pi build gets real defaults.** `templates/superenv.default`

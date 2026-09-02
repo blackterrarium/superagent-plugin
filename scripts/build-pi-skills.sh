@@ -188,7 +188,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_BRANCH_REVIEWER=pi:openai-codex\/gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_FIX_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_FIX_PLANNER=pi:openai-codex\/gpt-5.6-sol/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=pi\1# this is the Pi build — the external driver fires the Pi CLI (pi -p)/' \
-  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay agent model for a BRIDGED SDD role (.pi\/agents relay definition); inherit = the pi-subagents default; never a weak model — it answers instead of relaying/' \
+  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=openai-codex\/gpt-5.6-terra\1# relay agent model for a BRIDGED SDD role (.pi\/agents relay definition; bare <provider>\/<model>, no harness prefix); the sonnet-tier peer, same as implementer\/fix-applier — never a weak model (it answers instead of relaying) and never inherit (the pi-subagents default is unpinned)/' \
   -e '/^SUPER_PANEL_AGENT_TYPE=/d' \
   >"$TMP/templates/superenv.default"
 
