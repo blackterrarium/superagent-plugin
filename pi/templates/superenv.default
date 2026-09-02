@@ -24,7 +24,7 @@ SUPER_MODEL_TASK_REVIEWER=pi:openai-codex/gpt-5.6-sol
 SUPER_MODEL_RE_REVIEWER=pi:openai-codex/gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=pi:openai-codex/gpt-5.6-sol  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=pi:openai-codex/gpt-5.6-sol      # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_BRIDGE_RELAY_MODEL=inherit         # relay agent model for a BRIDGED SDD role (.pi/agents relay definition); inherit = the pi-subagents default; never a weak model — it answers instead of relaying
+SUPER_BRIDGE_RELAY_MODEL=openai-codex/gpt-5.6-terra         # relay agent model for a BRIDGED SDD role (.pi/agents relay definition; bare <provider>/<model>, no harness prefix); the sonnet-tier peer, same as implementer/fix-applier — never a weak model (it answers instead of relaying) and never inherit (the pi-subagents default is unpinned)
 
 # ── Reasoning effort per agent role ───────────────────────────────
 # Values are effort names in the ROLE's harness, or "inherit" (= the CLI/model default).

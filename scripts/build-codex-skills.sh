@@ -249,7 +249,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_FIX_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
-  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
+  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra\1# relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer\/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)/' \
   >"$TMP/plugins/superagent/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ This build differs from the Claude Code plugin:
   roles spawn a relay from `templates/relay-preamble.md`.
 - **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
   (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
-  (default `inherit`) sets the relay subagent's model.
+  (default `gpt-5.6-terra`, the sonnet-tier peer) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone

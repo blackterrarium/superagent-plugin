@@ -20,7 +20,7 @@ This build differs from the Claude Code plugin:
   roles spawn a relay from `templates/relay-preamble.md`.
 - **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
   (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
-  (default `inherit`) sets the relay subagent's model.
+  (default `gpt-5.6-terra`, the sonnet-tier peer) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone

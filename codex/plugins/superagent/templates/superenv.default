@@ -24,7 +24,7 @@ SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol      # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
-SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED roles; inherit = the CLI default subagent model
+SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra         # relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)
 
 # ── Reasoning effort per agent role ───────────────────────────────
 # Values are Codex effort names, or "inherit" (= the CLI/model default).

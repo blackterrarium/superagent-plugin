@@ -351,7 +351,7 @@ Defaults shown are the Claude Code build's. Other builds differ; see
 | SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | |
 | SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | |
 | SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | |
-| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex/Cursor builds: `inherit`) | Model of the relay subagent for a bridged role. Bare native name, no harness prefix. It only copies a prompt and returns a result, so keep it cheap, but do not weaken to `haiku`: measured to answer the prompt itself instead of relaying. |
+| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | Model of the relay subagent for a bridged role. Bare native name, no harness prefix. It only copies a prompt and returns a result, so keep it cheap, but do not weaken to `haiku`: measured to answer the prompt itself instead of relaying. Every build that has a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Ticks fire on an interval, so per-tick cost compounds. `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | |
 | SUPER_EFFORT_EXECUTOR | `medium` | The hard thinking is delegated to the reviewers and fix planner. |
