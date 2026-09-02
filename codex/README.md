@@ -11,7 +11,7 @@ This build differs from the Claude Code plugin:
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
 - **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Codex model name
-  (e.g. `gpt-5.1-codex`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  (e.g. `gpt-5.6-sol`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
   `pi:openai/gpt-5`, …) is valid too but BRIDGED — dispatched through a relay that runs the shipped
   `scripts/role-bridge.sh`.
 - **Effort keys** (`SUPER_EFFORT_*`) take Codex effort names (`none | minimal | low | medium |

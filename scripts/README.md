@@ -107,7 +107,7 @@ environment.
   superagent@superagent`; the tick's own file-read prompt still needs the build tree on disk at
   `<plugin-repo>/codex` (`scripts/build-codex-skills.sh`). Auth is `OPENAI_API_KEY` in the target
   repo's `.env`, else the CLI's own stored login (`codex login`). Model values are Codex model
-  names (e.g. `gpt-5.1-codex`), with `inherit` omitting `-m` (the CLI's `config.toml` default
+  names (e.g. `gpt-5.6-sol`), with `inherit` omitting `-m` (the CLI's `config.toml` default
   applies). Sandbox posture is the separate `SUPER_CODEX_SANDBOX` knob (default
   `danger-full-access`, mapping to `--dangerously-bypass-approvals-and-sandbox` — parity with the
   unsandboxed claude harness; the alternative `workspace-write` maps to `--sandbox workspace-write
