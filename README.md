@@ -230,6 +230,55 @@ tick itself; the other nine are dispatched by it.
 
 Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
 
+How the roles hand work to each other over one goal. The supervisor tick dispatches the planner and
+the executor, one per tick; the executor runs the six SDD roles inside its own process; escalations
+flow back up to the supervisor and its panel. Any role's model key can point at another harness, in
+which case a relay subagent runs it through the bridge script.
+
+```mermaid
+flowchart TD
+    SUP["SUPERVISOR<br/>the superagent tick, fired by the scheduler"]
+    SUP -- "status WAITING FOR PLAN" --> PL["PLANNER<br/>supergoal / superplan: writes the next plan"]
+    PL -- "plan PR, merged by the supervisor" --> SUP
+    SUP -- "status WAITING FOR RUN" --> EX
+
+    subgraph RUN["superrun, a separate CLI process"]
+        direction TB
+        EX["EXECUTOR<br/>the SDD controller: dispatches every role below,<br/>filters review findings by confidence"]
+        subgraph TASK["per plan task"]
+            direction TB
+            IMPL["IMPLEMENTER<br/>writes code + tests for one task"]
+            TR["TASK_REVIEWER<br/>spec + code-quality review"]
+            RND{"open findings?<br/>fix round R of 5"}
+            IMPL2["IMPLEMENTER, resumed<br/>fixes the findings"]
+            FP["FIX_PLANNER<br/>diagnoses the root cause"]
+            FA["FIX_APPLIER<br/>applies the prescribed edit"]
+            RR["RE_REVIEWER<br/>checks only the open findings"]
+            IMPL --> TR --> RND
+            RND -- "R = 1..3" --> IMPL2 --> RR
+            RND -- "R = 4..5" --> FP --> FA --> RR
+            RR -- "still open: next round" --> RND
+        end
+        BR["BRANCH_REVIEWER<br/>whole-branch review, once per plan"]
+        EX -- "next task" --> IMPL
+        RND -- "clean, all tasks done" --> BR
+        BR -- "one fix dispatch + re-review, then code PR" --> EX
+    end
+
+    EX -- "Final Report: code PR, merged by the supervisor" --> SUP
+    EX -- "BLOCKED / CI red / critical finding" --> SUP
+    SUP -- "L7 rung 1" --> PANEL["PANEL<br/>3 read-only agents, each recommends a resolution"]
+    PANEL -- "supervisor adjudicates: retry / re-plan / decline" --> SUP
+    SUP -- "L7 rung 2: unresolved" --> USER["WAITING FOR INPUT<br/>the loop parks until the user answers"]
+
+    subgraph BRIDGE["any role pinned to another harness"]
+        direction LR
+        RELAY["relay subagent<br/>SUPER_BRIDGE_RELAY_MODEL"] --> CLI["role-bridge.sh runs the foreign CLI<br/>codex / pi / cursor / claude"]
+    end
+    IMPL -. "e.g. SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra" .-> RELAY
+```
+
+
 ### Model values
 
 A model key accepts `inherit` (the session model; a headless tick has no session, so the supervisor
