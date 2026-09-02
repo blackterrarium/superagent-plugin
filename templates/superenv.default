@@ -2,7 +2,7 @@
 # Precedence: env var > repo-root .superenv > this plugin default.
 # Model values: "inherit", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi
 # and <model> is that harness's native model string — claude: a tier (sonnet|opus|haiku|fable) or
-# full ID (claude-fable-5); codex: a Codex model (gpt-5.6-sol); cursor: `agent --list-models`;
+# full ID (claude-opus-4-8); codex: a Codex model (gpt-5.6-sol); cursor: `agent --list-models`;
 # pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the
 # model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a "/" → pi).
 # A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same
@@ -14,16 +14,16 @@
 # (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=claude:opus      # the superagent tick itself
-SUPER_MODEL_PLANNER=claude:opus         # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=claude:opus        # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
-SUPER_MODEL_PANEL=claude:opus           # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_SUPERVISOR=claude:claude-opus-4-8       # the superagent tick itself
+SUPER_MODEL_PLANNER=claude:claude-opus-4-8          # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=claude:claude-opus-4-8         # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_PANEL=claude:claude-opus-4-8            # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=claude:sonnet
 SUPER_MODEL_FIX_APPLIER=claude:sonnet
-SUPER_MODEL_TASK_REVIEWER=claude:opus
-SUPER_MODEL_RE_REVIEWER=claude:opus
-SUPER_MODEL_BRANCH_REVIEWER=claude:opus # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=claude:opus     # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_TASK_REVIEWER=claude:claude-opus-4-8
+SUPER_MODEL_RE_REVIEWER=claude:claude-opus-4-8
+SUPER_MODEL_BRANCH_REVIEWER=claude:claude-opus-4-8  # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=claude:claude-opus-4-8      # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=sonnet         # model of the thin relay subagent that runs role-bridge.sh for a BRIDGED role (bare native model name or inherit — no harness prefix; the relay always runs on SUPER_HARNESS); do not weaken to haiku — it answers the prompt itself instead of relaying
 

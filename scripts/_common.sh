@@ -278,8 +278,8 @@ load_superenv() {
   set -a
   [[ -f "$plugin_root/templates/superenv.default" ]] && . "$plugin_root/templates/superenv.default"
   # The harness build's own template layers over the Claude default, so a repo whose .superenv
-  # says only SUPER_HARNESS=pi gets that harness's defaults (SUPER_MODEL_SUPERVISOR=inherit, …)
-  # instead of claude:opus — which the pi tick refuses with exit 11. When the tick already runs
+  # says only SUPER_HARNESS=pi gets that harness's defaults (SUPER_MODEL_SUPERVISOR=pi:openai-codex/gpt-5.6-sol, …)
+  # instead of claude:claude-opus-4-8 — which the pi tick refuses with exit 11. When the tick already runs
   # from a harness build (plugin_root IS pi/), the nested path does not exist and this is a no-op.
   [[ -n "$harness_dir" && -f "$plugin_root/$harness_dir/templates/superenv.default" ]] && . "$plugin_root/$harness_dir/templates/superenv.default"
   [[ -f "$repo/.superenv" ]] && . "$repo/.superenv"

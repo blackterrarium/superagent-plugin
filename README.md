@@ -212,7 +212,7 @@ minimal | low | medium | high | xhigh | max | inherit` (a `:<level>` suffix on t
 Out-of-domain values always WARN and fall back to `inherit` the same way, regardless of harness.
 `inherit` means no effort flag is passed, so the CLI's own default applies. The Claude build pins
 every *native* role: the four dispatch roles (supervisor/planner/executor/panel) default to
-`opus` at effort `medium`/`high`/`medium`/`xhigh` respectively, and the SDD worker roles keep
+`claude-opus-4-8` (the full ID — the `opus` alias floats with the CLI) at effort `medium`/`high`/`medium`/`xhigh` respectively, and the SDD worker roles keep
 their nonzero efforts (`medium` for implementer/fix-applier, `high` for the reviewers and
 fix-planner, `xhigh` for the branch reviewer) — see the table below. The Agent tool has no effort
 parameter, so on the Claude build a non-`inherit` effort on any subagent role pins via the
@@ -220,9 +220,11 @@ per-role agent definition `superagent:init` generates (a relay definition, gener
 `templates/super-role-bridge-agent.md`, for a bridged role; a real one otherwise) — with these
 defaults that is the normal path, so a repo whose `.claude/agents/super-*.md` files are missing
 (e.g. a hand-trimmed `.superenv` falling through to the plugin defaults) needs a re-run of init.
-The Codex build maps the `opus` pins to `gpt-5.6-sol` (and implementer/fix-applier to
+The Codex build maps the `claude-opus-4-8` pins to `gpt-5.6-sol` (and implementer/fix-applier to
 `gpt-5.6-terra`) with the same efforts and generates relay spawns from
-`templates/relay-preamble.md` for a bridged role instead of an agent-definition file; the Cursor
+`templates/relay-preamble.md` for a bridged role instead of an agent-definition file; the Pi build
+mirrors the Codex defaults through the `openai-codex` provider (`pi:openai-codex/gpt-5.6-sol` /
+`pi:openai-codex/gpt-5.6-terra`, the same efforts); the Cursor
 build ships every model and effort key as `inherit` by default, since Claude tier names are not
 valid Cursor model names and the Cursor CLI has no effort control, but still supports bridged
 roles through the same relay-definition mechanism as Claude when a role key is set explicitly.
@@ -231,16 +233,16 @@ its default and why it must not be weakened to `haiku`.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_MODEL_SUPERVISOR | `claude:opus` | Model for the superagent tick itself. (`inherit` = the session model; a headless tick has no session, so `inherit` resolves to `opus` there.) |
-| SUPER_MODEL_PLANNER | `claude:opus` | Model for the `superplan` / `supergoal` dispatch subagent — plan quality has the most downstream leverage, so this stays on a strong model. |
-| SUPER_MODEL_EXECUTOR | `claude:opus` | Model for `superrun` (the SDD controller), which runs as its own CLI process via `role-bridge.sh --tools executor`, never as a subagent (issue #25) — it applies the review confidence filter itself, so it needs judgment. |
-| SUPER_MODEL_PANEL | `claude:opus` | Model for the L7 escalation panel (3 read-only agents). |
+| SUPER_MODEL_SUPERVISOR | `claude:claude-opus-4-8` | Model for the superagent tick itself. (`inherit` = the session model; a headless tick has no session, so `inherit` resolves to `claude-opus-4-8` there.) |
+| SUPER_MODEL_PLANNER | `claude:claude-opus-4-8` | Model for the `superplan` / `supergoal` dispatch subagent — plan quality has the most downstream leverage, so this stays on a strong model. |
+| SUPER_MODEL_EXECUTOR | `claude:claude-opus-4-8` | Model for `superrun` (the SDD controller), which runs as its own CLI process via `role-bridge.sh --tools executor`, never as a subagent (issue #25) — it applies the review confidence filter itself, so it needs judgment. |
+| SUPER_MODEL_PANEL | `claude:claude-opus-4-8` | Model for the L7 escalation panel (3 read-only agents). |
 | SUPER_MODEL_IMPLEMENTER | `claude:sonnet` | Model for SDD implementer tasks. |
 | SUPER_MODEL_FIX_APPLIER | `claude:sonnet` | Model for SDD fix-applier tasks. |
-| SUPER_MODEL_TASK_REVIEWER | `claude:opus` | Model for the per-task SDD reviewer. |
-| SUPER_MODEL_RE_REVIEWER | `claude:opus` | Model for the SDD re-reviewer (post-fix). |
-| SUPER_MODEL_BRANCH_REVIEWER | `claude:opus` | Model for the final whole-branch reviewer. |
-| SUPER_MODEL_FIX_PLANNER | `claude:opus` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
+| SUPER_MODEL_TASK_REVIEWER | `claude:claude-opus-4-8` | Model for the per-task SDD reviewer. |
+| SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | Model for the SDD re-reviewer (post-fix). |
+| SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | Model for the final whole-branch reviewer. |
+| SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | Model for fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
 | SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex/Cursor builds: `inherit`) | Model of the thin relay subagent that runs `role-bridge.sh` for a bridged role — it only copies a prompt and returns a result, so keep it cheap; do not weaken to `haiku` — measured to answer the prompt itself instead of relaying. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort for the superagent tick itself (claude: `--effort`; codex: `-c model_reasoning_effort=`; pi: `--thinking`; `inherit` passes no effort flag). Ticks fire on an interval, so per-tick cost compounds — `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Reasoning effort for the `superplan` / `supergoal` dispatch subagent. |
