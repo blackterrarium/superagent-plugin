@@ -1,6 +1,7 @@
 {
   "name": "superagent-pi",
-  "version": "0.6.8",
+  "version": "0.6.9",
+  "license": "MIT",
   "description": "superagent plugin — Pi build (external unattended driver only)",
   "pi": { "skills": ["skills"] }
 }

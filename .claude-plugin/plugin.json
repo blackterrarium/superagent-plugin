@@ -1,7 +1,8 @@
 {
   "name": "superagent",
   "description": "Plan-tree authoring (supergoal/superplan) and autonomy-loop execution (superagent/superrun) skills, with an external unattended driver",
-  "version": "0.6.8",
+  "version": "0.6.9",
+  "license": "MIT",
   "author": { "name": "Eugene Chai", "email": "eugene.chai@gmail.com" },
   "repository": "https://github.com/blackterrarium/superagent-plugin",
   "keywords": ["planning", "autonomy-loop", "subagents", "workflows"]

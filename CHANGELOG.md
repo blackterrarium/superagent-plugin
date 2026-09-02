@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.9 — 2026-09-02
+
+- **Relicensed under MIT.** The repository now ships a `LICENSE` file (MIT, copyright 2026 Eugene
+  Chai). Every canonical skill under `skills/` and its generated Cursor, Codex, and Pi copies now
+  declare `license: MIT` in frontmatter instead of `all rights reserved`, all four plugin manifests
+  gain a `"license": "MIT"` field (the three `scripts/build-*-skills.sh` emit it, so a rebuild
+  keeps it), and the README's License section no longer describes the repo as private.
+
 ## 0.6.8 — 2026-09-02
 
 - **`scripts/pi-smoke.sh` gains T4b, the pi→claude relay round trip.** T4 only proved a Pi

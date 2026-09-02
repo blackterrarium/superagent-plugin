@@ -1,7 +1,7 @@
 ---
 name: superfinish
 description: Use after an implementation plan from a goal folder's plans/ subfolder has been executed — captures findings, writes a closeout report to reports/, annotates the plan, and advances the parent seed's progress-report table. Bookkeeping only; never executes plan work.
-license: all rights reserved
+license: MIT
 related skills: superplan, supertraverse
 ---
 

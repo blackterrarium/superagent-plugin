@@ -1,7 +1,7 @@
 ---
 name: supertraverse
 description: Use when traversing a tree of seed/master/implementation plans — descending a progress-report table's Plan links to find the next task (planning mode = next available task to plan; execution mode = next written-but-unexecuted leaf plan), or ascending from a leaf plan to the root updating ancestor statuses. Shared by superplan, superrun, and superfinish.
-license: all rights reserved
+license: MIT
 ---
 
 <!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/

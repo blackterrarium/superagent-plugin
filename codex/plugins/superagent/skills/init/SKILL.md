@@ -1,7 +1,7 @@
 ---
 name: init
 description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent, and add the loop-status gitignore entry. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
-license: all rights reserved
+license: MIT
 ---
 
 <!-- GENERATED FILE — Codex build. Do not edit by hand: edit the canonical skill under skills/

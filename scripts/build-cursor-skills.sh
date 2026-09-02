@@ -246,6 +246,7 @@ cat >"$TMP/.cursor-plugin/plugin.json" <<EOF
   "name": "superagent",
   "description": "Plan-tree authoring (supergoal/superplan) and autonomy-loop execution (superagent/superrun) skills — Cursor build (external unattended driver only)",
   "version": "${version}",
+  "license": "MIT",
   "author": { "name": "Eugene Chai", "email": "eugene.chai@gmail.com" },
   "repository": "https://github.com/blackterrarium/superagent-plugin",
   "keywords": ["planning", "autonomy-loop", "subagents", "workflows"]

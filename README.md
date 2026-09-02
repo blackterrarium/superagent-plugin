@@ -589,5 +589,5 @@ existed, cut it over once the plugin covers the same behavior:
 
 ## License
 
-This repository is private and ships no LICENSE by choice. The skills' `all rights reserved`
-frontmatter is accurate; contact the owner before redistribution.
+MIT — see [LICENSE](LICENSE). Every skill's `license: MIT` frontmatter and each build's plugin
+manifest carry the same declaration.

@@ -1,7 +1,7 @@
 ---
 name: superrun
 description: Use when asked to execute the next ready implementation plan in a goal's plan tree from its root seed/master plan — finds the highest-priority written-but-unexecuted leaf plan, executes it, and closes it out.
-license: all rights reserved
+license: MIT
 related skills: supertraverse, superfinish, superplan
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: superauthor
 description: Shared plan-authoring core — the no-execution rule, the plan-authoring standard, no-placeholders, generic self-review, standing authorization, findings capture, commit-and-merge-via-PR, and Final Report format. Invoked by plan-producing skills (supergoal, superplan) to avoid duplicate planning logic.
-license: all rights reserved
+license: MIT
 ---
 
 # Superauthor
