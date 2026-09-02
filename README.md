@@ -232,8 +232,9 @@ Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
 
 How the roles hand work to each other over one goal. The supervisor tick dispatches the planner and
 the executor, one per tick; the executor runs the six SDD roles inside its own process; escalations
-flow back up to the supervisor and its panel. Any role's model key can point at another harness, in
-which case a relay subagent runs it through the bridge script.
+flow back up to the supervisor and its panel. Any role except the supervisor can point at another harness; the
+executor then runs through the bridge script directly, every other bridged role through a relay
+subagent.
 
 ```mermaid
 flowchart TD
@@ -271,11 +272,14 @@ flowchart TD
     PANEL -- "supervisor adjudicates: retry / re-plan / decline" --> SUP
     SUP -- "L7 rung 2: unresolved" --> USER["WAITING FOR INPUT<br/>the loop parks until the user answers"]
 
-    subgraph BRIDGE["any role pinned to another harness"]
+    subgraph BRIDGE["a role pinned to another harness (not the supervisor or executor)"]
         direction LR
         RELAY["relay subagent<br/>SUPER_BRIDGE_RELAY_MODEL"] --> CLI["role-bridge.sh runs the foreign CLI<br/>codex / pi / cursor / claude"]
     end
-    IMPL -. "e.g. SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra" .-> RELAY
+    PL -. "bridged planner" .-> RELAY
+    PANEL -. "bridged panelists" .-> RELAY
+    TASK -. "bridged SDD role, e.g.<br/>SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra" .-> RELAY
+    EX -. "bridged executor: role-bridge.sh directly, no relay" .-> CLI
 ```
 
 
@@ -408,7 +412,7 @@ the executor while it runs an implementation plan.
 | SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | The SDD scoped re-reviewer, dispatched after each fix round: verifies only that the open findings were addressed and nothing regressed. One per fix round. |
 | SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | The SDD final whole-branch reviewer, run once after all tasks: reviews the complete diff for cross-task issues before the code PR is opened. The last quality gate. |
 | SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | The SDD fix-planner for fix rounds 4–5, reached when three rounds of implementer fixes did not clear a task's findings: a fresh subagent diagnoses the root cause and writes the exact edit, which a fix-applier then carries out. SDD calls for a more capable model here than the implementer. |
-| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
+| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by the planner, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since the planner and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Effort for `supergoal` / `superplan`. Plans are the highest-leverage artifact, so this is the one dispatch-side role above `medium`. |
