@@ -1,7 +1,7 @@
 ---
 name: supergoal
 description: Use when starting a brand-new multi-PR initiative from a goal description (not an existing plan file) — creates the goal vault folder (YYYY-MM-DD-hh_mm-<slug>), its goal-directives.md, the standard subfolders, and the ROOT master plan that seeds the planning tree.
-license: all rights reserved
+license: MIT
 related skills: superauthor, superplan, supertraverse
 ---
 

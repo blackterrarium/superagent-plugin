@@ -2,7 +2,7 @@
 name: superagent-stop
 description: Use to stop a superagent EXTERNAL (unattended) loop for a goal, given only the goal's root master plan (PLAN.md). Complements superagent-external. Default is a graceful drain (disable the timer; a running tick finishes); optional --hard halts an in-flight tick immediately and --purge removes the per-goal env file. The loop-status file is always preserved so the loop can be relaunched.
 argument-hint: "<PLAN.md> [--hard] [--purge]"
-license: all rights reserved
+license: MIT
 related skills: superagent-external, superagent-monitor, superagent-force-stop, superagent, superloop
 ---
 

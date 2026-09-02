@@ -2,7 +2,7 @@
 name: superagent-external
 description: Use to launch a superagent EXTERNAL (unattended) loop for a goal in one step — given only the goal's root master plan (PLAN.md), it prepares the loop-status file and arms the per-goal scheduler entry (systemd user timer on Linux, launchd LaunchAgent on macOS) so the loop runs in the background with no separate console. Optional interval; defaults are used when omitted.
 argument-hint: "<PLAN.md> [--interval 30min]"
-license: all rights reserved
+license: MIT
 related skills: superagent, superloop, superagent-monitor
 ---
 

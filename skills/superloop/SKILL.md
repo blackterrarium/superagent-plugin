@@ -1,7 +1,7 @@
 ---
 name: superloop
 description: Shared autonomy-loop chassis — the gitignored loop-status state file, the cron/external driver, the overlap lock, the context-handoff (session skill-budget) gate, the sync gate, the PR-merge discipline, and the 3-subagent escalation ladder. A clause library (L1–L7) invoked via the Skill tool by autonomy-driver skills (superagent today) to avoid re-implementing the loop machinery.
-license: all rights reserved
+license: MIT
 ---
 
 # Superloop

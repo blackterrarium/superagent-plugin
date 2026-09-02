@@ -2,7 +2,7 @@
 name: superagent-force-stop
 description: Use to recover a HUNG or wedged superagent EXTERNAL tick — a loop stuck at a transient status (RUNNING/PLANNING) with the L3 overlap lock held and no forward progress (e.g. a tick process that hung, or a tick killed mid-flight that orphaned its lock). Halts the in-flight tick, reaps the stale `.lockd` lock so the loop self-heals immediately instead of waiting out the 90-min lock-steal window, and (by default) kicks a fresh recovery tick. Distinct from superagent-stop (which disarms the scheduler for a healthy loop); this is the force/recover path for a stuck one. Identify the loop by its root master plan (PLAN.md) or --slug.
 argument-hint: "(<PLAN.md> | --slug <goal-slug>) [--drain] [--no-kick]"
-license: all rights reserved
+license: MIT
 related skills: superagent-monitor, superagent-stop, superagent-external, superagent, superloop
 ---
 

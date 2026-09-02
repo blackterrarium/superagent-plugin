@@ -1,7 +1,7 @@
 ---
 name: superplan
 description: Use when asked to turn a seed/master/sub-master plan into a focused sub-master or implementation plan for a given step or topic — produces a routed, self-reviewed plan file
-license: all rights reserved
+license: MIT
 ---
 
 <!-- GENERATED FILE — Codex build. Do not edit by hand: edit the canonical skill under skills/

@@ -197,6 +197,7 @@ cat >"$TMP/package.json" <<EOF
 {
   "name": "superagent-pi",
   "version": "${version}",
+  "license": "MIT",
   "description": "superagent plugin — Pi build (external unattended driver only)",
   "pi": { "skills": ["skills"] }
 }

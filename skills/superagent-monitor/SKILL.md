@@ -2,7 +2,7 @@
 name: superagent-monitor
 description: Use to monitor and control the superagent external loops running on this host — list every concurrent loop and its live state (status, iteration, timer/tick/lock, WAITING FOR INPUT, DONE), answer a parked decision, and perform lifecycle actions (drain, hard-stop, uninstall a DONE loop, re-arm a stopped one). The console/control plane for the plugin's external driver.
 argument-hint: "[<slug>]   (omit to cover all loops)"
-license: all rights reserved
+license: MIT
 related skills: superagent, superloop
 ---
 
