@@ -1,0 +1,13 @@
+flowchart TD
+    SUP["SUPERVISOR<br/>claude -p --tick (external) or the live session (cron)<br/>--model / --effort from SUPER_*_SUPERVISOR"]
+    SUP -- "Agent tool, synchronous<br/>tier: model: param · full ID / effort / bridged: subagent_type super-planner" --> PL["PLANNER subagent<br/>.claude/agents/super-planner.md when pinned"]
+    SUP -- "Bash: role-bridge.sh --tools executor<br/>timeout 7200000, needs BASH_MAX_TIMEOUT_MS ≥ 2h" --> EX["EXECUTOR: fresh top-level claude -p<br/>runs superrun; definition file unused"]
+    EX -- "Task tool ×N, synchronous<br/>tier: model: param · else subagent_type super-&lt;role&gt;" --> SDD["6 SDD roles<br/>.claude/agents/super-&lt;role&gt;.md when pinned"]
+    SUP -- "Agent tool ×3 in one message<br/>subagent_type SUPER_PANEL_AGENT_TYPE, or super-panel when pinned" --> PAN["PANEL: 3 panelists"]
+    subgraph BR["bridged role (any but supervisor / executor)"]
+        REL["relay definition super-&lt;role&gt;.md<br/>model: SUPER_BRIDGE_RELAY_MODEL, tools: Bash"] --> RB["role-bridge.sh → foreign CLI"]
+    end
+    PL -.-> REL
+    SDD -.-> REL
+    PAN -.-> REL
+    EX -. "bridged executor: same Bash call,<br/>foreign --harness, no relay" .-> RB

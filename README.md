@@ -57,6 +57,10 @@ both fully planned and fully executed. The supervisor can run as an in-session c
 or as an external loop where an OS scheduler fires a fresh headless session per tick (unattended).
 See [Running the loop](#running-the-loop).
 
+For the structural reference, with diagrams of the architecture, the state machine, the ten agent
+roles, and how each harness dispatches them, see
+[`docs/superagent-structure.html`](docs/superagent-structure.html).
+
 ## Quick start (Claude Code)
 
 **1. Install the plugin and its dependency.** `superrun` needs the superpowers plugin; planning
@@ -230,57 +234,9 @@ tick itself; the other nine are dispatched by it.
 
 Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
 
-How the roles hand work to each other over one goal. The supervisor tick dispatches the planner and
-the executor, one per tick; the executor runs the six SDD roles inside its own process; escalations
-flow back up to the supervisor and its panel. Any role except the supervisor can point at another harness; the
-executor then runs through the bridge script directly, every other bridged role through a relay
-subagent.
-
-```mermaid
-flowchart TD
-    SUP["SUPERVISOR<br/>the superagent tick, fired by the scheduler"]
-    SUP -- "status WAITING FOR PLAN" --> PL["PLANNER<br/>supergoal / superplan: writes the next plan"]
-    PL -- "plan PR, merged by the supervisor" --> SUP
-    SUP -- "status WAITING FOR RUN" --> EX
-
-    subgraph RUN["superrun, a separate CLI process"]
-        direction TB
-        EX["EXECUTOR<br/>the SDD controller: dispatches every role below,<br/>filters review findings by confidence"]
-        subgraph TASK["per plan task"]
-            direction TB
-            IMPL["IMPLEMENTER<br/>writes code + tests for one task"]
-            TR["TASK_REVIEWER<br/>spec + code-quality review"]
-            RND{"open findings?<br/>fix round R of 5"}
-            IMPL2["IMPLEMENTER, resumed<br/>fixes the findings"]
-            FP["FIX_PLANNER<br/>diagnoses the root cause"]
-            FA["FIX_APPLIER<br/>applies the prescribed edit"]
-            RR["RE_REVIEWER<br/>checks only the open findings"]
-            IMPL --> TR --> RND
-            RND -- "R = 1..3" --> IMPL2 --> RR
-            RND -- "R = 4..5" --> FP --> FA --> RR
-            RR -- "still open: next round" --> RND
-        end
-        BR["BRANCH_REVIEWER<br/>whole-branch review, once per plan"]
-        EX -- "next task" --> IMPL
-        RND -- "clean, all tasks done" --> BR
-        BR -- "one fix dispatch + re-review, then code PR" --> EX
-    end
-
-    EX -- "Final Report: code PR, merged by the supervisor" --> SUP
-    EX -- "BLOCKED / CI red / critical finding" --> SUP
-    SUP -- "L7 rung 1" --> PANEL["PANEL<br/>3 read-only agents, each recommends a resolution"]
-    PANEL -- "supervisor adjudicates: retry / re-plan / decline" --> SUP
-    SUP -- "L7 rung 2: unresolved" --> USER["WAITING FOR INPUT<br/>the loop parks until the user answers"]
-
-    subgraph BRIDGE["a role pinned to another harness (not the supervisor or executor)"]
-        direction LR
-        RELAY["relay subagent<br/>SUPER_BRIDGE_RELAY_MODEL"] --> CLI["role-bridge.sh runs the foreign CLI<br/>codex / pi / cursor / claude"]
-    end
-    PL -. "bridged planner" .-> RELAY
-    PANEL -. "bridged panelists" .-> RELAY
-    TASK -. "bridged SDD role, e.g.<br/>SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra" .-> RELAY
-    EX -. "bridged executor: role-bridge.sh directly, no relay" .-> CLI
-```
+The full picture of how these roles are dispatched, and how that differs per harness, is in
+[`docs/superagent-structure.html`](docs/superagent-structure.html), the structural reference with
+diagrams for the architecture, the state machine, the SDD loop, and each harness's dispatch path.
 
 
 ### Model values

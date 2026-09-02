@@ -1,0 +1,22 @@
+flowchart LR
+    SK["skills/*/SKILL.md<br/>canonical, with build markers<br/>cc-only · codex-only · cursor-only · pi-only"]
+    TP["templates/<br/>superenv.default, agent + relay templates"]
+    SK --> BC["build-codex-skills.sh"]
+    SK --> BU["build-cursor-skills.sh"]
+    SK --> BP["build-pi-skills.sh"]
+    TP --> BC
+    TP --> BU
+    TP --> BP
+    subgraph OUT["installable builds, all committed"]
+        direction TB
+        CC["Claude Code plugin<br/>repository root, canonical files used as-is"]
+        CO["codex/<br/>plugin marketplace root"]
+        CU["cursor/<br/>Cursor plugin dir"]
+        PI["pi/<br/>Pi package"]
+    end
+    SK -. "no build step" .-> CC
+    BC --> CO
+    BU --> CU
+    BP --> PI
+    SC["scripts/<br/>tick, drivers, role-bridge, fanout<br/>one copy, shared by every build"] -.-> OUT
+    CHK["--check on each build script:<br/>rebuild to a temp dir, diff against<br/>the committed tree, exit 1 if stale"]

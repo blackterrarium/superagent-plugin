@@ -1,0 +1,21 @@
+flowchart TD
+    EX["EXECUTOR: superrun, the SDD controller<br/>dispatches every role below and filters review findings by confidence"]
+    subgraph TASK["per plan task"]
+        direction TB
+        IMPL["IMPLEMENTER<br/>writes code + tests for one task"]
+        TR["TASK_REVIEWER<br/>spec + code-quality review"]
+        RND{"open findings?<br/>fix round R of 5"}
+        IMPL2["IMPLEMENTER, resumed<br/>fixes the findings"]
+        FP["FIX_PLANNER<br/>diagnoses the root cause"]
+        FA["FIX_APPLIER<br/>applies the prescribed edit"]
+        RR["RE_REVIEWER<br/>checks only the open findings"]
+        IMPL --> TR --> RND
+        RND -- "R = 1..3" --> IMPL2 --> RR
+        RND -- "R = 4..5" --> FP --> FA --> RR
+        RR -- "still open: next round" --> RND
+    end
+    BR["BRANCH_REVIEWER<br/>whole-branch review, once per plan"]
+    EX -- "next task" --> IMPL
+    RND -- "clean, all tasks done" --> BR
+    BR -- "one fix dispatch + re-review,<br/>then the code PR" --> EX
+    EX -- "Final Report or CI-PENDING report<br/>(stdout of the process)" --> SUP["SUPERVISOR"]

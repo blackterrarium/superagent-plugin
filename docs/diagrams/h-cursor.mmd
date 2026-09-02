@@ -1,0 +1,14 @@
+flowchart TD
+    SUP["SUPERVISOR<br/>agent -p --tick<br/>--model from SUPER_MODEL_SUPERVISOR; no effort control"]
+    SUP -- "Agent tool, synchronous<br/>tier/name: model: param · bridged: subagent_type super-planner" --> PL["PLANNER subagent<br/>.cursor/agents/super-planner.md when pinned"]
+    SUP -- "shell: role-bridge.sh --tools executor" --> EX["EXECUTOR: fresh top-level agent -p<br/>runs superrun"]
+    EX -- "Task tool ×N" --> SDD["6 SDD roles<br/>.cursor/agents/super-&lt;role&gt;.md when pinned"]
+    SUP -- "Agent tool ×3 in one message" --> PAN["PANEL: 3 panelists"]
+    subgraph BR["bridged role (any but supervisor / executor)"]
+        REL["relay definition super-&lt;role&gt;.md<br/>model: SUPER_BRIDGE_RELAY_MODEL (default inherit)"] --> RB["role-bridge.sh → foreign CLI"]
+    end
+    PL -.-> REL
+    SDD -.-> REL
+    PAN -.-> REL
+    EX -. "bridged executor: same shell call,<br/>foreign --harness, no relay" .-> RB
+    NOTE["Every effort key is inherit; any other value WARNs.<br/>Bridging from Cursor is unverified: the agent CLI is absent on the build host."]

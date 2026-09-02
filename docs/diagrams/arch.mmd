@@ -1,0 +1,19 @@
+flowchart TD
+    subgraph FIRE["what fires a tick"]
+        direction LR
+        SESS["attended: in-session cron driver<br/>CronCreate between turns"]
+        SCHED["unattended: OS scheduler<br/>systemd user timer · launchd LaunchAgent · crontab"]
+    end
+    SCHED --> TICK["scripts/superagent-tick.sh<br/>env file → lock → gates → launch one headless CLI"]
+    TICK --> CLI["harness CLI, headless<br/>claude -p · codex exec · agent -p · pi -p<br/>pinned to SUPER_MODEL_SUPERVISOR"]
+    SESS --> SUP
+    CLI --> SUP["SUPERVISOR skill: superagent<br/>one --tick: sync gate → budget gate → dispatch ONE step → advance state"]
+    SUP <--> LS[("loop-status file<br/>gitignored, per goal<br/>status · iteration · pending decision")]
+    SUP -- "WAITING FOR PLAN" --> PLN["PLANNER<br/>superplan / supergoal"]
+    SUP -- "WAITING FOR RUN" --> EXE["EXECUTOR<br/>superrun, own CLI process"]
+    SUP -- "BLOCKED / CI red / critical" --> PAN["PANEL<br/>3 read-only agents"]
+    PLN -- "plan PR" --> GH[("GitHub<br/>PRs squash-merged to main<br/>CI runs")]
+    EXE -- "code PR" --> GH
+    PLN --> VAULT[("goal vault<br/>plans · reports · findings<br/>committed via PR")]
+    EXE --> VAULT
+    SUP -- "merges" --> GH
