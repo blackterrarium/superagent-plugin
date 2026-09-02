@@ -141,17 +141,27 @@ run_test "T2 bridge-fanout ×3" "=== PANELIST 3 exit=0 ===" \
 run_test "T3 tick file-read + superagent hard gate" "requires a master plan" \
   bash -c "cd '$NEUTRAL' && echo 'Read the file $ROOT/pi/skills/superagent/SKILL.md and follow it: execute exactly ONE tick with no arguments (no PLAN.md, no loop file), in unattended/non-interactive mode. Show the skill response. If you cannot read that file, output exactly: CANNOT-READ.' | '$BIN' -p --no-session --approve --skill '$ROOT/pi/skills' ${MODEL_ARGS[*]:-}"
 
-# T4 — relay definition round trip pi→codex (needs pi-subagents AND codex).
-if [ -n "$SUBAGENTS_VERSION" ] && command -v codex >/dev/null 2>&1; then
-  sed -e 's/<role>/implementer/g' -e 's/<KEY>/SUPER_MODEL_IMPLEMENTER/g' -e 's/<harness>/codex/g' \
+# T4 — relay definition round trip (needs pi-subagents AND the target CLI). One variant per foreign
+# harness: T4 pi→codex, T4b pi→claude. Each renders the relay template into the workspace as
+# super-implementer, dispatches it through `subagent` async:false, and is PROVEN only when the
+# reply carries RELAY-OK AND a bridge log whose header names that harness exists — a relay that
+# answered the prompt itself would leave no log. Each variant gets its own TMPDIR so the log
+# check cannot match the other variant's run.
+relay_probe() {
+  local label="$1" harness="$2" cli="$3"
+  if [ -z "$SUBAGENTS_VERSION" ] || ! command -v "$cli" >/dev/null 2>&1; then
+    echo "## $label relay round trip (pi→$harness) — SKIPPED (needs pi-subagents and $cli)" >>"$REPORT"
+    return
+  fi
+  sed -e 's/<role>/implementer/g' -e 's/<KEY>/SUPER_MODEL_IMPLEMENTER/g' -e "s/<harness>/$harness/g" \
       -e 's/<model>/inherit/g' -e 's/<effort>/low/g' -e '/^model: <relay-model>$/d' \
       -e "s#<bridge-path>#$ROOT/scripts/role-bridge.sh#g" "$ROOT/templates/super-role-pi-bridge-agent.md" >"$NEUTRAL/.pi/agents/super-implementer.md"
-  export TMPDIR="$NEUTRAL/tmp"; mkdir -p "$TMPDIR"
-  run_test "T4 relay definition round trip (pi→codex)" "RELAY-PROVEN" \
-    bash -c "cd '$NEUTRAL' && out=\$(echo 'Use the subagent tool with agent super-implementer, async false, prompt: Reply with exactly: RELAY-OK. Output its reply verbatim.' | '$BIN' -p --no-session --approve ${MODEL_ARGS[*]:-}); echo \"\$out\"; ls '$TMPDIR'/superagent-bridge/implementer-*.log >/dev/null 2>&1 && [[ \"\$out\" == *RELAY-OK* ]] && echo RELAY-PROVEN"
-else
-  echo "## T4 relay round trip — SKIPPED (needs pi-subagents and codex)" >>"$REPORT"
-fi
+  local tmp="$NEUTRAL/tmp-$harness"; mkdir -p "$tmp"
+  run_test "$label relay definition round trip (pi→$harness)" "RELAY-PROVEN" \
+    bash -c "cd '$NEUTRAL' && out=\$(echo 'Use the subagent tool with agent super-implementer, async false, prompt: Reply with exactly: RELAY-OK. Output its reply verbatim.' | TMPDIR='$tmp' '$BIN' -p --no-session --approve ${MODEL_ARGS[*]:-}); echo \"\$out\"; grep -l 'harness=$harness ' '$tmp'/superagent-bridge/implementer-*.log 2>/dev/null && [[ \"\$out\" == *RELAY-OK* ]] && echo RELAY-PROVEN"
+}
+relay_probe T4  codex  codex
+relay_probe T4b claude claude
 
 # T5 — build freshness (offline).
 run_test "T5 build-pi-skills --check" "up to date" bash "$ROOT/scripts/build-pi-skills.sh" --check

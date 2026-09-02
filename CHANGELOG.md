@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.8 — 2026-09-02
+
+- **`scripts/pi-smoke.sh` gains T4b, the pi→claude relay round trip.** T4 only proved a Pi
+  supervisor relaying an SDD role to Codex; the Claude direction — the one an operator hits when a
+  Pi loop pins a reviewer or implementer to a Claude model — had never been exercised. Both
+  variants now share one `relay_probe` helper: render the relay template as `super-implementer`
+  for the target harness, dispatch it through `subagent` `async:false`, and count it PROVEN only
+  when the reply carries `RELAY-OK` **and** a bridge log whose header names that harness exists
+  (a relay that answers the prompt itself leaves no log). Each variant runs under its own
+  `TMPDIR`, so one variant's log can no longer satisfy the other's check, and the header grep
+  replaces the old existence-only test. Each variant SKIPs independently when its CLI is absent.
+  Verified 2026-09-02 on pi 0.84.4, `pi-subagents` 0.63.0: P3a, P3c, a frontmatter model+thinking
+  pin (run meta shows the child on `openai-codex/gpt-5.6-terra:low` under a `gpt-5.6-sol` parent),
+  and the pi→claude relay (`harness=claude` header, exit 0) all pass — no `pi-subagents` change is
+  needed for cross-harness roles; the relay is a bash-only agent definition.
+
 ## 0.6.7 — 2026-09-01
 
 - **Codex and Pi builds pin the bridge relay model instead of `inherit`.** `SUPER_BRIDGE_RELAY_MODEL`
