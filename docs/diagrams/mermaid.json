@@ -1,0 +1,1 @@
+{ "theme": "neutral", "themeVariables": { "fontFamily": "-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "14px" }, "flowchart": { "curve": "basis", "htmlLabels": true } }

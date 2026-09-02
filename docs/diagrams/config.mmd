@@ -1,0 +1,6 @@
+flowchart LR
+    E["1. process environment<br/>SUPER_* exported by the shell,<br/>the per-goal env file, or the scheduler"] -- "wins" --> R{"resolved value"}
+    S["2. repo-root .superenv<br/>created by init"] --> R
+    T["3. templates/superenv.default<br/>shipped with the plugin build"] --> R
+    R --> V["validated per key:<br/>model grammar, effort domain,<br/>supervisor native-only"]
+    V -- "invalid" --> W["WARN and fall back to inherit<br/>(supervisor: hard error, exit 11)"]

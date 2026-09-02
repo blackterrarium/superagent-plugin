@@ -1,0 +1,14 @@
+flowchart TD
+    SUP["SUPERVISOR<br/>pi -p --tick<br/>--model / --thinking from SUPER_*_SUPERVISOR<br/>never uses a subagent tool"]
+    SUP -- "bash: role-bridge.sh --tools planner --role planner<br/>native and bridged are the same call" --> PL["PLANNER: fresh pi -p (or foreign CLI)<br/>runs superplan; no definition file"]
+    SUP -- "bash: role-bridge.sh --tools executor" --> EX["EXECUTOR: fresh top-level pi -p<br/>runs superrun"]
+    EX -- "pi-subagents `subagent` tool, async: false<br/>agent: super-&lt;role&gt;" --> SDD["6 SDD roles<br/>.pi/agents/super-&lt;role&gt;.md (native pin or relay)"]
+    SUP -- "bash: bridge-fanout.sh --role panelist<br/>3 prompt files, one blocking call" --> PAN["PANEL: 3 pi -p (or foreign CLI) processes<br/>SUPER_PANEL_AGENT_TYPE ignored"]
+    subgraph BR["the bridge path"]
+        REL["relay definition, bridged SDD role only<br/>.pi/agents/super-&lt;role&gt;.md, model: SUPER_BRIDGE_RELAY_MODEL"] --> RB["role-bridge.sh → foreign CLI"]
+    end
+    SDD -.-> REL
+    PL -. "bridged planner / panel:<br/>same bridge call, foreign --harness" .-> RB
+    PAN -.-> RB
+    EX -.-> RB
+    NOTE["Without pi-subagents ≥ 0.58.0 the SDD roles run sequentially<br/>in superrun's own context with no pins (SUPER_PI_SUBAGENTS)."]

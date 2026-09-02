@@ -1,0 +1,17 @@
+flowchart LR
+    START(( )) -- "superagent-external<br/>or superagent" --> WP
+    WP(["WAITING FOR PLAN"]) -- "tick dispatches superplan" --> PL(["PLANNING<br/><i>transient</i>"])
+    PL -- "sub-master written,<br/>more to plan" --> WP
+    PL -- "leaf plan written" --> WR(["WAITING FOR RUN"])
+    WR -- "tick dispatches superrun" --> RN(["RUNNING<br/><i>transient</i>"])
+    RN -- "leaf done, another leaf ready" --> WR
+    RN -- "leaf done, next step unplanned" --> WP
+    RN -- "CI-PENDING report" --> CI(["WAITING FOR CI<br/><i>parked, no session</i>"])
+    CI -- "every recorded run terminal" --> WR
+    PL -- "L7 unresolved" --> IN(["WAITING FOR INPUT<br/><i>parked, no session</i>"])
+    RN -- "L7 unresolved" --> IN
+    IN -- "answer: recorded<br/>(answer.sh kicks a tick)" --> WR
+    WP -- "nothing left to plan or run" --> DN(["DONE<br/><i>timer auto-disarms</i>"])
+    WR -- "nothing left to plan or run" --> DN
+    PL -. "found persisted on a fresh tick<br/>= crash, reset" .-> WP
+    RN -. "found persisted on a fresh tick<br/>= crash, reset" .-> WR

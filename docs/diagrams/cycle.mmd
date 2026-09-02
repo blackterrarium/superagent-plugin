@@ -1,0 +1,7 @@
+flowchart LR
+    G["goal description"] --> SG["supergoal<br/>goal folder + root master plan"]
+    SG --> SP["superplan<br/>writes the next step's plan"]
+    SP --> SR["superrun<br/>executes the next ready leaf,<br/>merges the code PR"]
+    SR --> SF["superfinish<br/>closeout report,<br/>rows flipped complete"]
+    SF -- "more steps" --> SP
+    SF -- "tree fully planned and executed" --> D["DONE"]

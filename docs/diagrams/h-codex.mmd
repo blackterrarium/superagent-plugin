@@ -1,0 +1,13 @@
+flowchart TD
+    SUP["SUPERVISOR<br/>codex exec --tick<br/>-m / -c model_reasoning_effort from SUPER_*_SUPERVISOR"]
+    SUP -- "spawn_agent, synchronous<br/>model + reasoning_effort params" --> PL["PLANNER subagent<br/>no definition file"]
+    SUP -- "shell: role-bridge.sh --tools executor" --> EX["EXECUTOR: fresh top-level codex exec<br/>runs superrun"]
+    EX -- "spawn_agent ×N<br/>model + reasoning_effort params" --> SDD["6 SDD roles<br/>no definition files"]
+    SUP -- "spawn_agent ×3 in one message<br/>model + reasoning_effort params" --> PAN["PANEL: 3 panelists"]
+    subgraph BR["bridged role (any but supervisor / executor)"]
+        REL["relay spawn<br/>model = SUPER_BRIDGE_RELAY_MODEL<br/>message = relay-preamble.md + packet"] --> RB["role-bridge.sh → foreign CLI"]
+    end
+    PL -.-> REL
+    SDD -.-> REL
+    PAN -.-> REL
+    EX -. "bridged executor: same shell call,<br/>foreign --harness, no relay" .-> RB
