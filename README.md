@@ -339,30 +339,38 @@ Defaults shown are the Claude Code build's. Other builds differ; see
 
 **Models and effort**
 
+Every role in the [Roles](#roles) table has one `SUPER_MODEL_<ROLE>` key and one
+`SUPER_EFFORT_<ROLE>` key. The model key picks which model (and, via the prefix, which harness)
+that role runs on; the effort key sets its reasoning effort. The accepted values are in
+[Model values](#model-values) and [Effort values](#effort-values). The nine roles other than the
+supervisor split into two groups: the planner, executor and panel are dispatched by the tick, and
+the six SDD roles (implementer, fix-applier, the three reviewers, fix-planner) are dispatched by
+the executor while it runs an implementation plan.
+
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_MODEL_SUPERVISOR | `claude:claude-opus-4-8` | The tick itself. `inherit` resolves to `claude-opus-4-8` on a headless tick. |
-| SUPER_MODEL_PLANNER | `claude:claude-opus-4-8` | Plan quality has the most downstream leverage, so this stays on a strong model. |
-| SUPER_MODEL_EXECUTOR | `claude:claude-opus-4-8` | `superrun` applies the review confidence filter itself, so it needs judgment. |
-| SUPER_MODEL_PANEL | `claude:claude-opus-4-8` | L7 escalation panel. |
-| SUPER_MODEL_IMPLEMENTER | `claude:sonnet` | |
-| SUPER_MODEL_FIX_APPLIER | `claude:sonnet` | |
-| SUPER_MODEL_TASK_REVIEWER | `claude:claude-opus-4-8` | |
-| SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | |
-| SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | |
-| SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | |
-| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | Model of the relay subagent for a bridged role. Bare native name, no harness prefix. It only copies a prompt and returns a result, so keep it cheap, but do not weaken to `haiku`: measured to answer the prompt itself instead of relaying. Every build that has a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
-| SUPER_EFFORT_SUPERVISOR | `medium` | Ticks fire on an interval, so per-tick cost compounds. `medium` covers the routing work. |
-| SUPER_EFFORT_PLANNER | `high` | |
-| SUPER_EFFORT_EXECUTOR | `medium` | The hard thinking is delegated to the reviewers and fix planner. |
-| SUPER_EFFORT_PANEL | `xhigh` | Fires rarely, only when everything cheaper has failed. |
-| SUPER_EFFORT_IMPLEMENTER | `medium` | |
-| SUPER_EFFORT_FIX_APPLIER | `medium` | |
-| SUPER_EFFORT_TASK_REVIEWER | `high` | |
-| SUPER_EFFORT_RE_REVIEWER | `high` | |
-| SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | |
-| SUPER_EFFORT_FIX_PLANNER | `high` | |
-| SUPER_PANEL_AGENT_TYPE | `general-purpose` | Subagent type for the L7 panel, or `Explore`. |
+| SUPER_MODEL_SUPERVISOR | `claude:claude-opus-4-8` | The superagent tick itself: reads the loop-status file, runs the sync and CI gates, picks the next skill to dispatch, merges PRs, and runs the L7 panel. Always native to `SUPER_HARNESS`; the tick passes it as `--model`. `inherit` resolves to `claude-opus-4-8` on a headless tick because there is no session to inherit from. |
+| SUPER_MODEL_PLANNER | `claude:claude-opus-4-8` | The subagent that runs `supergoal` and `superplan`: writes the root master plan, the sub-master plans, and the implementation plans. Plan quality has the most downstream leverage, so this stays on a strong model. |
+| SUPER_MODEL_EXECUTOR | `claude:claude-opus-4-8` | `superrun`, the SDD controller that executes one implementation plan: dispatches the six SDD roles below, filters their review findings by confidence (`SUPER_REVIEW_CONFIDENCE_FILTER`), and opens and integrates the code PR. Runs as its own CLI process rather than a subagent. It applies the confidence filter itself, so it needs judgment. |
+| SUPER_MODEL_PANEL | `claude:claude-opus-4-8` | The three read-only agents of the L7 escalation panel (Rung 1), dispatched when a delegated skill reports BLOCKED, CI red, a critical finding, or a clarification instead of finishing. Each recommends a resolution; the supervisor adjudicates. |
+| SUPER_MODEL_IMPLEMENTER | `claude:sonnet` | The SDD implementer: one fresh subagent per plan task that writes the code and tests, then is resumed for fix rounds 1–3 with the reviewer's open findings. It gets the full task text, so a mid tier is enough. |
+| SUPER_MODEL_FIX_APPLIER | `claude:sonnet` | The SDD fix-applier: a fresh subagent that applies the edit the fix-planner prescribed in fix rounds 4–5. Mechanical work, so it shares the implementer's tier. |
+| SUPER_MODEL_TASK_REVIEWER | `claude:claude-opus-4-8` | The SDD per-task reviewer, dispatched after each implementer finishes: checks the task's spec compliance against the plan and its code quality, and reports every finding with a severity and confidence label for the executor to filter. |
+| SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | The SDD scoped re-reviewer, dispatched after each fix round: verifies only that the open findings were addressed and nothing regressed. One per fix round. |
+| SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | The SDD final whole-branch reviewer, run once after all tasks: reviews the complete diff for cross-task issues before the code PR is opened. The last quality gate. |
+| SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | The SDD fix-planner for fix rounds 4–5, reached when three rounds of implementer fixes did not clear a task's findings: a fresh subagent diagnoses the root cause and writes the exact edit, which a fix-applier then carries out. SDD calls for a more capable model here than the implementer. |
+| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
+| SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
+| SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
+| SUPER_EFFORT_PLANNER | `high` | Effort for `supergoal` / `superplan`. Plans are the highest-leverage artifact, so this is the one dispatch-side role above `medium`. |
+| SUPER_EFFORT_EXECUTOR | `medium` | Effort for the `superrun` controller, passed to its CLI process. The hard thinking is delegated to the reviewers and the fix-planner. |
+| SUPER_EFFORT_PANEL | `xhigh` | Effort for each L7 panelist. Fires rarely, only when everything cheaper has failed, so it can afford the top setting. |
+| SUPER_EFFORT_IMPLEMENTER | `medium` | Effort for the per-task implementer. Enough for TDD against a fully specified task. |
+| SUPER_EFFORT_FIX_APPLIER | `medium` | Effort for the fix-applier. It applies an edit the fix-planner already worked out. |
+| SUPER_EFFORT_TASK_REVIEWER | `high` | Effort for the per-task reviewer. Catching a spec deviation here is far cheaper than at the branch review. |
+| SUPER_EFFORT_RE_REVIEWER | `high` | Effort for the scoped re-reviewer. Same bar as the task review so a fix round cannot pass on a weaker check. |
+| SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Effort for the final whole-branch reviewer. Runs once per plan and is the last gate before the PR, so it gets the top setting. |
+| SUPER_EFFORT_FIX_PLANNER | `high` | Effort for the fix-planner. Root-cause diagnosis after three failed fix rounds. |
 
 **Harness**
 
