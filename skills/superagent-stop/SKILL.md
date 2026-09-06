@@ -25,7 +25,7 @@ repo-root `.superenv` file, (3) the plugin default
 ## Parameters
 
 - **`<PLAN.md>` — required.** The goal's **root** master plan (the same file passed
-  to `superagent-external`). This is the only compulsory argument.
+  to `superagent-external`). This is the only compulsory argument (an absolute path when the vault is external — `stop.sh`/`force-stop.sh` match it against the loop file's absolute `master_plan:`).
 - **`--hard` — optional.** Also halt an in-flight tick immediately (SIGTERM the
   service). Default is a graceful drain: the timer is disabled so no new ticks fire,
   and a tick already running finishes on its own.

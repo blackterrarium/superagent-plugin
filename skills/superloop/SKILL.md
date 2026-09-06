@@ -28,6 +28,16 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
+## Vault root
+
+Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
+its own git repository outside the checkout. Otherwise `<vault_root>` is
+`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
+--path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
+file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
+root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+
 ## Subroutine contract — read before applying the clauses
 
 When `superagent` (or any autonomy-driver skill) invokes this skill via the Skill tool, you (the calling
@@ -54,7 +64,7 @@ The caller supplies, once, at invocation:
 - **L2** — Drivers & guard/bootstrap/resume (Driver A cron, Driver B external, context model, Step-0 branching, `stop_driver()`).
 - **L3** — Overlap lock (`acquire_lock()` / `release_lock()`).
 - **L4** — Context-handoff gate (`check_session_budget()`).
-- **L5** — Sync gate (`sync_main()` + Be-sure verification).
+- **L5** — Sync gate (`sync_main()` + `sync_vault()` (external vault only) + Be-sure verification).
 - **L6** — PR integration discipline (CI-green gate + `--admin` merge via `superauthor` A7 + post-merge sync/be-sure + CI-red escalation trigger).
 - **L7** — Decision-escalation ladder (3-subagent panel → user escalation).
 
@@ -67,23 +77,26 @@ State lives in a single per-goal file: `<goal-folder>/<SUPER_LOOP_STATUS_DIRNAME
 The **goal folder** is derived from `<PLAN.md>` the same way `superplan` does it (its *Goal
 Identification* step): the directory that contains the `master-plans/` / `plans/` subfolders for this
 plan family — the **parent** of the `master-plans/` folder the seed sits in, **not** that
-`master-plans/` folder. Goal folders live under the repo's goal-folder root `<SUPER_GOAL_ROOT>`
-(worked example from the originating repo: `SUPER_GOAL_ROOT=vault/network-compose`), so the loop file lands at
-`<SUPER_GOAL_ROOT>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/<date>-<slug>.md` — a sibling of that goal's
+`master-plans/` folder. Goal folders live under the vault root `<vault_root>` (see **Vault root**;
+worked example from the originating repo: `SUPER_GOAL_ROOT=vault/network-compose`), so the loop file lands at
+`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/<date>-<slug>.md` — a sibling of that goal's
 `master-plans/`, `plans/`, `reports/`, `findings/`.
 
-The `<SUPER_LOOP_STATUS_DIRNAME>/` directory is **gitignored** (pattern
-`<SUPER_GOAL_ROOT>/**/<SUPER_LOOP_STATUS_DIRNAME>/` — worked example from the originating repo:
-`vault/network-compose/**/loop-status/`). It is **local-only state** — never commit it, never open a PR for it, just
+The `<SUPER_LOOP_STATUS_DIRNAME>/` directory is **gitignored** — in an internal vault by the
+code repo's `.gitignore` pattern `<SUPER_GOAL_ROOT>/**/<SUPER_LOOP_STATUS_DIRNAME>/` (worked example
+from the originating repo: `vault/network-compose/**/loop-status/`); in an **external vault** by the
+vault repo's own `.gitignore` pattern `**/<SUPER_LOOP_STATUS_DIRNAME>/` (written by `superagent:init`).
+It is **local-only state** — never commit it, never open a PR for it, just
 Write it with the Write tool. Being gitignored, it survives `superplan`/`superrun`'s `git checkout -b …
 / checkout main / pull` dance untouched and can never be swept into one of their explicit-`git add`
 docs commits.
 
-**The loop-status file always lives in the primary checkout, never in a worktree.** Because
-`<SUPER_LOOP_STATUS_DIRNAME>/` is gitignored, it is physical working-tree state that exists only in the primary
-checkout — it is **absent from every linked git worktree**. If the loop is launched from inside a
-worktree (e.g. one created by `EnterWorktree` for plan execution), resolve the primary checkout root
-**first** and root the loop-status path there:
+**The loop-status file always lives at the vault root, never in a worktree.** In an **external
+vault** that is automatic — `<vault_root>` is the same directory from every worktree. In an
+**internal vault**, because `<SUPER_LOOP_STATUS_DIRNAME>/` is gitignored, it is physical working-tree
+state that exists only in the primary checkout — it is **absent from every linked git worktree**. If
+the loop is launched from inside a worktree (e.g. one created by `EnterWorktree` for plan
+execution), resolve the primary checkout root **first** and root the loop-status path there:
 
 ```
 # primary_root(): the checkout this worktree was created from (a no-op if already primary)
@@ -93,16 +106,17 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
 # `dirname` of the common dir is the primary checkout root — regardless of the primary's current branch.
 ```
 
-Every loop-status read/write, the overlap-lock dir, and the Sync gate's `git` commands use
-`primary_root` as their base. Derive the goal folder (`<SUPER_GOAL_ROOT>/<goal>/`) as before, but
-root it at `primary_root`: the loop file is
-`<primary_root>/<SUPER_GOAL_ROOT>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/<date>-<slug>.md`.
+Every loop-status read/write, the overlap-lock dir, and the Sync gate's code-repo `git` commands use
+`primary_root` as their base. Derive the goal folder (`<vault_root>/<goal>/`) with `<vault_root>`
+resolved at `primary_root`: the loop file is
+`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/<date>-<slug>.md` (internal vault:
+`<primary_root>/<SUPER_GOAL_ROOT>/<goal>/…`; external vault: `<SUPER_GOAL_ROOT>/<goal>/…` verbatim).
 
 Format — YAML frontmatter is the machine state; the body is an append-only human log:
 
 ```markdown
 ---
-master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # repo-relative path to the ROOT seed
+master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # ROOT seed: repo-relative (internal vault) or ABSOLUTE (external vault)
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
 plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's two-signal DONE; other consumers add their own work-model fields here
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
@@ -481,7 +495,7 @@ External ticks run in **independent sessions**, so a long tick (a run with a 30-
 still be running when the next interval fires. Guard every tick with an atomic file lock in the
 loop-status dir so two ticks never run concurrently:
 - **`acquire_lock()`** — atomically `mkdir "<loop-file-dir>/.<loop-file-basename>.lockd"`. `<loop-file-dir>`
-  is the absolute primary-checkout path (it lands under `primary_root()` — see **L1**),
+  is an absolute path (under `primary_root()` for an internal vault, under `<vault_root>` for an external one — see **L1**),
   so the lock is unambiguous even when the loop is launched from a worktree. On **success**,
   write a unix timestamp to `…lockd/acquired` AND the driving process's PID —
   `${SUPERAGENT_TICK_PID:-$PPID}` (the external wrapper exports `SUPERAGENT_TICK_PID`; in-session
@@ -620,10 +634,29 @@ primary checkout `primary_root` resolves to cwd, so `git -C "$primary_root"` is 
    ignored loop-status file and other untracked scratch are fine). If not → **STOP and escalate** (do
    not commit or discard tracked changes you did not make).
 
-### Be-sure verification (after a skill, post-`sync_main()`)
+### `sync_vault()` — external vault only, run right after `sync_main()`
+In internal mode the vault is part of the code repo and `sync_main()` already covered it; skip
+this. In **external** mode (see **Vault root**) the plan tree lives in the vault repo, so:
+1. `git -C "<vault_root>" remote get-url origin` fails → **no remote → synced** (nothing to pull).
+2. Otherwise `git -C "<vault_root>" fetch origin` and compare the vault's current branch to its
+   upstream — `git -C "<vault_root>" rev-list --left-right --count HEAD...@{upstream}`:
+   - **equal** → synced;
+   - **behind only** → `git -C "<vault_root>" merge --ff-only @{upstream}`;
+   - **ahead only** → **normal here** (an earlier A7 push failed): `git -C "<vault_root>" push`;
+     if the push fails → STOP and escalate;
+   - **diverged** → STOP and escalate (never reset or force).
+3. `git -C "<vault_root>" status --porcelain --untracked-files=no` must be empty → else STOP and
+   escalate (tracked vault changes nobody committed).
+
+### Be-sure verification (after a skill, post-`sync_main()`/`sync_vault()`)
 The caller's just-completed sub-step reports the PR(s) it merged and the file(s) it wrote; confirm each
-is present and tracked on local `main`:
-- the reported output file(s) exist and are tracked on `main` — `git ls-files --error-unmatch <path>`;
+is present and tracked:
+- the reported output file(s) exist and are tracked — **code paths** (a merged code PR's files)
+  on the code repo's `main`: `git -C "$primary_root" ls-files --error-unmatch <path>`; **vault
+  paths** (plans, closeouts, project folders) on the vault repo: `git -C "<vault_root>" ls-files
+  --error-unmatch <vault-relative path>`. In internal mode both resolve to the code repo; in
+  external mode a vault artifact is reported by A8 as `**Commit:** <short-sha> in <vault_root>`
+  rather than a PR URL, and `git -C "<vault_root>" cat-file -e <short-sha>` confirms the commit;
 - (optional) the merge is in history — `git log --oneline origin/main | grep <pr-number>`.
 
 If a reported artifact is **missing** after a clean `sync_main()`, the merge did not propagate as
