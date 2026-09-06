@@ -66,5 +66,28 @@ printf 'REPO=%s\nLOOP_FILE=%s\nSUPERAGENT_SLUG=custom-slug\n' "$T/code" "$LOOPD/
 check "stop: absolute master_plan matched to its registered slug" bash -c "cd '$T/code' && '$ROOT/scripts/stop.sh' '$PLAN_EXT' --dry-run 2>&1 | grep -q 'goal slug:   custom-slug'"
 check "force-stop: absolute master_plan matched to its registered slug" bash -c "cd '$T/code' && '$ROOT/scripts/force-stop.sh' '$PLAN_EXT' 2>&1 | grep -q 'loop file:   $LOOPD/2026-09-06-demo.md'"
 
+# ---- 3. init ignore-entry routing rules (the shell the skill text prescribes) ------------------
+# append_ignore <file> <line> — Step 5's rule: newline guard, then append unless an identical
+# line is present. The skill text in skills/init/SKILL.md must match this function.
+append_ignore() {
+  local f="$1" line="$2"
+  if [[ -s "$f" && "$(tail -c1 "$f" | od -An -c | tr -d ' ')" != '\n' ]]; then printf '\n' >>"$f"; fi
+  grep -qxF -- "$line" "$f" 2>/dev/null || printf '%s\n' "$line" >>"$f"
+}
+mkdir -p "$T/ini"; ( cd "$T/ini" && git init -q )
+printf 'node_modules' >"$T/ini/.gitignore"            # no trailing newline: the guard must fire
+append_ignore "$T/ini/.gitignore" ".env"; append_ignore "$T/ini/.gitignore" ".env"; append_ignore "$T/ini/.gitignore" "vault/**/loop-status/"
+check "init: newline guard + idempotent append into .gitignore" bash -c "[ \"\$(cat '$T/ini/.gitignore')\" = \"\$(printf 'node_modules\n.env\nvault/**/loop-status/')\" ]"
+EXCL="$T/ini/.git/info/exclude"
+for l in ".env" ".superenv" ".claude/agents/super-*.md"; do append_ignore "$EXCL" "$l"; done
+append_ignore "$EXCL" ".superenv"
+check "init --local-only: entries land in .git/info/exclude once each" bash -c "grep -c '^\.superenv\$' '$EXCL' | grep -qx 1 && grep -qxF '.claude/agents/super-*.md' '$EXCL' && grep -qxF '.env' '$EXCL'"
+check "init --local-only: .gitignore untouched by the exclude writes" bash -c "[ \"\$(cat '$T/ini/.gitignore')\" = \"\$(printf 'node_modules\n.env\nvault/**/loop-status/')\" ]"
+printf 'x\n' >"$T/ini/.superenv"; mkdir -p "$T/ini/.claude/agents"; printf 'x\n' >"$T/ini/.claude/agents/super-planner.md"
+check "init --local-only: git sees the excluded files as ignored" bash -c "cd '$T/ini' && git check-ignore -q .superenv && git check-ignore -q .claude/agents/super-planner.md"
+# Worktree: the exclude file is shared through the common git dir.
+( cd "$T/ini" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init && git worktree add -q "$T/ini-wt" -b wt )
+check "init --local-only: exclude resolves through --git-common-dir from a worktree" bash -c "cd '$T/ini-wt' && [ \"\$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude\" -ef '$EXCL' ] && printf 'x\n' >.superenv && git check-ignore -q .superenv"
+
 echo "vault-external-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]
