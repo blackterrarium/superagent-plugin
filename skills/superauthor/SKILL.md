@@ -61,6 +61,16 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
+## Vault root
+
+Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
+its own git repository outside the checkout. Otherwise `<vault_root>` is
+`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
+--path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
+file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
+root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+
 ## A2 — Authoring standard (REQUIRED)
 
 **Author the plan yourself, directly, to the standard below.** This standard is the distilled
@@ -215,9 +225,20 @@ findings, record none.
 ## A7 — Commit and merge via PR (caller-parameterized)
 
 After the artifact(s) and any `findings/` docs are written into the goal folder, commit those planning
-artifacts and merge them to `main` via a pull request. **Merge the PR without asking the user for
-confirmation** — the user has granted standing authorization (A5), so never pause before writing or
-merging.
+artifacts. **Never pause before writing, committing, or merging** — the user has granted standing
+authorization (A5).
+
+**Target repo — resolve first (see Vault root).** In **internal** mode the target is the code repo
+and the rest of this clause applies as written. In **external** mode the target is the **vault repo
+at `<vault_root>`**, and the **direct-commit variant** (bottom of this clause) **always applies**,
+regardless of `SUPER_PROTECTED_MAIN` — that key describes the code repo, not the vault: run every
+git command as `git -C "<vault_root>" …`, express the caller's `git add` paths **relative to
+`<vault_root>`**, keep the caller's commit subject, push **only if** `git -C "<vault_root>" remote
+get-url origin` succeeds (otherwise the commit stays local — not an error), and open **no branch,
+no PR, no `gh` call**. Record the short SHA for A8. The remaining paragraphs describe the internal
+target.
+
+**Merge the PR without asking the user for confirmation** (internal mode).
 
 If `SUPER_PROTECTED_MAIN=true` (the shipped default), the default branch is a **protected branch**
 (direct pushes are rejected), so this MUST go through a feature branch and a PR — merged per
@@ -263,9 +284,11 @@ Notes:
   TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped
   default), run `gh` normally.
 
-**`SUPER_PROTECTED_MAIN=false` — direct-commit variant.** The skeleton above is the
-`SUPER_PROTECTED_MAIN=true` (shipped-default) path. When `SUPER_PROTECTED_MAIN=false`, skip the
-branch/PR machinery entirely and commit straight to the default branch — no `gh` calls at all:
+**Direct-commit variant — `SUPER_PROTECTED_MAIN=false`, or any external vault.** The skeleton
+above is the internal-mode `SUPER_PROTECTED_MAIN=true` (shipped-default) path. When
+`SUPER_PROTECTED_MAIN=false`, or whenever the target is an external vault (then prefix each
+command with `-C "<vault_root>"` and make the paths vault-relative), skip the branch/PR machinery
+entirely and commit straight to the current branch — no `gh` calls at all:
 
 ```bash
 # from the repo root, with the artifact/findings files already written
@@ -295,7 +318,7 @@ skill):
 ## <skill> complete
 
 **<primary artifact>:** <full path>      ← the most important line; always include it
-**PR:** <url> (merged)
+**PR:** <url> (merged)            ← internal vault; external vault: **Commit:** <short-sha> in <vault_root>
 
 **Other files created/modified:**
 - <path> — <what changed>     (or: none)
@@ -305,5 +328,8 @@ skill):
 
 ⚠️ **Critical:** <only present when a finding needs attention>
 ```
+
+In external vault mode there is no PR: print `**Commit:** <short-sha> in <vault_root>` on that
+line instead. Every caller's instantiation applies the same substitution.
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.
