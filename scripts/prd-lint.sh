@@ -92,13 +92,56 @@ lint_prd() {
   [[ -z "$SC_ROWS" ]] && finding FAIL prd.md "Success criteria" "no success-criteria rows"
 }
 
+lint_kb() {
+  local f="$PROJECT/knowledge-base.md" rows row id kind loc path sym pat
+  if grep -q '^| Id | Kind | Locator | Read for |' "$f"; then
+    finding PASS knowledge-base.md header "table header present"
+  else
+    finding FAIL knowledge-base.md header "table header must be '| Id | Kind | Locator | Read for |'"
+  fi
+  rows="$(table_rows <"$f")"
+  if [[ -z "$rows" ]]; then finding FAIL knowledge-base.md table "no source rows"; return; fi
+  while IFS= read -r row; do
+    [[ -z "$row" ]] && continue
+    id="$(printf '%s\n' "$row" | cell 1)"
+    kind="$(printf '%s\n' "$row" | cell 2)"
+    loc="$(printf '%s\n' "$row" | cell 3)"
+    case "$kind" in
+      instructions|repo-file|sample-code)
+        if [[ -e "$REPO/$loc" ]]; then finding PASS knowledge-base.md "$id" "$kind '$loc' exists"
+        else finding FAIL knowledge-base.md "$id" "$kind '$loc' not found under the repo root"; fi ;;
+      repo-glob)
+        # `**` → `*`: find -path lets `*` span '/' so the pattern matches recursively (bash 3.2 has no globstar)
+        pat="$REPO/$(printf '%s' "$loc" | sed 's#\*\*#*#g')"
+        if [[ -n "$(find "$REPO" -path "$pat" -type f -print 2>/dev/null | head -1)" ]]; then
+          finding PASS knowledge-base.md "$id" "repo-glob '$loc' matches"
+        else finding FAIL knowledge-base.md "$id" "repo-glob '$loc' matches no file"; fi ;;
+      entry-point)
+        if [[ "$loc" != *:* ]]; then finding FAIL knowledge-base.md "$id" "entry-point locator must be <path>:<symbol>, got '$loc'"
+        else
+          path="${loc%%:*}"; sym="${loc#*:}"
+          if [[ ! -f "$REPO/$path" ]]; then finding FAIL knowledge-base.md "$id" "entry-point file '$path' not found"
+          elif grep -qF -- "$sym" "$REPO/$path"; then finding PASS knowledge-base.md "$id" "entry-point '$loc' found"
+          else finding WARN knowledge-base.md "$id" "symbol '$sym' not found in $path"; fi
+        fi ;;
+      doc-url)
+        if [[ "$loc" =~ ^https?://[^[:space:]]+$ ]]; then finding PASS knowledge-base.md "$id" "doc-url well-formed"
+        else finding FAIL knowledge-base.md "$id" "doc-url '$loc' is not an http(s) URL"; fi ;;
+      context7)
+        if [[ "$loc" =~ ^/[^/]+/[^/]+$ ]]; then finding PASS knowledge-base.md "$id" "context7 id well-formed"
+        else finding FAIL knowledge-base.md "$id" "context7 id '$loc' must look like /<org>/<project>"; fi ;;
+      *) finding FAIL knowledge-base.md "$id" "unknown kind '$kind' (instructions|repo-file|repo-glob|sample-code|entry-point|doc-url|context7)" ;;
+    esac
+  done <<<"$rows"
+}
+
 # ── main ─────────────────────────────────────────────────────────────────────
 HAVE_PRD=false; HAVE_KB=false; HAVE_EVAL=false
 check_file_present prd.md            && HAVE_PRD=true
 check_file_present knowledge-base.md && HAVE_KB=true
 check_file_present evaluation.md     && HAVE_EVAL=true
 $HAVE_PRD  && { check_header prd.md;            lint_prd; }
-$HAVE_KB   && { check_header knowledge-base.md; }
+$HAVE_KB   && { check_header knowledge-base.md; lint_kb; }
 $HAVE_EVAL && { check_header evaluation.md; }
 
 # ── output ───────────────────────────────────────────────────────────────────
