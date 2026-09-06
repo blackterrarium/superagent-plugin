@@ -70,12 +70,13 @@ repo-root `.superenv` file, (3) the plugin default
 ## Vault root
 
 Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
-`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
-its own git repository outside the checkout. Otherwise `<vault_root>` is
-`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
---path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
-file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
-root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
 
 ## Goal Identification
 
@@ -211,9 +212,10 @@ a direct commit to the default branch is permitted instead — see `superauthor`
 `superauthor` A7's direct-commit variant always applies — `git -C "<vault_root>" add
 <vault-relative paths…> && git -C "<vault_root>" commit -m "docs(finish): <topic> closeout —
 superfinish output [skip ci]"`, push only if the vault has an `origin`. The skeleton below is
-the internal-mode path. The progress-table **PR** cell of a *planning* row stays blank in
-external mode (there is no PR for a vault-only commit); an *executed* row still records the
-code PR number.
+the internal-mode path. A7's **precondition** applies: if `<vault_root>` is not its own
+repository, STOP and report — never improvise a `git init`. The progress-table **PR** cell of a
+*planning* row stays blank in external mode (there is no PR for a vault-only commit); an
+*executed* row still records the code PR number.
 
 **Scope of the commit: only the bookkeeping docs** written this run — the closeout report, new/revised
 `findings/` docs, the `<PLAN.md>` close-out note, and **every ancestor plan file** the completion-mode
@@ -276,6 +278,7 @@ appear here.**
 
     ⚠️ **Critical:** <only present when a finding contradicts a plan assumption>
 
-    **PR:** <url> (merged)            ← external vault: **Commit:** <short-sha> in <vault_root>
+    **PR:** <url> (merged)
+    **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.

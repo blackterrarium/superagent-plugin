@@ -87,6 +87,7 @@ printf 'x\n' >"$T/ini/.superenv"; mkdir -p "$T/ini/.claude/agents"; printf 'x\n'
 check "init --local-only: git sees the excluded files as ignored" bash -c "cd '$T/ini' && git check-ignore -q .superenv && git check-ignore -q .claude/agents/super-planner.md"
 # Worktree: the exclude file is shared through the common git dir.
 ( cd "$T/ini" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init && git worktree add -q "$T/ini-wt" -b wt )
+check "init: SKILL.md quotes the idempotent append rule" grep -qF 'grep -qxF -- ' "$ROOT/skills/init/SKILL.md"
 check "init --local-only: exclude resolves through --git-common-dir from a worktree" bash -c "cd '$T/ini-wt' && [ \"\$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude\" -ef '$EXCL' ] && printf 'x\n' >.superenv && git check-ignore -q .superenv"
 
 echo "vault-external-test: $FAILS failure(s)"

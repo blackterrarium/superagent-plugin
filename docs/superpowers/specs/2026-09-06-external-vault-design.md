@@ -54,7 +54,7 @@ vault_root() {
 
 Skills get the same logic as a canonical **Vault root** block placed directly under the existing
 `.superenv` resolver block, in every skill that composes a vault path (init, superloop, superagent,
-superagent-external, supergoal, superplan, superfinish, superprd, superrun). Its wording:
+superagent-external, supergoal, superplan, superfinish, superprd). Its wording:
 
 > Resolve `SUPER_GOAL_ROOT`. If it starts with `/` or `~`, the vault is **external**:
 > `<vault_root>` is that path (with `~` expanded) and the vault is its own git repository.

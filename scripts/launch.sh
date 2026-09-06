@@ -69,7 +69,12 @@ case "$PLAN_ABS" in
   "$VAULT"/*|"$VAULT_P"/*)
     if vault_is_external; then PLAN_REL="$PLAN_ABS"
     else echo "plan must live inside the repo checkout ($REPO): $PLAN_ABS" >&2; exit 2; fi ;;
-  *) echo "plan must live inside the repo checkout ($REPO) or the external vault ($VAULT): $PLAN_ABS" >&2; exit 2 ;;
+  *) if vault_is_external; then
+       echo "plan must live inside the repo checkout ($REPO) or the external vault ($VAULT): $PLAN_ABS" >&2
+     else
+       echo "plan must live inside the repo checkout ($REPO): $PLAN_ABS" >&2
+     fi
+     exit 2 ;;
 esac
 
 # Goal folder = parent of the master-plans/ dir holding the plan (superloop L1).

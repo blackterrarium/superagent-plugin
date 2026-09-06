@@ -87,14 +87,17 @@ authoring), so the two are ambiguous whenever both are available. `superagent:in
 
 - verifies prerequisites;
 - creates a `.superenv` config from the plugin's shipped defaults if the repo has none;
-- seeds the goal vault (`root.md` under `SUPER_GOAL_ROOT`, default `vault`) if absent — an absolute or `~`-prefixed `SUPER_GOAL_ROOT` is an **external vault**, initialised as its own git repo outside the checkout; `--local-only` routes every ignore entry to `.git/info/exclude` so the checkout has nothing to commit;
+- seeds the goal vault (`root.md` under `SUPER_GOAL_ROOT`, default `vault`) if absent — an absolute or `~`-prefixed `SUPER_GOAL_ROOT` is an **external vault**, initialised as its own git repo outside the checkout; `--local-only` routes every ignore entry to `.git/info/exclude` so a checkout with an external vault has nothing to commit;
 - adds the loop-status gitignore entry;
 - on Claude Code, generates per-role agent definitions in `.claude/agents/` for the model and
   effort pins in `.superenv`.
 
-It is idempotent and never overwrites an existing file. It only prepares files and never commits,
-so review and commit `.superenv`, the vault seed, and `.gitignore` yourself (through a PR if the
-repo protects its default branch).
+It is idempotent and never overwrites an existing file. What is left for you to commit depends on
+the mode: with an **internal vault and no `--local-only`**, review and commit `.superenv`, the vault
+seed, any generated role agents, and `.gitignore` yourself (through a PR if the repo protects its
+default branch); with an **external vault**, init makes the vault repo's own seed commit — its one
+exception to "never commits" — and the code repo needs only `.superenv`, the role agents, and the
+`.env` ignore line; with **`--local-only` and an external vault**, nothing needs committing.
 
 **4. Create a goal.**
 
@@ -111,6 +114,10 @@ This produces a goal folder with a root master plan.
 | Manual, one step at a time | Invoke `superagent:superplan`, `superagent:superrun`, `superagent:superfinish` directly. | Full control, no loop. |
 | Attended loop | `superagent:superagent <PLAN.md>` | Runs in your session as a cron job. Launch the session with the Bash timeout variables described under [Timeouts](#timeouts). |
 | Unattended loop | `superagent:superagent-external <PLAN.md>` | Arms a per-goal OS scheduler entry. Needs no console session. |
+
+In external vault mode `<PLAN.md>` is the plan's absolute path (e.g.
+`~/superagent-vaults/<repo>/<STAMP>-<slug>/master-plans/<seed>.md`); an internal vault takes the
+repo-relative path.
 
 `superagent` carries `disable-model-invocation`, so it never auto-triggers from a plain-English
 request. Invoke it by its full name, exactly like `superagent:init`.
