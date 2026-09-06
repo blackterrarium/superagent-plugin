@@ -110,21 +110,32 @@ change. The gitignore sentence moves: in internal mode the pattern lives in the 
 `**/<SUPER_LOOP_STATUS_DIRNAME>/`, which also covers the `.<loop>.lockd` and `.ci-stale` markers
 that sit beside the loop file.
 
+**L2 — bootstrap/resume.** The loop-file lookup and lazy first-write are rooted at
+`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/` (internal: under `primary_root`, as today;
+external: the vault), and the input `<PLAN.md>` is repo-relative (internal) or absolute
+(external), the form `launch.sh` stores in `master_plan:`.
+
 **L5 — sync gate.** `sync_main()` on the code repo is unchanged; code PRs still need it. A second
-mechanical step, `sync_vault()`, runs immediately after it in external mode:
+mechanical step, `sync_vault()`, runs immediately after it in external mode — in the driver's
+pre-dispatch gates (step 1 of both states) as well as the post-dispatch ones:
 
 1. `git -C "<vault_root>" remote get-url origin` fails → **no remote → no-op**, synced.
-2. Otherwise `git -C "<vault_root>" fetch origin`, then the same left-right count comparison
+2. `origin` exists but the branch has no upstream → `git -C "<vault_root>" push -u origin HEAD`;
+   failure → STOP and escalate.
+3. Otherwise `git -C "<vault_root>" fetch origin`, then the same left-right count comparison
    against the vault's current branch: equal → synced; behind only → `merge --ff-only`; ahead or
    diverged → in external mode **ahead is normal** (local commits not yet pushed because a push
    failed) — attempt `git -C "<vault_root>" push`; if that fails or the branches diverged →
    STOP and escalate exactly as `sync_main()` does.
-3. No uncommitted **tracked** changes in the vault repo (`git -C "<vault_root>" status
+4. No uncommitted **tracked** changes in the vault repo (`git -C "<vault_root>" status
    --porcelain --untracked-files=no` empty) → else STOP and escalate.
 
-**Be-sure verification** distinguishes the two kinds of reported artifact: code paths are checked
-on the code repo as today; vault paths are checked with `git -C "<vault_root>" ls-files
---error-unmatch <vault-relative path>`. In internal mode both resolve to the code repo.
+**Be-sure verification** distinguishes the two kinds of reported artifact. Internal vault: both
+kinds are checked with today's form, `git -C "$primary_root" ls-files --error-unmatch
+<repo-relative path>`. External vault: code paths as before; a vault artifact is reported as an
+absolute path plus `**Commit:** <short-sha> in <vault_root>` — strip the `<vault_root>/` prefix and
+check `git -C "<vault_root>" ls-files --error-unmatch <vault-relative path>`, confirming the commit
+with `git -C "<vault_root>" cat-file -e <short-sha>`.
 
 **L6** is unchanged. The `superagent` driver skill's per-branch "present and tracked on local
 `main`" checks after superplan / superrun use the same two-kind rule.
