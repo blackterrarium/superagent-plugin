@@ -24,10 +24,10 @@ SUPER_MODEL_TASK_REVIEWER=pi:openai-codex/gpt-5.6-sol
 SUPER_MODEL_RE_REVIEWER=pi:openai-codex/gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=pi:openai-codex/gpt-5.6-sol  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=pi:openai-codex/gpt-5.6-sol      # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_MODEL_PRD_REVIEWER=pi:openai-codex/gpt-5.6-sol    # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=pi:openai-codex/gpt-5.6-sol    # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
-SUPER_MODEL_EVALUATOR=pi:openai-codex/gpt-5.6-sol       # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
-SUPER_MODEL_DIAGNOSER=pi:openai-codex/gpt-5.6-sol       # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
+SUPER_MODEL_PRD_REVIEWER=pi:openai-codex/gpt-5.6-sol     # superprd: zero-context sufficiency review of the drafted PRD (read-only)
+SUPER_MODEL_META_PLANNER=pi:openai-codex/gpt-5.6-sol     # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
+SUPER_MODEL_EVALUATOR=pi:openai-codex/gpt-5.6-sol        # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
+SUPER_MODEL_DIAGNOSER=pi:openai-codex/gpt-5.6-sol        # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_BRIDGE_RELAY_MODEL=openai-codex/gpt-5.6-terra         # relay agent model for a BRIDGED SDD role (.pi/agents relay definition; bare <provider>/<model>, no harness prefix); the sonnet-tier peer, same as implementer/fix-applier — never a weak model (it answers instead of relaying) and never inherit (the pi-subagents default is unpinned)
 
 # ── Reasoning effort per agent role ───────────────────────────────

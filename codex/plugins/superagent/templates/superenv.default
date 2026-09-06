@@ -23,10 +23,10 @@ SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol
 SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol      # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_MODEL_PRD_REVIEWER=codex:gpt-5.6-sol    # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol    # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
-SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol       # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
-SUPER_MODEL_DIAGNOSER=codex:gpt-5.6-sol       # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
+SUPER_MODEL_PRD_REVIEWER=codex:gpt-5.6-sol     # superprd: zero-context sufficiency review of the drafted PRD (read-only)
+SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol     # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
+SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol        # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
+SUPER_MODEL_DIAGNOSER=codex:gpt-5.6-sol        # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra         # relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)
 
