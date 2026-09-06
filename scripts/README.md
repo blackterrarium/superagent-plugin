@@ -75,7 +75,8 @@ passed through.
 This domain applies to `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` specifically, since the supervisor
 is always native to `SUPER_HARNESS`. The thirteen subagent role keys (`SUPER_EFFORT_PLANNER`,
 `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
-`_BRANCH_REVIEWER`, `_FIX_PLANNER`) are validated in **their own resolved harness's** domain
+`_BRANCH_REVIEWER`, `_FIX_PLANNER`, `_PRD_REVIEWER`, `_META_PLANNER`, `_EVALUATOR`, `_DIAGNOSER`)
+are validated in **their own resolved harness's** domain
 instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
 a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|xhigh|max|inherit`
 (a `:<level>` suffix on the model string, or `--thinking` when the model is `inherit`). See the

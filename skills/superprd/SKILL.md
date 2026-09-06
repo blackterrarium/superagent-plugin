@@ -52,7 +52,7 @@ for confirmation before any vault write (step 8), exactly as `supergoal` does.
 ### 2. Derive identifiers
 
 - `<slug>` — concise kebab-case summary of the objective (mirror `supergoal`'s style).
-- `<STAMP>` — `date -u +%Y-%m-%d-%H_%M`. `<DATE>` — `date +%Y-%m-%d` (branch name only).
+- `<STAMP>` — `date -u +%Y-%m-%d-%H_%M`. `<DATE>` — `date +%Y-%m-%d` (branch name and the header block).
 - Project folder — `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/`, rooted at the
   primary checkout. If `<project-dir>` was given, use it instead and treat its files as the
   starting draft. If the derived folder already exists and no `<project-dir>` was given,
@@ -183,7 +183,20 @@ the user). Keep the WARNs.
 
 ### 7. Zero-context review
 
-Dispatch **one** read-only `PRD_REVIEWER` subagent. Resolve `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`. If the model is a bare tier name (`sonnet`, `opus`, `haiku`, `fable`) **and** the effort is `inherit`, dispatch with the plain subagent mechanism and `model: <tier>`. Otherwise — a full model ID such as the default `claude-opus-4-8`, a non-`inherit` effort, or a bridged harness prefix — dispatch with `subagent_type: super-prd-reviewer` and omit `model:`; that is the definition `superagent:init` generates in `.claude/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop (the same rule superloop L7 applies to the panel). The prompt contains **only** the three scratch files
+Dispatch **one** read-only `PRD_REVIEWER` subagent. Resolve `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`.
+<!-- cc-only:start -->
+If the model is `inherit` or a bare tier name (`sonnet`, `opus`, `haiku`, `fable`) **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <tier>` when a tier, no `model:` when `inherit`. Otherwise — a full model ID such as the default `claude-opus-4-8`, a non-`inherit` effort, or a bridged harness prefix — dispatch with `subagent_type: super-prd-reviewer` and omit `model:`; that is the definition `superagent:init` generates in `.claude/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop (the same rule superloop L7 applies to the panel).
+<!-- cc-only:end -->
+<!-- cursor-only:start
+If the model is `inherit` or a bare model name **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <name>` when named, no `model:` when `inherit`. Otherwise dispatch with `subagent_type: super-prd-reviewer` and omit `model:`; that is the definition `superagent:init` generates in `.cursor/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop.
+cursor-only:end -->
+<!-- codex-only:start
+Pass the resolved pins as the `spawn_agent` parameters — `model` (prefix stripped) and `reasoning_effort` — omitting each that is `inherit`; no definition file is involved.
+codex-only:end -->
+<!-- pi-only:start
+The four coding-loop roles get no `.pi/agents/` definition (see `init`). Dispatch through the `pi-subagents` `subagent` tool with the model pin as its parameter — `<provider>/<model>[:<effort>]` resolved from the two keys, omitting each part that is `inherit`; a bridged prefix (any harness other than `pi`) runs the reviewer as a blocking `role-bridge.sh` process instead, the way the planner and panel are dispatched on Pi.
+pi-only:end -->
+The prompt contains **only** the three scratch files
 verbatim and these two questions:
 
 1. Could a fresh planner, given these files and the sources they name and nothing else, write

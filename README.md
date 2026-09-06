@@ -440,6 +440,29 @@ coding-loop skills, never by the tick.
 | SUPER_GH_DISABLE_SANDBOX | `false` | `true` on hosts (e.g. macOS) where `gh` needs keychain access the tool sandbox blocks. |
 | SUPER_REPO_NOTES | *(empty)* | Optional path to a repo doc the SDD executor reads before the task loop, treated as standing repo policy. |
 
+### Coding loop
+
+0.7.0 ships the first stage of a PRD-driven outer loop that will meta-plan, run the inner
+`superagent` loop, evaluate the result, diagnose failures, and repeat (design:
+`docs/superpowers/specs/2026-09-05-coding-loop-design.md`). Stage 1 delivers the inputs:
+
+- a **project folder** at `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/` holding
+  `prd.md` (objective, success criteria, constraints, locked decisions, iteration ledger),
+  `knowledge-base.md` (a manifest of sources by kind), and `evaluation.md` (a setup command,
+  command checks with `exit <n>` / `stdout ~ /regex/` pass rules and timeouts, and judged
+  objectives with written criteria);
+- `superagent:superprd`, which turns a planning conversation into that folder once a readiness
+  rubric passes, asking you one question per gap first;
+- `scripts/prd-lint.sh <project-dir> [--json]`, the offline validator both `superprd` and the
+  future evaluator run.
+
+| Key | Default | Meaning |
+|---|---|---|
+| SUPER_PROJECT_DIRNAME | `projects` | Where project folders live under `SUPER_GOAL_ROOT`. A project folder has no `master-plans/`, so the plan-tree skills never mistake it for a goal. |
+| SUPER_EVAL_TIMEOUT_MIN | `60` | Ceiling for any `evaluation.md` check timeout; `prd-lint.sh` FAILs a larger value. |
+| SUPER_GOAL_AUTOCONFIRM | `false` | Reserved for Stage 2. `true` only inside `supermeta`'s dispatch of `supergoal`, to skip its human confirmation. Nothing reads it yet. |
+| SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
+
 ## Other harnesses: Codex, Cursor, Pi
 
 Each non-Claude build is generated from the canonical skills by a `scripts/build-<harness>-skills.sh`
@@ -530,29 +553,6 @@ implementer and two live codex task-reviewer relays. Remaining gap: `TICK_TIMEOU
 `timeout` or `gtimeout` on `PATH`, else the driver WARNs and runs uncapped. Re-run with
 `bash scripts/pi-smoke.sh` (`PI_SMOKE_MODEL=<provider>/<id>` to pin a model). The scheduler-fired
 path is covered by `scripts/pi-e2e.sh`; see [`scripts/README.md`](scripts/README.md).
-
-### Coding loop
-
-0.7.0 ships the first stage of a PRD-driven outer loop that will meta-plan, run the inner
-`superagent` loop, evaluate the result, diagnose failures, and repeat (design:
-`docs/superpowers/specs/2026-09-05-coding-loop-design.md`). Stage 1 delivers the inputs:
-
-- a **project folder** at `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/` holding
-  `prd.md` (objective, success criteria, constraints, locked decisions, iteration ledger),
-  `knowledge-base.md` (a manifest of sources by kind), and `evaluation.md` (a setup command,
-  command checks with `exit <n>` / `stdout ~ /regex/` pass rules and timeouts, and judged
-  objectives with written criteria);
-- `superagent:superprd`, which turns a planning conversation into that folder once a readiness
-  rubric passes, asking you one question per gap first;
-- `scripts/prd-lint.sh <project-dir> [--json]`, the offline validator both `superprd` and the
-  future evaluator run.
-
-| Key | Default | Meaning |
-|---|---|---|
-| SUPER_PROJECT_DIRNAME | `projects` | Where project folders live under `SUPER_GOAL_ROOT`. A project folder has no `master-plans/`, so the plan-tree skills never mistake it for a goal. |
-| SUPER_EVAL_TIMEOUT_MIN | `60` | Ceiling for any `evaluation.md` check timeout; `prd-lint.sh` FAILs a larger value. |
-| SUPER_GOAL_AUTOCONFIRM | `false` | Reserved for Stage 2. `true` only inside `supermeta`'s dispatch of `supergoal`, to skip its human confirmation. Nothing reads it yet. |
-| SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
 
 ## Skill reference
 

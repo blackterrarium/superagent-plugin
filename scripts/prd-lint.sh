@@ -188,7 +188,7 @@ lint_eval() {
     fi
     if ! [[ "$to" =~ ^[0-9]+$ ]]; then
       finding FAIL evaluation.md "$id" "Timeout must be a whole number of minutes, got '$to'"
-    elif (( to > MAX_TIMEOUT )); then
+    elif (( 10#$to > 10#$MAX_TIMEOUT )); then
       finding FAIL evaluation.md "$id" "Timeout $to exceeds SUPER_EVAL_TIMEOUT_MIN=$MAX_TIMEOUT"
     fi
   done <<<"$rows"
@@ -245,7 +245,7 @@ $HAVE_EVAL && { check_header evaluation.md; lint_eval; }
 $HAVE_PRD && $HAVE_EVAL && lint_coverage
 
 # ── output ───────────────────────────────────────────────────────────────────
-json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g'; }
+json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g; s/'$'\t''/\\t/g' | tr -d '\000-\010\013-\037'; }
 if $JSON; then
   printf '['
   first=true

@@ -169,6 +169,14 @@ if command -v python3 >/dev/null 2>&1; then
     ok "--json parses and has the four keys"
   else fail "--json parses and has the four keys"; fi
 fi
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak "s/names the offending field/names the$(printf '\t')offending field/" "$T/p/evaluation.md"
+if command -v python3 >/dev/null 2>&1; then
+  if "$LINT" "$T/p" --json | python3 -c 'import json,sys; json.load(sys.stdin)' >/dev/null 2>&1; then
+    ok "--json escapes a tab in a cell"
+  else fail "--json escapes a tab in a cell"; fi
+fi
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `exit 0` | 08 |#' "$T/p/evaluation.md"
+expect "leading-zero timeout is accepted" 0 'PASS evaluation.md:C1 Pass when' "$T/p"
 
 echo "prd-lint-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]
