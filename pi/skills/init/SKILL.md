@@ -173,7 +173,7 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
 
 ## Step 3 — Role agents (model/effort pins)
 
-Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
+Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
 which the external tick passes straight to `pi --model`. On Pi the supervisor's OWN dispatches
 (planner, executor, panel) are bridge processes that take the pins as CLI flags and need no
 definition; only superrun's SDD roles (implementer, fix-applier, task-reviewer, re-reviewer,
@@ -181,6 +181,8 @@ branch-reviewer, fix-planner) dispatch through the `pi-subagents` `subagent` too
 generated `.pi/agents/super-<role>.md` definitions. Generation happens only when Step 1 found
 `pi-subagents` ≥ 0.58.0 and `SUPER_PI_SUBAGENTS` ≠ `off`; otherwise this step generates nothing
 and reports `dispatch=sequential (no pi-subagents)` for the six SDD roles.
+The four coding-loop roles (prd-reviewer, meta-planner, evaluator, diagnoser) get no `.pi/agents/`
+file in 0.7.0; `superprd` passes the model pin as a subagent parameter instead.
 
 Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
@@ -195,6 +197,14 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+| SUPER_MODEL_PRD_REVIEWER | SUPER_EFFORT_PRD_REVIEWER | `.claude/agents/super-prd-reviewer.md` |
+| SUPER_MODEL_META_PLANNER | SUPER_EFFORT_META_PLANNER | `.claude/agents/super-meta-planner.md` |
+| SUPER_MODEL_EVALUATOR | SUPER_EFFORT_EVALUATOR | `.claude/agents/super-evaluator.md` |
+| SUPER_MODEL_DIAGNOSER | SUPER_EFFORT_DIAGNOSER | `.claude/agents/super-diagnoser.md` |
+
+The last four rows are the **coding-loop roles** (0.7.0): `super-prd-reviewer` is dispatched by
+`superprd`, the other three by `supermeta` / `supereval` / `superdiagnose` when those skills land.
+They follow the same generate/skip/conflict rules as the nine loop roles above.
 
 On Pi the listed path is `.pi/agents/super-<role>.md` for the six SDD roles; planner/executor/panel
 never get a file.
