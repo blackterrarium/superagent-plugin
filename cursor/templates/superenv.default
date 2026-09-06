@@ -23,6 +23,10 @@ SUPER_MODEL_TASK_REVIEWER=inherit
 SUPER_MODEL_RE_REVIEWER=inherit
 SUPER_MODEL_BRANCH_REVIEWER=inherit  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=inherit      # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_PRD_REVIEWER=inherit    # superprd: zero-context sufficiency review of the drafted PRD (read-only)
+SUPER_MODEL_META_PLANNER=inherit    # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
+SUPER_MODEL_EVALUATOR=inherit       # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
+SUPER_MODEL_DIAGNOSER=inherit       # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED roles; inherit = the CLI default subagent model
 
@@ -39,6 +43,10 @@ SUPER_EFFORT_TASK_REVIEWER=inherit
 SUPER_EFFORT_RE_REVIEWER=inherit
 SUPER_EFFORT_BRANCH_REVIEWER=inherit      # final whole-branch reviewer
 SUPER_EFFORT_FIX_PLANNER=inherit           # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_EFFORT_PRD_REVIEWER=inherit          # superprd zero-context reviewer
+SUPER_EFFORT_META_PLANNER=inherit          # supermeta (Stage 2)
+SUPER_EFFORT_EVALUATOR=inherit             # supereval judged objectives (Stage 2)
+SUPER_EFFORT_DIAGNOSER=inherit            # superdiagnose RCA (Stage 3)
 
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=cursor                    # this is the Cursor build — the external driver fires the Cursor CLI (`agent`)
@@ -82,3 +90,11 @@ SUPER_GH_DISABLE_SANDBOX=false          # true on macOS hosts where gh needs key
 
 # ── Escape hatch ──────────────────────────────────────────────────
 SUPER_REPO_NOTES=                       # optional path to a repo doc the executor reads pre-run
+
+# ── Coding loop (supercode) ───────────────────────────────────────
+# Stage 1 (0.7.0) ships the project inputs and superprd; the keys marked "reserved" are declared
+# now so a .superenv created today needs no edit when the loop lands, but nothing reads them yet.
+SUPER_PROJECT_DIRNAME=projects          # project folders land at <SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/
+SUPER_GOAL_AUTOCONFIRM=false            # reserved (Stage 2): true ONLY in supermeta's dispatch of supergoal — skips supergoal's step-7 human confirmation
+SUPER_CODE_MAX_ITERATIONS=5             # reserved (Stage 3): supercode rounds before parking on WAITING FOR INPUT
+SUPER_EVAL_TIMEOUT_MIN=60               # ceiling for any evaluation.md check timeout (prd-lint.sh FAILs a larger value)
