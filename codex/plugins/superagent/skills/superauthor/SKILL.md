@@ -101,12 +101,13 @@ repo-root `.superenv` file, (3) the plugin default
 ## Vault root
 
 Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
-`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
-its own git repository outside the checkout. Otherwise `<vault_root>` is
-`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
---path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
-file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
-root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
 
 ## A2 — Authoring standard (REQUIRED)
 
@@ -267,14 +268,23 @@ authorization (A5).
 
 **Target repo — resolve first (see Vault root).** In **internal** mode the target is the code repo
 and the rest of this clause applies as written. In **external** mode the target is the **vault repo
-at `<vault_root>`**, and the **direct-commit variant** (bottom of this clause) **always applies**,
+at `<vault_root>`**.
+
+**Precondition — verify before the first git command:** `git -C "<vault_root>" rev-parse
+--show-toplevel` must succeed and its output, resolved physically (`cd … && pwd -P`), must equal
+`<vault_root>` resolved physically. If it does not — `<vault_root>` is not a repository, it sits
+inside another repository's tree (git would silently commit into *that* repo and, if it has a
+remote, push there), or it resolves inside `<primary_root>` — **STOP**: write nothing, commit
+nothing, and report "external vault at `<vault_root>` is not initialised — run `superagent:init`".
+Never `git init` here; init owns vault creation.
+
+In **external** mode the **direct-commit variant** (bottom of this clause) **always applies**,
 regardless of `SUPER_PROTECTED_MAIN` — that key describes the code repo, not the vault: run every
 git command as `git -C "<vault_root>" …`, express the caller's `git add` paths **relative to
 `<vault_root>`**, keep the caller's commit subject, push **only if** `git -C "<vault_root>" remote
 get-url origin` succeeds (otherwise the commit stays local — not an error), and open **no branch,
 no PR, no `gh` call**. Record the short SHA for A8 (`git -C "<vault_root>" rev-parse --short HEAD`).
-The remaining paragraphs describe the internal
-target.
+The remaining paragraphs describe the internal target.
 
 **Merge the PR without asking the user for confirmation** (internal mode).
 
@@ -358,7 +368,8 @@ skill):
 ## <skill> complete
 
 **<primary artifact>:** <full path>      ← the most important line; always include it
-**PR:** <url> (merged)            ← internal vault; external vault: **Commit:** <short-sha> in <vault_root>
+**PR:** <url> (merged)
+**Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
 
 **Other files created/modified:**
 - <path> — <what changed>     (or: none)

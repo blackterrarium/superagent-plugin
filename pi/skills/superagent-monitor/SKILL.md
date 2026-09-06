@@ -185,5 +185,6 @@ user before any stop / uninstall / purge.**
   file directly, hold that loop's `.<loop>.lockd` yourself. Never touch a loop whose `LOCK=yes`/`TICK=yes`
   without the lock.
 - **Confirm before destructive actions** (hard stop, `--purge`). Drain and re-arm are reversible.
-- **Operate per `primary_root`.** The loop files and locks exist only in the primary checkout; a `<slug>`
-  with a missing loop file is a resume-via-bootstrap situation, not an error to paper over.
+- **Operate per `primary_root`.** The loop files and locks exist only at the vault root (the primary
+  checkout for an internal vault, the vault repo for an external one); a `<slug>` with a missing
+  loop file is a resume-via-bootstrap situation, not an error to paper over.

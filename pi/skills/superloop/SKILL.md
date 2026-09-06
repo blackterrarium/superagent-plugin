@@ -55,12 +55,13 @@ repo-root `.superenv` file, (3) the plugin default
 ## Vault root
 
 Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
-`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
-its own git repository outside the checkout. Otherwise `<vault_root>` is
-`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
---path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
-file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
-root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
 
 ## Subroutine contract — read before applying the clauses
 
@@ -130,7 +131,9 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
 # `dirname` of the common dir is the primary checkout root — regardless of the primary's current branch.
 ```
 
-Every loop-status read/write, the overlap-lock dir, and the Sync gate's code-repo `git` commands use
+Every loop-status read/write and the overlap-lock dir derive from the **loop file's own directory**
+(`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/` — the scripts compute the lock as
+`dirname(<loop-file>)/.<basename>.lockd`); only the Sync gate's code-repo `git` commands use
 `primary_root` as their base. Derive the goal folder (`<vault_root>/<goal>/`) with `<vault_root>`
 resolved at `primary_root`: the loop file is
 `<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/<date>-<slug>.md` (internal vault:
@@ -223,8 +226,9 @@ goal-folder derivation, no search. This is the only form that advances the state
 2. Read the named loop file. The carried path is **absolute**, rooted at `<vault_root>` (see **Vault
    root**) — in an internal vault that is under the primary checkout (`primary_root()`, not the
    worktree); in an external vault it is the vault itself — so the tick's cwd is irrelevant for
-   reading/writing the file. Still resolve `primary_root()` (see **L1**) for the lock dir and the Sync
-   gate's code-repo `git` commands — a tick can fire while cwd is a worktree. A clean
+   reading/writing the file. Still resolve `primary_root()` (see **L1**) for the Sync gate's code-repo
+   `git` commands — a tick can fire while cwd is a worktree; the overlap-lock dir derives from the
+   **loop file's own directory** (see **L1** and **L3**), not from `primary_root`. A clean
    context is fine — **all** state (`status`, `plan_exhausted`, `driver`, `cron_id`, decisions) is in the
    file, not in conversation memory.
 3. If `status` is **`DONE`** → `release_lock()`, no-op, and (in `external` mode) remind the user to
@@ -356,10 +360,12 @@ interval, each in a **fresh session = clean context**.
 External ticks run in **independent sessions**, so a long tick (a run with a 30-min CI gate) can
 still be running when the next interval fires. Guard every tick with an atomic file lock in the
 loop-status dir so two ticks never run concurrently:
-- **`acquire_lock()`** — atomically `mkdir "<loop-file-dir>/.<loop-file-basename>.lockd"`. `<loop-file-dir>`
-  is an absolute path (under `primary_root()` for an internal vault, under `<vault_root>` for an external one — see **L1**),
-  so the lock is unambiguous even when the loop is launched from a worktree. On **success**,
-  write a unix timestamp to `…lockd/acquired` AND the driving process's PID —
+- **`acquire_lock()`** — atomically `mkdir "<loop-file-dir>/.<loop-file-basename>.lockd"`. The lock
+  derives from the **loop file's own directory** (`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/`),
+  never from `primary_root` (see **L1**). `<loop-file-dir>` is an absolute path — inside the primary
+  checkout for an internal vault, inside the vault repo for an external one — so the lock is
+  unambiguous even when the loop is launched from a worktree. On **success**, write a unix
+  timestamp to `…lockd/acquired` AND the driving process's PID —
   `${SUPERAGENT_TICK_PID:-$PPID}` (the external wrapper exports `SUPERAGENT_TICK_PID`; in-session
   ticks fall back to `$PPID`, the CLI process) — to `…lockd/owner`, then proceed. On **failure**
   (held): read `…lockd/owner`; if it names a PID that is **no longer alive** (`kill -0 <pid>`
@@ -398,13 +404,12 @@ traversal then acts on stale rows — **re-planning a step whose plan row alread
 re-plan loop), or failing to find a leaf whose closeout already merged. The loop must never read, or
 hand a sub-step, a stale tree.
 
-Run this gate in the **primary repo checkout** (the one holding the loop-status file). Resolve
-`primary_root()` (see **L1**) and run **every** gate `git` command against it —
-`git -C "$primary_root" <…>` (fetch, rev-parse, rev-list, merge --ff-only, status, checkout). This is
-what makes `git checkout main` correct when the loop itself was launched in a worktree: it operates
-on the **primary tree**, not the worktree (which cannot check out `main` — it is already checked out in
-the primary tree), and satisfies the "the one holding the loop-status file" qualifier above. In the
-primary checkout `primary_root` resolves to cwd, so `git -C "$primary_root"` is a no-op there. All
+Run this gate in the **primary repo checkout**. Resolve `primary_root()` (see **L1**) and run
+**every** gate `git` command against it — `git -C "$primary_root" <…>` (fetch, rev-parse, rev-list,
+merge --ff-only, status, checkout). This is what makes `git checkout main` correct when the loop
+itself was launched in a worktree: it operates on the **primary tree**, not the worktree (which
+cannot check out `main` — it is already checked out in the primary tree). In the primary checkout
+`primary_root` resolves to cwd, so `git -C "$primary_root"` is a no-op there. All
 `git` commands run in the Bash sandbox (no `gh`; `git fetch`/`pull` work there).
 
 ### `sync_main()` — deterministic, mechanical (no subagent panel — this is plumbing, not judgement)
@@ -485,8 +490,9 @@ duplicate that skeleton — apply A7's.
    default), the default branch is protected; never direct-push. If `SUPER_PROTECTED_MAIN=false`, a
    direct commit to the default branch is permitted instead.
    Commit/PR text carries no AI-attribution / `Co-Authored-By` trailers (repo policy).
-3. **Post-merge sync + be-sure (L5).** Immediately run `sync_main()` and the Be-sure verification so the
-   primary checkout reflects the merge before the next tick reads the tree.
+3. **Post-merge sync + be-sure (L5).** Immediately run `sync_main()` (then `sync_vault()` in external
+   vault mode) and the Be-sure verification so the primary checkout reflects the merge before the
+   next tick reads the tree.
 
 **superagent's subset.** superagent does **not** itself open/merge work PRs — `superplan`/`superrun`
 do that inside their own flows. superagent therefore applies only **L6.1's CI-red → L7 escalation

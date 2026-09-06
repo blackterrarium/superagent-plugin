@@ -103,12 +103,13 @@ repo-root `.superenv` file, (3) the plugin default
 ## Vault root
 
 Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
-`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
-its own git repository outside the checkout. Otherwise `<vault_root>` is
-`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
---path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
-file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
-root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
 
 ---
 

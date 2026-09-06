@@ -1,6 +1,6 @@
 ---
 name: init
-description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent (an external vault becomes its own git repo), and add the loop-status gitignore entry. `--local-only` routes every ignore entry to .git/info/exclude so a dogfooded checkout has nothing to commit. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
+description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent (an external vault becomes its own git repo), and add the loop-status gitignore entry. `--local-only` routes every ignore entry to .git/info/exclude so a dogfooded checkout with an external vault has nothing to commit. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
 argument-hint: "[--local-only]"
 license: MIT
 ---
@@ -40,10 +40,14 @@ files. Finish with a summary table of step → done/skipped.
 - **`--local-only`** — optional. Every line Step 5 would append to `<repo-root>/.gitignore` is
   appended to `<git-common-dir>/info/exclude` instead (`git rev-parse --path-format=absolute
   --git-common-dir` — so linked worktrees share it), plus two more lines: `.superenv` and
-  `.claude/agents/super-*.md`. `.gitignore` is not touched, and Step 6 reports that nothing
-  needs committing. Use it when the repository's history must not carry superagent's bootstrap
-  files — dogfooding the plugin on its own checkout, or any repo whose maintainers did not opt
-  in. Re-running later without the flag never removes the exclude lines (init never deletes).
+  `.claude/agents/super-*.md`. `.gitignore` is not touched. The flag routes **ignore entries
+  only**: with an **external** vault that leaves the checkout with nothing to commit (Step 6),
+  but with an **internal** vault the vault seed and every later plan-tree commit still land in
+  the code repo, so Step 6 warns that the combination is probably unintended. Use it when the
+  repository's history must not carry superagent's bootstrap files — dogfooding the plugin on
+  its own checkout, or any repo whose maintainers did not opt in. Re-running later without the
+  flag never removes the exclude lines (init never deletes).
+  On Pi the role definitions live in `.pi/agents/super-*.md`; that is the line excluded.
 
 Invoke this skill explicitly as `superagent:init` — a built-in `init` skill (CLAUDE.md
 authoring) ships unscoped in most sessions, so the bare name `init` is ambiguous the
@@ -126,13 +130,14 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-### .superenv validation (lint — WARN + fallback, never abort — one exception)
+### .superenv validation (lint — WARN + fallback, never abort — two exceptions)
 
 Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
 using it. For each finding emit one WARN row in the summary; the effective value used
 by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
-report-only. There is exactly one exception to "never abort": a foreign harness on
-`SUPER_MODEL_SUPERVISOR` (item 5) stops init.
+report-only. There are exactly two exceptions to "never abort": a foreign harness on
+`SUPER_MODEL_SUPERVISOR` (item 5), and a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/`
+(item 7) — either one stops init.
 
 1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
    also exist in `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
@@ -181,11 +186,16 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
    item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
    codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high|xhigh|max`;
    cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
-7. **Paths:** `SUPER_GOAL_ROOT` must be non-empty, without a trailing `/`, and without a `..`
-   segment (→ WARN, fall back to the template default `vault`). An absolute or `~`-prefixed
-   value selects **external vault mode** (see Step 4); if that value resolves to a directory
-   *inside* `<repo-root>`, WARN "external form for an in-repo path — treated as internal" and
-   use it as the equivalent repo-relative path. `SUPER_PROJECT_DIRNAME` and
+7. **Paths:** `SUPER_GOAL_ROOT` must be non-empty and without a `..` segment (→ WARN, fall back
+   to the template default `vault`). A trailing `/` is a WARN that **strips the slash and keeps
+   the value** — the same normalisation `vault_root` performs — never a fall-back to `vault`. An
+   absolute or `~`-prefixed value selects **external vault mode** (see Step 4); if that value
+   resolves to a directory *inside* `<repo-root>`, WARN "external form for an in-repo path —
+   treated as internal" and use it as the equivalent repo-relative path. If `<vault_root>`
+   resolves physically (`cd "<vault_root>" && pwd -P`) to `$HOME` or to `/`, **ABORT** init with
+   "SUPER_GOAL_ROOT resolves to your home directory / the filesystem root; choose a subdirectory
+   such as `~/superagent-vaults/<repo>`" — Step 4 would otherwise `git init` the whole home
+   directory or filesystem root and scatter goal folders through it. `SUPER_PROJECT_DIRNAME` and
    `SUPER_LOOP_STATUS_DIRNAME` must be a single path segment (no `/`) — else WARN + default.
 
 ## Step 3 — Role agents (model/effort pins)
@@ -360,10 +370,19 @@ depends on the mode:
   means a feature branch + PR, same as every `superauthor`-driven skill's own A7 commit step.
 - **External vault, no `--local-only`:** the same list **without** the vault seed (it is
   committed in the vault repo already) and with `.gitignore` covering only `.env`.
-- **`--local-only` (either mode):** state that **nothing needs committing**; list the paths now
-  excluded via `.git/info/exclude` (`.env`, `.superenv`, `.claude/agents/super-*.md`, and in
-  internal mode the loop-status pattern), and where the loop-status pattern lives (the vault
-  repo's `.gitignore` in external mode).
+- **External vault with `--local-only`:** state that **nothing needs committing**; list the paths
+  now excluded via `.git/info/exclude` (`.env`, `.superenv`, `.claude/agents/super-*.md`), and
+  note that the loop-status pattern lives in the vault repo's own `.gitignore` (Step 4).
+- **Internal vault with `--local-only`:** the flag routes **ignore entries only**, so this is
+  **not** a checkout with nothing to commit: the vault seed (`<SUPER_GOAL_ROOT>/root.md`) and
+  every later plan-tree commit from `supergoal`/`superplan`/`superfinish` still land in the code
+  repo. List the paths now excluded via `.git/info/exclude` (`.env`, `.superenv`,
+  `.claude/agents/super-*.md`, the loop-status pattern), say the vault seed still needs
+  committing, and **WARN** that `--local-only` with an internal vault is probably unintended —
+  it hides the bootstrap files while the goal vault itself stays in the repo's history. An
+  external vault (`SUPER_GOAL_ROOT` absolute or `~`-prefixed) is what makes the checkout
+  genuinely commit-free.
+  On Pi the role definitions are `.pi/agents/super-*.md` in every bullet above.
 
 `.env` itself (holding Pi provider credentials (`pi auth`) and `GH_TOKEN`) is never committed in any mode — only
 the ignore entry that excludes it is.

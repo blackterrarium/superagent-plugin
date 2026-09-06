@@ -117,12 +117,13 @@ repo-root `.superenv` file, (3) the plugin default
 ## Vault root
 
 Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
-`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
-its own git repository outside the checkout. Otherwise `<vault_root>` is
-`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
---path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
-file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
-root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
 
 ## Goal Identification
 
@@ -388,7 +389,8 @@ a direct commit to the default branch is permitted instead — see `superauthor`
 `superauthor` A7's direct-commit variant always applies — `git -C "<vault_root>" add
 <vault-relative paths…> && git -C "<vault_root>" commit -m "docs(plan): <topic> — superplan
 output [skip ci]"`, push only if the vault has an `origin`. The skeleton below is the
-internal-mode path.
+internal-mode path. A7's **precondition** applies: if `<vault_root>` is not its own repository,
+STOP and report — never improvise a `git init`.
 
 **Scope of the commit: only the planning artifacts** — the plan file, new/revised `findings/` docs, the
 immediate-parent progress-report update, and **every ancestor plan file** the planning-mode ascent
@@ -447,7 +449,7 @@ Report the following, in order:
    plan up to the root `<PLAN.md>` whose status the ascent set to `in progress`** (path + which row).
    Give the path and a one-line note of what changed. If none, write "none".
 4. **PR** — the URL of the pull request that committed and merged the plan documents, and its state
-   (merged). *Always include it.*
+   (merged) — external vault: the vault commit SHA. *Always include it.*
 5. **Findings** — one line per new finding captured during planning. **Call out any CRITICAL finding** (a
    contradiction in the seed, a mechanism that does not work as the seed assumed, a blocking constraint)
    under its own bold ⚠️ line so it cannot be missed. If there were none, write "none".
@@ -458,7 +460,8 @@ Use this format:
 
     **Plan file:** <full path>
     **Plan type:** implementation plan | seed/master plan
-    **PR:** <url> (merged)            ← external vault: **Commit:** <short-sha> in <vault_root>
+    **PR:** <url> (merged)
+    **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
 
     **Other files created/modified:**
     - <path> — <what changed>     (or: none)
