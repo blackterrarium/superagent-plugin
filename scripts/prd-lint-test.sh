@@ -124,6 +124,10 @@ rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `instructions` |#| `wiki` |
 expect "unknown kind is a FAIL"                 1 "FAIL knowledge-base.md:K1 unknown kind 'wiki'" "$T/p"
 rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak '/^| K/d' "$T/p/knowledge-base.md"
 expect "empty kb table is a FAIL"               1 'FAIL knowledge-base.md:table no source rows' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#`src/app.py` | the entry point#| the entry point#' "$T/p/knowledge-base.md"
+expect "empty locator is a FAIL"                1 'FAIL knowledge-base.md:K2 repo-file has an empty locator' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#`src/app.py:main`#`src/app.py:`#' "$T/p/knowledge-base.md"
+expect "entry-point with trailing colon is a FAIL" 1 'FAIL knowledge-base.md:K7 entry-point locator must be <path>:<symbol>' "$T/p"
 
 echo "prd-lint-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]

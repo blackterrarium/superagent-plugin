@@ -106,9 +106,10 @@ lint_kb() {
     id="$(printf '%s\n' "$row" | cell 1)"
     kind="$(printf '%s\n' "$row" | cell 2)"
     loc="$(printf '%s\n' "$row" | cell 3)"
+    if [[ -z "$loc" ]]; then finding FAIL knowledge-base.md "$id" "$kind has an empty locator"; continue; fi
     case "$kind" in
       instructions|repo-file|sample-code)
-        if [[ -e "$REPO/$loc" ]]; then finding PASS knowledge-base.md "$id" "$kind '$loc' exists"
+        if [[ -n "$loc" && -e "$REPO/$loc" ]]; then finding PASS knowledge-base.md "$id" "$kind '$loc' exists"
         else finding FAIL knowledge-base.md "$id" "$kind '$loc' not found under the repo root"; fi ;;
       repo-glob)
         # `**` → `*`: find -path lets `*` span '/' so the pattern matches recursively (bash 3.2 has no globstar)
@@ -117,7 +118,7 @@ lint_kb() {
           finding PASS knowledge-base.md "$id" "repo-glob '$loc' matches"
         else finding FAIL knowledge-base.md "$id" "repo-glob '$loc' matches no file"; fi ;;
       entry-point)
-        if [[ "$loc" != *:* ]]; then finding FAIL knowledge-base.md "$id" "entry-point locator must be <path>:<symbol>, got '$loc'"
+        if [[ "$loc" != *:* || -z "${loc#*:}" ]]; then finding FAIL knowledge-base.md "$id" "entry-point locator must be <path>:<symbol>, got '$loc'"
         else
           path="${loc%%:*}"; sym="${loc#*:}"
           if [[ ! -f "$REPO/$path" ]]; then finding FAIL knowledge-base.md "$id" "entry-point file '$path' not found"
