@@ -102,6 +102,8 @@ A `FAIL` maps to a rubric item by its `<file>:<loc>` and message:
 
 Never report R1–R7 all PASS while `prd-lint.sh` exits non-zero: a FAIL matching none of the rules above is an R2 gap naming its `<file>:<loc>`. WARNs are not gaps; keep them for the report.
 
+When the `mcp__context7__resolve-library-id` tool is available, also resolve every `context7` row live and turn a non-resolving id into an R4 gap.
+
 Each item is `PASS` or `GAP <what is missing>`.
 
 ### 5. `--check` exit, or fill the gaps
