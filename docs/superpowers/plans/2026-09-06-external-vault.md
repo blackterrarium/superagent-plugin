@@ -1011,9 +1011,15 @@ Expected: `git status --porcelain` in the clone is **empty** (`.superenv`, `.cla
 
 - [ ] **Step 3: supergoal into the external vault (headless)**
 
+Configure the key the way an operator would — in the clone's `.superenv` (excluded from git by
+`--local-only`) — and point the run at the checkout's superauthor, since the Skill tool would
+otherwise load the installed plugin's copy:
+
 ```bash
+sed -i.bak "s#^SUPER_GOAL_ROOT=.*#SUPER_GOAL_ROOT=$D/ext-vault#" "$D/code/.superenv" && rm "$D/code/.superenv.bak"
+grep '^SUPER_GOAL_ROOT=' "$D/code/.superenv"
 cd "$D/code" && CLAUDE_PLUGIN_ROOT="$HOME/src/superagent-plugin" SUPER_GOAL_ROOT="$D/ext-vault" claude -p --model claude-opus-4-8 \
-  "Read $HOME/src/superagent-plugin/skills/supergoal/SKILL.md and run it for this goal: 'Add a --version flag to the toy CLI that prints 0.1.0'. Unattended: at the confirmation gate treat the answer as yes." </dev/null \
+  "Read $HOME/src/superagent-plugin/skills/supergoal/SKILL.md and run it for this goal: 'Add a --version flag to the toy CLI that prints 0.1.0'. Where it says to invoke superagent:superauthor via the Skill tool, instead read $HOME/src/superagent-plugin/skills/superauthor/SKILL.md and apply its clauses. Unattended: at the confirmation gate treat the answer as yes." </dev/null \
   | tee -a "$HOME/src/superagent-plugin/vault-external-report.md"
 echo "--- code repo:"; git -C "$D/code" status --porcelain; diff "$D/log-before.txt" <(git -C "$D/code" log --oneline) && echo "history unchanged"
 echo "--- vault repo:"; git -C "$D/ext-vault" log --oneline; git -C "$D/ext-vault" show --stat --oneline HEAD | tail -12
