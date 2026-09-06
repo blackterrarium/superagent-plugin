@@ -436,11 +436,18 @@ cursor-only:end -->
 
 ## Step 4 — Vault
 
-Resolve `SUPER_GOAL_ROOT` per the resolution order above (shipped default `vault`; a
-worked example from the originating repo sets it to `vault/network-compose`). Three cases:
+**Resolve `<vault_root>`.** Read `SUPER_GOAL_ROOT` per the resolution order above (shipped
+default `vault`; a worked example from the originating repo sets it to `vault/network-compose`).
+If it starts with `/` or `~`, the vault is **external**: `<vault_root>` is that path with `~`
+expanded to `$HOME`, and the vault is its own git repository outside the checkout. Otherwise
+`<vault_root>` is `<repo-root>/<SUPER_GOAL_ROOT>` (**internal**, today's default). Strip one
+trailing `/` if present. This is the same rule `vault_root` in `scripts/_common.sh` implements;
+never join `SUPER_GOAL_ROOT` onto `<repo-root>` when it is absolute.
 
-- `<repo-root>/<SUPER_GOAL_ROOT>` does not exist: create it and copy
-  `${CLAUDE_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`.
+**Seed the goal root** at `<vault_root>` — three cases:
+
+- `<vault_root>` does not exist: create it (`mkdir -p`) and copy
+  `${CLAUDE_PLUGIN_ROOT}/templates/vault-root.md` to `<vault_root>/root.md`.
 - the directory exists but has no `root.md`: seed `root.md` from the same template.
   Writing a file that is currently absent is not an overwrite, so the intro's
   never-overwrite invariant still holds. `root.md` is not a precondition any skill
@@ -455,6 +462,26 @@ worked example from the originating repo sets it to `vault/network-compose`). Th
 Report which of the three happened in the summary table — `created` / `seeded root.md
 into existing goal root` / `already present` — rather than collapsing the middle case
 into either of the other two rows.
+
+**External vault only — make it a git repository.** Vault docs in external mode are committed
+into the vault itself (superauthor A7's external target), so it must be a repo:
+
+1. `git -C "<vault_root>" rev-parse --is-inside-work-tree` fails → `git -C "<vault_root>" init -q`
+   (summary row `Vault repo: initialised`); succeeds → `Vault repo: already a git repo`.
+   Never `git init` inside the code checkout — if `<vault_root>` resolves inside `<repo-root>`
+   the lint (item 7) already downgraded it to internal mode.
+2. Ensure `<vault_root>/.gitignore` contains the line `**/<SUPER_LOOP_STATUS_DIRNAME>/` (same
+   newline guard and idempotent append as Step 5). This also covers the `.<loop>.lockd/` and
+   `.<loop>.ci-stale` markers, which sit inside that directory.
+3. If the vault repo has no commits yet (`git -C "<vault_root>" rev-parse --verify HEAD` fails):
+   `git -C "<vault_root>" add root.md .gitignore && git -C "<vault_root>" commit -q -m
+   "chore(vault): seed goal root"`. This is a **deliberate, narrow exception** to "init never
+   commits": it is the plugin-owned vault repo, never the user's code repo, and only its very
+   first commit — a later re-run finds `HEAD` and does nothing. Add a summary row
+   `Vault seed commit: created <short-sha>` / `already committed`.
+
+A vault repo with a remote is the operator's choice (`git -C "<vault_root>" remote add origin …`);
+A7 pushes only when one exists. init never adds one.
 
 ## Step 5 — Gitignore
 
