@@ -36,5 +36,35 @@ check "vault_is_external: absolute → true"   bash -c "SUPER_GOAL_ROOT=/abs; . 
 check "vault_is_external: tilde → true"      bash -c "SUPER_GOAL_ROOT='~/v'; . '$ROOT/scripts/_common.sh'; vault_is_external"
 check "vault_root: missing primary arg → rc 1" bash -c "SUPER_GOAL_ROOT=vault; . '$ROOT/scripts/_common.sh'; ! vault_root 2>/dev/null"
 
+# ---- 2. launch.sh / stop.sh / force-stop.sh with a plan under an EXTERNAL vault ----------------
+# Shims so the fail-fast preflight (CLI binary, gh auth) and the scheduler probes pass offline.
+SHIM="$T/bin"; mkdir -p "$SHIM"
+for s in gh pi launchctl systemctl; do printf '#!/usr/bin/env bash\nexit 0\n' >"$SHIM/$s"; chmod +x "$SHIM/$s"; done
+export PATH="$SHIM:$PATH"
+export XDG_CONFIG_HOME="$T/xdg"; mkdir -p "$XDG_CONFIG_HOME/superagent"
+# A code repo with NO vault inside it, and an external vault holding one goal.
+mkdir -p "$T/code"; ( cd "$T/code" && git init -q && printf 'x\n' >f && git add f && git -c user.email=t@t -c user.name=t commit -qm init )
+EXT="$T/ext-vault"; mkdir -p "$EXT/2026-09-06-10_00-demo/master-plans"; printf '# plan\n' >"$EXT/2026-09-06-10_00-demo/master-plans/seed.md"
+PLAN_EXT="$EXT/2026-09-06-10_00-demo/master-plans/seed.md"
+# An internal-mode repo too (today's behaviour must be unchanged).
+mkdir -p "$T/int/vault/2026-09-06-10_00-demo/master-plans"; ( cd "$T/int" && git init -q && printf '# plan\n' >vault/2026-09-06-10_00-demo/master-plans/seed.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm init )
+# An unrelated location: under neither root.
+mkdir -p "$T/elsewhere/master-plans"; printf '# plan\n' >"$T/elsewhere/master-plans/seed.md"
+
+L="$ROOT/scripts/launch.sh"
+check "launch: external plan accepted (--dry-run)" bash -c "cd '$T/code' && SUPER_GOAL_ROOT='$EXT' SUPER_HARNESS=pi '$L' '$PLAN_EXT' --harness pi --dry-run 2>&1 | grep -q 'nothing created or armed'"
+check "launch: external plan is reported by its absolute path" bash -c "cd '$T/code' && SUPER_GOAL_ROOT='$EXT' SUPER_HARNESS=pi '$L' '$PLAN_EXT' --harness pi --dry-run 2>&1 | grep -q '^  plan:       $PLAN_EXT\$'"
+check "launch: external loop file lands beside the plan's master-plans/" bash -c "cd '$T/code' && SUPER_GOAL_ROOT='$EXT' SUPER_HARNESS=pi '$L' '$PLAN_EXT' --harness pi --dry-run 2>&1 | grep -q '^  loop file:  $EXT/2026-09-06-10_00-demo/loop-status/'"
+check "launch: plan under neither root still rejected" bash -c "cd '$T/code' && SUPER_GOAL_ROOT='$EXT' SUPER_HARNESS=pi '$L' '$T/elsewhere/master-plans/seed.md' --harness pi --dry-run >'$T/rej.out' 2>&1; [ \$? = 2 ] && grep -q 'plan must live inside the repo checkout' '$T/rej.out' && grep -q '$EXT' '$T/rej.out'"
+check "launch: internal plan still accepted and repo-relative" bash -c "cd '$T/int' && SUPER_HARNESS=pi '$L' vault/2026-09-06-10_00-demo/master-plans/seed.md --harness pi --dry-run 2>&1 | grep -q '^  plan:       vault/2026-09-06-10_00-demo/master-plans/seed.md\$'"
+check "launch: internal plan outside the repo still rejected" bash -c "cd '$T/int' && SUPER_HARNESS=pi '$L' '$T/elsewhere/master-plans/seed.md' --harness pi --dry-run >/dev/null 2>&1; [ \$? = 2 ]"
+
+# stop.sh / force-stop.sh: a registered loop whose master_plan is ABSOLUTE must be found by plan.
+LOOPD="$EXT/2026-09-06-10_00-demo/loop-status"; mkdir -p "$LOOPD"
+printf -- '---\nmaster_plan: %s\nstatus: WAITING FOR PLAN\ndriver: external\n---\n' "$PLAN_EXT" >"$LOOPD/2026-09-06-demo.md"
+printf 'REPO=%s\nLOOP_FILE=%s\nSUPERAGENT_SLUG=custom-slug\n' "$T/code" "$LOOPD/2026-09-06-demo.md" >"$XDG_CONFIG_HOME/superagent/custom-slug.env"
+check "stop: absolute master_plan matched to its registered slug" bash -c "cd '$T/code' && '$ROOT/scripts/stop.sh' '$PLAN_EXT' --dry-run 2>&1 | grep -q 'goal slug:   custom-slug'"
+check "force-stop: absolute master_plan matched to its registered slug" bash -c "cd '$T/code' && '$ROOT/scripts/force-stop.sh' '$PLAN_EXT' 2>&1 | grep -q 'loop file:   $LOOPD/2026-09-06-demo.md'"
+
 echo "vault-external-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]

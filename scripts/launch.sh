@@ -56,13 +56,20 @@ elif [[ "$HARNESS" == cursor ]]; then MODEL_SHOWN="auto (default)"
 elif [[ "$HARNESS" == pi ]]; then MODEL_SHOWN="settings default"
 else MODEL_SHOWN="opus (default)"; fi
 
-# Resolve the plan to an absolute path, then to a repo-relative path (superloop
-# stores master_plan repo-relative).
+# Resolve the plan to an absolute path, then to the form superloop stores in master_plan:
+# repo-relative when the plan lies inside the checkout (internal vault), absolute when it lies
+# under an EXTERNAL vault (SUPER_GOAL_ROOT absolute or ~-prefixed — see vault_root in _common.sh).
 [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; exit 2; }
 PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
+VAULT="$(vault_root "$REPO")"
+# Compare against the physical vault path too: $REPO is physical (git), the vault may be a symlink.
+VAULT_P="$( [[ -d "$VAULT" ]] && cd "$VAULT" && pwd -P || printf '%s' "$VAULT" )"
 case "$PLAN_ABS" in
   "$REPO"/*) PLAN_REL="${PLAN_ABS#"$REPO"/}" ;;
-  *) echo "plan must live inside the repo checkout ($REPO): $PLAN_ABS" >&2; exit 2 ;;
+  "$VAULT"/*|"$VAULT_P"/*)
+    if vault_is_external; then PLAN_REL="$PLAN_ABS"
+    else echo "plan must live inside the repo checkout ($REPO): $PLAN_ABS" >&2; exit 2; fi ;;
+  *) echo "plan must live inside the repo checkout ($REPO) or the external vault ($VAULT): $PLAN_ABS" >&2; exit 2 ;;
 esac
 
 # Goal folder = parent of the master-plans/ dir holding the plan (superloop L1).
