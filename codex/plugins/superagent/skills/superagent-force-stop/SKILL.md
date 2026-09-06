@@ -95,7 +95,7 @@ mid-flight (e.g. driving a long CI push — ticks run uncapped by default), it i
 
 - **`<PLAN.md>` or `--slug <goal-slug>` — one is required.** Identify the loop by its
   **root** master plan (matched against the registered env files, like
-  `superagent-stop`) or directly by slug.
+  `superagent-stop`) (an absolute path when the vault is external — `stop.sh`/`force-stop.sh` match it against the loop file's absolute `master_plan:`) or directly by slug.
 - **`--drain` — optional.** After cleanup, also disable the timer (stop the loop).
   Default keeps the timer armed so the loop resumes.
 - **`--no-kick` — optional.** Do not immediately start a recovery tick after cleanup.

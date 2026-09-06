@@ -51,8 +51,8 @@ repo-root `.superenv` file, (3) the plugin default
 ## Parameters
 
 - **`<PLAN.md>` — required.** The goal's **root** seed/master plan (the same file
-  `superrun` traverses / `superplan` descends), living under this repo's goal-folder
-  root `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/master-plans/<seed>.md` (shipped default:
+  `superrun` traverses / `superplan` descends), living under the vault root
+  `<vault_root>/<STAMP>-<slug>/master-plans/<seed>.md` — inside the checkout, or, when `SUPER_GOAL_ROOT` is absolute or `~`-prefixed, in the **external vault** (pass the plan by its absolute path) (shipped default:
   `SUPER_GOAL_ROOT=vault`, giving `vault/<STAMP>-<slug>/master-plans/<seed>.md`;
   worked example from the originating repo, where
   `SUPER_GOAL_ROOT=vault/network-compose`). This is the only compulsory argument.

@@ -51,7 +51,7 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
-Everything here runs on the **host that runs the loops** (the primary checkout holding
+Everything here runs on the **host that runs the loops** (the primary checkout — or, for an external vault, the vault repo — holding
 the gitignored `<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating
 repo: `SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks). Resolve
 `primary_root` first if invoked from a worktree, and locate this plugin's installed

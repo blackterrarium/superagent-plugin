@@ -97,6 +97,16 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
+## Vault root
+
+Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped) and the vault is
+its own git repository outside the checkout. Otherwise `<vault_root>` is
+`<primary_root>/<SUPER_GOAL_ROOT>` (`primary_root` = `dirname "$(git rev-parse
+--path-format=absolute --git-common-dir)"`). Every goal folder, project folder, loop-status
+file and lock derives from `<vault_root>`; **never join `SUPER_GOAL_ROOT` onto the checkout
+root by hand.** The same rule is `vault_root` / `vault_is_external` in `scripts/_common.sh`.
+
 ---
 
 ## The loop-status file
@@ -145,7 +155,7 @@ runs in a fresh context. Go straight to **Step 1**.
 
 ## Sync gate — local `main` must equal `origin/main` (REQUIRED around every skill dispatch)
 
-Run **superloop L5** (`sync_main()` + the Be-sure verification, STOP → `WAITING FOR INPUT`) around every
+Run **superloop L5** (`sync_main()`, `sync_vault()` in external vault mode, + the Be-sure verification, STOP → `WAITING FOR INPUT`) around every
 skill dispatch — pre, so the delegated skill reads a fresh tree, and post, so a silently-skipped local
 pull never leaves the primary checkout stale. superagent's **be-sure artifacts** are the
 `superplan` / `superrun` Final-Report-named plan / closeout files plus the PR squash commits (see the
@@ -425,7 +435,7 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
     the resume process, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
 
 ### `WAITING FOR PLAN`
-1. **Sync gate (pre).** Run `sync_main()` so `superplan` reads a fresh tree. If it STOPs, pause and end
+1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superplan` reads a fresh tree. If it STOPs, pause and end
    this tick.
 2. Set `status: PLANNING`, write the loop file.
 3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
@@ -438,8 +448,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final
    Report verbatim as its final message** (step 5 parses that report). superagent never invokes
    `superplan` inline in its own context.
-4. **Sync gate (post + be-sure).** Run `sync_main()`, then verify `superplan`'s reported plan file and
-   immediate-parent/ancestor progress-row edits are present and tracked on local `main`. If a reported
+4. **Sync gate (post + be-sure).** Run `sync_main()` (then `sync_vault()` in external vault mode), then verify `superplan`'s reported plan file and
+   immediate-parent/ancestor progress-row edits are present and tracked — on local `main` (internal vault) or in the vault repo (external vault; L5's two-kind be-sure rule). If a reported
    artifact is missing or the tree can't reconcile, escalate (STOP) — do not advance, and surface the
    failure in this tick's `Findings & issues` line.
 5. **Retain `superplan`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
@@ -454,10 +464,10 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
      remain; let `superrun` check.
    - **`not-traversable` / `I need to know the plan file`** → ERROR: report, `stop_driver()`,
      `release_lock()`.
-6. Append an iteration-log entry (skill, result, plan path, PR URL). Go to **Step 2**.
+6. Append an iteration-log entry (skill, result, plan path, PR URL — or the vault commit SHA in external mode). Go to **Step 2**.
 
 ### `WAITING FOR RUN`
-1. **Sync gate (pre).** Run `sync_main()` so `superrun`'s traversal reads a fresh tree. If it STOPs,
+1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superrun`'s traversal reads a fresh tree. If it STOPs,
    pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
 3. **Dispatch `superagent:superrun` in its own CLI process** — **not** an Agent-tool subagent: run
@@ -471,8 +481,8 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
    own context, and never as a subagent (issue #25).
 4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
    skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
-   `sync_main()`, then verify `superrun`'s reported merges landed
-   on local `main`: the leaf's closeout report exists and is tracked, and (if the code PR merged) its
+   `sync_main()` (then `sync_vault()` in external vault mode), then verify `superrun`'s reported merges landed:
+   the leaf's closeout report exists and is tracked (on local `main` for an internal vault; in the vault repo for an external one — L5's two-kind rule), and (if the code PR merged) its
    squash commit is in `origin/main` history. A merged code PR but stale local `main` is the exact bug
    this gate exists for — reconcile (ff-pull) or escalate. Do not advance on an unverified merge, and
    surface the failure in this tick's `Findings & issues` line.

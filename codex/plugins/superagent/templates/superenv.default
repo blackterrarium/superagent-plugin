@@ -57,7 +57,7 @@ SUPER_CODEX_SANDBOX=danger-full-access  # codex harness only: danger-full-access
 SUPER_PI_SUBAGENTS=recommended          # pi harness only: recommended (init WARNs if the pi-subagents package is missing or < 0.58.0; superrun's SDD children then run sequentially in-context without role pins) | required (init ABORTS instead) | off (never generate .pi/agents/ definitions, never use the subagent tool)
 
 # ── Paths ─────────────────────────────────────────────────────────
-SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/
+SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/. Relative: inside the checkout (default). Absolute or ~/…: EXTERNAL vault — its own git repo outside the checkout; vault docs are committed there, never here
 SUPER_LOOP_STATUS_DIRNAME=loop-status   # gitignored; sibling of the goal's master-plans/
 
 # ── Loop tuning ───────────────────────────────────────────────────

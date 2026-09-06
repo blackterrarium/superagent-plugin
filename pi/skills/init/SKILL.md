@@ -1,6 +1,7 @@
 ---
 name: init
-description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent, and add the loop-status gitignore entry. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
+description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent (an external vault becomes its own git repo), and add the loop-status gitignore entry. `--local-only` routes every ignore entry to .git/info/exclude so a dogfooded checkout has nothing to commit. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
+argument-hint: "[--local-only]"
 license: MIT
 ---
 
@@ -33,6 +34,16 @@ license: MIT
 Prepare the current repository to run the superagent skill family. Every step is
 idempotent: report what was **done** vs **already present**; never overwrite existing
 files. Finish with a summary table of step → done/skipped.
+
+## Arguments
+
+- **`--local-only`** — optional. Every line Step 5 would append to `<repo-root>/.gitignore` is
+  appended to `<git-common-dir>/info/exclude` instead (`git rev-parse --path-format=absolute
+  --git-common-dir` — so linked worktrees share it), plus two more lines: `.superenv` and
+  `.claude/agents/super-*.md`. `.gitignore` is not touched, and Step 6 reports that nothing
+  needs committing. Use it when the repository's history must not carry superagent's bootstrap
+  files — dogfooding the plugin on its own checkout, or any repo whose maintainers did not opt
+  in. Re-running later without the flag never removes the exclude lines (init never deletes).
 
 Invoke this skill explicitly as `superagent:init` — a built-in `init` skill (CLAUDE.md
 authoring) ships unscoped in most sessions, so the bare name `init` is ambiguous the
@@ -170,6 +181,12 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
    item 5; the supervisor's harness is `SUPER_HARNESS`): claude `low|medium|high|xhigh|max`;
    codex `none|minimal|low|medium|high|xhigh` (no `max`); pi `off|minimal|low|medium|high|xhigh|max`;
    cursor: `inherit` only. `inherit` is always valid. Out of domain → WARN, treat as `inherit`.
+7. **Paths:** `SUPER_GOAL_ROOT` must be non-empty, without a trailing `/`, and without a `..`
+   segment (→ WARN, fall back to the template default `vault`). An absolute or `~`-prefixed
+   value selects **external vault mode** (see Step 4); if that value resolves to a directory
+   *inside* `<repo-root>`, WARN "external form for an in-repo path — treated as internal" and
+   use it as the equivalent repo-relative path. `SUPER_PROJECT_DIRNAME` and
+   `SUPER_LOOP_STATUS_DIRNAME` must be a single path segment (no `/`) — else WARN + default.
 
 ## Step 3 — Role agents (model/effort pins)
 
@@ -243,11 +260,18 @@ relay definition could not be written (hand-edited file kept, or the write was d
 
 ## Step 4 — Vault
 
-Resolve `SUPER_GOAL_ROOT` per the resolution order above (shipped default `vault`; a
-worked example from the originating repo sets it to `vault/network-compose`). Three cases:
+**Resolve `<vault_root>`.** Read `SUPER_GOAL_ROOT` per the resolution order above (shipped
+default `vault`; a worked example from the originating repo sets it to `vault/network-compose`).
+If it starts with `/` or `~`, the vault is **external**: `<vault_root>` is that path with `~`
+expanded to `$HOME`, and the vault is its own git repository outside the checkout. Otherwise
+`<vault_root>` is `<repo-root>/<SUPER_GOAL_ROOT>` (**internal**, today's default). Strip one
+trailing `/` if present. This is the same rule `vault_root` in `scripts/_common.sh` implements;
+never join `SUPER_GOAL_ROOT` onto `<repo-root>` when it is absolute.
 
-- `<repo-root>/<SUPER_GOAL_ROOT>` does not exist: create it and copy
-  `${SUPER_PLUGIN_ROOT}/templates/vault-root.md` to `<SUPER_GOAL_ROOT>/root.md`.
+**Seed the goal root** at `<vault_root>` — three cases:
+
+- `<vault_root>` does not exist: create it (`mkdir -p`) and copy
+  `${SUPER_PLUGIN_ROOT}/templates/vault-root.md` to `<vault_root>/root.md`.
 - the directory exists but has no `root.md`: seed `root.md` from the same template.
   Writing a file that is currently absent is not an overwrite, so the intro's
   never-overwrite invariant still holds. `root.md` is not a precondition any skill
@@ -263,33 +287,83 @@ Report which of the three happened in the summary table — `created` / `seeded 
 into existing goal root` / `already present` — rather than collapsing the middle case
 into either of the other two rows.
 
+**External vault only — make it a git repository.** Vault docs in external mode are committed
+into the vault itself (superauthor A7's external target), so it must be a repo:
+
+1. **"Already a git repo" test.** `git -C "<vault_root>" rev-parse --show-toplevel` succeeds AND
+   its output, resolved physically (`cd "<that output>" && pwd -P`), equals `<vault_root>`
+   resolved the same way (`cd "<vault_root>" && pwd -P`) → `Vault repo: already a git repo`. Any
+   other outcome — not inside a work tree at all, or the top level is a different directory (the
+   vault sits inside another repo's tree) — run `git -C "<vault_root>" init -q` (summary row
+   `Vault repo: initialised`), which makes `<vault_root>` its own nested repository (legitimate
+   git usage; git treats a nested `.git` as a boundary). A vault deliberately placed inside
+   another repository's tree therefore still gets its own nested repo; an operator who wants
+   otherwise removes `<vault_root>/.git` after init and accepts that A7's vault commits then land
+   in the enclosing repo. Never `git init` inside the code checkout — if `<vault_root>` resolves
+   inside `<repo-root>` the lint (item 7) already downgraded it to internal mode.
+2. Ensure `<vault_root>/.gitignore` contains the line `**/<SUPER_LOOP_STATUS_DIRNAME>/` (same
+   newline guard and idempotent append as Step 5). This also covers the `.<loop>.lockd/` and
+   `.<loop>.ci-stale` markers, which sit inside that directory.
+3. If the vault repo has no commits yet (`git -C "<vault_root>" rev-parse --verify HEAD` fails):
+   `git -C "<vault_root>" add root.md .gitignore && git -C "<vault_root>" commit -q -m
+   "chore(vault): seed goal root"`. This is a **deliberate, narrow exception** to "init never
+   commits": it is the plugin-owned vault repo, never the user's code repo, and only its very
+   first commit — a later re-run finds `HEAD` and does nothing. Add a summary row
+   `Vault seed commit: created <short-sha>` / `already committed`.
+
+A vault repo with a remote is the operator's choice (`git -C "<vault_root>" remote add origin …`);
+A7 pushes only when one exists. init never adds one.
+
 ## Step 5 — Gitignore
 
-Before appending anything in this step, ensure `<repo-root>/.gitignore` (if it already
-exists and is non-empty) ends with a newline — if its last byte is not `\n`, run
-`printf '\n' >> .gitignore` first, so an append below never fuses onto the file's last
-existing line.
+**Target file.** Without `--local-only` the target is `<repo-root>/.gitignore`. With
+`--local-only` it is `<git-common-dir>/info/exclude` (create `info/` if absent) and
+`.gitignore` is never touched. Every append below uses the same two rules, in this order:
 
-Resolve `SUPER_LOOP_STATUS_DIRNAME` per the resolution order above (shipped default
-`loop-status`). Append the line `<SUPER_GOAL_ROOT>/**/<SUPER_LOOP_STATUS_DIRNAME>/` to
-`<repo-root>/.gitignore` unless an identical line is already present (create
-`.gitignore` if absent). This is the exact pattern `superloop`'s L1 clause documents as
-gitignored local-only state (worked example from the originating repo: `vault/**/loop-status/`) — every loop-status
-file `superagent`/`superagent-external` write must never be tracked or swept into a
-docs-only PR commit.
+1. **newline guard** — if the target exists, is non-empty, and its last byte is not `\n`, run
+   `printf '\n' >> <target>` first, so an append never fuses onto the file's last line;
+2. **idempotent append** — `grep -qxF -- '<line>' <target> || printf '%s\n' '<line>' >> <target>`.
 
-Also append the line `.env` to `<repo-root>/.gitignore` unless an identical line is
-already present (same idempotent check, same newline guard). External (unattended) mode
-directs Pi provider credentials (`pi auth`) and `GH_TOKEN` into `<repo>/.env` (see `scripts/README.md`'s
-Prerequisites), and that file must never be committed.
+(`scripts/vault-external-test.sh` section 3 pins exactly these two rules as `append_ignore`.)
+
+**Lines to append.** Resolve `SUPER_LOOP_STATUS_DIRNAME` per the resolution order above
+(shipped default `loop-status`).
+
+- `<SUPER_GOAL_ROOT>/**/<SUPER_LOOP_STATUS_DIRNAME>/` — **internal vault mode only**. This is
+  the exact pattern `superloop`'s L1 clause documents as gitignored local-only state (worked
+  example from the originating repo: `vault/**/loop-status/`) — every loop-status file
+  `superagent`/`superagent-external` write must never be tracked or swept into a docs-only PR
+  commit. In **external vault mode** this line is **not** written here: the pattern lives in
+  the vault repo's own `.gitignore` (Step 4).
+- `.env` — always. External (unattended) mode directs Pi provider credentials (`pi auth`) and `GH_TOKEN` into
+  `<repo>/.env` (see `scripts/README.md`'s Prerequisites), and that file must never be
+  committed.
+- `.superenv` and `.claude/agents/super-*.md` — **`--local-only` only**. These are the two
+  bootstrap artifacts that cannot leave the checkout (every skill resolves `.superenv` at the
+  primary root; Step 3's role definitions are read by the harness from `.claude/agents/`), so
+  under `--local-only` they are excluded locally instead of being committed.
+  On Pi the role definitions live in `.pi/agents/super-*.md`; exclude that path instead.
+
+Report the target file and each line as `added` / `already present` in the summary table
+(`Ignore target: .gitignore` or `Ignore target: .git/info/exclude`).
 
 ## Step 6 — Landing
 
-init only prepares files — it never commits. Tell the user what to commit
-(`.superenv`, the vault seed, any generated `.claude/agents/super-*.md` role
-definitions, `.gitignore` — now covering both the loop-status pattern
-and `.env`) and remind them to follow the repo's own change discipline: if
-`SUPER_PROTECTED_MAIN=true` (the shipped default), that means a feature branch + PR, same
-as every `superauthor`-driven skill's own A7 commit step. `.env` itself (holding
-Pi provider credentials (`pi auth`) and `GH_TOKEN`) stays gitignored and is never committed — only the
-`.gitignore` entry that excludes it is.
+init only prepares files — it never commits to the user's repository (the one exception is the
+external vault repo's own first commit in Step 4, which is plugin-owned). What to tell the user
+depends on the mode:
+
+- **Internal vault, no `--local-only`:** list what to commit — `.superenv`, the vault seed
+  (`<SUPER_GOAL_ROOT>/root.md`), any generated `.claude/agents/super-*.md` role definitions,
+  `.gitignore` (now covering the loop-status pattern and `.env`) — and remind them to follow
+  the repo's own change discipline: if `SUPER_PROTECTED_MAIN=true` (the shipped default), that
+  means a feature branch + PR, same as every `superauthor`-driven skill's own A7 commit step.
+- **External vault, no `--local-only`:** the same list **without** the vault seed (it is
+  committed in the vault repo already) and with `.gitignore` covering only `.env`.
+- **`--local-only` (either mode):** state that **nothing needs committing**; list the paths now
+  excluded via `.git/info/exclude` (`.env`, `.superenv`, `.claude/agents/super-*.md`, and in
+  internal mode the loop-status pattern), and where the loop-status pattern lives (the vault
+  repo's `.gitignore` in external mode).
+
+`.env` itself (holding Pi provider credentials (`pi auth`) and `GH_TOKEN`) is never committed in any mode — only
+the ignore entry that excludes it is.

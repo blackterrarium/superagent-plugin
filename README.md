@@ -87,7 +87,7 @@ authoring), so the two are ambiguous whenever both are available. `superagent:in
 
 - verifies prerequisites;
 - creates a `.superenv` config from the plugin's shipped defaults if the repo has none;
-- seeds the goal vault (`root.md` under `SUPER_GOAL_ROOT`, default `vault`) if absent;
+- seeds the goal vault (`root.md` under `SUPER_GOAL_ROOT`, default `vault`) if absent — an absolute or `~`-prefixed `SUPER_GOAL_ROOT` is an **external vault**, initialised as its own git repo outside the checkout; `--local-only` routes every ignore entry to `.git/info/exclude` so the checkout has nothing to commit;
 - adds the loop-status gitignore entry;
 - on Claude Code, generates per-role agent definitions in `.claude/agents/` for the model and
   effort pins in `.superenv`.
@@ -135,9 +135,10 @@ All loop state lives in one **gitignored** file per goal:
 ```
 
 YAML frontmatter holds the machine state (`status`, `iteration`, `driver`, `session_skill_count`,
-and so on) and the body is an append-only human log. Because it is gitignored, it is local-only,
-survives every skill's branch-switching, and is never swept into a docs commit. It always lives in
-the **primary** checkout, never in a worktree.
+and so on) and the body is an append-only human log. `<SUPER_GOAL_ROOT>` is the vault root — inside
+the checkout by default, or an external vault repo when the key is absolute. Because it is
+gitignored, it is local-only, survives every skill's branch-switching, and is never swept into a
+docs commit. It always lives in the **primary** checkout, never in a worktree.
 
 ### Statuses
 
@@ -407,7 +408,7 @@ coding-loop skills, never by the tick.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. |
+| SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. Relative: inside the checkout, vault docs merged via PR. Absolute or `~/…`: **external vault** — its own git repo outside the checkout; vault docs are committed there directly, the code repo's history never carries the plan tree. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory, a sibling of each goal's `master-plans/`. |
 | SUPER_HEAVY_STEP_LIMIT | `6` | Heavy skills (one dispatch each) per cron session before the context-handoff gate hands off. |
 | SUPER_LOCK_STEAL_MIN | `90` | Minutes before a stale overlap lock from a crashed tick is auto-stolen. |
