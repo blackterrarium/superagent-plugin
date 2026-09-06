@@ -136,6 +136,96 @@ lint_kb() {
   done <<<"$rows"
 }
 
+check_command() {  # <file> <loc> <command> — first word on PATH or a repo path → PASS, else WARN
+  local word="${3%% *}"
+  if command -v "$word" >/dev/null 2>&1 || [[ -e "$REPO/$word" ]]; then
+    finding PASS "$1" "$2" "command '$word' is on PATH or in the repo"
+  else
+    finding WARN "$1" "$2" "command '$word' not on PATH and not a repo path (a setup step may install it)"
+  fi
+}
+
+CHECK_IDS=""
+lint_eval() {
+  local f="$PROJECT/evaluation.md" envsec setup cwd rows row id cmd ccwd pw to crit ev dup
+  envsec="$(section_body "$f" "Environment")"
+  if [[ -z "$envsec" ]]; then finding FAIL evaluation.md Environment "missing section '## Environment'"; fi
+  if grep -q '^- setup:' <<<"$envsec"; then
+    setup="$(sed -n 's/^- setup:[[:space:]]*//p' <<<"$envsec" | head -1 | strip_ticks)"
+    [[ -n "$setup" ]] && check_command evaluation.md setup "$setup"
+  else
+    finding FAIL evaluation.md Environment "missing '- setup: <command>' line (the command may be empty)"
+  fi
+  cwd="$(sed -n 's/^- cwd:[[:space:]]*//p' <<<"$envsec" | head -1 | strip_ticks)"
+  if [[ -z "$cwd" ]]; then finding FAIL evaluation.md Environment "missing '- cwd: <dir>' line"
+  elif [[ ! -d "$REPO/$cwd" ]]; then finding WARN evaluation.md Environment "cwd '$cwd' does not exist yet"
+  else finding PASS evaluation.md Environment "setup/cwd lines present"; fi
+
+  if ! grep -q '^| Id | Command | Cwd | Pass when | Timeout |' "$f"; then
+    finding FAIL evaluation.md "Command checks" "table header must be '| Id | Command | Cwd | Pass when | Timeout |'"
+  fi
+  rows="$(section_body "$f" "Command checks" | table_rows)"
+  while IFS= read -r row; do
+    [[ -z "$row" ]] && continue
+    id="$(printf '%s\n' "$row" | cell 1)";   cmd="$(printf '%s\n' "$row" | cell 2)"
+    ccwd="$(printf '%s\n' "$row" | cell 3)"; pw="$(printf '%s\n' "$row" | cell 4)"
+    to="$(printf '%s\n' "$row" | cell 5)"
+    CHECK_IDS="${CHECK_IDS}${id}"$'\n'
+    if [[ -z "$cmd" ]]; then finding FAIL evaluation.md "$id" "empty command"; else check_command evaluation.md "$id" "$cmd"; fi
+    [[ -n "$ccwd" && ! -d "$REPO/$ccwd" ]] && finding WARN evaluation.md "$id" "cwd '$ccwd' does not exist yet"
+    if [[ "$pw" =~ ^exit\ [0-9]+$ ]] || [[ "$pw" =~ ^stdout\ ~\ /.+/$ ]]; then
+      finding PASS evaluation.md "$id" "Pass when '$pw' well-formed"
+    else
+      finding FAIL evaluation.md "$id" "Pass when must be 'exit <n>' or 'stdout ~ /<regex>/', got '$pw'"
+    fi
+    if ! [[ "$to" =~ ^[0-9]+$ ]]; then
+      finding FAIL evaluation.md "$id" "Timeout must be a whole number of minutes, got '$to'"
+    elif (( to > MAX_TIMEOUT )); then
+      finding FAIL evaluation.md "$id" "Timeout $to exceeds SUPER_EVAL_TIMEOUT_MIN=$MAX_TIMEOUT"
+    fi
+  done <<<"$rows"
+
+  if ! grep -q '^| Id | Objective | Criteria | Evidence to inspect |' "$f"; then
+    finding FAIL evaluation.md "Judged objectives" "table header must be '| Id | Objective | Criteria | Evidence to inspect |'"
+  fi
+  rows="$(section_body "$f" "Judged objectives" | table_rows)"
+  while IFS= read -r row; do
+    [[ -z "$row" ]] && continue
+    id="$(printf '%s\n' "$row" | cell 1)"; crit="$(printf '%s\n' "$row" | cell 3)"; ev="$(printf '%s\n' "$row" | cell 4)"
+    CHECK_IDS="${CHECK_IDS}${id}"$'\n'
+    [[ -z "$crit" ]] && finding FAIL evaluation.md "$id" "judged objective has empty criteria"
+    [[ -z "$ev" ]]   && finding FAIL evaluation.md "$id" "judged objective has empty evidence"
+    [[ -n "$crit" && -n "$ev" ]] && finding PASS evaluation.md "$id" "judged objective has criteria and evidence"
+  done <<<"$rows"
+
+  dup="$(printf '%s' "$CHECK_IDS" | sort | uniq -d | tr '\n' ' ' | sed 's/ $//')"
+  [[ -n "$dup" ]] && finding FAIL evaluation.md ids "duplicate check id(s): $dup"
+  [[ -z "$(printf '%s' "$CHECK_IDS" | tr -d '\n')" ]] && finding FAIL evaluation.md checks "no command checks or judged objectives"
+}
+
+lint_coverage() {  # both directions of the coverage rule; needs SC_ROWS and CHECK_IDS
+  local row id ids c found
+  while IFS= read -r row; do
+    [[ -z "$row" ]] && continue
+    id="$(printf '%s\n' "$row" | cell 1)"
+    ids="$(printf '%s\n' "$row" | cell 3 | tr ',' ' ')"
+    if [[ -z "${ids// /}" ]]; then finding FAIL prd.md "$id" "criterion has no check ids (coverage rule)"; continue; fi
+    for c in $ids; do
+      if grep -qx -- "$c" <<<"$CHECK_IDS"; then finding PASS prd.md "$id" "covered by $c"
+      else finding FAIL prd.md "$id" "references unknown check id '$c'"; fi
+    done
+  done <<<"$SC_ROWS"
+  while IFS= read -r c; do
+    [[ -z "$c" ]] && continue
+    found=false
+    while IFS= read -r row; do
+      [[ -z "$row" ]] && continue
+      if printf '%s\n' "$row" | cell 3 | tr ', ' '\n\n' | grep -qx -- "$c"; then found=true; fi
+    done <<<"$SC_ROWS"
+    $found || finding FAIL evaluation.md "$c" "check id '$c' serves no success criterion (coverage rule)"
+  done <<<"$CHECK_IDS"
+}
+
 # ── main ─────────────────────────────────────────────────────────────────────
 HAVE_PRD=false; HAVE_KB=false; HAVE_EVAL=false
 check_file_present prd.md            && HAVE_PRD=true
@@ -143,7 +233,8 @@ check_file_present knowledge-base.md && HAVE_KB=true
 check_file_present evaluation.md     && HAVE_EVAL=true
 $HAVE_PRD  && { check_header prd.md;            lint_prd; }
 $HAVE_KB   && { check_header knowledge-base.md; lint_kb; }
-$HAVE_EVAL && { check_header evaluation.md; }
+$HAVE_EVAL && { check_header evaluation.md; lint_eval; }
+$HAVE_PRD && $HAVE_EVAL && lint_coverage
 
 # ── output ───────────────────────────────────────────────────────────────────
 json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g'; }

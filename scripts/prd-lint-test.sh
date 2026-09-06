@@ -129,5 +129,43 @@ expect "empty locator is a FAIL"                1 'FAIL knowledge-base.md:K2 rep
 rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#`src/app.py:main`#`src/app.py:`#' "$T/p/knowledge-base.md"
 expect "entry-point with trailing colon is a FAIL" 1 'FAIL knowledge-base.md:K7 entry-point locator must be <path>:<symbol>' "$T/p"
 
+# ── Task 4: evaluation checks, coverage, --json ───────────────────────────────
+expect "valid evaluation PASSes"                 0 'PASS evaluation.md:C1' "$T/valid"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak '/^- setup:/d' "$T/p/evaluation.md"
+expect "missing setup line is a FAIL"            1 'FAIL evaluation.md:Environment missing .- setup:' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#^- cwd: `.`#- cwd: `build/out`#' "$T/p/evaluation.md"
+expect "nonexistent env cwd is a WARN"           0 "WARN evaluation.md:Environment cwd 'build/out' does not exist yet" "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `passes` | 5 |#' "$T/p/evaluation.md"
+expect "malformed Pass when is a FAIL"           1 'FAIL evaluation.md:C1 Pass when must be' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `stdout ~ /ALL PASSED/` | 5 |#' "$T/p/evaluation.md"
+expect "stdout regex Pass when is accepted"      0 'PASS evaluation.md:C1' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `exit 0` | soon |#' "$T/p/evaluation.md"
+expect "non-numeric timeout is a FAIL"           1 'FAIL evaluation.md:C1 Timeout must be a whole number' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `exit 0` | 20 |#' "$T/p/evaluation.md"
+SUPER_EVAL_TIMEOUT_MIN=10 expect "timeout above SUPER_EVAL_TIMEOUT_MIN is a FAIL" 1 'FAIL evaluation.md:C1 Timeout 20 exceeds SUPER_EVAL_TIMEOUT_MIN=10' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| C1 | `true` |#| C1 | `no-such-binary-xyz --run` |#' "$T/p/evaluation.md"
+expect "command not on PATH is a WARN"           0 "WARN evaluation.md:C1 command 'no-such-binary-xyz' not on PATH" "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| C1 | `true` |#| C1 | `src/app.py` |#' "$T/p/evaluation.md"
+expect "repo-relative command is a PASS"         0 "PASS evaluation.md:C1 command 'src/app.py'" "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| J1 | Errors#| C1 | Errors#' "$T/p/evaluation.md"
+expect "duplicate check id is a FAIL"            1 'FAIL evaluation.md:ids duplicate check id(s): C1' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| Every failure path names the offending field |#|  |#' "$T/p/evaluation.md"
+expect "judged row without criteria is a FAIL"   1 'FAIL evaluation.md:J1 judged objective has empty criteria' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak '/^| C1 /d; /^| J1 /d' "$T/p/evaluation.md"
+expect "no checks at all is a FAIL"              1 'FAIL evaluation.md:checks no command checks or judged objectives' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| SC1 | The test suite passes | C1 |#| SC1 | The test suite passes | C9 |#' "$T/p/prd.md"
+expect "criterion naming an unknown check FAILs" 1 "FAIL prd.md:SC1 references unknown check id 'C9'" "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#^| C1 | `true` | `.` | `exit 0` | 5 |#| C1 | `true` | `.` | `exit 0` | 5 |\
+| C2 | `true` | `.` | `exit 0` | 5 |#' "$T/p/evaluation.md"
+expect "check serving no criterion FAILs"        1 "FAIL evaluation.md:C2 check id 'C2' serves no success criterion" "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| SC1 | The test suite passes | C1 |#| SC1 | The test suite passes |  |#' "$T/p/prd.md"
+expect "criterion with no check ids FAILs"       1 'FAIL prd.md:SC1 criterion has no check ids' "$T/p"
+expect "--json emits an array"                   0 '^\[{"level":"' "$T/valid" --json
+if command -v python3 >/dev/null 2>&1; then
+  if "$LINT" "$T/valid" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d and all(set(x)=={"level","file","loc","message"} for x in d)'; then
+    ok "--json parses and has the four keys"
+  else fail "--json parses and has the four keys"; fi
+fi
+
 echo "prd-lint-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]
