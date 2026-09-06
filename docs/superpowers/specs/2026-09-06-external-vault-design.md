@@ -150,8 +150,10 @@ on the code repo as today; vault paths are checked with `git -C "<vault_root>" l
 
 **Step 4 — Vault.** Resolve `<vault_root>`. The three existing cases (create + seed; seed
 `root.md` into existing; already present) apply at that path. In external mode, additionally:
-if `<vault_root>` is not inside a git work tree (`git -C "<vault_root>" rev-parse
---is-inside-work-tree` fails), run `git -C "<vault_root>" init -q`; ensure
+unless `<vault_root>` is already its own repository — `git -C "<vault_root>" rev-parse
+--show-toplevel` succeeds and, resolved physically, equals `<vault_root>` — run
+`git -C "<vault_root>" init -q` (a vault sitting inside some other repo's tree gets its own
+nested repo rather than committing into the enclosing one); ensure
 `<vault_root>/.gitignore` contains the line `**/<SUPER_LOOP_STATUS_DIRNAME>/` (same newline
 guard and idempotent check as Step 5); then, if the vault repo has no commits yet
 (`git -C "<vault_root>" rev-parse --verify HEAD` fails), commit `root.md` and `.gitignore` with
