@@ -466,10 +466,17 @@ into either of the other two rows.
 **External vault only — make it a git repository.** Vault docs in external mode are committed
 into the vault itself (superauthor A7's external target), so it must be a repo:
 
-1. `git -C "<vault_root>" rev-parse --is-inside-work-tree` fails → `git -C "<vault_root>" init -q`
-   (summary row `Vault repo: initialised`); succeeds → `Vault repo: already a git repo`.
-   Never `git init` inside the code checkout — if `<vault_root>` resolves inside `<repo-root>`
-   the lint (item 7) already downgraded it to internal mode.
+1. **"Already a git repo" test.** `git -C "<vault_root>" rev-parse --show-toplevel` succeeds AND
+   its output, resolved physically (`cd "<that output>" && pwd -P`), equals `<vault_root>`
+   resolved the same way (`cd "<vault_root>" && pwd -P`) → `Vault repo: already a git repo`. Any
+   other outcome — not inside a work tree at all, or the top level is a different directory (the
+   vault sits inside another repo's tree) — run `git -C "<vault_root>" init -q` (summary row
+   `Vault repo: initialised`), which makes `<vault_root>` its own nested repository (legitimate
+   git usage; git treats a nested `.git` as a boundary). A vault deliberately placed inside
+   another repository's tree therefore still gets its own nested repo; an operator who wants
+   otherwise removes `<vault_root>/.git` after init and accepts that A7's vault commits then land
+   in the enclosing repo. Never `git init` inside the code checkout — if `<vault_root>` resolves
+   inside `<repo-root>` the lint (item 7) already downgraded it to internal mode.
 2. Ensure `<vault_root>/.gitignore` contains the line `**/<SUPER_LOOP_STATUS_DIRNAME>/` (same
    newline guard and idempotent append as Step 5). This also covers the `.<loop>.lockd/` and
    `.<loop>.ci-stale` markers, which sit inside that directory.
