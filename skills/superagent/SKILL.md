@@ -167,7 +167,7 @@ pi-only:end -->
 
 ## Sync gate — local `main` must equal `origin/main` (REQUIRED around every skill dispatch)
 
-Run **superloop L5** (`sync_main()` + the Be-sure verification, STOP → `WAITING FOR INPUT`) around every
+Run **superloop L5** (`sync_main()`, `sync_vault()` in external vault mode, + the Be-sure verification, STOP → `WAITING FOR INPUT`) around every
 skill dispatch — pre, so the delegated skill reads a fresh tree, and post, so a silently-skipped local
 pull never leaves the primary checkout stale. superagent's **be-sure artifacts** are the
 `superplan` / `superrun` Final-Report-named plan / closeout files plus the PR squash commits (see the
@@ -493,7 +493,7 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
     the resume process, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
 
 ### `WAITING FOR PLAN`
-1. **Sync gate (pre).** Run `sync_main()` so `superplan` reads a fresh tree. If it STOPs, pause and end
+1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superplan` reads a fresh tree. If it STOPs, pause and end
    this tick.
 2. Set `status: PLANNING`, write the loop file.
 3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
@@ -527,7 +527,7 @@ pi-only:end -->
 6. Append an iteration-log entry (skill, result, plan path, PR URL — or the vault commit SHA in external mode). Go to **Step 2**.
 
 ### `WAITING FOR RUN`
-1. **Sync gate (pre).** Run `sync_main()` so `superrun`'s traversal reads a fresh tree. If it STOPs,
+1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superrun`'s traversal reads a fresh tree. If it STOPs,
    pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
 3. **Dispatch `superagent:superrun` in its own CLI process** — **not** an Agent-tool subagent: run

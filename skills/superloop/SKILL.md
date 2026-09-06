@@ -54,7 +54,7 @@ The caller supplies, once, at invocation:
 - **`<bootstrap-input>`** — the caller's required bootstrap input, the L2 hard gate (no input + no existing loop file ⇒ print the hard-gate message and exit). Must be the goal's **root** seed/master plan (superagent: the root `<PLAN.md>`) — see L2.
 - **Status vocabulary + role→value mapping** — the caller's concrete `status:` values *and* the mapping of each onto L1's generic roles (a *ready* state, a *transient/running* state, `WAITING FOR INPUT`, `DONE`), plus any extra frontmatter fields the caller stores beyond the L1 baseline — see L1.
 - **Heavy-step definition + THRESHOLD** — what increments `session_skill_count`, and the handoff THRESHOLD (this plugin's callers resolve it from `SUPER_HEAVY_STEP_LIMIT`, default 6) — see L4.
-- **Be-sure artifact list** — the output file(s)/PR(s) the caller's just-completed sub-step reports, which the Be-sure verification confirms are present and tracked on local `main` — see L5/L6.
+- **Be-sure artifact list** — the output file(s)/PR(s) the caller's just-completed sub-step reports, which the Be-sure verification confirms are present and tracked (L5's two-kind rule) — see L5/L6.
 - **Escalation option-set + apply actions** — the concrete options and what "apply" does per trigger — see L7.
 - **Per-tick body & DONE-condition** — entirely the caller's; superloop never dispatches the work.
 
@@ -196,9 +196,11 @@ goal-folder derivation, no search. This is the only form that advances the state
 
 1. **`acquire_lock()`** (see **L3**). If another tick is already in flight → **exit immediately**
    (no-op; the next fire retries). This is what keeps fresh-session external ticks from overlapping.
-2. Read the named loop file. The carried path is the **absolute** path under the primary checkout, so
-   the tick's cwd is irrelevant for reading/writing the file. Still resolve `primary_root()` (see **L1**)
-   for the lock dir and the Sync gate's `git` commands — a tick can fire while cwd is a worktree. A clean
+2. Read the named loop file. The carried path is **absolute**, rooted at `<vault_root>` (see **Vault
+   root**) — in an internal vault that is under the primary checkout (`primary_root()`, not the
+   worktree); in an external vault it is the vault itself — so the tick's cwd is irrelevant for
+   reading/writing the file. Still resolve `primary_root()` (see **L1**) for the lock dir and the Sync
+   gate's code-repo `git` commands — a tick can fire while cwd is a worktree. A clean
    context is fine — **all** state (`status`, `plan_exhausted`, `driver`, `cron_id`, decisions) is in the
    file, not in conversation memory.
 3. If `status` is **`DONE`** → `release_lock()`, no-op, and (in `external` mode) remind the user to
@@ -236,9 +238,12 @@ cursor-only:end -->
 codex-only:end -->
 3. **Locate state.** Derive the goal folder from the required input (the `superplan`
    Goal-Identification rule — parent of the `master-plans/` folder), then **root it at
-   `primary_root()`** (see **L1**) — so the lookup and the lazy first-write target are in the primary
-   checkout, not the worktree the loop may have been launched from. The input path stays repo-relative;
-   only the on-disk base changes. Look in `<primary_root>/<goal-folder>/<SUPER_LOOP_STATUS_DIRNAME>/`
+   `<vault_root>`** (see **Vault root**) — so the lookup and the lazy first-write target are
+   `<vault_root>/<goal-folder>/<SUPER_LOOP_STATUS_DIRNAME>/`: in an internal vault that is under
+   `primary_root()`, not the worktree the loop may have been launched from, exactly as before; in an
+   external vault it is the vault itself. The input `<PLAN.md>` path is repo-relative in an internal
+   vault and absolute in an external one (the form `launch.sh` stores in `master_plan:`); only the
+   on-disk base changes. Look in `<vault_root>/<goal-folder>/<SUPER_LOOP_STATUS_DIRNAME>/`
    for a file whose `master_plan:` matches the input. Deterministic, single-directory lookup — not a
    global scan. The `<SUPER_LOOP_STATUS_DIRNAME>/` subdir is created lazily on first write (no `mkdir`).
 4. **Guard / bootstrap / resume — branch on `driver`:**
@@ -638,25 +643,29 @@ primary checkout `primary_root` resolves to cwd, so `git -C "$primary_root"` is 
 In internal mode the vault is part of the code repo and `sync_main()` already covered it; skip
 this. In **external** mode (see **Vault root**) the plan tree lives in the vault repo, so:
 1. `git -C "<vault_root>" remote get-url origin` fails → **no remote → synced** (nothing to pull).
-2. Otherwise `git -C "<vault_root>" fetch origin` and compare the vault's current branch to its
+2. `origin` exists but the vault branch has no upstream (`git -C "<vault_root>" rev-parse
+   --abbrev-ref @{upstream}` fails) → `git -C "<vault_root>" push -u origin HEAD`; success → synced,
+   failure → STOP and escalate.
+3. Otherwise `git -C "<vault_root>" fetch origin` and compare the vault's current branch to its
    upstream — `git -C "<vault_root>" rev-list --left-right --count HEAD...@{upstream}`:
    - **equal** → synced;
    - **behind only** → `git -C "<vault_root>" merge --ff-only @{upstream}`;
    - **ahead only** → **normal here** (an earlier A7 push failed): `git -C "<vault_root>" push`;
      if the push fails → STOP and escalate;
    - **diverged** → STOP and escalate (never reset or force).
-3. `git -C "<vault_root>" status --porcelain --untracked-files=no` must be empty → else STOP and
+4. `git -C "<vault_root>" status --porcelain --untracked-files=no` must be empty → else STOP and
    escalate (tracked vault changes nobody committed).
 
 ### Be-sure verification (after a skill, post-`sync_main()`/`sync_vault()`)
 The caller's just-completed sub-step reports the PR(s) it merged and the file(s) it wrote; confirm each
 is present and tracked:
-- the reported output file(s) exist and are tracked — **code paths** (a merged code PR's files)
-  on the code repo's `main`: `git -C "$primary_root" ls-files --error-unmatch <path>`; **vault
-  paths** (plans, closeouts, project folders) on the vault repo: `git -C "<vault_root>" ls-files
-  --error-unmatch <vault-relative path>`. In internal mode both resolve to the code repo; in
-  external mode a vault artifact is reported by A8 as `**Commit:** <short-sha> in <vault_root>`
-  rather than a PR URL, and `git -C "<vault_root>" cat-file -e <short-sha>` confirms the commit;
+- the reported output file(s) exist and are tracked. **Internal vault:** both kinds are checked
+  with the existing form, `git -C "$primary_root" ls-files --error-unmatch <repo-relative path>` —
+  the paths the sub-step reports are already repo-relative. **External vault:** a vault artifact is
+  reported by A8 as an absolute path plus `**Commit:** <short-sha> in <vault_root>`; strip the
+  `<vault_root>/` prefix and check `git -C "<vault_root>" ls-files --error-unmatch <vault-relative
+  path>`, and confirm the commit with `git -C "<vault_root>" cat-file -e <short-sha>`; code paths
+  are checked on the code repo as before;
 - (optional) the merge is in history — `git log --oneline origin/main | grep <pr-number>`.
 
 If a reported artifact is **missing** after a clean `sync_main()`, the merge did not propagate as
