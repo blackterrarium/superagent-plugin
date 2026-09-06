@@ -138,7 +138,9 @@ YAML frontmatter holds the machine state (`status`, `iteration`, `driver`, `sess
 and so on) and the body is an append-only human log. `<SUPER_GOAL_ROOT>` is the vault root — inside
 the checkout by default, or an external vault repo when the key is absolute. Because it is
 gitignored, it is local-only, survives every skill's branch-switching, and is never swept into a
-docs commit. It always lives in the **primary** checkout, never in a worktree.
+docs commit. It always lives at the vault root, never in a worktree — for an internal vault that
+is the primary checkout; for an external vault it is the vault directory itself, which is the
+same from every worktree.
 
 ### Statuses
 

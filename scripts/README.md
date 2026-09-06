@@ -344,7 +344,7 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   2 on usage. `PRD_LINT_REPO_ROOT` overrides repo-root detection. Bash 3.2, no network.
 - `prd-lint-test.sh` — offline fixture tests for `prd-lint.sh` (a valid project plus one mutation
   per FAIL and WARN class); exit 1 on any failure.
-- `vault-external-test.sh` — offline tests for the external-vault resolver, launch.sh
+- `vault-external-test.sh` — tests for the external-vault resolver, launch.sh
   external-plan acceptance, stop/force-stop absolute matching, init ignore routing; offline, bash 3.2.
 - `bridge-smoke.sh` — live probes for `role-bridge.sh` against whatever real CLIs are installed on
   the host (T1–T7: each harness native, plus Claude↔Codex relay round trips); missing CLIs are
