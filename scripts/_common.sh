@@ -289,6 +289,34 @@ load_superenv() {
 }
 
 # ---------------------------------------------------------------------------
+# Goal-vault location. SUPER_GOAL_ROOT is repo-relative by default (`vault`) — the
+# vault lives inside the checkout and its docs are committed there via PR. An
+# ABSOLUTE or ~-prefixed value selects EXTERNAL mode: the vault is its own git
+# repo outside the checkout, and vault docs are committed there instead, so the
+# code repo's history never carries the plan tree (spec:
+# docs/superpowers/specs/2026-09-06-external-vault-design.md).
+# ---------------------------------------------------------------------------
+
+# vault_is_external — rc 0 when SUPER_GOAL_ROOT is absolute or ~-prefixed.
+vault_is_external() {
+  case "${SUPER_GOAL_ROOT:-vault}" in /*|"~"|"~/"*) return 0 ;; *) return 1 ;; esac
+}
+
+# vault_root <primary-root> — absolute goal root in either mode, no trailing slash.
+# Internal: <primary-root>/<SUPER_GOAL_ROOT>. External: the value itself (~ expanded).
+vault_root() {
+  local primary="${1:-}" v="${SUPER_GOAL_ROOT:-vault}"
+  [[ -n "$primary" ]] || { echo "superagent: vault_root needs the primary checkout root" >&2; return 1; }
+  v="${v%/}"
+  case "$v" in
+    "~")   printf '%s\n' "$HOME" ;;
+    "~/"*) printf '%s/%s\n' "$HOME" "${v#"~/"}" ;;
+    /*)    printf '%s\n' "$v" ;;
+    *)     printf '%s/%s\n' "${primary%/}" "$v" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
 # Loop-status file readers — shared by the tick wrapper, answer.sh, status.sh.
 # All are safe under a caller's `set -euo pipefail`: a missing/unreadable file,
 # an absent field, or a missing/empty argument yields empty output, never a
