@@ -48,9 +48,10 @@ strip_ticks() { sed 's/^`//;s/`$//'; }
 section_body() {
   awk -v h="## $2" '$0 == h { on=1; next } on && /^## / { exit } on { print }' "$1"
 }
-# table_rows — data rows of the first markdown table on stdin (drops the header and |---| rows)
+# table_rows — data rows of every markdown table on stdin; each table's header and separator
+# rows dropped
 table_rows() {
-  awk '/^\|/ { n++; if (n == 1) next; if ($0 ~ /^\|[[:space:]]*-/) next; print }'
+  awk '!/^\|/ { n=0; next } { n++; if (n == 1) next; if ($0 ~ /^\|[[:space:]]*:?-/) next; print }'
 }
 # cell <n> — the n-th cell (1-based) of a "| a | b |" row on stdin, trimmed, backticks stripped
 cell() { awk -F'|' -v n="$(( $1 + 1 ))" '{ print $n }' | trim | strip_ticks; }
@@ -116,4 +117,8 @@ else
     printf '%s %s:%s %s\n' "$level" "$file" "$loc" "$msg"
   done <"$FINDINGS_FILE"
 fi
+# Authoritative count from the findings file, not the $FAILS shell variable: finding() may run
+# inside a subshell (e.g. a `cmd | while read` loop body in bash 3.2), which would silently lose
+# the increment and let a FAIL-printing run exit 0.
+FAILS=$(grep -c "^FAIL$US" "$FINDINGS_FILE" 2>/dev/null || true)
 [[ $FAILS -eq 0 ]]

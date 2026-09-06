@@ -99,6 +99,8 @@ rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's/^## Locked decisions/## Zz/; 
 expect "out-of-order prd section is a FAIL"   1 'FAIL prd.md:Success criteria .*out of order' "$T/p"
 rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's/| Round | Meta-plan |/| Round | Plan |/' "$T/p/prd.md"
 expect "wrong ledger header is a FAIL"        1 'FAIL prd.md:Iteration ledger' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's/|---|---|---|/|:---|:---|---:|/; /^| SC1 /d; /^| SC2 /d' "$T/p/prd.md"
+expect "alignment separator with no rows is a FAIL" 1 'FAIL prd.md:Success criteria no success-criteria rows' "$T/p"
 
 echo "prd-lint-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]
