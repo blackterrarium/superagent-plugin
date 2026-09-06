@@ -581,8 +581,8 @@ regardless of `SUPER_PROTECTED_MAIN` — that key describes the code repo, not t
 git command as `git -C "<vault_root>" …`, express the caller's `git add` paths **relative to
 `<vault_root>`**, keep the caller's commit subject, push **only if** `git -C "<vault_root>" remote
 get-url origin` succeeds (otherwise the commit stays local — not an error), and open **no branch,
-no PR, no `gh` call**. Record the short SHA for A8. The remaining paragraphs describe the internal
-target.
+no PR, no `gh` call**. Record the short SHA for A8 (`git -C "<vault_root>" rev-parse --short HEAD`).
+The remaining paragraphs describe the internal target.
 
 **Merge the PR without asking the user for confirmation** (internal mode).
 ```
@@ -602,7 +602,9 @@ with:
 above is the internal-mode `SUPER_PROTECTED_MAIN=true` (shipped-default) path. When
 `SUPER_PROTECTED_MAIN=false`, or whenever the target is an external vault (then prefix each
 command with `-C "<vault_root>"` and make the paths vault-relative), skip the branch/PR machinery
-entirely and commit straight to the current branch — no `gh` calls at all:
+entirely and commit straight to the target repo's current branch (internal mode: the default
+branch, as today; external vault: whichever branch the vault repo has checked out) — no `gh`
+calls at all:
 ```
 
 - [ ] **Step 3: A8 substitution**
