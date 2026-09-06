@@ -202,7 +202,9 @@ report-only. There are exactly two exceptions to "never abort": a foreign harnes
    resolves physically (`cd "<vault_root>" && pwd -P`) to `$HOME` or to `/`, **ABORT** init with
    "SUPER_GOAL_ROOT resolves to your home directory / the filesystem root; choose a subdirectory
    such as `~/superagent-vaults/<repo>`" — Step 4 would otherwise `git init` the whole home
-   directory or filesystem root and scatter goal folders through it. `SUPER_PROJECT_DIRNAME` and
+   directory or filesystem root and scatter goal folders through it. A `<vault_root>` that does not
+   exist yet cannot be `$HOME` or `/`, so this check cannot fire on a fresh external vault; Step 4
+   creates it. `SUPER_PROJECT_DIRNAME` and
    `SUPER_LOOP_STATUS_DIRNAME` must be a single path segment (no `/`) — else WARN + default.
 
 ## Step 3 — Role agents (model/effort pins)

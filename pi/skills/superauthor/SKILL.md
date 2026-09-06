@@ -257,12 +257,12 @@ authorization (A5).
 and the rest of this clause applies as written. In **external** mode the target is the **vault repo
 at `<vault_root>`**.
 
-**Precondition — verify before the first git command:** `git -C "<vault_root>" rev-parse
+**Precondition (external mode only) — verify before the first git command:** `git -C "<vault_root>" rev-parse
 --show-toplevel` must succeed and its output, resolved physically (`cd … && pwd -P`), must equal
 `<vault_root>` resolved physically. If it does not — `<vault_root>` is not a repository, it sits
 inside another repository's tree (git would silently commit into *that* repo and, if it has a
-remote, push there), or it resolves inside `<primary_root>` — **STOP**: write nothing, commit
-nothing, and report "external vault at `<vault_root>` is not initialised — run `superagent:init`".
+remote, push there), or it resolves inside `<primary_root>` — **STOP**: write nothing further,
+commit nothing, and report "external vault at `<vault_root>` is not initialised — run `superagent:init`".
 Never `git init` here; init owns vault creation.
 
 In **external** mode the **direct-commit variant** (bottom of this clause) **always applies**,
