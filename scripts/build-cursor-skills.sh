@@ -223,6 +223,10 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_RE_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_RE_REVIEWER=inherit/' \
   -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_BRANCH_REVIEWER=inherit/' \
   -e 's/^SUPER_MODEL_FIX_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_FIX_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_PRD_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_PRD_REVIEWER=inherit/' \
+  -e 's/^SUPER_MODEL_META_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_META_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_EVALUATOR=claude:[^[:space:]]*/SUPER_MODEL_EVALUATOR=inherit/' \
+  -e 's/^SUPER_MODEL_DIAGNOSER=claude:[^[:space:]]*/SUPER_MODEL_DIAGNOSER=inherit/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=cursor\1# this is the Cursor build — the external driver fires the Cursor CLI (`agent`)/' \
   -e 's/^SUPER_EFFORT_SUPERVISOR=medium/SUPER_EFFORT_SUPERVISOR=inherit/' \
   -e 's/^SUPER_EFFORT_PLANNER=high/SUPER_EFFORT_PLANNER=inherit/' \
@@ -234,6 +238,10 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_EFFORT_RE_REVIEWER=high/SUPER_EFFORT_RE_REVIEWER=inherit/' \
   -e 's/^SUPER_EFFORT_BRANCH_REVIEWER=xhigh/SUPER_EFFORT_BRANCH_REVIEWER=inherit/' \
   -e 's/^SUPER_EFFORT_FIX_PLANNER=high/SUPER_EFFORT_FIX_PLANNER=inherit/' \
+  -e 's/^SUPER_EFFORT_PRD_REVIEWER=high/SUPER_EFFORT_PRD_REVIEWER=inherit/' \
+  -e 's/^SUPER_EFFORT_META_PLANNER=high/SUPER_EFFORT_META_PLANNER=inherit/' \
+  -e 's/^SUPER_EFFORT_EVALUATOR=high/SUPER_EFFORT_EVALUATOR=inherit/' \
+  -e 's/^SUPER_EFFORT_DIAGNOSER=xhigh/SUPER_EFFORT_DIAGNOSER=inherit/' \
   -e 's/^SUPER_CODEX_SANDBOX=danger-full-access\([[:space:]]*\)# codex harness only:/SUPER_CODEX_SANDBOX=danger-full-access\1# used by bridged codex roles:/' \
   -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=inherit\1# relay subagent model for BRIDGED roles; inherit = the CLI default subagent model/' \
   >"$TMP/templates/superenv.default"

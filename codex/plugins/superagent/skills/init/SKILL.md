@@ -181,7 +181,7 @@ report-only. There is exactly one exception to "never abort": a foreign harness 
 
 ## Step 3 — Role agents (model/effort pins)
 
-Nine `SUPER_MODEL_*` role keys dispatch through subagents — all but
+Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `codex exec -m`.
 On Codex there are **no generated agent-definition files at all**: role pins dispatch
 at runtime as `spawn_agent` parameters — `SUPER_MODEL_<ROLE>` → `model`,
@@ -203,6 +203,14 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_RE_REVIEWER | SUPER_EFFORT_RE_REVIEWER | `.claude/agents/super-re-reviewer.md` |
 | SUPER_MODEL_BRANCH_REVIEWER | SUPER_EFFORT_BRANCH_REVIEWER | `.claude/agents/super-branch-reviewer.md` |
 | SUPER_MODEL_FIX_PLANNER | SUPER_EFFORT_FIX_PLANNER | `.claude/agents/super-fix-planner.md` |
+| SUPER_MODEL_PRD_REVIEWER | SUPER_EFFORT_PRD_REVIEWER | `.claude/agents/super-prd-reviewer.md` |
+| SUPER_MODEL_META_PLANNER | SUPER_EFFORT_META_PLANNER | `.claude/agents/super-meta-planner.md` |
+| SUPER_MODEL_EVALUATOR | SUPER_EFFORT_EVALUATOR | `.claude/agents/super-evaluator.md` |
+| SUPER_MODEL_DIAGNOSER | SUPER_EFFORT_DIAGNOSER | `.claude/agents/super-diagnoser.md` |
+
+The last four rows are the **coding-loop roles** (0.7.0): `super-prd-reviewer` is dispatched by
+`superprd`, the other three by `supermeta` / `supereval` / `superdiagnose` when those skills land.
+They follow the same generate/skip/conflict rules as the nine loop roles above.
 
 
 (`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch

@@ -248,6 +248,10 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_MODEL_RE_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_FIX_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PRD_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_PRD_REVIEWER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_META_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_EVALUATOR=claude:[^[:space:]]*/SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_DIAGNOSER=claude:[^[:space:]]*/SUPER_MODEL_DIAGNOSER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
   -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra\1# relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer\/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)/' \
   >"$TMP/plugins/superagent/templates/superenv.default"

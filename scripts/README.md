@@ -55,10 +55,10 @@ line in the tick log records the model in use (`model=...`).
 
 `SUPER_MODEL_SUPERVISOR` (and `TICK_MODEL`) must be **native** to `SUPER_HARNESS`: the value's
 grammar is `[<harness>:]<model>` with the same `claude|codex|cursor|pi` prefix and inference rules
-as the nine subagent role keys (see the main [`README.md`](../README.md#configuration)'s
+as the thirteen subagent role keys (see the main [`README.md`](../README.md#configuration)'s
 Configuration section), but a prefix — explicit or inferred — that names a harness other than the
 resolved `SUPER_HARNESS` is a hard error (exit 11; see Exit codes below) rather than a bridge: the
-supervisor itself can never be dispatched through `role-bridge.sh`, only the nine dispatch-hook
+supervisor itself can never be dispatched through `role-bridge.sh`, only the thirteen dispatch-hook
 role keys can.
 
 ## Effort
@@ -73,9 +73,10 @@ non-`inherit` `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` is logged as a warning and
 passed through.
 
 This domain applies to `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` specifically, since the supervisor
-is always native to `SUPER_HARNESS`. The nine subagent role keys (`SUPER_EFFORT_PLANNER`,
+is always native to `SUPER_HARNESS`. The thirteen subagent role keys (`SUPER_EFFORT_PLANNER`,
 `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
-`_BRANCH_REVIEWER`, `_FIX_PLANNER`) are validated in **their own resolved harness's** domain
+`_BRANCH_REVIEWER`, `_FIX_PLANNER`, `_PRD_REVIEWER`, `_META_PLANNER`, `_EVALUATOR`, `_DIAGNOSER`)
+are validated in **their own resolved harness's** domain
 instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
 a fourth domain beyond the three above: Pi accepts `off|minimal|low|medium|high|xhigh|max|inherit`
 (a `:<level>` suffix on the model string, or `--thinking` when the model is `inherit`). See the
@@ -331,6 +332,17 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `bridge-test.sh` — offline tests for `role-bridge.sh` and the `_common.sh` role-grammar parser,
   using `PATH` shims in place of the real CLIs (no network, no live CLI needed); prints `bridge-test:
   N failure(s)` and exits 1 on any failure.
+- `prd-lint.sh <project-dir> [--json]` — offline validator for a coding-loop project folder
+  (`prd.md`, `knowledge-base.md`, `evaluation.md`): header blocks, `prd.md` section order and
+  ledger header, knowledge-base kinds and locators (files/globs/entry points resolved against the
+  repo root, URLs and context7 ids checked for shape), `evaluation.md` setup/cwd, `Pass when`
+  grammar, timeouts against `SUPER_EVAL_TIMEOUT_MIN`, judged rows, check-id uniqueness, and the
+  two-way coverage rule between success criteria and check ids (a literal `|` in a cell is written
+  `\|`). Prints `PASS|WARN|FAIL
+  <file>:<loc> <message>` lines (or a JSON array with `--json`); exit 0 with no FAIL, 1 otherwise,
+  2 on usage. `PRD_LINT_REPO_ROOT` overrides repo-root detection. Bash 3.2, no network.
+- `prd-lint-test.sh` — offline fixture tests for `prd-lint.sh` (a valid project plus one mutation
+  per FAIL and WARN class); exit 1 on any failure.
 - `bridge-smoke.sh` — live probes for `role-bridge.sh` against whatever real CLIs are installed on
   the host (T1–T7: each harness native, plus Claude↔Codex relay round trips); missing CLIs are
   reported as SKIP, not FAIL. Always exits 0 and writes `bridge-smoke-report.md` at the repo root —

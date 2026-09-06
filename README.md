@@ -219,8 +219,9 @@ the template so you can edit knobs in place.
 
 ### Roles
 
-Ten role keys control which model and effort each part of the loop uses. The supervisor is the
-tick itself; the other nine are dispatched by it.
+Fourteen role keys control which model and effort each part of the plugin uses. The supervisor is
+the tick itself; nine loop roles are dispatched by it, and four **coding-loop roles** (0.7.0, see
+[Coding loop](#coding-loop)) are dispatched by the coding-loop skills.
 
 | Role | Runs |
 |---|---|
@@ -231,6 +232,10 @@ tick itself; the other nine are dispatched by it.
 | `IMPLEMENTER`, `FIX_APPLIER` | SDD worker tasks. |
 | `TASK_REVIEWER`, `RE_REVIEWER`, `BRANCH_REVIEWER` | SDD per-task reviewer, post-fix re-reviewer, final whole-branch reviewer. |
 | `FIX_PLANNER` | Fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
+| `PRD_REVIEWER` | `superprd`'s zero-context sufficiency review of a drafted project folder. Read-only. |
+| `META_PLANNER` | `supermeta`, the coding-loop meta-planner (Stage 2). |
+| `EVALUATOR` | `supereval`'s grader for judged objectives (Stage 2). Read-only. |
+| `DIAGNOSER` | `superdiagnose`, root-cause analysis of a failed evaluation (Stage 3). |
 
 Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
 
@@ -351,10 +356,11 @@ Defaults shown are the Claude Code build's. Other builds differ; see
 Every role in the [Roles](#roles) table has one `SUPER_MODEL_<ROLE>` key and one
 `SUPER_EFFORT_<ROLE>` key. The model key picks which model (and, via the prefix, which harness)
 that role runs on; the effort key sets its reasoning effort. The accepted values are in
-[Model values](#model-values) and [Effort values](#effort-values). The nine roles other than the
+[Model values](#model-values) and [Effort values](#effort-values). The nine loop roles other than the
 supervisor split into two groups: the planner, executor and panel are dispatched by the tick, and
 the six SDD roles (implementer, fix-applier, the three reviewers, fix-planner) are dispatched by
-the executor while it runs an implementation plan.
+the executor while it runs an implementation plan. The four coding-loop roles are dispatched by the
+coding-loop skills, never by the tick.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -368,6 +374,10 @@ the executor while it runs an implementation plan.
 | SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | The SDD scoped re-reviewer, dispatched after each fix round: verifies only that the open findings were addressed and nothing regressed. One per fix round. |
 | SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | The SDD final whole-branch reviewer, run once after all tasks: reviews the complete diff for cross-task issues before the code PR is opened. The last quality gate. |
 | SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | The SDD fix-planner for fix rounds 4–5, reached when three rounds of implementer fixes did not clear a task's findings: a fresh subagent diagnoses the root cause and writes the exact edit, which a fix-applier then carries out. SDD calls for a more capable model here than the implementer. |
+| SUPER_MODEL_PRD_REVIEWER | `claude:claude-opus-4-8` | The read-only subagent `superprd` dispatches with nothing but the three drafted input files, to answer whether a fresh planner could plan from them alone. A strong model here catches the gaps the author is blind to. |
+| SUPER_MODEL_META_PLANNER | `claude:claude-opus-4-8` | The `supermeta` subagent (Stage 2): reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. Mirrors the planner. |
+| SUPER_MODEL_EVALUATOR | `claude:claude-opus-4-8` | The read-only grader `supereval` dispatches for judged objectives (Stage 2). Command checks run in bash and use no model. |
+| SUPER_MODEL_DIAGNOSER | `claude:claude-opus-4-8` | The `superdiagnose` subagent (Stage 3): root-cause analysis of a failed evaluation report. |
 | SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by the planner, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since the planner and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
@@ -380,6 +390,10 @@ the executor while it runs an implementation plan.
 | SUPER_EFFORT_RE_REVIEWER | `high` | Effort for the scoped re-reviewer. Same bar as the task review so a fix round cannot pass on a weaker check. |
 | SUPER_EFFORT_BRANCH_REVIEWER | `xhigh` | Effort for the final whole-branch reviewer. Runs once per plan and is the last gate before the PR, so it gets the top setting. |
 | SUPER_EFFORT_FIX_PLANNER | `high` | Effort for the fix-planner. Root-cause diagnosis after three failed fix rounds. |
+| SUPER_EFFORT_PRD_REVIEWER | `high` | One dispatch per project; the review is the last check before the loop starts. |
+| SUPER_EFFORT_META_PLANNER | `high` | Same reasoning as the planner: the meta-plan has the most downstream leverage in a round. |
+| SUPER_EFFORT_EVALUATOR | `high` | Grading against written criteria; one dispatch per round. |
+| SUPER_EFFORT_DIAGNOSER | `xhigh` | RCA is the highest-leverage reasoning step in the loop and fires only on a failed round. |
 
 **Harness**
 
@@ -425,6 +439,29 @@ the executor while it runs an implementation plan.
 | SUPER_SKIP_FINISHING_HANDOFF | `false` | `true` bypasses `superpowers:finishing-a-development-branch`'s interactive menu; `superrun` integrates the code PR itself. |
 | SUPER_GH_DISABLE_SANDBOX | `false` | `true` on hosts (e.g. macOS) where `gh` needs keychain access the tool sandbox blocks. |
 | SUPER_REPO_NOTES | *(empty)* | Optional path to a repo doc the SDD executor reads before the task loop, treated as standing repo policy. |
+
+### Coding loop
+
+0.7.0 ships the first stage of a PRD-driven outer loop that will meta-plan, run the inner
+`superagent` loop, evaluate the result, diagnose failures, and repeat (design:
+`docs/superpowers/specs/2026-09-05-coding-loop-design.md`). Stage 1 delivers the inputs:
+
+- a **project folder** at `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/` holding
+  `prd.md` (objective, success criteria, constraints, locked decisions, iteration ledger),
+  `knowledge-base.md` (a manifest of sources by kind), and `evaluation.md` (a setup command,
+  command checks with `exit <n>` / `stdout ~ /regex/` pass rules and timeouts, and judged
+  objectives with written criteria);
+- `superagent:superprd`, which turns a planning conversation into that folder once a readiness
+  rubric passes, asking you one question per gap first;
+- `scripts/prd-lint.sh <project-dir> [--json]`, the offline validator both `superprd` and the
+  future evaluator run.
+
+| Key | Default | Meaning |
+|---|---|---|
+| SUPER_PROJECT_DIRNAME | `projects` | Where project folders live under `SUPER_GOAL_ROOT`. A project folder has no `master-plans/`, so the plan-tree skills never mistake it for a goal. |
+| SUPER_EVAL_TIMEOUT_MIN | `60` | Ceiling for any `evaluation.md` check timeout; `prd-lint.sh` FAILs a larger value. |
+| SUPER_GOAL_AUTOCONFIRM | `false` | Reserved for Stage 2. `true` only inside `supermeta`'s dispatch of `supergoal`, to skip its human confirmation. Nothing reads it yet. |
+| SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
 
 ## Other harnesses: Codex, Cursor, Pi
 
@@ -526,6 +563,7 @@ unprefixed on Codex, Cursor, and Pi.
 |---|---|
 | `init` | Bootstrap a repo: prerequisite checks, `.superenv`, vault seed, gitignore entry, per-role agent definitions. Idempotent. |
 | `supergoal` | Turn a goal description into a goal folder plus root master plan. |
+| `superprd` | Turn a planning conversation into a coding-loop project folder (`prd.md`, `knowledge-base.md`, `evaluation.md`) after a readiness rubric passes; `--check` prints the readiness report only. |
 | `superplan` | Author the next step's plan (sub-master or implementation leaf), route it, commit and merge via PR. |
 | `superrun` | Execute the next ready leaf via `subagent-driven-development`, integrate the code PR, hand off to `superfinish`. |
 | `superfinish` | Post-execution bookkeeping: findings, closeout report, ancestor rows flipped complete. |

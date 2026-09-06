@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0 — 2026-09-05
+
+- **Coding loop, Stage 1: project inputs and `superprd`.** First stage of the PRD-driven outer
+  loop (design: `docs/superpowers/specs/2026-09-05-coding-loop-design.md`; this stage:
+  `…-stage1-prd-design.md`). A **project folder** at
+  `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/` holds `prd.md`,
+  `knowledge-base.md`, and `evaluation.md` in fixed formats; `scripts/prd-lint.sh` validates
+  them offline (with `prd-lint-test.sh` fixtures); the new `superprd` skill grades a planning
+  conversation against a seven-item readiness rubric, asks one question per gap, drafts the three
+  files, has a zero-context `PRD_REVIEWER` subagent confirm they are self-sufficient, and ships
+  the folder via PR after the operator confirms (`--check` prints the readiness report only).
+- **Four new roles and four loop keys in `.superenv`.** `SUPER_MODEL_/SUPER_EFFORT_` for
+  `PRD_REVIEWER` (high), `META_PLANNER` (high), `EVALUATOR` (high), `DIAGNOSER` (xhigh), all on
+  `claude:claude-opus-4-8` by default and mirrored in the Codex/Cursor/Pi builds like the nine
+  loop roles; `init` generates their `.claude/agents/super-<role>.md` definitions.
+  `SUPER_PROJECT_DIRNAME=projects` and `SUPER_EVAL_TIMEOUT_MIN=60` are live;
+  `SUPER_GOAL_AUTOCONFIRM=false` and `SUPER_CODE_MAX_ITERATIONS=5` are declared but read by
+  nothing until Stages 2–3. No existing skill changes behaviour.
+
 ## 0.6.9 — 2026-09-02
 
 - **Relicensed under MIT.** The repository now ships a `LICENSE` file (MIT, copyright 2026 Eugene
