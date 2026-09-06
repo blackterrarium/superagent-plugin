@@ -51,7 +51,7 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
-Everything here runs on the **host that runs the loops** (the primary checkout holding
+Everything here runs on the **host that runs the loops** (the primary checkout — or, for an external vault, the vault repo — holding
 the gitignored `<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating
 repo: `SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks). Resolve
 `primary_root` first if invoked from a worktree, and locate this plugin's installed
@@ -186,5 +186,6 @@ user before any stop / uninstall / purge.**
   file directly, hold that loop's `.<loop>.lockd` yourself. Never touch a loop whose `LOCK=yes`/`TICK=yes`
   without the lock.
 - **Confirm before destructive actions** (hard stop, `--purge`). Drain and re-arm are reversible.
-- **Operate per `primary_root`.** The loop files and locks exist only in the primary checkout; a `<slug>`
-  with a missing loop file is a resume-via-bootstrap situation, not an error to paper over.
+- **Operate per `primary_root`.** The loop files and locks exist only at the vault root (the primary
+  checkout for an internal vault, the vault repo for an external one); a `<slug>` with a missing
+  loop file is a resume-via-bootstrap situation, not an error to paper over.

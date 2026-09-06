@@ -87,14 +87,17 @@ authoring), so the two are ambiguous whenever both are available. `superagent:in
 
 - verifies prerequisites;
 - creates a `.superenv` config from the plugin's shipped defaults if the repo has none;
-- seeds the goal vault (`root.md` under `SUPER_GOAL_ROOT`, default `vault`) if absent;
+- seeds the goal vault (`root.md` under `SUPER_GOAL_ROOT`, default `vault`) if absent — an absolute or `~`-prefixed `SUPER_GOAL_ROOT` is an **external vault**, initialised as its own git repo outside the checkout; `--local-only` routes every ignore entry to `.git/info/exclude` so a checkout with an external vault has nothing to commit;
 - adds the loop-status gitignore entry;
 - on Claude Code, generates per-role agent definitions in `.claude/agents/` for the model and
   effort pins in `.superenv`.
 
-It is idempotent and never overwrites an existing file. It only prepares files and never commits,
-so review and commit `.superenv`, the vault seed, and `.gitignore` yourself (through a PR if the
-repo protects its default branch).
+It is idempotent and never overwrites an existing file. What is left for you to commit depends on
+the mode: with an **internal vault and no `--local-only`**, review and commit `.superenv`, the vault
+seed, any generated role agents, and `.gitignore` yourself (through a PR if the repo protects its
+default branch); with an **external vault**, init makes the vault repo's own seed commit — its one
+exception to "never commits" — and the code repo needs only `.superenv`, the role agents, and the
+`.env` ignore line; with **`--local-only` and an external vault**, nothing needs committing.
 
 **4. Create a goal.**
 
@@ -111,6 +114,10 @@ This produces a goal folder with a root master plan.
 | Manual, one step at a time | Invoke `superagent:superplan`, `superagent:superrun`, `superagent:superfinish` directly. | Full control, no loop. |
 | Attended loop | `superagent:superagent <PLAN.md>` | Runs in your session as a cron job. Launch the session with the Bash timeout variables described under [Timeouts](#timeouts). |
 | Unattended loop | `superagent:superagent-external <PLAN.md>` | Arms a per-goal OS scheduler entry. Needs no console session. |
+
+In external vault mode `<PLAN.md>` is the plan's absolute path (e.g.
+`~/superagent-vaults/<repo>/<STAMP>-<slug>/master-plans/<seed>.md`); an internal vault takes the
+repo-relative path.
 
 `superagent` carries `disable-model-invocation`, so it never auto-triggers from a plain-English
 request. Invoke it by its full name, exactly like `superagent:init`.
@@ -135,9 +142,12 @@ All loop state lives in one **gitignored** file per goal:
 ```
 
 YAML frontmatter holds the machine state (`status`, `iteration`, `driver`, `session_skill_count`,
-and so on) and the body is an append-only human log. Because it is gitignored, it is local-only,
-survives every skill's branch-switching, and is never swept into a docs commit. It always lives in
-the **primary** checkout, never in a worktree.
+and so on) and the body is an append-only human log. `<SUPER_GOAL_ROOT>` is the vault root — inside
+the checkout by default, or an external vault repo when the key is absolute. Because it is
+gitignored, it is local-only, survives every skill's branch-switching, and is never swept into a
+docs commit. It always lives at the vault root, never in a worktree — for an internal vault that
+is the primary checkout; for an external vault it is the vault directory itself, which is the
+same from every worktree.
 
 ### Statuses
 
@@ -407,7 +417,7 @@ coding-loop skills, never by the tick.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. |
+| SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. Relative: inside the checkout, vault docs merged via PR. Absolute or `~/…`: **external vault** — its own git repo outside the checkout; vault docs are committed there directly, the code repo's history never carries the plan tree. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory, a sibling of each goal's `master-plans/`. |
 | SUPER_HEAVY_STEP_LIMIT | `6` | Heavy skills (one dispatch each) per cron session before the context-handoff gate hands off. |
 | SUPER_LOCK_STEAL_MIN | `90` | Minutes before a stale overlap lock from a crashed tick is auto-stolen. |

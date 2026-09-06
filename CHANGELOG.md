@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.1 — 2026-09-06
+
+- **External vault.** `SUPER_GOAL_ROOT` may now be an absolute or `~`-prefixed path (design:
+  `docs/superpowers/specs/2026-09-06-external-vault-design.md`). The vault then lives outside
+  the checkout as its own git repository: `superauthor` A7 commits plan-tree docs directly there
+  (no PR; pushed only if the vault has a remote), `superloop` roots the loop-status file at the
+  vault and adds `sync_vault()` plus a two-kind be-sure rule, `launch.sh` accepts a root plan
+  under the external vault and stores its absolute `master_plan:`, and `superagent:init`
+  creates/initialises the vault repo with its own loop-status `.gitignore` and seed commit. New
+  `vault_root` / `vault_is_external` in `scripts/_common.sh`; new offline
+  `scripts/vault-external-test.sh`. Relative values are unchanged.
+- **`superagent:init --local-only`.** Routes every ignore entry to `.git/info/exclude` and
+  adds `.superenv` and `.claude/agents/super-*.md` there, so a dogfooded checkout has nothing
+  to commit. New `.superenv` lint item 7 validates path-shaped keys.
+
 ## 0.7.0 — 2026-09-05
 
 - **Coding loop, Stage 1: project inputs and `superprd`.** First stage of the PRD-driven outer

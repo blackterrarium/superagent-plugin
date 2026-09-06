@@ -77,14 +77,25 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
+## Vault root
+
+Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
+
 ## Goal Identification
 
 Identify the **goal folder**: the top-level directory this plan belongs to — the directory under which all
 plans for this initiative are written. In practice it is the directory that contains (or should contain)
 the `master-plans/` and `plans/` subfolders for this plan family. Derive it from the location of
 `<PLAN.md>` — typically its parent goal folder, **not** the `master-plans/` or `plans/` subfolder the seed
-itself sits in. All output is written under this goal folder. Goal folders live under the repo's
-goal-folder root `<SUPER_GOAL_ROOT>` (created by `superagent:init` if absent) — so "write to the goal
+itself sits in. All output is written under this goal folder. Goal folders live under the vault root
+`<vault_root>` (see **Vault root**; created by `superagent:init` if absent) — so "write to the goal
 folder" means writing the docs there.
 
 ## Planning — author per superauthor's A2 standard (REQUIRED)
@@ -337,6 +348,13 @@ If `SUPER_PROTECTED_MAIN=true` (the shipped default), the default branch is a **
 a direct commit to the default branch is permitted instead — see `superauthor` clause **A7**'s
 `SUPER_PROTECTED_MAIN=false` worked example for the exact recipe (no feature branch, no PR, no `gh`).
 
+**External vault (see Vault root):** the target repo is the vault at `<vault_root>`, and
+`superauthor` A7's direct-commit variant always applies — `git -C "<vault_root>" add
+<vault-relative paths…> && git -C "<vault_root>" commit -m "docs(plan): <topic> — superplan
+output [skip ci]"`, push only if the vault has an `origin`. The skeleton below is the
+internal-mode path. A7's **precondition** applies: if `<vault_root>` is not its own repository,
+STOP and report — never improvise a `git init`.
+
 **Scope of the commit: only the planning artifacts** — the plan file, new/revised `findings/` docs, the
 immediate-parent progress-report update, and **every ancestor plan file** the planning-mode ascent
 updated up to the root `<PLAN.md>`. Add each with an explicit `git add <path>`; **never `git add -A`**
@@ -394,7 +412,7 @@ Report the following, in order:
    plan up to the root `<PLAN.md>` whose status the ascent set to `in progress`** (path + which row).
    Give the path and a one-line note of what changed. If none, write "none".
 4. **PR** — the URL of the pull request that committed and merged the plan documents, and its state
-   (merged). *Always include it.*
+   (merged) — external vault: the vault commit SHA. *Always include it.*
 5. **Findings** — one line per new finding captured during planning. **Call out any CRITICAL finding** (a
    contradiction in the seed, a mechanism that does not work as the seed assumed, a blocking constraint)
    under its own bold ⚠️ line so it cannot be missed. If there were none, write "none".
@@ -406,6 +424,7 @@ Use this format:
     **Plan file:** <full path>
     **Plan type:** implementation plan | seed/master plan
     **PR:** <url> (merged)
+    **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
 
     **Other files created/modified:**
     - <path> — <what changed>     (or: none)

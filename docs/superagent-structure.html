@@ -162,7 +162,10 @@ supervisor can start and wait on a child agent, which is the subject of
 
 <p>A goal lives in <code>&lt;SUPER_GOAL_ROOT&gt;/&lt;STAMP&gt;-&lt;slug&gt;/</code>, where the
 stamp is the UTC creation time (<code>YYYY-MM-DD-hh_mm</code>) and the root defaults to
-<code>vault</code>. supergoal creates six dated subfolders and a routing map:</p>
+<code>vault</code>. <code>SUPER_GOAL_ROOT</code> is repo-relative by default; an absolute or
+<code>~</code>-prefixed value makes it an <strong>external vault</strong> — its own git repository
+outside the checkout, into which plan-tree docs are committed directly. supergoal creates six
+dated subfolders and a routing map:</p>
 
 <div class="table-scroll">
 <table>
@@ -198,8 +201,9 @@ implementation-plan leaves.</p>
 
 <h3>The loop-status file</h3>
 <p>All loop state lives in one gitignored file per goal at
-<code>&lt;primary root&gt;/&lt;SUPER_GOAL_ROOT&gt;/&lt;goal&gt;/&lt;SUPER_LOOP_STATUS_DIRNAME&gt;/&lt;date&gt;-&lt;slug&gt;.md</code>.
-It is always resolved against the primary checkout, never a worktree, so it survives every skill's
+<code>&lt;vault root&gt;/&lt;goal&gt;/&lt;SUPER_LOOP_STATUS_DIRNAME&gt;/&lt;date&gt;-&lt;slug&gt;.md</code>.
+It is always resolved against the vault root, never a worktree (the primary checkout for an
+internal vault; the vault directory itself for an external one), so it survives every skill's
 branch switching. YAML frontmatter holds the machine state (<code>master_plan</code>,
 <code>status</code>, <code>plan_exhausted</code>, <code>prior_status</code>, <code>driver</code>,
 <code>cron_id</code>, <code>created</code>, <code>iteration</code>,

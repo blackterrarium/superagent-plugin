@@ -67,11 +67,22 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
+## Vault root
+
+Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **external**:
+`<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
+(`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
+repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
+(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
+`SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
+`vault_is_external` in `scripts/_common.sh`.
+
 ## Goal Identification
 
 Identify the **goal folder**: the top-level initiative directory that contains the `plans/`,
 `master-plans/`, `findings/`, and `reports/` subfolders. It is the parent of the `plans/` folder the
-input plan sits in (worked example from the originating repo: `<SUPER_GOAL_ROOT>/2026-05-20-graphgen-grammar-first-redesign/`). All
+input plan sits in (worked example from the originating repo: `<vault_root>/2026-05-20-graphgen-grammar-first-redesign/` — see **Vault root**). All
 output is written under this goal folder.
 
 **Read `goal-directives.md` at the goal-folder root FIRST, if it exists.** It is the authoritative map
@@ -197,6 +208,15 @@ pushes are rejected), so this MUST go through a feature branch and a PR — merg
 a direct commit to the default branch is permitted instead — see `superauthor` clause **A7**'s
 `SUPER_PROTECTED_MAIN=false` worked example for the exact recipe (no feature branch, no PR, no `gh`).
 
+**External vault (see Vault root):** the target repo is the vault at `<vault_root>`, and
+`superauthor` A7's direct-commit variant always applies — `git -C "<vault_root>" add
+<vault-relative paths…> && git -C "<vault_root>" commit -m "docs(finish): <topic> closeout —
+superfinish output [skip ci]"`, push only if the vault has an `origin`. The skeleton below is
+the internal-mode path. A7's **precondition** applies: if `<vault_root>` is not its own
+repository, STOP and report — never improvise a `git init`. The progress-table **PR** cell of a
+*planning* row stays blank in external mode (there is no PR for a vault-only commit); an
+*executed* row still records the code PR number.
+
 **Scope of the commit: only the bookkeeping docs** written this run — the closeout report, new/revised
 `findings/` docs, the `<PLAN.md>` close-out note, and **every ancestor plan file** the completion-mode
 ascent updated (the immediate parent and any further-up ancestors it flipped, up to the root). Add each
@@ -259,5 +279,6 @@ appear here.**
     ⚠️ **Critical:** <only present when a finding contradicts a plan assumption>
 
     **PR:** <url> (merged)
+    **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.

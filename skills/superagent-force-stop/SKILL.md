@@ -23,10 +23,11 @@ repo-root `.superenv` file, (3) the plugin default
 `grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
 
-Everything here runs on the **host that runs the loops** (the primary checkout
-holding the gitignored `<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the
-originating repo: `SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd`
-locks). Resolve `primary_root` first if invoked from a worktree, set
+Everything here runs on the **host that runs the loops** (the vault root — the primary checkout for
+an internal vault, the vault repo for an external one — holding the gitignored
+`<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating repo:
+`SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks). Resolve `primary_root`
+first if invoked from a worktree, set
 `$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory (see
 [scripts/README.md](../../scripts/README.md) for the convention), and run the script
 from `primary_root`:
@@ -58,7 +59,7 @@ mid-flight (e.g. driving a long CI push — ticks run uncapped by default), it i
 
 - **`<PLAN.md>` or `--slug <goal-slug>` — one is required.** Identify the loop by its
   **root** master plan (matched against the registered env files, like
-  `superagent-stop`) or directly by slug.
+  `superagent-stop`) (an absolute path when the vault is external — `stop.sh`/`force-stop.sh` match it against the loop file's absolute `master_plan:`) or directly by slug.
 - **`--drain` — optional.** After cleanup, also disable the timer (stop the loop).
   Default keeps the timer armed so the loop resumes.
 - **`--no-kick` — optional.** Do not immediately start a recovery tick after cleanup.
