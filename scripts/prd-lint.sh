@@ -9,7 +9,7 @@
 # 2 on a usage error. WARNs never change the exit code.
 # Repo root: PRD_LINT_REPO_ROOT, else `git rev-parse --show-toplevel` from the project dir.
 # SUPER_EVAL_TIMEOUT_MIN resolves env > <repo>/.superenv > templates/superenv.default (load_superenv).
-# Known limit: a `|` inside a table cell (e.g. in a regex) splits the row; escape it or avoid it.
+# A literal | inside a table cell must be written \| (standard markdown); an unescaped | splits the row.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/scripts/_common.sh"
@@ -35,11 +35,17 @@ MAX_TIMEOUT="${SUPER_EVAL_TIMEOUT_MIN:-60}"
 # message may contain '|' or ':'. (A bash array would need bash 4 to be safe under set -u.)
 FINDINGS_FILE="$(mktemp)"; trap 'rm -f "$FINDINGS_FILE"' EXIT
 US=$'\x1f'
+RS=$'\x1e'
 FAILS=0
 finding() {  # finding <PASS|WARN|FAIL> <file> <loc> <message>
   [[ "$1" == FAIL ]] && FAILS=$((FAILS+1))
   printf '%s%s%s%s%s%s%s\n' "$1" "$US" "$2" "$US" "$3" "$US" "$4" >>"$FINDINGS_FILE"
 }
+
+if ! [[ "$MAX_TIMEOUT" =~ ^[0-9]+$ ]]; then
+  finding WARN evaluation.md config "SUPER_EVAL_TIMEOUT_MIN='$MAX_TIMEOUT' is not a whole number of minutes; using 60"
+  MAX_TIMEOUT=60
+fi
 
 # ── markdown helpers ─────────────────────────────────────────────────────────
 trim()        { sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
@@ -53,8 +59,10 @@ section_body() {
 table_rows() {
   awk '!/^\|/ { n=0; next } { n++; if (n == 1) next; if ($0 ~ /^\|[[:space:]]*:?-/) next; print }'
 }
-# cell <n> — the n-th cell (1-based) of a "| a | b |" row on stdin, trimmed, backticks stripped
-cell() { awk -F'|' -v n="$(( $1 + 1 ))" '{ print $n }' | trim | strip_ticks; }
+# cell <n> — the n-th cell (1-based) of a "| a | b |" row on stdin, trimmed, backticks stripped.
+# A \| escape is swapped for the ASCII RS placeholder before the awk split (so it doesn't split
+# the row) and restored as a literal | afterward.
+cell() { sed "s/\\\\|/$RS/g" | awk -F'|' -v n="$(( $1 + 1 ))" '{ print $n }' | trim | strip_ticks | sed "s/$RS/|/g"; }
 
 # ── per-file checks ──────────────────────────────────────────────────────────
 check_file_present() {  # <basename> — FAIL and return 1 when absent

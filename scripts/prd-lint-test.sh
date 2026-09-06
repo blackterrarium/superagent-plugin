@@ -160,6 +160,9 @@ rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#^| C1 | `true` | `.` | `exit 
 expect "check serving no criterion FAILs"        1 "FAIL evaluation.md:C2 check id 'C2' serves no success criterion" "$T/p"
 rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| SC1 | The test suite passes | C1 |#| SC1 | The test suite passes |  |#' "$T/p/prd.md"
 expect "criterion with no check ids FAILs"       1 'FAIL prd.md:SC1 criterion has no check ids' "$T/p"
+SUPER_EVAL_TIMEOUT_MIN=none expect "non-numeric SUPER_EVAL_TIMEOUT_MIN is a WARN and falls back" 0 "WARN evaluation.md:config SUPER_EVAL_TIMEOUT_MIN='none'" "$T/valid"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `stdout ~ /ok\\|fine/` | 5 |#' "$T/p/evaluation.md"
+expect "escaped pipe in a regex Pass when is accepted" 0 "PASS evaluation.md:C1 Pass when 'stdout ~ /ok|fine/' well-formed" "$T/p"
 expect "--json emits an array"                   0 '^\[{"level":"' "$T/valid" --json
 if command -v python3 >/dev/null 2>&1; then
   if "$LINT" "$T/valid" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d and all(set(x)=={"level","file","loc","message"} for x in d)'; then
