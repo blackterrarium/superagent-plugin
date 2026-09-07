@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0 — 2026-09-07
+
+- **Coding loop, Stage 2: `supermeta`, `supereval`, and supergoal auto-confirm.** One manual
+  round of the PRD-driven outer loop now runs end to end (design:
+  `docs/superpowers/specs/2026-09-06-coding-loop-stage2-design.md`). `superagent:supermeta
+  <project-dir>` turns a READY project folder into the round's meta-plan and drives
+  `superagent:supergoal` (auto-confirmed) into a goal folder the inner `superagent` loop then
+  builds; `superagent:supereval <project-dir>` runs that round's `evaluation.md` command checks
+  against the latest `main` in a detached worktree, grades the judged objectives with a read-only
+  `EVALUATOR`, and records one PASS/FAIL verdict in the eval report and the project's iteration
+  ledger.
+- **`scripts/supereval.sh` and the shared parser `scripts/_evalspec.sh`.** The markdown helpers
+  and the `evalspec_env` / `evalspec_checks` readers were extracted from `scripts/prd-lint.sh`
+  into `scripts/_evalspec.sh` (sourced by both; `prd-lint.sh`'s output and exit codes are
+  unchanged and `scripts/prd-lint-test.sh` is unmodified). The new `scripts/supereval.sh` runner
+  executes the command checks in the worktree with per-check timeouts and writes the results file
+  `supereval` embeds; `scripts/supereval-test.sh` covers all eight offline cases.
+- **`supergoal` gains goal-as-file, `--autoconfirm`, and `--slug` (defaults preserved).** A
+  `<GOAL>` naming an existing `.md` file is read as the goal description; `--slug` overrides the
+  derived slug; `--autoconfirm` skips supergoal's step-7 human confirmation **only** when
+  `SUPER_GOAL_AUTOCONFIRM` resolves to `true` (a two-factor gate `supermeta` uses). A direct
+  `supergoal` user passing neither flag sees identical behaviour.
+- **No key defaults change.** `SUPER_GOAL_AUTOCONFIRM`, `SUPER_EVAL_TIMEOUT_MIN`,
+  `SUPER_PROJECT_DIRNAME`, and the `META_PLANNER` / `EVALUATOR` roles all shipped in 0.7.0; Stage
+  2 adds no `.superenv` key. The Stage-2 reservation markers are removed from the template
+  comments and the README now those skills exist.
+
 ## 0.7.1 — 2026-09-06
 
 - **External vault.** `SUPER_GOAL_ROOT` may now be an absolute or `~`-prefixed path (design:
