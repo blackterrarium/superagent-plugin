@@ -232,7 +232,8 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | SUPER_MODEL_DIAGNOSER | SUPER_EFFORT_DIAGNOSER | `.claude/agents/super-diagnoser.md` |
 
 The last four rows are the **coding-loop roles** (0.7.0): `super-prd-reviewer` is dispatched by
-`superprd`, the other three by `supermeta` / `supereval` / `superdiagnose` when those skills land.
+`superprd` and `super-meta-planner` backs `supermeta` (Stage 2); `super-evaluator` and
+`super-diagnoser` follow with `supereval` / `superdiagnose` when those skills land.
 They follow the same generate/skip/conflict rules as the nine loop roles above.
 
 On Pi the listed path is `.pi/agents/super-<role>.md` for the six SDD roles; planner/executor/panel
