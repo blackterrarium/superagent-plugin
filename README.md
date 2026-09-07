@@ -243,8 +243,8 @@ the tick itself; nine loop roles are dispatched by it, and four **coding-loop ro
 | `TASK_REVIEWER`, `RE_REVIEWER`, `BRANCH_REVIEWER` | SDD per-task reviewer, post-fix re-reviewer, final whole-branch reviewer. |
 | `FIX_PLANNER` | Fix rounds 4–5: diagnoses, then hands the mechanical edit to a fix-applier. |
 | `PRD_REVIEWER` | `superprd`'s zero-context sufficiency review of a drafted project folder. Read-only. |
-| `META_PLANNER` | `supermeta`, the coding-loop meta-planner (Stage 2). |
-| `EVALUATOR` | `supereval`'s grader for judged objectives (Stage 2). Read-only. |
+| `META_PLANNER` | `supermeta`, the coding-loop meta-planner. |
+| `EVALUATOR` | `supereval`'s grader for judged objectives. Read-only. |
 | `DIAGNOSER` | `superdiagnose`, root-cause analysis of a failed evaluation (Stage 3). |
 
 Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
@@ -385,8 +385,8 @@ coding-loop skills, never by the tick.
 | SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | The SDD final whole-branch reviewer, run once after all tasks: reviews the complete diff for cross-task issues before the code PR is opened. The last quality gate. |
 | SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | The SDD fix-planner for fix rounds 4–5, reached when three rounds of implementer fixes did not clear a task's findings: a fresh subagent diagnoses the root cause and writes the exact edit, which a fix-applier then carries out. SDD calls for a more capable model here than the implementer. |
 | SUPER_MODEL_PRD_REVIEWER | `claude:claude-opus-4-8` | The read-only subagent `superprd` dispatches with nothing but the three drafted input files, to answer whether a fresh planner could plan from them alone. A strong model here catches the gaps the author is blind to. |
-| SUPER_MODEL_META_PLANNER | `claude:claude-opus-4-8` | The `supermeta` subagent (Stage 2): reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. Mirrors the planner. |
-| SUPER_MODEL_EVALUATOR | `claude:claude-opus-4-8` | The read-only grader `supereval` dispatches for judged objectives (Stage 2). Command checks run in bash and use no model. |
+| SUPER_MODEL_META_PLANNER | `claude:claude-opus-4-8` | The `supermeta` subagent: reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. Mirrors the planner. |
+| SUPER_MODEL_EVALUATOR | `claude:claude-opus-4-8` | The read-only grader `supereval` dispatches for judged objectives. Command checks run in bash and use no model. |
 | SUPER_MODEL_DIAGNOSER | `claude:claude-opus-4-8` | The `superdiagnose` subagent (Stage 3): root-cause analysis of a failed evaluation report. |
 | SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by the planner, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since the planner and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
@@ -452,9 +452,12 @@ coding-loop skills, never by the tick.
 
 ### Coding loop
 
-0.7.0 ships the first stage of a PRD-driven outer loop that will meta-plan, run the inner
-`superagent` loop, evaluate the result, diagnose failures, and repeat (design:
-`docs/superpowers/specs/2026-09-05-coding-loop-design.md`). Stage 1 delivers the inputs:
+0.8.0 delivers one manual round of a PRD-driven outer loop that meta-plans a project, runs the
+inner `superagent` loop to build it, and evaluates the result (design:
+`docs/superpowers/specs/2026-09-05-coding-loop-design.md`; Stage 2:
+`docs/superpowers/specs/2026-09-06-coding-loop-stage2-design.md`). One round is
+`superagent:supermeta` → `superagent:superagent-external` → `superagent:supereval`; diagnosing a
+failed round and closing the loop automatically are Stage 3. The pieces:
 
 - a **project folder** at `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/` holding
   `prd.md` (objective, success criteria, constraints, locked decisions, iteration ledger),

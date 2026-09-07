@@ -24,8 +24,8 @@ SUPER_MODEL_RE_REVIEWER=inherit
 SUPER_MODEL_BRANCH_REVIEWER=inherit  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=inherit      # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_MODEL_PRD_REVIEWER=inherit     # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=inherit     # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
-SUPER_MODEL_EVALUATOR=inherit        # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
+SUPER_MODEL_META_PLANNER=inherit     # supermeta: meta-plan author, drives supergoal (coding loop)
+SUPER_MODEL_EVALUATOR=inherit        # supereval: grades judged objectives (read-only; command checks use no model)
 SUPER_MODEL_DIAGNOSER=inherit        # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED roles; inherit = the CLI default subagent model
@@ -44,8 +44,8 @@ SUPER_EFFORT_RE_REVIEWER=inherit
 SUPER_EFFORT_BRANCH_REVIEWER=inherit      # final whole-branch reviewer
 SUPER_EFFORT_FIX_PLANNER=inherit           # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_EFFORT_PRD_REVIEWER=inherit          # superprd zero-context reviewer
-SUPER_EFFORT_META_PLANNER=inherit          # supermeta (Stage 2)
-SUPER_EFFORT_EVALUATOR=inherit             # supereval judged objectives (Stage 2)
+SUPER_EFFORT_META_PLANNER=inherit          # supermeta
+SUPER_EFFORT_EVALUATOR=inherit             # supereval judged objectives
 SUPER_EFFORT_DIAGNOSER=inherit            # superdiagnose RCA (Stage 3)
 
 # ── Harness ───────────────────────────────────────────────────────
