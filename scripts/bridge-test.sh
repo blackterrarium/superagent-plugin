@@ -68,6 +68,12 @@ check "codex: --tools accepted and ignored" bash -c "[ $rc -eq 0 ] && ! grep -q 
 "$BRIDGE" --harness claude --model inherit --effort inherit --tools "" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
 check "usage error on empty --tools" [ "$rc" -eq 64 ]
 
+# Judged objectives need actual inspection tools, not a literal tool named evaluator.
+"$BRIDGE" --harness pi --model inherit --effort inherit --tools evaluator --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "pi: evaluator has read-only inspection tools" [ "$(argv pi)" = "-p --approve --no-session --tools read,grep,find,ls " ]
+"$BRIDGE" --harness claude --model inherit --effort inherit --tools evaluator --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
+check "claude: bridged evaluator has read-only inspection tools" [ "$(argv claude)" = "-p --allowedTools Read,Grep,Glob " ]
+
 # ── codex ──
 out="$("$BRIDGE" --harness codex --model gpt-5.6-terra --effort medium --cwd "$T/cwd" --prompt-file "$T/prompt.txt" 2>/dev/null)"
 check "codex: stdout is -o file content" [ "$out" = "RESULT-codex" ]
@@ -223,9 +229,24 @@ check "e2e: transition sets E2E_LINE only on change (no subshell)" bash -c "PI_E
 mkdir -p "$T/deliv/scripts"; printf '#!/bin/sh\necho "hello, world"\n' >"$T/deliv/scripts/hello.sh"; printf '#!/bin/sh\n[ "$(sh "$(dirname "$0")/hello.sh")" = "hello, world" ]\n' >"$T/deliv/scripts/test.sh"; chmod +x "$T/deliv/scripts/"*.sh
 check "e2e: deliverables pass"                    bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_assert_deliverables '$T/deliv'"
 check "e2e: deliverables fail when hello.sh is wrong" bash -c "PI_E2E_LIB=1; . '$E2E'; rm -rf '$T/deliv2'; cp -R '$T/deliv' '$T/deliv2'; echo 'echo nope' >'$T/deliv2/scripts/hello.sh'; ! e2e_assert_deliverables '$T/deliv2'"
+# A fresh-clone e2e run requires the user package; invalid versions must fail before provisioning.
+printf '{"version":"0.58.0"}\n' >"$T/subagents-version.json"
+check "e2e: required subagents accepts minimum version" bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_subagents_version '$T/subagents-version.json')\" = 0.58.0 ]"
+printf '{"version":"0.59.0-beta"}\n' >"$T/subagents-version.json"
+check "e2e: required subagents accepts higher prerelease" bash -c "PI_E2E_LIB=1; . '$E2E'; [ \"\$(e2e_subagents_version '$T/subagents-version.json')\" = 0.59.0-beta ]"
+for version in 0.57.9 0.58.0-beta.1 malformed; do
+  printf '{"version":"%s"}\n' "$version" >"$T/subagents-version.json"
+  check "e2e: required subagents rejects $version" bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_subagents_version '$T/subagents-version.json' 2>'$T/subagents-err'; [ \$? = 2 ] && grep -q 'requires pi-subagents >= 0.58.0' '$T/subagents-err'"
+done
+check "e2e: required subagents rejects missing package" bash -c "PI_E2E_LIB=1; . '$E2E'; e2e_subagents_version '$T/no-subagents.json' 2>'$T/subagents-err'; [ \$? = 2 ] && grep -q 'pi install npm:pi-subagents' '$T/subagents-err'"
+# Isolate e2e preflight package discovery from the operator's installed packages.
+E2E_TEST_PACKAGE="$T/e2e-subagents-package.json"
+E2E_MISSING_PACKAGE="$T/e2e-missing-package.json"
+printf '{"version":"0.58.0"}\n' >"$E2E_TEST_PACKAGE"
 mkshim gh; mkshim launchctl; mkshim systemctl
-check "e2e: --dry-run exits 0 and prints the plan" bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r '$E2E' --dry-run 2>&1 | grep -q 'nothing created or armed'"
-check "e2e: --dry-run writes no report"           bash -c "cd '$T/cwd' && PI_E2E_REPO=o/r PI_E2E_REPORT='$T/dry-report.md' '$E2E' --dry-run >/dev/null 2>&1; [ ! -f '$T/dry-report.md' ]"
+check "e2e: clean host without package refuses before provisioning" bash -c "cd '$T/cwd'; PI_E2E_SUBAGENTS_PACKAGE='$E2E_MISSING_PACKAGE' PI_E2E_REPO=o/r PI_E2E_REPORT='$T/missing-package-report.md' '$E2E' --dry-run >'$T/missing-package.out' 2>&1; rc=\$?; [ \$rc = 2 ] && grep -q 'requires pi-subagents >= 0.58.0' '$T/missing-package.out' && [ ! -f '$T/missing-package-report.md' ] || { cat '$T/missing-package.out'; exit 1; }"
+check "e2e: --dry-run exits 0 and prints the plan" bash -c "cd '$T/cwd' && PI_E2E_SUBAGENTS_PACKAGE='$E2E_TEST_PACKAGE' PI_E2E_REPO=o/r '$E2E' --dry-run >'$T/e2e-dry.out' 2>&1 && grep -q 'nothing created or armed' '$T/e2e-dry.out' || { cat '$T/e2e-dry.out'; exit 1; }"
+check "e2e: --dry-run writes no report"           bash -c "cd '$T/cwd' && PI_E2E_SUBAGENTS_PACKAGE='$E2E_TEST_PACKAGE' PI_E2E_REPO=o/r PI_E2E_REPORT='$T/dry-report.md' '$E2E' --dry-run >/dev/null 2>&1; [ ! -f '$T/dry-report.md' ]"
 check "e2e: bad flag → exit 2"                    bash -c "'$E2E' --bogus >/dev/null 2>&1; [ \$? = 2 ]"
 check "e2e: kill_tree kills a child and its grandchild" bash -c "PI_E2E_LIB=1; . '$E2E'; bash -c 'sleep 57; true' & p=\$!; sleep 0.3; c=\$(pgrep -P \$p | head -1); e2e_kill_tree \$p; sleep 0.3; ! kill -0 \$p 2>/dev/null && ! kill -0 \$c 2>/dev/null"
 # gh shim that hangs only on `repo view` — everything else answers instantly (preflight must pass)
@@ -235,7 +256,7 @@ if [ "$1" = repo ] && [ "$2" = view ]; then sleep 31; fi
 echo RESULT-gh
 EOF
 chmod +x "$SHIM/gh"
-check "e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s" bash -c "cd '$T/cwd'; PI_E2E_REPO=o/r PI_E2E_REPORT='$T/e2e-term-report.md' '$E2E' >'$T/e2e-term.out' 2>&1 & p=\$!; for i in \$(seq 1 40); do grep -q Provision '$T/e2e-term.out' && break; sleep 0.5; done; t0=\$(date +%s); kill -TERM \$p; wait \$p; rc=\$?; el=\$(( \$(date +%s) - t0 )); [ \$rc = 143 ] && [ \$el -lt 10 ] && grep -q 'interrupted' '$T/e2e-term.out' && ! pgrep -f '^sleep 31\$' >/dev/null"
+check "e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s" bash -c "cd '$T/cwd'; PI_E2E_SUBAGENTS_PACKAGE='$E2E_TEST_PACKAGE' PI_E2E_REPO=o/r PI_E2E_REPORT='$T/e2e-term-report.md' '$E2E' >'$T/e2e-term.out' 2>&1 & p=\$!; for i in \$(seq 1 40); do grep -q Provision '$T/e2e-term.out' && break; sleep 0.5; done; t0=\$(date +%s); kill -TERM \$p; wait \$p; rc=\$?; el=\$(( \$(date +%s) - t0 )); [ \$rc = 143 ] && [ \$el -lt 10 ] && grep -q 'interrupted' '$T/e2e-term.out' && ! pgrep -f '^sleep 31\$' >/dev/null || { cat '$T/e2e-term.out'; exit 1; }"
 
 # --- launch.sh: a repo reached through a symlinked path (macOS /var → /private/var, /tmp → /private/tmp)
 # must still accept its plan: REPO comes from git (physical) while the plan path must not be logical.
@@ -366,13 +387,13 @@ echo ok
 EOF
 chmod +x "$SHIM/claude" "$SHIM/pi" "$SHIM/codex"
 export MIX_PLUGIN_LIST="$PL"
-check "mix: --dry-run exits 0 and prints the mix" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r '$MIX' --dry-run 2>&1 | tee '$T/mix-dry.out' | grep -q 'nothing created or armed' && grep -q 'implementer+fix-applier=codex:gpt-5.6-terra' '$T/mix-dry.out'"
+check "mix: --dry-run exits 0 and prints the mix" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r '$MIX' --dry-run 2>&1 | tee '$T/mix-dry.out' | grep -q 'nothing created or armed' && grep -q 'implementer+fix-applier=codex:gpt-5.6-terra' '$T/mix-dry.out' || { cat '$T/mix-dry.out'; exit 1; }"
 check "mix: --dry-run writes no report"          bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REPORT='$T/mix-dry-report.md' '$MIX' --dry-run >/dev/null 2>&1; [ ! -f '$T/mix-dry-report.md' ]"
 check "mix: preflight refuses a pin outside claude+codex+pi" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REVIEWER=codex:gpt-5.6-sol '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'must name pi' '$T/mix-err'"
 check "mix: preflight refuses when pi lacks the reviewer's provider" bash -c "cd '$T/cwd' && MIX_E2E_REPO=o/r MIX_E2E_REVIEWER=pi:openai/gpt-5 '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q \"provider 'openai'\" '$T/mix-err'"
 check "mix: preflight refuses when the plugin is disabled" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/✔ enabled/✘ disabled/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'not enabled' '$T/mix-err'"
 mkdir -p "$T/cache/superagent-marketplace/superagent/0.1.0/scripts"; cp "$BRIDGE" "$T/cache/superagent-marketplace/superagent/0.1.0/scripts/role-bridge.sh"   # the mismatching version still ships a header-carrying bridge
-check "mix: preflight WARNs (not fails) on a plugin version mismatch" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/0.6.4/0.1.0/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 0 ] && grep -q 'WARN installed claude plugin is 0.1.0' '$T/mix-err'"
+check "mix: preflight WARNs (not fails) on a plugin version mismatch" bash -c "cd '$T/cwd' && MIX_PLUGIN_LIST=\"\$(printf '%s' \"\$MIX_PLUGIN_LIST\" | sed 's/0.6.4/0.1.0/')\" MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 0 ] && grep -q 'WARN installed claude plugin is 0.1.0' '$T/mix-err' || { cat '$T/mix-err'; exit 1; }"
 check "mix: preflight refuses an installed bridge without the evidence header" bash -c "mkdir -p '$T/cache-old/superagent-marketplace/superagent/0.6.4/scripts'; printf '#!/bin/sh\necho old\n' >'$T/cache-old/superagent-marketplace/superagent/0.6.4/scripts/role-bridge.sh'; cd '$T/cwd' && MIX_E2E_PLUGIN_CACHE='$T/cache-old' MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'predates the evidence header' '$T/mix-err'"
 check "mix: preflight refuses when the installed bridge is missing" bash -c "cd '$T/cwd' && MIX_E2E_PLUGIN_CACHE='$T/cache-none' MIX_E2E_REPO=o/r '$MIX' --dry-run >/dev/null 2>'$T/mix-err'; [ \$? = 2 ] && grep -q 'installed bridge not found' '$T/mix-err'"
 check "mix: bad flag → exit 2"                   bash -c "'$MIX' --bogus >/dev/null 2>&1; [ \$? = 2 ]"

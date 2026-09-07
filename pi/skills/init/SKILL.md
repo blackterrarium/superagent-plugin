@@ -18,14 +18,14 @@ license: MIT
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
->   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
->   sequential fallback and report it.
+>   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
+>   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
 >   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; use `git worktree` via `bash`.
 
@@ -89,13 +89,13 @@ which is exactly the case Step 2 below fixes by creating one.
    — planning skills (`supergoal`, `superplan`) work without it, but `superrun` requires
    `superpowers:subagent-driven-development` to execute a plan and will refuse.
    On Pi, superpowers is a Pi package: `pi list` must show `superpowers` (install:
-   `pi install git:github.com/obra/superpowers`). Then check the `pi-subagents` package per
-   `SUPER_PI_SUBAGENTS` (validated below): read its installed version from
-   `~/.pi/agent/npm/node_modules/pi-subagents/package.json` or `.pi/npm/node_modules/pi-subagents/package.json`
-   (whichever exists); missing or `< 0.58.0` → `recommended`: WARN "pi-subagents missing/old —
-   superrun's SDD children will run sequentially in-context without role pins; install:
-   `pi install npm:pi-subagents`"; `required`: ABORT with the same hint; `off`: skip the check.
-   Record the version (or `absent`) in the summary — Step 3 keys off it.
+   `pi install git:github.com/obra/superpowers`). `pi-subagents` ≥ 0.58.0 is also required.
+   Read the active installation's version from `pi list` and its package.json (the usual paths
+   are `~/.pi/agent/npm/node_modules/pi-subagents/package.json` and
+   `.pi/npm/node_modules/pi-subagents/package.json`). Missing, unreadable, or `< 0.58.0` → ABORT:
+   "superagent requires pi-subagents >= 0.58.0; install: `pi install npm:pi-subagents`".
+   Record the verified version in the summary. The package must expose the `subagent` tool
+   in the Pi sessions that execute SDD; superrun checks tool availability before execution.
 3. `gh auth status` succeeds — else WARN (PR-based flows need it; planning artifacts are
    drafted either way, but `superauthor`'s A7 commit-and-merge step and every CI/PR
    operation in `superplan`/`superrun` need it). On a macOS host, a sandboxed `gh auth
@@ -130,14 +130,14 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-### .superenv validation (lint — WARN + fallback, never abort — two exceptions)
+### .superenv validation (lint — WARN + fallback, except hard errors)
 
 Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
 using it. For each finding emit one WARN row in the summary; the effective value used
 by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
-report-only. There are exactly two exceptions to "never abort": a foreign harness on
-`SUPER_MODEL_SUPERVISOR` (item 5), and a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/`
-(item 7) — either one stops init.
+report-only. Hard errors stop init: a foreign harness on `SUPER_MODEL_SUPERVISOR` (item 5),
+a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
+`SUPER_PI_SUBAGENTS` value other than `required` or its deprecated `recommended` alias (item 2).
 
 1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
    also exist in `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
@@ -150,8 +150,12 @@ report-only. There are exactly two exceptions to "never abort": a foreign harnes
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
-   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈
-   recommended|required|off.
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈ required.
+   On Pi, normalize legacy `recommended` to `required` for this run and report
+   "SUPER_PI_SUBAGENTS=recommended is deprecated; enforcing required" without editing the
+   user's environment or .superenv. `off` (or any other value) is a migration error:
+   ABORT with "set SUPER_PI_SUBAGENTS=required in the overriding environment or .superenv;
+   pi-subagents >= 0.58.0 is mandatory". No value permits a sequential fallback.
    On Pi `SUPER_PANEL_AGENT_TYPE` is ignored (the panel is a bridge fan-out, not typed subagents) —
    WARN once if it is set to anything.
 3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
@@ -207,11 +211,14 @@ which the external tick passes straight to `pi --model`. On Pi the supervisor's 
 (planner, executor, panel) are bridge processes that take the pins as CLI flags and need no
 definition; only superrun's SDD roles (implementer, fix-applier, task-reviewer, re-reviewer,
 branch-reviewer, fix-planner) dispatch through the `pi-subagents` `subagent` tool, and THOSE ride
-generated `.pi/agents/super-<role>.md` definitions. Generation happens only when Step 1 found
-`pi-subagents` ≥ 0.58.0 and `SUPER_PI_SUBAGENTS` ≠ `off`; otherwise this step generates nothing
-and reports `dispatch=sequential (no pi-subagents)` for the six SDD roles.
+generated `.pi/agents/super-<role>.md` definitions. Step 1 must have verified
+`pi-subagents` ≥ 0.58.0 and Step 2 must have resolved `SUPER_PI_SUBAGENTS` to `required` before
+this step runs. Missing prerequisites abort init; there is no sequential fallback.
 The four coding-loop roles (prd-reviewer, meta-planner, evaluator, diagnoser) get no `.pi/agents/`
-file in 0.7.0; `superprd` passes the model pin as a subagent parameter instead.
+file. Coding-loop dispatches use fresh blocking bridge processes with model/effort CLI pins:
+`superprd` runs its reviewer through `role-bridge.sh --tools evaluator`, `supereval` uses the
+same read-only bridge profile, and `supermeta` dispatches its PLANNER through `--tools planner`.
+The diagnoser's dispatch belongs to Stage 3.
 
 Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
 
@@ -235,32 +242,35 @@ The last four rows are the **coding-loop roles** (0.7.0): `super-prd-reviewer` i
 `superprd`, `super-meta-planner` backs `supermeta`, and `super-evaluator` grades the judged
 objectives `supereval` dispatches (all Stage 2); `super-diagnoser` follows with `superdiagnose`
 when that skill lands.
-They follow the same generate/skip/conflict rules as the nine loop roles above.
+They follow the harness-specific generate/skip/conflict rules below.
 
-On Pi the listed path is `.pi/agents/super-<role>.md` for the six SDD roles; planner/executor/panel
-never get a file.
+On Pi the listed path is `.pi/agents/super-<role>.md` only for the six SDD roles, including
+roles whose pins both inherit. Planner/executor/panel and the four coding-loop roles never
+get a file. This Pi rule overrides the table's generated paths.
 
 (`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch
 `superrun` through it: the executor always runs as the top-level agent of its own CLI process via
 `role-bridge.sh --tools executor`, taking `SUPER_MODEL_EXECUTOR` / `SUPER_EFFORT_EXECUTOR` directly —
 see superagent **Subagent dispatch**, issue #25.)
 
-- **SDD role, native (`pi:` or inherit) — generate when** the model is non-`inherit` OR the effort is
-  non-`inherit`: render `${SUPER_PLUGIN_ROOT}/templates/super-role-pi-agent.md` to
+- **SDD role, native (`pi:` or inherit) — always generate:** render `${SUPER_PLUGIN_ROOT}/templates/super-role-pi-agent.md` to
   `.pi/agents/super-<role>.md` (create `.pi/agents/` if needed), substituting `<role>`, `<KEY>`,
   `<model>` (prefix stripped; drop the `model:` line when `inherit`) and `<effort>` (drop the
-  `thinking:` line when `inherit`). A role with both keys `inherit` needs no file.
+  `thinking:` line when `inherit`). When both keys are `inherit`, keep the named definition
+  with neither field: pi-subagents still requires an `agent` name for dispatch.
 - **SDD role, bridged (harness ≠ pi):** render
   `${SUPER_PLUGIN_ROOT}/templates/super-role-pi-bridge-agent.md` to the same path, substituting
   `<role>`, `<KEY>`, `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit` when
   unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
   `inherit`) and `<bridge-path>` = the absolute path of `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`.
-- **Planner / executor / panel:** never a file; record `dispatch=bridge(<harness>)` (native roles
-  show `bridge(pi)`).
+- **Planner / executor / panel and coding-loop roles:** never a file; record
+  `dispatch=bridge(<harness>)` for implemented dispatches (native roles show `bridge(pi)`),
+  and `dispatch=pending (Stage 3)` for the diagnoser.
 - Ownership rules are the Claude build's: files carry the `generated-by: superagent:init` marker;
   rewrite marked files whose pins drifted; never touch an unmarked file (report `conflict`);
-  delete a marked file no key requires (`removed (stale)`). When `pi-subagents` is absent/`off`,
-  existing marked files are left in place and reported `unused (no pi-subagents)`.
+  delete marked files for roles no longer generated (`removed (stale)`), but keep all six SDD
+  definitions even when their pins inherit. A prerequisite failure stops init
+  before this step, leaving existing definitions untouched.
 - A leftover `.claude/agents/super-*.md` from a Claude Code init of the same repo belongs to that
   harness's build: leave it untouched and do not report it as stale.
 

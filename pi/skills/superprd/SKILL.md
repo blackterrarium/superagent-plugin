@@ -19,14 +19,14 @@ related skills: superauthor, supergoal, supermeta
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
->   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
->   sequential fallback and report it.
+>   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
+>   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
 >   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; use `git worktree` via `bash`.
 
@@ -224,7 +224,12 @@ Fix every FAIL (returning to step 5 when the fix needs the user). Keep the WARNs
 ### 7. Zero-context review
 
 Dispatch **one** read-only `PRD_REVIEWER` subagent. Resolve `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`.
-The four coding-loop roles get no `.pi/agents/` definition (see `init`). Dispatch through the `pi-subagents` `subagent` tool with the model pin as its parameter — `<provider>/<model>[:<effort>]` resolved from the two keys, omitting each part that is `inherit`; a bridged prefix (any harness other than `pi`) runs the reviewer as a blocking `role-bridge.sh` process instead, the way the planner and panel are dispatched on Pi.
+The PRD reviewer gets no `.pi/agents/` definition. Run one blocking
+`role-bridge.sh --tools evaluator --role prd-reviewer` process with the resolved harness/model/effort
+from `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`; a native role uses `--harness pi`
+(and `inherit` resolves to Pi). This fresh CLI receives only the review prompt below, without
+conversation history. Wait for completion and report a failed dispatch; never grade it yourself.
+The required `pi-subagents` extension is used by the inner loop's SDD roles.
 The prompt contains **only** the three scratch files
 verbatim and these two questions:
 

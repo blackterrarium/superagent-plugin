@@ -168,6 +168,13 @@ its vault path.
 
 Dispatch **one** `PLANNER`-role subagent. Resolve `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER`.
 If the model is `inherit` or a bare model name **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <name>` when named, no `model:` when `inherit`. Otherwise dispatch with `subagent_type: super-planner` and omit `model:`; that is the definition `superagent:init` generates in `.cursor/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop.
+Set `SUPER_GOAL_AUTOCONFIRM=true` **only for this child dispatch**, together with
+`--autoconfirm` below. Do not edit `.superenv` or change the caller's environment. For a CLI bridge,
+prefix that invocation with `SUPER_GOAL_AUTOCONFIRM=true`; for a native subagent, include
+`Treat SUPER_GOAL_AUTOCONFIRM=true as a dispatch-scoped override for this invocation` in its prompt.
+On Pi also set `SUPERAGENT_PI_SKILLS="${SUPER_PLUGIN_ROOT}/skills"` on the bridge invocation,
+so an attended call delivers `supergoal` to the child just as a scheduler tick does.
+
 The subagent's prompt instructs it to invoke the `superagent:supergoal` skill via the Skill tool with
 
 ```

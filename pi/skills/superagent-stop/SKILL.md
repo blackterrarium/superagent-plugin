@@ -19,14 +19,14 @@ related skills: superagent-external, superagent-monitor, superagent-force-stop, 
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
->   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
->   sequential fallback and report it.
+>   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
+>   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
 >   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; use `git worktree` via `bash`.
 

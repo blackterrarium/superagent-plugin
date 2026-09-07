@@ -118,10 +118,10 @@ cat >"$banner_file" <<'EOF'
 >   `<repo>/codex/plugins/superagent`). Substitute its absolute path wherever it appears.
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
->   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
->   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
->   path for it.
+>   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
+>   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
+>   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -197,7 +197,8 @@ cp "$ROOT/templates/super-role-bridge-agent.md" "$TMP/plugins/superagent/templat
 cp "$ROOT/templates/relay-preamble.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/vault-root.md" "$TMP/plugins/superagent/templates/"
 mkdir -p "$TMP/plugins/superagent/scripts"
-cp "$ROOT/scripts/role-bridge.sh" "$TMP/plugins/superagent/scripts/"
+cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" \
+  "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/plugins/superagent/scripts/"
 chmod +x "$TMP/plugins/superagent/scripts/role-bridge.sh"
 
 # superenv.default: same seds as skills, then Codex-specific header + model defaults.

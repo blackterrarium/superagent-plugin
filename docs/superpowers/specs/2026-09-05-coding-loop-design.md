@@ -160,5 +160,7 @@ loop installed. The loop only ever *calls* them.
 - An attended in-session driver for the outer loop.
 - Parallel rounds or several projects sharing one inner loop.
 - Editing the PRD or evaluation spec autonomously: a spec defect always parks for the operator.
-- Verifying the coding loop on Codex, Cursor, or Pi. The new skills are built for those harnesses by
-  the existing build scripts, but only `SUPER_HARNESS=claude` is exercised through Stage 3.
+- The original plan scoped verification through Stage 3 to `SUPER_HARNESS=claude`. The
+  [2026-09-07 compatibility follow-up](../reports/2026-09-07-coding-loop-harnesses.md) extends
+  Stage 1/2 skill verification to Codex and Pi. Cursor and the full scheduler-driven coding-loop
+  acceptance on Codex/Pi remain outside that follow-up.

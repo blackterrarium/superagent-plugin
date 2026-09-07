@@ -2,7 +2,7 @@
 # role-bridge.sh — run ONE agent role on a foreign harness CLI, headless.
 #
 #   role-bridge.sh --harness claude|codex|cursor|pi|inherit --model <m|inherit> --effort <e|inherit>
-#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|planner|executor|<list>]
+#                  --cwd <dir> --prompt-file <file> [--role <name>] [--tools role|planner|executor|evaluator|<list>]
 #
 # --tools picks the child's tool allowlist (claude: --allowedTools; pi: --tools; codex/cursor: ignored):
 #   role     (default) claude Read,Edit,Write,Bash,Grep,Glob · pi read,edit,write,bash,grep,find,ls —
@@ -13,6 +13,7 @@
 #            extension tools such as pi-subagents' `subagent`). This is how superagent runs superrun
 #            as the TOP-LEVEL agent of its own CLI process (issue #25): a subagent cannot
 #            foreground-wait on its own children, so the SDD controller has to be depth 0 in some process.
+#   evaluator read-only file inspection: claude Read,Grep,Glob; pi read,grep,find,ls.
 #   <list>   an explicit comma-separated allowlist in the harness's own tool names.
 # Pi children always run with --approve (project trust for one run; the operator chose the repo)
 # and --no-session (a bridged run is ephemeral; the log file is its record). When
@@ -65,7 +66,8 @@ case "$tools" in
   role)     allowed="$TOOLS_ROLE";     pi_allowed="$TOOLS_PI_ROLE" ;;
   planner)  allowed="$TOOLS_EXECUTOR"; pi_allowed="$TOOLS_PI_ROLE" ;;
   executor) allowed="$TOOLS_EXECUTOR"; pi_allowed="" ;;
-  "")       echo "role-bridge: --tools must be role|planner|executor|<comma-separated list> (got '')" >&2; exit 64 ;;
+  evaluator) allowed="Read,Grep,Glob"; pi_allowed="read,grep,find,ls" ;;
+  "")       echo "role-bridge: --tools must be role|planner|executor|evaluator|<comma-separated list> (got '')" >&2; exit 64 ;;
   *)        allowed="$tools";          pi_allowed="$tools" ;;
 esac
 

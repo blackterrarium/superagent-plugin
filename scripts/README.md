@@ -306,14 +306,15 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   exits 0 and writes `codex-smoke-report.md` at the repo root — failures are the data, not a script
   bug.
 - `role-bridge.sh --harness claude|codex|cursor|pi --model <m|inherit> --effort <e|inherit> --cwd <dir>
-  --prompt-file <file> [--role <name>] [--tools role|planner|executor|<list>]` — runs one agent role
+  --prompt-file <file> [--role <name>] [--tools role|planner|executor|evaluator|<list>]` — runs one agent role
   on a harness CLI, headless: reads the prompt from `<file>`, runs the target CLI in `<dir>`, prints
   its final message on stdout and nothing else (CLI chatter goes to a log file, path printed on
   stderr). The relay definitions a bridged role dispatches through (`templates/super-role-bridge-agent.md`
   on Claude/Cursor, `templates/relay-preamble.md` on Codex, `templates/super-role-pi-bridge-agent.md`
   on Pi) shell out to this script; it is also copied into the `codex/`, `cursor/`, and `pi/` builds.
   `--tools` selects the child's tool allowlist (claude: `--allowedTools`; pi: `--tools`; codex/cursor:
-  ignored): `role` (default: claude `Read,Edit,Write,Bash,Grep,Glob` · pi
+  ignored): `evaluator` uses only file inspection (claude `Read,Grep,Glob`; Pi `read,grep,find,ls`),
+  `role` (default: claude `Read,Edit,Write,Bash,Grep,Glob` · pi
   `read,edit,write,bash,grep,find,ls`) for a leaf role, `planner` (a `superplan` dispatch: claude adds
   `Task,Skill`; pi = the role set) for a skill-invoking dispatch, `executor` (claude
   `…,Task,Skill` — the tick's own set; pi = no `--tools` flag, so extension tools such as
@@ -324,7 +325,7 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   tick does. Pi children always run with `--approve --no-session`, plus `--skill` from
   `SUPERAGENT_PI_SKILLS` when set.
 - `bridge-fanout.sh --harness <h> --model <m|inherit> --effort <e|inherit> --cwd <dir>
-  [--tools role|planner|executor|<list>] [--role <name>] [--timeout <sec>] --prompt-file <f> [--prompt-file <f> ...]`
+  [--tools role|planner|executor|evaluator|<list>] [--role <name>] [--timeout <sec>] --prompt-file <f> [--prompt-file <f> ...]`
   — runs N `role-bridge.sh` invocations CONCURRENTLY and blocks until all finish; the L7 panel
   primitive for a harness with no blocking parallel subagent tool (pi): one blocking shell call
   returns every panelist's verdict, framed `=== PANELIST <n> exit=<rc> ===` / `=== END <n> ===`.
@@ -671,3 +672,30 @@ the `grep -c` double-zero; run 3 (aborted at the then-150-min ceiling) was the r
 branch reviewer found a seed-level design gap (unguarded rewrite failure → silent store loss), the
 L7 panel adopted a re-plan, and a second plan was executed — the run that moved the default ceiling
 to 240 min.
+
+
+## Coding-loop harness acceptance
+
+`bash scripts/coding-loop-package-test.sh` copies each Codex/Pi package to a temporary directory
+and runs the PRD validator and evaluation runner suites against only the shipped dependencies.
+A source checkout cannot fill a missing package dependency. This check is offline.
+
+Live Stage 1/2 acceptance (real model sessions and cost; authenticated CLI required):
+
+```sh
+python3 scripts/coding-loop-harness-smoke.py --harness codex --run-dir /tmp/coding-loop-codex-run
+python3 scripts/coding-loop-harness-smoke.py --harness pi --run-dir /tmp/coding-loop-pi-run
+```
+
+Each run directory must be new and is retained for inspection. The test copies the generated
+plugin, creates a code repository and an external vault with local bare origins, exercises
+superprd's review and confirmation gate, supermeta's planner/autoconfirm dispatch, then
+supereval's command and judged FAIL/PASS paths and round ledger. Pi requires the installed
+pi-subagents package. The runner supplies the code commit normally produced by the inner loop;
+it does not test scheduler operation or GitHub PR transport. Every phase retains its prompt,
+CLI event log, and stderr. `result.json` is written only after all assertions pass. The default
+per-session timeout is 1800 seconds (`--timeout` overrides it); failures return nonzero.
+`--continue-after-prd` resumes a retained fixture after successful draft and approval sessions;
+it preserves the authored inputs and starts at meta-planning. `--continue-after-meta` resumes
+a completed first round goal scaffold at the negative evaluation. Runtime dispatch receipts verify
+completed children with the expected model/effort and isolated Codex contexts.

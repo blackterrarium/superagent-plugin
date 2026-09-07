@@ -34,10 +34,10 @@ license: MIT
 >   `<repo>/codex/plugins/superagent`). Substitute its absolute path wherever it appears.
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
->   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
->   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
->   path for it.
+>   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
+>   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
+>   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -140,14 +140,14 @@ key names (`grep -oE '^SUPER_[A-Z_]+='` on each file) rather than the full lines
 an intentionally edited value is not a gap. This is informational only: a missing key
 falls through to the plugin default per the resolution order above.
 
-### .superenv validation (lint — WARN + fallback, never abort — two exceptions)
+### .superenv validation (lint — WARN + fallback, except hard errors)
 
 Validate the RESOLVED configuration (env > repo `.superenv` > plugin default) before
 using it. For each finding emit one WARN row in the summary; the effective value used
 by later steps is the fallback shown. Never rewrite the user's `.superenv` — this is
-report-only. There are exactly two exceptions to "never abort": a foreign harness on
-`SUPER_MODEL_SUPERVISOR` (item 5), and a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/`
-(item 7) — either one stops init.
+report-only. Hard errors stop init: a foreign harness on `SUPER_MODEL_SUPERVISOR` (item 5),
+a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
+`SUPER_PI_SUBAGENTS` value other than `required` or its deprecated `recommended` alias (item 2).
 
 1. **Unknown keys:** every `SUPER_*`/`TICK_*` key present in the repo `.superenv` must
    also exist in `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Unknown → WARN
@@ -160,8 +160,12 @@ report-only. There are exactly two exceptions to "never abort": a foreign harnes
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
-   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈
-   recommended|required|off.
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈ required.
+   On Pi, normalize legacy `recommended` to `required` for this run and report
+   "SUPER_PI_SUBAGENTS=recommended is deprecated; enforcing required" without editing the
+   user's environment or .superenv. `off` (or any other value) is a migration error:
+   ABORT with "set SUPER_PI_SUBAGENTS=required in the overriding environment or .superenv;
+   pi-subagents >= 0.58.0 is mandatory". No value permits a sequential fallback.
 3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
    `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
    `SUPER_GH_DISABLE_SANDBOX`.
@@ -240,7 +244,7 @@ The last four rows are the **coding-loop roles** (0.7.0): `super-prd-reviewer` i
 `superprd`, `super-meta-planner` backs `supermeta`, and `super-evaluator` grades the judged
 objectives `supereval` dispatches (all Stage 2); `super-diagnoser` follows with `superdiagnose`
 when that skill lands.
-They follow the same generate/skip/conflict rules as the nine loop roles above.
+They follow the harness-specific generate/skip/conflict rules below.
 
 
 (`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch

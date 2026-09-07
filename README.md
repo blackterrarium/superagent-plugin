@@ -411,7 +411,7 @@ coding-loop skills, never by the tick.
 |---|---|---|
 | SUPER_HARNESS | `claude` | `claude` \| `cursor` \| `codex` \| `pi`. Which CLI the external driver fires per tick (`claude -p` / `agent -p` / `codex exec` / `pi -p`). |
 | SUPER_CODEX_SANDBOX | `danger-full-access` | Sandbox for the Codex harness and any codex-bridged role. `danger-full-access` matches the unsandboxed claude harness. `workspace-write` keeps the repo's top-level `.git/` read-only, so git fetch/commit fail and the sync gate parks the loop. Out-of-domain values abort the tick. |
-| SUPER_PI_SUBAGENTS | `recommended` | Pi harness only. `recommended`: WARN if `pi-subagents` is missing or older than 0.58.0; SDD children then run sequentially without pins. `required`: init aborts instead. `off`: never generate `.pi/agents/` or use the subagent tool. |
+| SUPER_PI_SUBAGENTS | `required` | Pi requires `pi-subagents` ≥ 0.58.0 and its `subagent` tool. Init aborts if the package is missing/old; superrun stops if the tool is unavailable. Legacy `recommended` is a deprecated alias of `required`, reported at runtime; `off` is an error. |
 
 **Paths and loop tuning**
 
@@ -457,7 +457,16 @@ inner `superagent` loop to build it, and evaluates the result (design:
 `docs/superpowers/specs/2026-09-05-coding-loop-design.md`; Stage 2:
 `docs/superpowers/specs/2026-09-06-coding-loop-stage2-design.md`). One round is
 `superagent:supermeta` → `superagent:superagent-external` → `superagent:supereval`; diagnosing a
-failed round and closing the loop automatically are Stage 3. The pieces:
+failed round and closing the loop automatically are Stage 3.
+
+Stage 1/2 skills also support Codex and Pi. Both generated packages include the validator and
+evaluation runner dependencies. Pi requires `pi-subagents >= 0.58.0`; re-run `init` after upgrading
+to generate named SDD agents even when model/effort settings inherit. Live Codex/Pi checks cover
+PRD approval, planner dispatch, and command/judged FAIL/PASS evaluations; see the
+[verification report](docs/superpowers/reports/2026-09-07-coding-loop-harnesses.md) for scope and
+remaining end-to-end checks.
+
+The pieces:
 
 - a **project folder** at `<SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/` holding
   `prd.md` (objective, success criteria, constraints, locked decisions, iteration ledger),
@@ -539,12 +548,12 @@ Re-run with `bash scripts/cursor-smoke.sh` from a clone.
 
 **Install.** No install step for the plugin itself: the external driver passes
 `--skill <repo>/pi/skills` on every headless run (or `pi install /path/to/superagent-plugin/pi` for
-interactive use). Install superpowers as a Pi package and, recommended, `pi-subagents`:
+interactive use). Install the required superpowers and `pi-subagents` Pi packages:
 
 ```
 npm install -g @earendil-works/pi-coding-agent
 pi install git:github.com/obra/superpowers
-pi install npm:pi-subagents        # >= 0.58.0, recommended
+pi install npm:pi-subagents        # >= 0.58.0, required
 ```
 
 **Auth.** The CLI's `~/.pi/agent/auth.json`, or provider keys in the target repo's `.env`. Every
@@ -561,8 +570,10 @@ blocking bash calls to `scripts/role-bridge.sh` with `--tools planner` / `--tool
 the L7 panel is one blocking call to `scripts/bridge-fanout.sh` (three concurrent bridge runs,
 1800 s timeout). `superrun`'s SDD children go through superpowers' Pi mapping (the `pi-subagents`
 `subagent` tool with `async: false`), with pins in the `.pi/agents/super-<role>.md` definitions
-`init` generates. Without `pi-subagents`, SDD runs sequentially in-context and pins are not
-applied; `SUPER_PI_SUBAGENTS=required` makes init abort instead.
+`init` generates. `pi-subagents` ≥ 0.58.0 is mandatory: init aborts if it is missing or old,
+and superrun stops if its `subagent` tool is unavailable. Legacy `SUPER_PI_SUBAGENTS=recommended`
+is reported and treated as `required`; it never permits a fallback. `off` must be changed to
+`required` before running the plugin.
 
 **Status: verified end-to-end** (2026-08-31, pi CLI 0.84.3, `pi-subagents` 0.61.0). Live smoke
 PASS 10 / FAIL 1 (informational: pi exits 1 for both a bad model and a failed turn). A full loop

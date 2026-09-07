@@ -76,14 +76,14 @@ cat >"$banner_file" <<'EOF'
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
->   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
->   sequential fallback and report it.
+>   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
+>   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
 >   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; use `git worktree` via `bash`.
 EOF
@@ -142,7 +142,7 @@ EOF
 
 mkdir -p "$TMP/templates" "$TMP/scripts"
 cp "$ROOT/templates/super-role-pi-agent.md" "$ROOT/templates/super-role-pi-bridge-agent.md" "$ROOT/templates/vault-root.md" "$TMP/templates/"
-cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/bridge-fanout.sh" "$ROOT/scripts/_common.sh" "$TMP/scripts/"
+cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/bridge-fanout.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/scripts/"
 chmod +x "$TMP/scripts/role-bridge.sh" "$TMP/scripts/bridge-fanout.sh"
 
 substitute <"$ROOT/templates/superenv.default" | awk '
@@ -218,9 +218,11 @@ repository root. **Do not edit by hand.**
 - **Skill delivery:** the tick passes `--skill <repo>/pi/skills` — no install step. For interactive
   use `pi install /path/to/superagent-plugin/pi` (this directory is a valid Pi package).
 - **Prerequisites:** `pi` (`npm install -g @earendil-works/pi-coding-agent`), superpowers as a Pi
-  package (`pi install git:github.com/obra/superpowers`), and — recommended — `pi-subagents`
-  ≥ 0.58.0 (`pi install npm:pi-subagents`). Without it superrun's SDD children run sequentially
-  in-context with no role pins (`SUPER_PI_SUBAGENTS=required` makes init abort instead).
+  package (`pi install git:github.com/obra/superpowers`), and `pi-subagents`
+  ≥ 0.58.0 (`pi install npm:pi-subagents`). All are required. Init aborts when pi-subagents is
+  missing/old; superrun stops when its tool is unavailable. Legacy
+  `SUPER_PI_SUBAGENTS=recommended` is reported and treated as `required`; `off` is an error.
+  There is no sequential fallback.
 - **Dispatch:** the supervisor runs `superplan`/`superrun` through `scripts/role-bridge.sh` and the
   L7 panel through `scripts/bridge-fanout.sh` — child CLI processes, every harness including Pi.
   superrun's SDD roles use `pi-subagents`' `subagent` tool (`async: false`); their pins ride
