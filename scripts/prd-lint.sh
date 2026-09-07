@@ -13,6 +13,7 @@
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/scripts/_common.sh"
+. "$ROOT/scripts/_evalspec.sh"   # US/RS + markdown helpers (trim/strip_ticks/section_body/table_rows/cell)
 
 PROJECT=""; JSON=false
 for a in "$@"; do
@@ -34,8 +35,6 @@ MAX_TIMEOUT="${SUPER_EVAL_TIMEOUT_MIN:-60}"
 # One line per finding in $FINDINGS_FILE, fields separated by the ASCII unit separator so a
 # message may contain '|' or ':'. (A bash array would need bash 4 to be safe under set -u.)
 FINDINGS_FILE="$(mktemp)"; trap 'rm -f "$FINDINGS_FILE"' EXIT
-US=$'\x1f'
-RS=$'\x1e'
 FAILS=0
 finding() {  # finding <PASS|WARN|FAIL> <file> <loc> <message>
   [[ "$1" == FAIL ]] && FAILS=$((FAILS+1))
@@ -46,23 +45,6 @@ if ! [[ "$MAX_TIMEOUT" =~ ^[0-9]+$ ]]; then
   finding WARN evaluation.md config "SUPER_EVAL_TIMEOUT_MIN='$MAX_TIMEOUT' is not a whole number of minutes; using 60"
   MAX_TIMEOUT=60
 fi
-
-# ── markdown helpers ─────────────────────────────────────────────────────────
-trim()        { sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
-strip_ticks() { sed 's/^`//;s/`$//'; }
-# section_body <file> <heading-text> — lines strictly between "## <heading>" and the next "## "
-section_body() {
-  awk -v h="## $2" '$0 == h { on=1; next } on && /^## / { exit } on { print }' "$1"
-}
-# table_rows — data rows of every markdown table on stdin; each table's header and separator
-# rows dropped
-table_rows() {
-  awk '!/^\|/ { n=0; next } { n++; if (n == 1) next; if ($0 ~ /^\|[[:space:]]*:?-/) next; print }'
-}
-# cell <n> — the n-th cell (1-based) of a "| a | b |" row on stdin, trimmed, backticks stripped.
-# A \| escape is swapped for the ASCII RS placeholder before the awk split (so it doesn't split
-# the row) and restored as a literal | afterward.
-cell() { sed "s/\\\\|/$RS/g" | awk -F'|' -v n="$(( $1 + 1 ))" '{ print $n }' | trim | strip_ticks | sed "s/$RS/|/g"; }
 
 # ── per-file checks ──────────────────────────────────────────────────────────
 check_file_present() {  # <basename> — FAIL and return 1 when absent
