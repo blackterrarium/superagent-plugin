@@ -24,8 +24,8 @@ SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol
 SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol  # final whole-branch reviewer
 SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol      # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_MODEL_PRD_REVIEWER=codex:gpt-5.6-sol     # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol     # supermeta: meta-plan author, drives supergoal (coding loop, Stage 2)
-SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol        # supereval: grades judged objectives (read-only; command checks use no model) (Stage 2)
+SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol     # supermeta: meta-plan author, drives supergoal (coding loop)
+SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol        # supereval: grades judged objectives (read-only; command checks use no model)
 SUPER_MODEL_DIAGNOSER=codex:gpt-5.6-sol        # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra         # relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)
@@ -47,8 +47,8 @@ SUPER_EFFORT_RE_REVIEWER=high
 SUPER_EFFORT_BRANCH_REVIEWER=xhigh      # final whole-branch reviewer
 SUPER_EFFORT_FIX_PLANNER=high           # fix rounds 4-5: diagnose, then hand to fix-applier
 SUPER_EFFORT_PRD_REVIEWER=high          # superprd zero-context reviewer
-SUPER_EFFORT_META_PLANNER=high          # supermeta (Stage 2)
-SUPER_EFFORT_EVALUATOR=high             # supereval judged objectives (Stage 2)
+SUPER_EFFORT_META_PLANNER=high          # supermeta
+SUPER_EFFORT_EVALUATOR=high             # supereval judged objectives
 SUPER_EFFORT_DIAGNOSER=xhigh            # superdiagnose RCA (Stage 3)
 
 # ── Harness ───────────────────────────────────────────────────────
