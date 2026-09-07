@@ -470,7 +470,7 @@ coding-loop skills, never by the tick.
 |---|---|---|
 | SUPER_PROJECT_DIRNAME | `projects` | Where project folders live under `SUPER_GOAL_ROOT`. A project folder has no `master-plans/`, so the plan-tree skills never mistake it for a goal. |
 | SUPER_EVAL_TIMEOUT_MIN | `60` | Ceiling for any `evaluation.md` check timeout; `prd-lint.sh` FAILs a larger value. |
-| SUPER_GOAL_AUTOCONFIRM | `false` | Reserved for Stage 2. `true` only inside `supermeta`'s dispatch of `supergoal`, to skip its human confirmation. Nothing reads it yet. |
+| SUPER_GOAL_AUTOCONFIRM | `false` | Two-factor gate: `supergoal --autoconfirm` skips supergoal's step-7 human confirmation **only** when this is `true` (used by `supermeta`'s dispatch). Either alone does nothing; a direct `supergoal` user is unaffected. |
 | SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
 
 ## Other harnesses: Codex, Cursor, Pi
