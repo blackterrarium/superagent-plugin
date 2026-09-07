@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 — 2026-09-07
 
 - Package the Stage 1/2 validator, evaluator, and their dependencies with Codex and Pi.
 - Give Pi PRD/evaluation reviewers fresh CLI contexts with read-only inspection tools; keep
