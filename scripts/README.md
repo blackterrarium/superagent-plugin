@@ -349,9 +349,18 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   2 on usage. `PRD_LINT_REPO_ROOT` overrides repo-root detection. Bash 3.2, no network.
 - `prd-lint-test.sh` — offline fixture tests for `prd-lint.sh` (a valid project plus one mutation
   per FAIL and WARN class); exit 1 on any failure.
-- `supereval-test.sh` — offline tests for the `_evalspec.sh` parser (and, once it lands, the
-  `supereval.sh` runner added in a later step); fixture `evaluation.md` files in a temp dir. Bash
-  3.2, no network; exit 1 on any failure.
+- `supereval.sh <project-dir> --repo <repo> --commit <sha> --out <file> [--worktree <dir>] [--keep-worktree] [--max-timeout-min <n>]`
+  — offline command-check runner. Adds a detached git worktree of `<sha>`, runs `evaluation.md`'s
+  `## Command checks` rows against it under a `timeout`/`gtimeout`/uncapped wrapper
+  (`min(row, --max-timeout-min | SUPER_EVAL_TIMEOUT_MIN)` minutes each), and writes a markdown
+  results file (Environment line, `| Id | Result | Exit | Seconds | Evidence |` table, one output
+  block per non-PASS check). Result is `PASS`/`FAIL`/`TIMEOUT`/`ERROR`; a failed setup marks every
+  row `ERROR setup failed`. Exit 0 when every command row is `PASS`, 1 otherwise, 2 on usage /
+  script-setup errors. Judged (`J`) rows are listed but not run here (the `supereval` skill grades
+  them). Sources `_common.sh` + `_evalspec.sh`; bash 3.2, no network.
+- `supereval-test.sh` — offline tests for the `_evalspec.sh` parser and the `supereval.sh` runner
+  (the spec's eight command-check cases against a one-commit fixture repo in a temp dir). Bash 3.2,
+  no network; exit 1 on any failure.
 - `vault-external-test.sh` — tests for the external-vault resolver, launch.sh
   external-plan acceptance, stop/force-stop absolute matching, init ignore routing; offline, bash 3.2.
 - `bridge-smoke.sh` — live probes for `role-bridge.sh` against whatever real CLIs are installed on
