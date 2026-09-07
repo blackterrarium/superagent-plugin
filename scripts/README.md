@@ -333,6 +333,11 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `bridge-test.sh` — offline tests for `role-bridge.sh` and the `_common.sh` role-grammar parser,
   using `PATH` shims in place of the real CLIs (no network, no live CLI needed); prints `bridge-test:
   N failure(s)` and exits 1 on any failure.
+- `_evalspec.sh` — sourced markdown-table parser shared by `prd-lint.sh` and `supereval.sh`
+  (single source of truth for the `trim`/`strip_ticks`/`section_body`/`table_rows`/`cell` helpers
+  and the `US`/`RS` separators). Adds two readers over an `evaluation.md`: `evalspec_env` prints
+  `setup<US>cwd`; `evalspec_checks` prints one `C…`/`J…` record per command/judged row (a literal
+  `|` in a cell, written `\|`, is unescaped). Bash 3.2, sourced not executed.
 - `prd-lint.sh <project-dir> [--json]` — offline validator for a coding-loop project folder
   (`prd.md`, `knowledge-base.md`, `evaluation.md`): header blocks, `prd.md` section order and
   ledger header, knowledge-base kinds and locators (files/globs/entry points resolved against the
@@ -344,6 +349,9 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   2 on usage. `PRD_LINT_REPO_ROOT` overrides repo-root detection. Bash 3.2, no network.
 - `prd-lint-test.sh` — offline fixture tests for `prd-lint.sh` (a valid project plus one mutation
   per FAIL and WARN class); exit 1 on any failure.
+- `supereval-test.sh` — offline tests for the `_evalspec.sh` parser (and, once it lands, the
+  `supereval.sh` runner added in a later step); fixture `evaluation.md` files in a temp dir. Bash
+  3.2, no network; exit 1 on any failure.
 - `vault-external-test.sh` — tests for the external-vault resolver, launch.sh
   external-plan acceptance, stop/force-stop absolute matching, init ignore routing; offline, bash 3.2.
 - `bridge-smoke.sh` — live probes for `role-bridge.sh` against whatever real CLIs are installed on
