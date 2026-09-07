@@ -467,6 +467,9 @@ coding-loop skills, never by the tick.
   future evaluator run.
 - `superagent:supermeta <project-dir>`, which turns that project folder into the round's meta-plan
   and drives `supergoal` (auto-confirmed) into a goal folder the inner loop then builds.
+- `superagent:supereval <project-dir>`, which runs that round's `evaluation.md` checks against the
+  latest `main` in a detached worktree, grades the judged objectives with a read-only evaluator, and
+  records one PASS/FAIL verdict in the eval report and the iteration ledger.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -577,6 +580,7 @@ unprefixed on Codex, Cursor, and Pi.
 | `supergoal` | Turn a goal description into a goal folder plus root master plan. |
 | `superprd` | Turn a planning conversation into a coding-loop project folder (`prd.md`, `knowledge-base.md`, `evaluation.md`) after a readiness rubric passes; `--check` prints the readiness report only. |
 | `supermeta` | Meta-planner of the coding loop: turn a READY project folder into the round's meta-plan and drive `supergoal` (auto-confirmed) to scaffold the goal folder the inner loop builds; appends the iteration-ledger row. |
+| `supereval` | Evaluator of the coding loop: run a round's `evaluation.md` command checks against the latest `main` in a detached worktree, grade judged objectives with a read-only evaluator, and record one PASS/FAIL verdict in the eval report and iteration ledger. |
 | `superplan` | Author the next step's plan (sub-master or implementation leaf), route it, commit and merge via PR. |
 | `superrun` | Execute the next ready leaf via `subagent-driven-development`, integrate the code PR, hand off to `superfinish`. |
 | `superfinish` | Post-execution bookkeeping: findings, closeout report, ancestor rows flipped complete. |
