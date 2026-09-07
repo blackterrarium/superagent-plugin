@@ -95,6 +95,6 @@ SUPER_REPO_NOTES=                       # optional path to a repo doc the execut
 # Stage 1 (0.7.0) ships the project inputs and superprd; the keys marked "reserved" are declared
 # now so a .superenv created today needs no edit when the loop lands, but nothing reads them yet.
 SUPER_PROJECT_DIRNAME=projects          # project folders land at <SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/
-SUPER_GOAL_AUTOCONFIRM=false            # reserved (Stage 2): true ONLY in supermeta's dispatch of supergoal — skips supergoal's step-7 human confirmation
+SUPER_GOAL_AUTOCONFIRM=false            # true + supergoal --autoconfirm skips supergoal's step-7 human confirmation (supermeta's dispatch); either alone does nothing
 SUPER_CODE_MAX_ITERATIONS=5             # reserved (Stage 3): supercode rounds before parking on WAITING FOR INPUT
 SUPER_EVAL_TIMEOUT_MIN=60               # ceiling for any evaluation.md check timeout (prd-lint.sh FAILs a larger value)

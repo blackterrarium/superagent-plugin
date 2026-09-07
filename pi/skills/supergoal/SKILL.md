@@ -1,6 +1,7 @@
 ---
 name: supergoal
 description: Use when starting a brand-new multi-PR initiative from a goal description (not an existing plan file) — creates the goal vault folder (YYYY-MM-DD-hh_mm-<slug>), its goal-directives.md, the standard subfolders, and the ROOT master plan that seeds the planning tree.
+argument-hint: "<goal description | path/to/goal.md> [--autoconfirm] [--slug <slug>]"
 license: MIT
 related skills: superauthor, superplan, supertraverse
 ---
@@ -104,18 +105,34 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 ### 1. Input gate
 
-If `<GOAL>` is not provided → respond with exactly `I need a goal description` and **exit**.
+`<GOAL>` is the full argument string. **Parse the optional flags off the *end* of it first** — so a prose
+goal that happens to contain the words "slug" or "autoconfirm" is never mis-parsed: strip a trailing
+`--autoconfirm` (record it as a boolean for step 7), and a trailing `--slug <slug>` (record `<slug>` for
+step 2). What remains, trimmed, is the **goal source**.
+
+- If the goal source is empty → respond with exactly `I need a goal description` and **exit**.
+- If the goal source names an **existing `.md` file** → read that file; its contents are the goal
+  description. Remember the file's path — step 5 cites it as `**Source:**`.
+- Otherwise the goal source is a **prose** goal description (there is no source file).
+
+Nothing else changes: the input-gate message is exactly `I need a goal description`, and a direct user
+who passes a bare prose goal with no flags sees identical behaviour to before.
 
 ### 2. Derive identifiers
 
-- **`<slug>`** — a concise, stable, descriptive kebab-case slug summarizing the goal (mirror the style of
-  existing goal folders — worked example from the originating repo: `graphgen-grammar-first-redesign`).
+- **`<slug>`** — if step 1 captured a `--slug <slug>` value, use it, but first validate it is kebab-case
+  (matches `^[a-z0-9]+(-[a-z0-9]+)*$`); if it is not, respond with exactly
+  `supergoal: --slug <value> is not a valid kebab-case slug` (with the offending value) and **exit**.
+  Otherwise derive a concise, stable, descriptive kebab-case slug summarizing the goal (mirror the style
+  of existing goal folders — worked example from the originating repo: `graphgen-grammar-first-redesign`).
 - **`<STAMP>`** — today's date plus the current UTC hour and minute (`date -u +%Y-%m-%d-%H_%M`), e.g.
   `2026-06-14-09_30`. This is the dated prefix for the goal folder and the dated files written into it.
 - **`<DATE>`** — today's date (`date +%Y-%m-%d`); used **only** for the git branch name (step 9).
 - **Goal folder** — `<vault_root>/<STAMP>-<slug>/` (see **Vault root**). This is the **goal folder** superauthor's
   clauses write under. If the folder already exists, disambiguate the slug; if it is clearly the same
-  initiative, report that and **exit** — **never overwrite an existing goal folder**.
+  initiative, report that and **exit** — **never overwrite an existing goal folder**. When `<slug>` came
+  from `--slug`, do **not** auto-disambiguate — report the collision and **exit**, because the caller
+  (e.g. supermeta) depends on the exact `<STAMP>-<slug>`.
 
 ### 3. Invoke superagent:superauthor
 
@@ -173,10 +190,16 @@ outside the goal folder. The root plan MUST:
 author it directly, drafting to scratch alongside the plan. It must be fully
 **self-contained** — do **not** point the reader at any external example file. Structure:
 
-1. **Title** — `# Goal Directives — <STAMP>-<slug>`.
-2. **Goal / Objectives — FIRST**, immediately after the title: the *why*, the target outcome, and
-   success criteria distilled from `<GOAL>`. (This is the one intentional deviation from older
-   directives docs that open with Type/Audience — supergoal puts the goal at the very top.)
+1. **Title** — `# Goal Directives — <STAMP>-<slug>`. **When `<GOAL>` was a file** (step 1): immediately
+   under the title, add a source line — `**Source:** [[<vault link to the goal file>]]` when that file
+   lives inside `<vault_root>` (wikilink form, path-from-vault-root without the `.md`), or
+   `**Source:** <relative repo path>` when it is a file outside the vault (a plain relative path). When
+   `<GOAL>` was prose, write **no** source line. The step-7 `**Confirmation:**` line, when written, sits
+   immediately **below** this source line.
+2. **Goal / Objectives — FIRST**, immediately after the title (and after the optional `**Source:**` /
+   `**Confirmation:**` header lines when present): the *why*, the target outcome, and success criteria
+   distilled from `<GOAL>`. (This is the one intentional deviation from older directives docs that open
+   with Type/Audience — supergoal puts the goal at the very top.)
 3. **What `goal-directives.md` is** — a short self-documenting note: one per goal folder, lives at the
    folder root, is the authoritative map of where files go, must be kept current.
 4. **Folder map** — a table of the six subfolders with a one-line purpose, lifecycle stage, and dated?
@@ -229,8 +252,23 @@ confirm:
 ### 7. Confirmation gate (REQUIRED — overrides A5)
 
 Planning is now complete and **nothing has been written to the vault yet** (the goal folder does not
-exist; all drafts are in scratch). **Pause and ask the user to confirm before any vault write.** Present
-a concise summary — do **not** dump the full drafts:
+exist; all drafts are in scratch).
+
+**Auto-confirm (two-factor — the only way this pause is skipped).** Resolve `SUPER_GOAL_AUTOCONFIRM`
+through the **Repo configuration** block above, and check whether step 1 captured `--autoconfirm`:
+
+- **`--autoconfirm` was passed *and* `SUPER_GOAL_AUTOCONFIRM` resolves to `true`** → the step-6
+  self-review stands as the confirmation. Do **not** pause. In the `goal-directives.md` scratch draft,
+  write — immediately under the title, and below the `**Source:**` line when step 5 added one —
+  `**Confirmation:** auto-confirmed (SUPER_GOAL_AUTOCONFIRM=true, --autoconfirm) on <DATE>`
+  (`<DATE>` = `date +%Y-%m-%d`). Then proceed directly to step 8 (write-out) and step 9 (commit & PR).
+- **`--autoconfirm` was passed but `SUPER_GOAL_AUTOCONFIRM` does not resolve to `true`** → print exactly
+  `--autoconfirm ignored: SUPER_GOAL_AUTOCONFIRM is not true`, then fall through to the human gate below.
+  Write no `**Confirmation:**` line.
+- **`--autoconfirm` was not passed** → fall through to the human gate below.
+
+**Human gate (default — unchanged behaviour).** **Pause and ask the user to confirm before any vault
+write.** Present a concise summary — do **not** dump the full drafts:
 
 - the goal folder that **will** be created (`<vault_root>/<STAMP>-<slug>/`) and its six subfolders;
 - the root plan's title and its progress-report **steps** (the table rows), so the user sees the
@@ -247,7 +285,8 @@ Then ask explicitly — e.g. *"Write this goal folder and root plan to the vault
 - **Declined** → write nothing and open no PR. Report that no vault changes were made and where the
   scratch drafts live, then exit.
 
-**Do not create the goal folder, any subfolder, or any file before the user approves here.**
+**Do not create the goal folder, any subfolder, or any file before confirmation** — the two-factor
+auto-confirm case above is the only path that skips the human pause.
 
 ### 8. Write-out (only after the user approves at step 7)
 
