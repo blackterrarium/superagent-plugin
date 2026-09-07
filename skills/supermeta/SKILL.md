@@ -149,11 +149,18 @@ If the model is `inherit` or a bare tier name (`sonnet`, `opus`, `haiku`, `fable
 If the model is `inherit` or a bare model name **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <name>` when named, no `model:` when `inherit`. Otherwise dispatch with `subagent_type: super-planner` and omit `model:`; that is the definition `superagent:init` generates in `.cursor/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop.
 cursor-only:end -->
 <!-- codex-only:start
-Pass the resolved pins as the `spawn_agent` parameters — `model` (prefix stripped) and `reasoning_effort` — omitting each that is `inherit`; no definition file is involved.
+For a native Codex role, use `spawn_agent` with `fork_turns: "none"`, `model` (the `codex:` prefix stripped), and `reasoning_effort`, omitting each pin that is `inherit`. For a foreign harness, use the generated banner's relay dispatch with `fork_turns: "none"`; pass the foreign model/effort to `role-bridge.sh`, never to the native spawn. No definition file is involved.
 codex-only:end -->
 <!-- pi-only:start
 The planner gets no `.pi/agents/` definition; dispatch it exactly as `superagent`'s Subagent-dispatch section does the planner on Pi — a blocking `role-bridge.sh --tools planner` process with the model/effort from `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER` (a bridged prefix runs that harness's CLI). Wait on it; never poll.
 pi-only:end -->
+Set `SUPER_GOAL_AUTOCONFIRM=true` **only for this child dispatch**, together with
+`--autoconfirm` below. Do not edit `.superenv` or change the caller's environment. For a CLI bridge,
+prefix that invocation with `SUPER_GOAL_AUTOCONFIRM=true`; for a native subagent, include
+`Treat SUPER_GOAL_AUTOCONFIRM=true as a dispatch-scoped override for this invocation` in its prompt.
+On Pi also set `SUPERAGENT_PI_SKILLS="${CLAUDE_PLUGIN_ROOT}/skills"` on the bridge invocation,
+so an attended call delivers `supergoal` to the child just as a scheduler tick does.
+
 The subagent's prompt instructs it to invoke the `superagent:supergoal` skill via the Skill tool with
 
 ```

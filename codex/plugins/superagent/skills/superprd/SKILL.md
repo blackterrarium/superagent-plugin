@@ -35,10 +35,10 @@ related skills: superauthor, supergoal, supermeta
 >   `<repo>/codex/plugins/superagent`). Substitute its absolute path wherever it appears.
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
->   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
->   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
->   path for it.
+>   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
+>   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
+>   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -237,7 +237,7 @@ Fix every FAIL (returning to step 5 when the fix needs the user). Keep the WARNs
 ### 7. Zero-context review
 
 Dispatch **one** read-only `PRD_REVIEWER` subagent. Resolve `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`.
-Pass the resolved pins as the `spawn_agent` parameters — `model` (prefix stripped) and `reasoning_effort` — omitting each that is `inherit`; no definition file is involved.
+For a native Codex role, use `spawn_agent` with `fork_turns: "none"`, `model` (the `codex:` prefix stripped), and `reasoning_effort`, omitting each pin that is `inherit`. For a foreign harness, use the generated banner's relay dispatch with `fork_turns: "none"`; pass the foreign model/effort to `role-bridge.sh`, never to the native spawn. No definition file is involved.
 The prompt contains **only** the three scratch files
 verbatim and these two questions:
 

@@ -19,14 +19,14 @@ related skills: superauthor, supergoal, superprd, supereval
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
->   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
->   sequential fallback and report it.
+>   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
+>   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
 >   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; use `git worktree` via `bash`.
 
@@ -167,6 +167,13 @@ its vault path.
 
 Dispatch **one** `PLANNER`-role subagent. Resolve `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER`.
 The planner gets no `.pi/agents/` definition; dispatch it exactly as `superagent`'s Subagent-dispatch section does the planner on Pi — a blocking `role-bridge.sh --tools planner` process with the model/effort from `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER` (a bridged prefix runs that harness's CLI). Wait on it; never poll.
+Set `SUPER_GOAL_AUTOCONFIRM=true` **only for this child dispatch**, together with
+`--autoconfirm` below. Do not edit `.superenv` or change the caller's environment. For a CLI bridge,
+prefix that invocation with `SUPER_GOAL_AUTOCONFIRM=true`; for a native subagent, include
+`Treat SUPER_GOAL_AUTOCONFIRM=true as a dispatch-scoped override for this invocation` in its prompt.
+On Pi also set `SUPERAGENT_PI_SKILLS="${SUPER_PLUGIN_ROOT}/skills"` on the bridge invocation,
+so an attended call delivers `supergoal` to the child just as a scheduler tick does.
+
 The subagent's prompt instructs it to invoke the `superagent:supergoal` skill via the Skill tool with
 
 ```

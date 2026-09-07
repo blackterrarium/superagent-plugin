@@ -207,10 +207,15 @@ If the model is `inherit` or a bare tier name (`sonnet`, `opus`, `haiku`, `fable
 If the model is `inherit` or a bare model name **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <name>` when named, no `model:` when `inherit`. Otherwise dispatch with `subagent_type: super-prd-reviewer` and omit `model:`; that is the definition `superagent:init` generates in `.cursor/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop.
 cursor-only:end -->
 <!-- codex-only:start
-Pass the resolved pins as the `spawn_agent` parameters — `model` (prefix stripped) and `reasoning_effort` — omitting each that is `inherit`; no definition file is involved.
+For a native Codex role, use `spawn_agent` with `fork_turns: "none"`, `model` (the `codex:` prefix stripped), and `reasoning_effort`, omitting each pin that is `inherit`. For a foreign harness, use the generated banner's relay dispatch with `fork_turns: "none"`; pass the foreign model/effort to `role-bridge.sh`, never to the native spawn. No definition file is involved.
 codex-only:end -->
 <!-- pi-only:start
-The four coding-loop roles get no `.pi/agents/` definition (see `init`). Dispatch through the `pi-subagents` `subagent` tool with the model pin as its parameter — `<provider>/<model>[:<effort>]` resolved from the two keys, omitting each part that is `inherit`; a bridged prefix (any harness other than `pi`) runs the reviewer as a blocking `role-bridge.sh` process instead, the way the planner and panel are dispatched on Pi.
+The PRD reviewer gets no `.pi/agents/` definition. Run one blocking
+`role-bridge.sh --tools evaluator --role prd-reviewer` process with the resolved harness/model/effort
+from `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`; a native role uses `--harness pi`
+(and `inherit` resolves to Pi). This fresh CLI receives only the review prompt below, without
+conversation history. Wait for completion and report a failed dispatch; never grade it yourself.
+The required `pi-subagents` extension is used by the inner loop's SDD roles.
 pi-only:end -->
 The prompt contains **only** the three scratch files
 verbatim and these two questions:

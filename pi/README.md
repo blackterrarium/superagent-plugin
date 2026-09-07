@@ -8,9 +8,11 @@ repository root. **Do not edit by hand.**
 - **Skill delivery:** the tick passes `--skill <repo>/pi/skills` — no install step. For interactive
   use `pi install /path/to/superagent-plugin/pi` (this directory is a valid Pi package).
 - **Prerequisites:** `pi` (`npm install -g @earendil-works/pi-coding-agent`), superpowers as a Pi
-  package (`pi install git:github.com/obra/superpowers`), and — recommended — `pi-subagents`
-  ≥ 0.58.0 (`pi install npm:pi-subagents`). Without it superrun's SDD children run sequentially
-  in-context with no role pins (`SUPER_PI_SUBAGENTS=required` makes init abort instead).
+  package (`pi install git:github.com/obra/superpowers`), and `pi-subagents`
+  ≥ 0.58.0 (`pi install npm:pi-subagents`). All are required. Init aborts when pi-subagents is
+  missing/old; superrun stops when its tool is unavailable. Legacy
+  `SUPER_PI_SUBAGENTS=recommended` is reported and treated as `required`; `off` is an error.
+  There is no sequential fallback.
 - **Dispatch:** the supervisor runs `superplan`/`superrun` through `scripts/role-bridge.sh` and the
   L7 panel through `scripts/bridge-fanout.sh` — child CLI processes, every harness including Pi.
   superrun's SDD roles use `pi-subagents`' `subagent` tool (`async: false`); their pins ride

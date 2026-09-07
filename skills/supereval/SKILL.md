@@ -127,7 +127,7 @@ If the model is `inherit` or a bare tier name (`sonnet`, `opus`, `haiku`, `fable
 If the model is `inherit` or a bare model name **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <name>` when named, no `model:` when `inherit`. Otherwise dispatch with `subagent_type: super-evaluator` and omit `model:`; that is the definition `superagent:init` generates in `.cursor/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop.
 cursor-only:end -->
 <!-- codex-only:start
-Pass the resolved pins as the `spawn_agent` parameters — `model` (prefix stripped) and `reasoning_effort` — omitting each that is `inherit`; no definition file is involved.
+For a native Codex role, use `spawn_agent` with `fork_turns: "none"`, `model` (the `codex:` prefix stripped), and `reasoning_effort`, omitting each pin that is `inherit`. For a foreign harness, use the generated banner's relay dispatch with `fork_turns: "none"`; pass the foreign model/effort to `role-bridge.sh`, never to the native spawn. No definition file is involved.
 codex-only:end -->
 <!-- pi-only:start
 The evaluator gets no `.pi/agents/` definition; dispatch it exactly as `superagent`'s Subagent-dispatch section does a read-only role on Pi — a blocking `role-bridge.sh --tools evaluator` process with the model/effort from `SUPER_MODEL_EVALUATOR` / `SUPER_EFFORT_EVALUATOR` (a bridged prefix runs that harness's CLI). Wait on it; never poll.

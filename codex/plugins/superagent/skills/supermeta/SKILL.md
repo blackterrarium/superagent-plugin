@@ -35,10 +35,10 @@ related skills: superauthor, supergoal, superprd, supereval
 >   `<repo>/codex/plugins/superagent`). Substitute its absolute path wherever it appears.
 >   Exception: the external-driver `scripts/` helpers (`superagent-tick.sh`, `launch.sh`, …) are
 >   not packaged inside the plugin — they live in the plugin source repository. Read
->   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory (the
->   `SUPERAGENT_SCRIPTS` convention in its scripts/README.md) — except `scripts/role-bridge.sh`,
->   which IS packaged inside the plugin at `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` — use that
->   path for it.
+>   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
+>   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
+>   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
 >   directly (the external tick's file-read prompt), never invoked by name.
@@ -179,7 +179,14 @@ its vault path.
 ### 6. Dispatch supergoal via one PLANNER subagent
 
 Dispatch **one** `PLANNER`-role subagent. Resolve `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER`.
-Pass the resolved pins as the `spawn_agent` parameters — `model` (prefix stripped) and `reasoning_effort` — omitting each that is `inherit`; no definition file is involved.
+For a native Codex role, use `spawn_agent` with `fork_turns: "none"`, `model` (the `codex:` prefix stripped), and `reasoning_effort`, omitting each pin that is `inherit`. For a foreign harness, use the generated banner's relay dispatch with `fork_turns: "none"`; pass the foreign model/effort to `role-bridge.sh`, never to the native spawn. No definition file is involved.
+Set `SUPER_GOAL_AUTOCONFIRM=true` **only for this child dispatch**, together with
+`--autoconfirm` below. Do not edit `.superenv` or change the caller's environment. For a CLI bridge,
+prefix that invocation with `SUPER_GOAL_AUTOCONFIRM=true`; for a native subagent, include
+`Treat SUPER_GOAL_AUTOCONFIRM=true as a dispatch-scoped override for this invocation` in its prompt.
+On Pi also set `SUPERAGENT_PI_SKILLS="${SUPER_PLUGIN_ROOT}/skills"` on the bridge invocation,
+so an attended call delivers `supergoal` to the child just as a scheduler tick does.
+
 The subagent's prompt instructs it to invoke the `superagent:supergoal` skill via the Skill tool with
 
 ```

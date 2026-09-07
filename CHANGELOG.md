@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Package the Stage 1/2 validator, evaluator, and their dependencies with Codex and Pi.
+- Give Pi PRD/evaluation reviewers fresh CLI contexts with read-only inspection tools; keep
+  Codex reviewer contexts isolated and route foreign harness pins through the relay.
+- Scope supergoal's autoconfirm override to supermeta's child and deliver Pi skills to that child
+  in attended sessions as well as scheduler ticks.
+- Require `pi-subagents >= 0.58.0` for Pi, including named SDD agent definitions when pins inherit.
+  Legacy `recommended` settings enforce the same requirement; `off` is rejected. Re-run init
+  to generate inherited-role definitions.
+- Add copied-package regression tests and a live Codex/Pi Stage 1/2 acceptance runner using
+  disposable local repositories, including command and judged failures and passes.
+
 ## 0.8.0 — 2026-09-07
 
 - **Coding loop, Stage 2: `supermeta`, `supereval`, and supergoal auto-confirm.** One manual

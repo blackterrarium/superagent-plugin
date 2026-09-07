@@ -54,7 +54,7 @@ SUPER_EFFORT_DIAGNOSER=xhigh            # superdiagnose RCA (Stage 3)
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=pi                    # this is the Pi build — the external driver fires the Pi CLI (pi -p)
 SUPER_CODEX_SANDBOX=danger-full-access  # codex harness only: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write
-SUPER_PI_SUBAGENTS=recommended          # pi harness only: recommended (init WARNs if the pi-subagents package is missing or < 0.58.0; superrun's SDD children then run sequentially in-context without role pins) | required (init ABORTS instead) | off (never generate .pi/agents/ definitions, never use the subagent tool)
+SUPER_PI_SUBAGENTS=required             # Pi requires pi-subagents >= 0.58.0 and its subagent tool; legacy recommended aliases required (reported); off is an error
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/. Relative: inside the checkout (default). Absolute or ~/…: EXTERNAL vault — its own git repo outside the checkout; vault docs are committed there, never here

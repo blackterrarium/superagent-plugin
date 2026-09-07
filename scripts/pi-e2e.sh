@@ -10,6 +10,8 @@
 #   scripts/pi-e2e.sh [--dry-run] [--keep]
 #     PI_E2E_REPO=<owner>/<name>   remote to (re)use; NEVER deleted, reset to an orphan commit per
 #                                  run (default: <gh user>/superagent-pi-e2e)
+#     PI_E2E_SUBAGENTS_PACKAGE=<path>  custom/test fixture package.json path; defaults to the
+#                                     user-installed pi-subagents package under ~/.pi/agent/npm
 #     PI_E2E_INTERVAL=2m           scheduler interval (launchd StartInterval / systemd timer)
 #     PI_E2E_MAX_MIN=90            wall-clock ceiling for the loop phase
 #     PI_E2E_GOAL="…"              goal text (default: the hello-world shell goal below)
@@ -28,6 +30,27 @@ SCRIPTS="$ROOT/scripts"
 # ---------------------------------------------------------------------------
 # Pure helpers (no side effects; unit-tested offline in bridge-test.sh)
 # ---------------------------------------------------------------------------
+
+# e2e_subagents_version <package.json> — require a semantic version >= 0.58.0.
+# The testbench provisions a fresh clone; by default it checks the user-installed package.
+e2e_subagents_version() {
+  python3 - "$1" <<'PYVERSION'
+import json, re, sys
+try:
+    with open(sys.argv[1]) as source:
+        version = json.load(source)["version"]
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?", version)
+    if not match:
+        raise ValueError("malformed version")
+    core = tuple(map(int, match.groups()[:3]))
+    if core < (0, 58, 0) or (core == (0, 58, 0) and match.group(4)):
+        raise ValueError("unsupported version")
+except (OSError, ValueError, KeyError, TypeError):
+    print("pi-e2e: requires pi-subagents >= 0.58.0; install: pi install npm:pi-subagents", file=sys.stderr)
+    sys.exit(2)
+print(version)
+PYVERSION
+}
 
 # e2e_status_field <status.sh --json output> <slug> <field>
 # Prints the field of the row whose slug matches (booleans as true/false); "" if absent.
@@ -190,8 +213,7 @@ phase_preflight() {
     REPO_SLUG="$owner/superagent-pi-e2e"
   fi
   [[ "$REPO_SLUG" == */* ]] || { echo "pi-e2e: PI_E2E_REPO must be <owner>/<name> (got '$REPO_SLUG')" >&2; return 2; }
-  SUBAGENTS_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.pi/agent/npm/node_modules/pi-subagents/package.json" 2>/dev/null | head -1)"
-  [[ -n "$SUBAGENTS_VERSION" ]] || echo "pi-e2e: WARN pi-subagents not installed — SDD children run sequentially without pins (SUPER_PI_SUBAGENTS=recommended)" >&2
+  SUBAGENTS_VERSION="$(e2e_subagents_version "${PI_E2E_SUBAGENTS_PACKAGE:-$HOME/.pi/agent/npm/node_modules/pi-subagents/package.json}")" || return 2
   local js; js="$("$SCRIPTS/status.sh" --json 2>/dev/null || echo '[]')"
   [[ -z "$(e2e_status_field "$js" "$SLUG" status)" ]] || { echo "pi-e2e: a loop is already registered under $SLUG" >&2; return 2; }
   return 0

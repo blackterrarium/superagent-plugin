@@ -18,14 +18,14 @@ related skills: supertraverse, superfinish, superplan
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
->   `.pi/agents/super-<role>.md` definitions `init` generates. If the tool is absent, follow SDD's
->   sequential fallback and report it.
+>   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
+>   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
 >   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; use `git worktree` via `bash`.
 
@@ -120,10 +120,14 @@ repo profile below**.
 
 > **On Pi, SDD's subagents are the `pi-subagents` `subagent` tool** (superpowers' own Pi mapping,
 > `references/pi-tools.md`). Dispatch every SDD child with `async: false` — one child per call,
-> foreground, the tool result is the child's final output. If no `subagent` tool is available in
-> this session, follow SDD's documented fallback (execute the task sequentially in this context)
-> and record `sdd-dispatch: sequential (no pi-subagents)` under Findings in the closeout so the
-> operator sees the degraded mode. Never launch background, parallel, chain, or workflow runs.
+> foreground, the tool result is the child's final output. Before executing any plan task,
+> verify `pi-subagents` ≥ 0.58.0 (the init prerequisite), that `SUPER_PI_SUBAGENTS` resolves to
+> `required`, and that this session exposes the `subagent` tool. Normalize legacy `recommended`
+> to `required` for this run and report the deprecated alias, without changing the user's
+> configuration; `off` or any other value is a hard error. If any check fails, STOP with the missing
+> prerequisite and `pi install npm:pi-subagents` / re-run `superagent:init` guidance.
+> This plugin requires SDD subagents; do not execute tasks in-context as a fallback.
+> Never launch background, parallel, chain, or workflow runs.
 
 - **Read the target leaf plan yourself** and extract its **full task list** plus scene-setting
   context. subagent-driven-development expects you to hand each implementer the **full task text**
@@ -179,10 +183,11 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    no model/thinking override on the call (native definition = model/thinking pins; bridged
    definition = a relay that runs the foreign CLI and returns its result verbatim — a reply
    beginning `BRIDGE-FAILED` is a crashed child: retry once, then the skill's normal escalation,
-   quoting the `log=` path). A role with both keys `inherit` has no definition: dispatch a plain
-   `subagent` call with no `agent`. A missing definition for a pinned role is a hard error (re-run
-   `superagent:init`) — unless the `subagent` tool itself is unavailable, in which case the
-   sequential fallback above applies and the pins are reported as not applied.
+   quoting the `log=` path). A role with both keys `inherit` still has a named definition,
+   with no model/thinking fields: always pass `agent: super-<role>`. A missing definition
+   for any SDD role is a hard error (re-run
+   `superagent:init`). An unavailable `subagent` tool is also a hard error under the
+   prerequisite above; never execute the role without its required dispatch.
 4. **Reviewer labels — keyed by `SUPER_REVIEW_CONFIDENCE_FILTER` (shipped default `controller`,
    the only supported value).** Reviewers report **every** finding with a severity **and a
    confidence label**; the controller filters to high-confidence findings before acting on or
