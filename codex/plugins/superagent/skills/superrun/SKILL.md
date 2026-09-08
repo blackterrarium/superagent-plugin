@@ -102,10 +102,22 @@ Invoke the `superagent:supertraverse` skill (Skill tool) and run its **DESCENT i
 
 - **`not-traversable`** — the root is not maintained as a progress-report tree (only orchestration
   tables / no step-tracking list). Report this and exit; there is nothing to execute.
-- **`none`** — no incomplete implementation plan exists under this root. Everything is either still
-  **unplanned** (a blank-`Plan` row — use `superagent:superplan` to plan it) or **already complete**.
-  Report which case applies and exit.
+- **BLOCKED** — report the row and reason; exit without execution.
+- **`none`** — no execution target exists; invoke **supertraverse C9 completion audit** before
+  reporting. **complete**: report none with integration/disposition evidence. **incomplete**:
+  report none with the planning/repair gap. **BLOCKED**: return a BLOCKED report naming the
+  unresolved leaf/PR/evidence, even though traversal returned none. An open-PR closeout is not
+  completion. Do not run superfinish on a fabricated target.
 - **a target leaf plan file path** — the highest-priority written-but-unexecuted leaf. Proceed.
+
+## Repair successor context
+
+For a C8 successor, read its Repair record and integration disposition before Step 2. If it
+reuses a PR/worktree, verify their current branch/head and use that isolated worktree; do not
+create a conflicting second checkout or blindly recreate the PR. Execute the successor's
+remaining/corrective tasks and all required review/test gates, then close out the **successor**.
+For a replacement, follow the plan's explicit predecessor PR disposition. Missing or conflicting
+integration instructions are BLOCKED. Supersession alone authorizes neither merge nor deletion.
 
 ## Step 2 — Isolate the workspace (enter a worktree)
 

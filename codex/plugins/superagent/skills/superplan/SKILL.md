@@ -83,11 +83,15 @@ Gates, in order:
    tables' `Plan` links (multi-layer, not just `<PLAN.md>`'s own rows), skipping completed steps and
    already-planned leaves, and returns:
    - the **target** — the deepest highest-ranked step that is not yet completed **and** has no plan
-     yet (the *available task to plan*), and
+     yet (the *available task to plan*), or an explicitly authorized `repair requested` row
+     selected by **supertraverse C8** even though its predecessor has a Plan/Closeout, and
    - the **descent path** — the chain of `(plan-file, row)` from `<PLAN.md>` down to the target's
      **immediate parent** (the deepest plan that directly contains the target row). The immediate
      parent may be a *descendant* of `<PLAN.md>`, not `<PLAN.md>` itself; the ascent step below uses
      this path.
+
+   If descent returns **BLOCKED** (e.g. invalid repair record), report the target/reason and
+   exit with BLOCKED; never convert it to `none`.
 
    If descent returns **"none"** (every step is completed or already has a plan), respond with exactly
    `No available task to plan — every step is completed or already has a plan` and **exit**.
@@ -323,6 +327,16 @@ An implementation plan is a **leaf** of the plan tree and **MUST NOT contain a p
 (see `supertraverse` C1, the leaf rule): the table's presence is exactly what marks a plan as an
 *internal node* that traversal descends into, so a leaf has none. Track an implementation plan's own
 work with task checkboxes / a verification matrix instead.
+
+## Repair target — publish a successor (C8)
+
+When descent selected `repair requested`, follow **supertraverse C8 Publish** as part of
+Planning → Self-Review → Routing → Immediate-Parent Update. Read its durable decision and
+predecessor evidence before drafting; the authorized corrections govern the successor's scope.
+C8's successor publication replaces the ordinary row update below (including its usual
+leave-PR-unchanged rule). Include the repair record and predecessor PR disposition in self-review
+and the Final Report. A successor stays an implementation leaf; larger unresolved scope returns
+BLOCKED for another decision rather than silently replacing it with a different tree shape.
 
 ## Update the Immediate Parent's Progress-Report Table (MUST)
 

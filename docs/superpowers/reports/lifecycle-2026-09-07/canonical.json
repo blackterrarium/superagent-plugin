@@ -1,0 +1,82 @@
+{
+  "adopted_replan": {
+    "planning": "repair",
+    "done": false,
+    "durable_repair": true,
+    "reason": "Superagent Decision-escalation ladder requires an adopted re-plan to apply supertraverse C8 before routing. C8 Request commits the record and repair requested row; C4/C6 select it despite predecessor closeout. C9 disallows DONE while repair remains."
+  },
+  "mixed_none_blocked": {
+    "outcome": "escalate",
+    "done": false,
+    "reason": "Superagent WAITING FOR RUN step 5 gives unresolved code PR/BLOCKED evidence precedence over none and invokes the decision ladder; C9.3 also marks the open PR BLOCKED."
+  },
+  "closeout_repair": {
+    "planning": "repair",
+    "execution": "none",
+    "done": false,
+    "reason": "Supertraverse C4 repair override and C6.2 select a valid repair requested row for planning and skip it for execution despite old closeout evidence. C9.3 makes the pending C8 request incomplete."
+  },
+  "merged": {
+    "done": true,
+    "reason": "Supertraverse C9.2 accepts a merged leaf with verified PR MERGED, merge commit on main and tracked closeout; C9.5 permits complete because every active obligation passes with no blocker."
+  },
+  "declined": {
+    "done": true,
+    "reason": "Supertraverse C9.2 accepts verified integration or a recorded authorized declined disposition; C9.5 permits completion when both obligations pass and nothing remains unresolved."
+  },
+  "fresh_tick": {
+    "planning": "repair",
+    "durable_repair": true,
+    "done": false,
+    "reason": "Superagent Repair reconciliation and supertraverse C8 Replay/fresh tick require creating the missing durable request from the recorded adopted authority before dispatch. C8 commits the record/tree and C6.2 then selects repair; C9 prevents completion."
+  },
+  "successor": {
+    "execution": "successor",
+    "done": false,
+    "reason": "Supertraverse C3 ignores repair history links; C6 selects the ready active successor with no banner. C8 Publish makes it an ordinary execution leaf, and superrun Repair successor context follows its integration disposition. C9 does not accept unfinished successor work or unresolved predecessor integration as complete."
+  },
+  "stale_ancestor": {
+    "done": false,
+    "outcome": "escalate",
+    "reason": "Supertraverse C9.1 descends active internal links even through closed ancestor status/closeout. C9.3 marks the open leaf PR BLOCKED, and superagent WAITING FOR RUN step 5 routes failed audit evidence to the decision ladder."
+  },
+  "missing_evidence": {
+    "done": false,
+    "outcome": "escalate",
+    "reason": "Supertraverse C9.2 requires verified PR MERGED and merge commit in main; C9.3/C9.5 make unverifiable evidence BLOCKED. Superagent routes BLOCKED completion audits to its decision ladder."
+  },
+  "late_closeout": {
+    "overwrite_successor": false,
+    "reason": "Supertraverse C7 active-plan guard and superfinish After-Run Finish step 4 require predecessor closeout to record historical evidence only, without changing active successor rows or ancestors."
+  },
+  "replay": {
+    "duplicate_successor": false,
+    "reset_repair": false,
+    "reason": "Supertraverse C8 Replay/fresh tick says a named successor matching the active link continues from its current state; never reset the row or create another successor."
+  },
+  "closed_pr": {
+    "done": false,
+    "outcome": "escalate",
+    "reason": "Supertraverse C9.3 explicitly makes a closed-but-unmerged PR BLOCKED; closed-out status alone cannot meet C9.2 integration evidence. Superagent routes the blocked audit to its decision ladder."
+  },
+  "hidden_ready": {
+    "done": false,
+    "outcome": "escalate",
+    "reason": "Supertraverse C9.1 audits through closed ancestors; C9.3 explicitly returns BLOCKED for unfinished work hidden by ancestor closed status or closeout, with its path for authorized reconciliation. Superagent routes BLOCKED audits to the decision ladder."
+  },
+  "second_repair": {
+    "outcome": "continue",
+    "execution": "successor",
+    "duplicate_successor": false,
+    "reason": "Supertraverse C8 Replay/fresh tick follows the verified P0 -> P1 -> P2 repair chain, treats R1 as historical, and processes only the latest unresolved request. Matching published successor links continue current state without duplication; C6 execution selects active ready P2."
+  },
+  "declined_repair": {
+    "reset_repair": false,
+    "done": true,
+    "reason": "Supertraverse C8 Replay/fresh tick treats authorized declined resolution with matching evidence as settled even if Successor remained pending; it must not reopen work. C9.2 accepts recorded authorized decline and C9.5 permits completion with no remaining obligations or blockers."
+  },
+  "direct_merge": {
+    "done": true,
+    "reason": "Supertraverse C9.2 accepts direct/no-PR work with recorded integration commit verified on local main when there is no remote and tracked closeout. C9.5 permits complete with no unresolved history or blocker."
+  }
+}

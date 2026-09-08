@@ -699,3 +699,24 @@ per-session timeout is 1800 seconds (`--timeout` overrides it); failures return 
 it preserves the authored inputs and starts at meta-planning. `--continue-after-meta` resumes
 a completed first round goal scaffold at the negative evaluation. Runtime dispatch receipts verify
 completed children with the expected model/effort and isolated Codex contexts.
+
+## Lifecycle skill regressions
+
+`lifecycle-regression.py` emits independent scenarios for a fresh agent reading the specified
+skill build, then checks its JSON answers with unittest. It does not start a model or touch a
+scheduler, GitHub repository, or vault:
+
+```bash
+python3 scripts/lifecycle-regression.py --prompt --skills skills > /tmp/lifecycle-prompt.txt
+# Give that prompt to a fresh agent; save only its JSON response to /tmp/lifecycle-answers.json.
+python3 scripts/lifecycle-regression.py --answers /tmp/lifecycle-answers.json
+```
+
+Use `--skills codex/plugins/superagent/skills` (or `pi/skills`, `cursor/skills`) to probe a generated
+package. `--cases <id> ...` selects a subset for focused regressions. The validator checks repair
+eligibility, blocked/none precedence, fresh-tick replay, successor protection, repeated repair
+chains and verified completion. Each answer must include its rule/evidence reasoning.
+
+These are interpreted-skill behavior probes; they do not execute a real scheduler/PR lifecycle.
+Saved answers document a particular probe run; validating them again is not a fresh agent test.
+See `docs/superpowers/reports/2026-09-07-lifecycle-verification.md` for baseline and repaired results.
