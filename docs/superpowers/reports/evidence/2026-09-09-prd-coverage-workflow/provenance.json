@@ -1,0 +1,21 @@
+{
+  "source_commit": "c16fa3a1efa7b5eefb13a407ce12ffa39a280638",
+  "approved_project_commit": "bd34d0e6efca96a19b9a1f4ba8b3a06159938cfc",
+  "repo": "/private/tmp/prd-coverage-validation-20260909/repo",
+  "vault": "/private/tmp/prd-coverage-validation-20260909/vault",
+  "project": "/private/tmp/prd-coverage-validation-20260909/vault/projects/2026-09-09-json-preservation",
+  "package": "/Users/eugene/.codex/plugins/cache/superagent/superagent/0.8.1+codex.20260909022917",
+  "goal_root": "/private/tmp/prd-coverage-validation-20260909/vault/2026-09-09-15_18-json-preservation-r1/master-plans/2026-09-09-15_18-json-preservation-r1.md",
+  "goal_folder": "/private/tmp/prd-coverage-validation-20260909/vault/2026-09-09-15_18-json-preservation-r1",
+  "meta_commit": "6915b2fd3c74d37de48283119b4d97f4638759a1",
+  "meta_plan": "/private/tmp/prd-coverage-validation-20260909/vault/projects/2026-09-09-json-preservation/meta-plans/2026-09-09-15_16-r1.md",
+  "leaf_plan": "/private/tmp/prd-coverage-validation-20260909/vault/2026-09-09-15_18-json-preservation-r1/plans/2026-09-09-15_25-json-preservation.md",
+  "leaf_plan_commit": "d19f49773a4239eb7b6585aaab3bbe382c8ff6e0",
+  "implementation_worktree": "/private/tmp/prd-coverage-validation-20260909/implementation",
+  "sdd_workspace": "/private/tmp/prd-coverage-validation-20260909/implementation/.superpowers/sdd/2026-09-09-15_25-json-preservation",
+  "implementation_base": "c16fa3a1efa7b5eefb13a407ce12ffa39a280638",
+  "implementation_commit": "d5644e2b5852c852ee31e93db940bac752ab0c55",
+  "positive_integrated_commit": "a24f8c8c8f276b873d426b3dc0f994727782ec27",
+  "closeout_report": "/private/tmp/prd-coverage-validation-20260909/vault/2026-09-09-15_18-json-preservation-r1/reports/2026-09-09-15_40-json-preservation-closeout.md",
+  "closeout_commit": "2ede8ad85168c85d75a4742d5be9597ea7c7149c"
+}

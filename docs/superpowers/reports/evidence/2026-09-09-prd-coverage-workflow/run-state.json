@@ -1,0 +1,94 @@
+{
+  "started_utc": "2026-09-09T15:14:10+00:00",
+  "deadline_utc": "2026-09-09T16:44:10+00:00",
+  "max_dispatches": 12,
+  "per_dispatch_seconds": 900,
+  "dispatches": [
+    {
+      "id": 1,
+      "task": "goal_planner",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:16:28.624060+00:00",
+      "status": "COMPLETED",
+      "task_path": "/root/goal_planner",
+      "ended_utc": "2026-09-09T15:25:44.862312+00:00",
+      "output_commit": "047175f",
+      "report": "/private/tmp/prd-coverage-validation-20260909/goal-report.md"
+    },
+    {
+      "id": 2,
+      "task": "fixture_implementer",
+      "task_path": "/root/fixture_implementer",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:26:28.306821+00:00",
+      "status": "COMPLETED",
+      "ended_utc": "2026-09-09T15:33:19.007509+00:00",
+      "output_commit": "d5644e2b5852c852ee31e93db940bac752ab0c55"
+    },
+    {
+      "id": 3,
+      "task": "task_review",
+      "task_path": "/root/task_review",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:33:19.007555+00:00",
+      "status": "COMPLETED",
+      "ended_utc": "2026-09-09T15:36:50.126108+00:00",
+      "report": "/private/tmp/prd-coverage-validation-20260909/implementation-evidence/task-review.md"
+    },
+    {
+      "id": 4,
+      "task": "branch_review",
+      "task_path": "/root/branch_review",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:36:50.126166+00:00",
+      "status": "COMPLETED",
+      "ended_utc": "2026-09-09T15:40:59.294361+00:00",
+      "report": "/private/tmp/prd-coverage-validation-20260909/implementation-evidence/branch-review.md"
+    },
+    {
+      "id": 5,
+      "task": "candidate_leaf_review",
+      "task_path": "/root/candidate_leaf_review",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:41:43.532498+00:00",
+      "status": "COMPLETED",
+      "ended_utc": "2026-09-09T15:46:10.136656+00:00",
+      "report": "/private/tmp/prd-coverage-validation-20260909/candidate-b/leaf-review-result.md"
+    },
+    {
+      "id": 6,
+      "task": "evaluator_a",
+      "task_path": "/root/evaluator_a",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:41:43.532559+00:00",
+      "status": "COMPLETED",
+      "timestamp_note": "Recorded start is pre-dispatch reservation; actual native spawn followed conversation compaction. Conservative timeout uses reservation.",
+      "ended_utc": "2026-09-09T15:48:12.195442+00:00",
+      "report": "/private/tmp/prd-coverage-validation-20260909/candidate-a/judged-results.md"
+    },
+    {
+      "id": 7,
+      "task": "evaluator_b",
+      "task_path": "/root/evaluator_b",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "started_utc": "2026-09-09T15:41:43.532560+00:00",
+      "status": "COMPLETED",
+      "timestamp_note": "Recorded start is pre-dispatch reservation; actual native spawn followed conversation compaction. Conservative timeout uses reservation.",
+      "ended_utc": "2026-09-09T15:50:09.142920+00:00",
+      "report": "/private/tmp/prd-coverage-validation-20260909/candidate-b/judged-results.md"
+    }
+  ],
+  "status": "COMPLETE",
+  "usage_note": "Native collaboration results expose task paths and final messages, not per-role token usage; no token-cost claim is inferred.",
+  "ended_utc": "2026-09-09T15:50:09.142920+00:00",
+  "elapsed_seconds": 2159.14292,
+  "dispatch_count": 7,
+  "transport_retries": 0
+}

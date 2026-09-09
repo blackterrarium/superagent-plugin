@@ -1,0 +1,28 @@
+{
+  "label": "candidate-b",
+  "repo": "/private/tmp/prd-coverage-validation-20260909/candidate-b/repo",
+  "vault": "/private/tmp/prd-coverage-validation-20260909/candidate-b/vault",
+  "project": "/private/tmp/prd-coverage-validation-20260909/candidate-b/vault/projects/2026-09-09-json-preservation",
+  "code_commit": "df5507166576550a4833c9bbf962419ea61f8681",
+  "vault_commit": "2ede8ad85168c85d75a4742d5be9597ea7c7149c",
+  "worktree": "/private/tmp/prd-coverage-validation-20260909/candidate-b/tmp/tmp.NvZye3dPEN",
+  "command": [
+    "/Users/eugene/.codex/plugins/cache/superagent/superagent/0.8.1+codex.20260909022917/scripts/supereval.sh",
+    "/private/tmp/prd-coverage-validation-20260909/candidate-b/vault/projects/2026-09-09-json-preservation",
+    "--repo",
+    "/private/tmp/prd-coverage-validation-20260909/candidate-b/repo",
+    "--commit",
+    "df5507166576550a4833c9bbf962419ea61f8681",
+    "--out",
+    "/private/tmp/prd-coverage-validation-20260909/candidate-b/command-results.md",
+    "--keep-worktree"
+  ],
+  "cwd": "/private/tmp/prd-coverage-validation-20260909/candidate-b/repo",
+  "started_utc": "2026-09-09T15:41:10.734426+00:00",
+  "ended_utc": "2026-09-09T15:41:12.913093+00:00",
+  "runner_exit": 0,
+  "runner_stdout": "",
+  "runner_stderr": "",
+  "context_available": true,
+  "packet": "/private/tmp/prd-coverage-validation-20260909/candidate-b/evaluator-packet.md"
+}

@@ -1,0 +1,14 @@
+{
+  "meta_commit": "6915b2fd3c74d37de48283119b4d97f4638759a1",
+  "goal_commit": "047175f",
+  "leaf_plan_commit": "d19f49773a4239eb7b6585aaab3bbe382c8ff6e0",
+  "verbatim_ac_rows_in_meta_and_leaf": [
+    "AC1",
+    "AC2",
+    "AC3"
+  ],
+  "root_conditions_inspected": true,
+  "root_one_step": true,
+  "source_revisions_preserved": true,
+  "code_and_vault_synced": true
+}

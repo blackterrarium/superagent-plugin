@@ -1,0 +1,18 @@
+{
+  "candidate-a": {
+    "code_commit": "a24f8c8c8f276b873d426b3dc0f994727782ec27",
+    "initial_vault_commit": "2ede8ad85168c85d75a4742d5be9597ea7c7149c"
+  },
+  "candidate-b": {
+    "code_commit": "df5507166576550a4833c9bbf962419ea61f8681",
+    "initial_vault_commit": "2ede8ad85168c85d75a4742d5be9597ea7c7149c"
+  },
+  "protocol": {
+    "one_assertion_replaced": true,
+    "changed_files": [
+      "test_product.py"
+    ],
+    "product_sha256": "50a2e77ff2e6b588bec24539dc9d87763ca0f1e2bf835392ab55d81e1e11f3e7",
+    "agreement_bytes_identical": true
+  }
+}
