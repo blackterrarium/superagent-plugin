@@ -858,6 +858,11 @@ deadlines without paid polling. It disarms only declared outer/inner registratio
 only recorded matching owned process groups. Registration identity is rechecked before stop;
 active jobs with missing ownership proof leave cleanup INCOMPLETE. Cleanup preserves state,
 registrations and committed artifacts. It uses no global scheduler disable or process-name kill.
+Standalone cleanup discovers every runtime archive for the exact approved manifest bytes and
+revalidates its approval and identities. It stops new admissions, reaps recorded detached native
+groups and watchdogs, and verifies their absence even after scheduler registrations disappear.
+Group termination requires the recorded leader start time, exact PGID and current user identity;
+an orphaned group without revalidatable ownership leaves cleanup INCOMPLETE.
 
 Runtime events retain requested pins separately from observed models/effort. Codex supplies its
 active model in hooks; Claude child model data comes from runtime transcript metadata; Pi supplies
@@ -865,6 +870,8 @@ its active model/thinking context. Missing actual model evidence cannot authoriz
 Effort and usage are recorded only when exposed. Hook archives omit prompts and full private
 transcripts; subprocess evidence is scrubbed for credentials. The driver observes ordinary native
 fixture work, not adversarial shell/network evasion or arbitrary alternate model APIs.
+Claude tool actors prefer the documented child `agent_id` over the shared `session_id`; observed
+Claude effort objects are validated and normalized from `effort.level` before comparing pins.
 
 The final native supervisor receives exact instructions to produce
 `PROJECT/loop-status/stage3-evidence.json` before exiting DONE or WAITING FOR INPUT. The driver waits for those owned

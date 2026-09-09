@@ -481,7 +481,9 @@ def execute(action, path, harness):
         if action != 'cleanup':
             check_scope(m, harness, baseline=action == 'run')
             check_agreement(m, harness)
-        if action == 'cleanup': output = cleanup_owned(m, harness, adapter)
+        if action == 'cleanup':
+            adapter.discover_owned(path)
+            output = cleanup_owned(m, harness, adapter)
         else:
             if action == 'run':
                 def emit(event):

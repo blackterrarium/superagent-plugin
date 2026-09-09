@@ -68,6 +68,12 @@ def normalize_name(name):
     return str(name).split('.')[-1].split('__')[-1]
 
 
+def event_actor(event):
+    actor = event.get('agent_id', event.get('session_id'))
+    live.require(isinstance(actor, str) and actor, 'missing native event actor')
+    return actor
+
+
 def pin_request(m, harness, event, entry, index=0):
     prompt = entry.get('message', entry.get('prompt', entry.get('task', '')))
     marker = MARKER.search(prompt if isinstance(prompt, str) else '')
@@ -80,9 +86,9 @@ def pin_request(m, harness, event, entry, index=0):
     if ':' not in model: model = harness + ':' + model
     effort = entry.get('reasoning_effort', entry.get('thinking', pin['effort']))
     live.require(model == pin['model'] and effort == pin['effort'], 'wrong native model/effort pin')
-    return dict(id=str(event['session_id']) + ':' + str(event['tool_use_id']) + ':' + str(index),
+    return dict(id=event_actor(event) + ':' + str(event['tool_use_id']) + ':' + str(index),
                 role=role, operation=operation, round=int(number), model=model, effort=effort,
-                source='native-tool', slug=os.environ.get('SUPERAGENT_SLUG'), session_id=event['session_id'], tool_use_id=event['tool_use_id'],
+                source='native-tool', slug=os.environ.get('SUPERAGENT_SLUG'), session_id=event['session_id'], actor_id=event_actor(event), tool_use_id=event['tool_use_id'],
                 tool=normalize_name(event['tool_name']), started=time.monotonic(), status='permitted')
 
 
@@ -164,6 +170,12 @@ def hook(path, event):
         m = live.load_manifest(data['manifest'], approved=True)
         live.require(live.sha256(Path(data['manifest']).read_bytes()) == data['manifest_sha256'], 'runtime manifest changed')
         harness = data['harness']; h = m['harnesses'][harness]
+        event = dict(event)
+        if harness == 'claude' and event.get('effort') is not None:
+            effort = event['effort']
+            live.require(isinstance(effort, dict) and effort.get('level') in ('low', 'medium', 'high', 'xhigh', 'max'), 'malformed actual Claude effort object')
+            event['effort'] = effort['level']
+            data['starts'].setdefault(event_actor(event), {})['effort'] = event['effort']
         kind = event.get('hook_event_name')
         if event.get('cwd'):
             cwd = Path(event['cwd']).resolve()
@@ -216,7 +228,7 @@ def hook(path, event):
             elif re.search(r'spawn|followup|resume.*agent|send.*input', name, re.I):
                 raise live.Invalid('unknown native dispatch tool alias: ' + name)
         elif kind in ('SubagentStart', 'SubagentStop', 'Stop'):
-            agent = event.get('agent_id', event.get('session_id'))
+            agent = event_actor(event)
             live.require(isinstance(agent, str) and agent, 'missing runtime child identity')
             observed = data['starts'].setdefault(agent, {})
             for key in ('model', 'effort'):
@@ -270,7 +282,7 @@ def hook(path, event):
             event_log(path, dict(kind=kind, agent_id=agent, model=observed.get('model'), effort=observed.get('effort')))
 
         elif kind == 'PostToolUse' and (name in SPAWNS | FOLLOWUPS or name == 'subagent'):
-            permits = [p for p in data['permits'].values() if p['session_id'] == event.get('session_id') and p['tool_use_id'] == event.get('tool_use_id')]
+            permits = [p for p in data['permits'].values() if p.get('actor_id', p['session_id']) == event_actor(event) and p['tool_use_id'] == event.get('tool_use_id')]
             ids = child_ids(event.get('tool_response'))
             if name in FOLLOWUPS and not ids: ids = [p['agent_id'] for p in permits if p.get('agent_id')]
             if len(ids) != len(permits): data['problems'].append('missing or ambiguous runtime child IDs for ' + str(event.get('tool_use_id')))
@@ -285,7 +297,7 @@ def hook(path, event):
                 for short in re.findall(r'\[[^]\n]*? ([0-9a-f]{7,40})\]', output):
                     try: commits.append(live.git(Path(h['code_root']), 'rev-parse', short + '^{commit}'))
                     except live.Incomplete: pass
-                owner = event.get('session_id')
+                owner = event_actor(event)
                 process_id = os.environ.get('SUPER_STAGE3_PROCESS_PERMIT')
                 if process_id in data['permits'] and data['permits'][process_id].get('agent_id') == owner:
                     owner = data['permits'][process_id]['agent_id']
@@ -544,6 +556,70 @@ class NativeAdapter:
         self.configure(manifest, harness)
         self.verified = dict(cli_sha256=live.sha256(Path(self.runtime['cli']).read_bytes()), cli_version=self.runtime['cli_version'], platform=sys.platform)
 
+    def validate_runtime(self, path, data):
+        manifest_path = live.absolute(data['manifest'])
+        live.require(manifest_path == path.parent / 'manifest.json', 'runtime manifest locator mismatch')
+        live.require(data['harness'] == self.harness, 'runtime harness mismatch')
+        live.require(live.sha256(manifest_path.read_bytes()) == data['manifest_sha256'], 'runtime manifest hash mismatch')
+        live.require(live.load_manifest(manifest_path, approved=True) == self.m, 'runtime approved manifest mismatch')
+        if data.get('scheduler_armed') and not data.get('watchdog'):
+            raise live.Incomplete('armed runtime lacks watchdog ownership receipt')
+        allowed = {item['slug'] for item in self.h['cleanup']['registrations']}
+        for pid, item in self.owned_groups(data):
+            live.require(str(pid).isdigit() and int(pid) > 1 and isinstance(item, dict) and
+                         isinstance(item.get('start'), str) and item['start'] and item.get('slug') in allowed,
+                         'invalid runtime process ownership record')
+
+    @staticmethod
+    def owned_groups(data):
+        groups = list(data['processes'].items())
+        if data.get('watchdog'): groups.append((str(data['watchdog']['pid']), data['watchdog']))
+        return groups
+
+    def discover_owned(self, manifest_path):
+        """Recovery uses every exact approved attempt, including partially armed runs."""
+        expected = live.sha256(Path(manifest_path).read_bytes())
+        self.paths = []
+        for candidate in sorted(Path(self.m['evidence_dir']).glob('*-run-*/native-runtime.json')):
+            candidate = live.absolute(str(candidate))
+            data = json.loads(candidate.read_text())
+            if data.get('harness') != self.harness: continue
+            archived = live.absolute(data['manifest'])
+            live.require(archived == candidate.parent / 'manifest.json', 'runtime manifest locator mismatch')
+            actual = live.sha256(archived.read_bytes())
+            live.require(actual == data['manifest_sha256'], 'runtime manifest hash mismatch')
+            if actual != expected: continue  # a different approval is not this cleanup's authority
+            self.validate_runtime(candidate, data)
+            self.paths.append(candidate)
+
+    def runtime_paths(self):
+        return list(dict.fromkeys(getattr(self, 'paths', []) + ([self.path] if hasattr(self, 'path') else [])))
+
+    @staticmethod
+    def group_members(pid):
+        # Inspect exact PGID members without recording unrelated host process data.
+        query = subprocess.run(['ps', '-ax', '-o', 'pid=,pgid=,uid=,stat=,lstart='], capture_output=True, text=True, timeout=5)
+        if query.returncode: raise live.Incomplete('cannot inspect owned process group')
+        members = []
+        for row in query.stdout.splitlines():
+            fields = row.split(None, 4)
+            if len(fields) == 5 and fields[1] == str(pid) and not fields[3].startswith('Z'):
+                members.append(dict(pid=fields[0], uid=fields[2], start=fields[4].strip()))
+        return members
+
+    def stop_group(self, pid, item):
+        members = self.group_members(pid)
+        if not members: return
+        leader = next((p for p in members if p['pid'] == str(pid)), None)
+        if not leader or leader['start'] != item['start'] or any(p['uid'] != str(os.getuid()) for p in members):
+            raise live.Incomplete('owned group identity cannot be revalidated: ' + str(pid))
+        try: os.killpg(int(pid), signal.SIGKILL)
+        except ProcessLookupError: pass
+        deadline = time.monotonic() + 2
+        while self.group_members(pid):
+            if time.monotonic() >= deadline: raise live.Incomplete('owned process group did not terminate: ' + str(pid))
+            time.sleep(0.02)
+
     def registration(self, identity, optional=False):
         path = Path(self.runtime['config_root']) / 'superagent' / (identity['slug'] + '.env')
         if optional and not path.exists(): return None
@@ -575,19 +651,17 @@ class NativeAdapter:
 
     def stop(self, identity):
         registered = self.registration(identity, optional=True)
+        for path in self.runtime_paths():
+            with transaction(path) as data:
+                self.validate_runtime(path, data)
+                data['stopped'] = True  # deny admissions before terminating watchdog/workers
+                groups = self.owned_groups(data)
+            for pid, item in groups:
+                if item['slug'] == identity['slug'] and int(pid) != os.getpid(): self.stop_group(pid, item)
         if registered is None:
             if self.active(identity): raise live.Incomplete('active scheduler identity lacks owned registration proof')
             return
         # No glob, pkill, killall, global systemctl action or unowned scheduler ID.
-        if hasattr(self, 'path'):
-            with transaction(self.path) as data:
-                for pid, item in list(data['processes'].items()):
-                    process = item if isinstance(item, dict) else {}
-                    if process.get('slug') != identity['slug']: continue
-                    current = subprocess.run(['ps', '-p', pid, '-o', 'lstart='], capture_output=True, text=True).stdout.strip()
-                    if current and current == process.get('start'):
-                        try: os.killpg(int(pid), signal.SIGKILL)
-                        except ProcessLookupError: pass
         stopped = self.command(['/bin/bash', str(Path(self.runtime['scripts_root']) / 'stop.sh'), '--slug', identity['slug'], '--hard'])
         if stopped.returncode: raise live.Incomplete('owned stop failed: ' + identity['slug'])
 
@@ -603,12 +677,12 @@ class NativeAdapter:
                 query = self.command(['systemctl', '--user', 'is-active', 'superagent-tick@' + identity['slug'] + '.' + suffix])
                 if query.returncode not in (0, 3, 4): raise live.Incomplete('cannot verify owned systemd cleanup')
                 active |= query.stdout.strip() in ('active', 'activating', 'reloading', 'deactivating')
-        if hasattr(self, 'path'):
-            with transaction(self.path) as data:
-                for pid, item in data['processes'].items():
-                    if isinstance(item, dict) and item.get('slug') == identity['slug']:
-                        query = subprocess.run(['ps', '-p', pid, '-o', 'lstart='], capture_output=True, text=True)
-                        active |= bool(query.stdout.strip()) and query.stdout.strip() == item.get('start')
+        for path in self.runtime_paths():
+            with transaction(path) as data:
+                self.validate_runtime(path, data)
+                groups = self.owned_groups(data)
+            for pid, item in groups:
+                if item['slug'] == identity['slug'] and int(pid) != os.getpid(): active |= bool(self.group_members(pid))
         return active
 
     def run(self, manifest, harness, attempt, budget):
@@ -650,6 +724,11 @@ class NativeAdapter:
                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                    env=self.env, start_new_session=True)
         try:
+            observation = subprocess.run(['ps', '-p', str(watcher.pid), '-o', 'lstart='], capture_output=True, text=True, timeout=5)
+            if observation.returncode or not observation.stdout.strip():
+                watcher.kill(); watcher.wait(); raise live.Incomplete('watchdog ownership receipt unavailable')
+            with transaction(self.path) as data:
+                data['watchdog'] = dict(pid=watcher.pid, start=observation.stdout.strip(), slug=outer['slug'])
             launched = self.command(['/bin/bash', str(Path(self.runtime['scripts_root']) / 'launch.sh'),
                 self.h['project'], '--supervisor', 'supercode', '--slug', outer['slug'],
                 '--interval', str(self.runtime['interval_seconds']) + 's',
@@ -755,6 +834,11 @@ def watchdog(path):
     adapter.runtime = adapter.h['runtime']; adapter.path = Path(path)
     adapter.env = dict(os.environ, REPO=adapter.h['code_root'], XDG_CONFIG_HOME=adapter.runtime['config_root'],
                        SUPERAGENT_LAUNCHD_DIR=adapter.runtime['launchd_dir'])
+    observation = subprocess.run(['ps', '-p', str(os.getpid()), '-o', 'lstart='], capture_output=True, text=True, timeout=5)
+    if observation.returncode or not observation.stdout.strip(): raise live.Incomplete('watchdog ownership receipt unavailable')
+    outer = next(item for item in adapter.h['cleanup']['registrations'] if item['supervisor'] == 'supercode')
+    with transaction(path) as current:
+        current['watchdog'] = dict(pid=os.getpid(), start=observation.stdout.strip(), slug=outer['slug'])
     while True:
         with transaction(path) as current:
             if current['stopped']: return 0

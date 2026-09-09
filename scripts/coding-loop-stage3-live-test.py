@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import signal
 import shlex
 from pathlib import Path
 import subprocess
@@ -320,6 +321,102 @@ class NativeHookTests(unittest.TestCase):
                 'cwd': str(self.repo), 'model': 'pinned-model', 'tool_name': tool,
                 'tool_input': {'message': 'STAGE3 role=' + role + ' operation=repair-' + str(number) + ' round=1\nDo work.',
                                'model': 'pinned-model', 'reasoning_effort': 'high'}}
+
+    def claude_child(self):
+        self.manifest['harnesses']['claude'], self.manifest['harnesses']['codex'] = self.manifest['harnesses']['codex'], self.manifest['harnesses']['claude']
+        for name in ('claude', 'codex'):
+            for pin in self.manifest['harnesses'][name]['roles'].values(): pin['model'] = name + ':pinned-model'
+        self.save(); self.approve(); self.run = self.root / 'claude-runtime.json'
+        self.native.initialize(self.path, 'claude', self.run)
+        self.native.hook(self.run, self.event('Agent'))
+        self.native.hook(self.run, dict(hook_event_name='PostToolUse', session_id='parent', tool_use_id='1',
+            tool_name='Agent', tool_response={'agent_id': 'child'}))
+        self.native.hook(self.run, dict(hook_event_name='SubagentStart', session_id='parent', agent_id='child', agent_type='stage3_IMPLEMENTER'))
+        transcript = self.root / 'child-transcript.jsonl'
+        transcript.write_text(json.dumps({'type': 'assistant', 'message': {'role': 'assistant', 'model': 'pinned-model'}}) + '\n')
+        return dict(hook_event_name='SubagentStop', session_id='parent', agent_id='child', agent_type='stage3_IMPLEMENTER',
+                    agent_transcript_path=str(transcript), last_assistant_message='Finished.')
+
+    def test_claude_child_git_actor_uses_agent_id_in_shared_session(self):
+        stop = self.claude_child()
+        self.native.hook(self.run, dict(hook_event_name='PostToolUse', session_id='parent', agent_id='child',
+            tool_use_id='git', tool_name='Bash', tool_input={'command': 'git rev-parse HEAD'}, tool_response={'stdout': self.sha}))
+        self.native.hook(self.run, stop)
+        data = json.loads(self.run.read_text())
+        self.assertEqual(data['permits']['parent:1:0']['commits'], [self.sha])
+        self.assertNotIn('parent', data['actions'])
+
+    def test_claude_observed_effort_object_normalizes_without_trusting_request(self):
+        stop = self.claude_child(); stop['effort'] = {'level': 'high'}
+        self.native.hook(self.run, stop)
+        data = json.loads(self.run.read_text())
+        self.assertEqual(data['permits']['parent:1:0']['actual_effort'], 'high')
+        self.assertEqual(data['problems'], [])
+        for malformed in ({}, {'level': 3}, ['high']):
+            with self.subTest(malformed=malformed), self.assertRaises(self.native.live.Invalid):
+                self.native.hook(self.run, dict(stop, effort=malformed))
+        with self.native.transaction(self.run) as data: data['permits']['parent:1:0']['status'] = 'permitted'
+        self.native.hook(self.run, dict(stop, effort={'level': 'low'}))
+        self.assertTrue(any('effort mismatch' in p for p in json.loads(self.run.read_text())['problems']))
+
+    def test_standalone_cleanup_reaps_discovered_detached_groups_and_watchdog(self):
+        self.cleanup_detached_fixture(check_bindings=False)
+
+    def test_standalone_cleanup_rejects_tampered_binding_and_process_identity(self):
+        self.cleanup_detached_fixture(check_bindings=True)
+
+    def cleanup_detached_fixture(self, check_bindings):
+        cli = self.root / 'fake-cli'; cli.write_text('offline')
+        self.manifest['harnesses']['codex']['runtime'] = dict(cli=str(cli), cli_version='offline',
+            scripts_root=str(SCRIPTS), config_root=str(self.root / 'config'), launchd_dir=str(self.root / 'LaunchAgents'),
+            outer_loop=str(self.project / 'loop-status/outer.md'), interval_seconds=1)
+        self.save(); self.approve()
+        bin_dir = self.root / 'scheduler-bin'; bin_dir.mkdir()
+        for name, code in (('launchctl', 113), ('systemctl', 3)):
+            executable = bin_dir / name; executable.write_text('#!/bin/sh\nexit ' + str(code) + '\n'); executable.chmod(0o700)
+        processes = [subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], start_new_session=True) for _ in range(3)]
+        def reap():
+            for process in processes:
+                if process.poll() is None: os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+        self.addCleanup(reap)
+        records = []
+        for process in processes:
+            observation = subprocess.run(['ps', '-p', str(process.pid), '-o', 'lstart='], text=True, capture_output=True, check=True)
+            self.assertTrue(observation.stdout.strip())
+            records.append(dict(pid=process.pid, start=observation.stdout.strip(), slug='codex-inner-1'))
+        attempt = live.new_attempt(self.manifest, self.path, 'run', 'codex')
+        runtime = attempt / 'native-runtime.json'; self.native.initialize(attempt / 'manifest.json', 'codex', runtime)
+        with self.native.transaction(runtime) as data:
+            data['processes'][str(processes[0].pid)] = records[0]
+        second_attempt = live.new_attempt(self.manifest, self.path, 'run', 'codex')
+        second_runtime = second_attempt / 'native-runtime.json'
+        self.native.initialize(second_attempt / 'manifest.json', 'codex', second_runtime)
+        with self.native.transaction(second_runtime) as data:
+            data['watchdog'] = dict(records[1], slug='codex-outer-1')
+        args = [sys.executable, str(PATH), 'cleanup', '--manifest', str(self.path), '--harness', 'codex']
+        env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'])
+        if check_bindings:
+            # Tampered binding is not process-kill authorization.
+            with self.native.transaction(runtime) as data: data['manifest_sha256'] = '0' * 64
+            rejected = subprocess.run(args, env=env, text=True, capture_output=True, timeout=10)
+            self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+            self.assertTrue(all(p.poll() is None for p in processes))
+            with self.native.transaction(runtime) as data: data['manifest_sha256'] = digest(self.path.read_bytes())
+            with self.native.transaction(runtime) as data: data['processes'][str(processes[0].pid)]['start'] = 'wrong process start'
+            mismatched = subprocess.run(args, env=env, text=True, capture_output=True, timeout=10)
+            self.assertEqual(json.loads(mismatched.stdout)['status'], 'INCOMPLETE')
+            self.assertIsNone(processes[0].poll(), 'cleanup killed a group whose identity mismatched')
+            self.assertIsNone(processes[2].poll())
+            with self.native.transaction(runtime) as data: data['processes'][str(processes[0].pid)] = records[0]
+        cleaned = subprocess.run(args, env=env, text=True, capture_output=True, timeout=10)
+        self.assertEqual(cleaned.returncode, 0, cleaned.stdout + cleaned.stderr)
+        self.assertEqual(json.loads(cleaned.stdout)['status'], 'PASS')
+        self.assertIsNotNone(processes[0].poll(), 'standalone cleanup left native detached worker alive')
+        self.assertIsNotNone(processes[1].poll(), 'standalone cleanup left watchdog alive')
+        self.assertIsNone(processes[2].poll(), 'cleanup killed an unrelated detached process')
+        self.assertTrue(json.loads(runtime.read_text())['stopped'])
+        self.assertTrue(json.loads(second_runtime.read_text())['stopped'])
 
     def test_native_hook_counts_followups_and_concurrent_reservations(self):
         for index, name in enumerate(('spawn_agent', 'followup_task', 'resume_agent'), 1):
