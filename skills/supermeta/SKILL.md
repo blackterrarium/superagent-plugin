@@ -1,7 +1,7 @@
 ---
 name: supermeta
 description: Turn a READY coding-loop project folder into the next round's meta-plan and drive supergoal (auto-confirmed) to scaffold the goal folder the inner loop will build. Writes meta-plans/<STAMP>-r<N>.md, dispatches one PLANNER subagent that runs supergoal, appends the iteration-ledger row, and commits per superauthor A7. Stage 2 of the coding loop; runs unattended.
-argument-hint: "<project-dir> [--operation <path>]"
+argument-hint: "<project-dir> [--operation <path>] [--supervisor-state <path>]"
 license: MIT
 related skills: superauthor, supergoal, superprd, supereval
 ---
@@ -19,8 +19,9 @@ structural docs (a meta-plan and a ledger row) and dispatches exactly **one** PL
 that invokes `superagent:supergoal`.
 
 **Input:** `<project-dir>` — an existing coding-loop project folder. **Required.** Optional:
-`--operation <path>` uses a supervisor-persisted operation identity. With no operation, all manual
-defaults remain unchanged.
+`--operation <path>` uses a supervisor-persisted operation identity. Supercode dispatches also pass
+`--supervisor-state <path>`: the real registered project state, required for author-approved META
+entry. That flag requires --operation. With no operation, all manual defaults remain unchanged.
 
 ## Repo configuration (.superenv)
 
@@ -106,7 +107,39 @@ In operation mode, do not derive identities from the clock or ledger. Use the re
 `meta_plan`, and only permitted `goal_folder`; derive `<STAMP>` from the frozen basenames and reject
 inconsistent round, stamp, slug, ledger, or project identities. Require `source_vault_commit` on
 vault `main` and the current agreement fingerprint equal to `agreement_revision` before dispatch.
-For round 1, repair guidance is `none — first round`. For a later round, locate the unique FINAL
+For a supercode dispatch, independently validate worker entry before drafting, dispatching a planner,
+or reusing an existing artifact. Run the installed helper against the actual registered state:
+
+```text
+python3 SCRIPTS/_coding_loop_state.py meta-entry STATE --repo PRIMARY --vault VAULT
+  --conf XDG_CONFIG_HOME/superagent --operation OPERATION_JSON
+```
+
+Resolve the config directory from the process environment (`$XDG_CONFIG_HOME`, default
+`$HOME/.config`), not an assertion in the worker prompt. The helper reloads state, requires exactly
+one matching supercode registration, recomputes binding context, and matches the exact reserved
+project/round/operation/agreement. Read its JSON `entry` result yourself. A parent-supplied result,
+free-form assertion of author approval, or an authorization file elsewhere is not evidence.
+
+- `FIRST_ROUND`: requires round 1; guidance is `none — first round`.
+- `AUTHOR_APPROVED`: permits this new planning round after actual author adoption or replan even
+  when the previous result was PASS, had different criteria, was a legacy round with no diagnosis,
+  or had AUTHOR INPUT. The validator requires the exact consumed-answer Decisions receipt and a
+  matching durable authorization bound to this operation id, project, from/to rounds and current
+  agreement. Preserve its decision id and answer as meta-plan provenance. Guidance is
+  `author-approved planning under the current agreement`; read prior artifacts as history and
+  incorporate only still-applicable obligations. Do not require an old FAIL/current-agreement
+  REPAIR in this branch, reuse old PASS, weaken criteria, or call this a first round.
+- `AUTONOMOUS_REPAIR`: the helper verifies the exact prior integrated FAIL and current-agreement
+  REPAIR receipt. Read that selected diagnosis and apply the strict guidance contract below.
+
+A missing/mismatched receipt is CONFLICT, not permission to invent authorization. Repeat this
+validation before integration; retries use the same state, operation id and decision receipt.
+Without --supervisor-state there is no author-approved entry path: retain the strict manual /
+operation-mode repair requirements below for later rounds.
+
+For round 1, repair guidance is `none — first round`. For a later round **other than the validated
+AUTHOR_APPROVED entry**, locate the unique FINAL
 diagnosis linked to the previous ledger row's failed report and validate it with
 the existing Python API and its complete authoritative inputs:
 
@@ -130,8 +163,9 @@ evaluated commit; take the report path from the previous ledger row and require 
 recorded source-vault revision on `main`. `validate_diagnosis` itself requires a unique operation ID
 in the report. The result must match the previous round/report, evaluated commit, agreement and
 source revision, return disposition `REPAIR`, and set `may_start_next_round: true`. Missing,
-ambiguous, AUTHOR INPUT, or mismatched context is `CONFLICT`; never label a later round as a first
-round.
+ambiguous, AUTHOR INPUT, or mismatched context is `CONFLICT` for autonomous repair; only the
+validated AUTHOR_APPROVED entry above supplies a different planning authority. Never label a later
+round as a first round.
 
 ### 4. Read the knowledge base
 
@@ -143,6 +177,11 @@ Read every row of `knowledge-base.md` by its `Kind`/`Locator`:
 - `doc-url` → fetch **only if** a fetch tool is available; else pass the URL through as a pointer.
 - `context7` (`/<org>/<project>`) → resolve with `mcp__context7__query-docs` **when that tool is
   available**; else pass through.
+
+For supervised operation mode every binding source must resolve: use the persisted verified
+captures for doc-url/context7 sources when needed. A pointer alone is not acceptance context;
+missing captures or an unresolved source is CONFLICT. This strict supervised gate does not change
+the existing manual pointer behavior above.
 
 For each row that resolved, keep the 1–10 lines most relevant to planning the work (a function
 signature, a config key, a doc sentence) for the meta-plan's Excerpt column.
@@ -179,7 +218,7 @@ doc-url/context7 rows.>
 <prd.md's "Constraints and non-goals" and "Locked decisions" sections verbatim>
 
 ## Repair guidance
-<`none — first round`, or the diagnosis's per-problem guidance quoted>
+<`none — first round`, the verified diagnosis's per-problem guidance, or author-approved planning with its decision id and exact answer>
 
 ## Planner instructions
 - Goal folder slug: `<project-slug>-r<N>`.
@@ -290,7 +329,7 @@ completion.
 **Goal folder:** <path>   **Root plan:** <path to master-plans/…>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line)
-**Repair guidance:** none — first round | <diagnosis path>
+**Repair guidance:** none — first round | <diagnosis path> | author-approved planning (<decision id>)
 **Next:** superagent:superagent-external <root plan>   (then superagent:supereval <project-dir> when the loop is DONE)
 ```
 
