@@ -1,0 +1,11 @@
+{
+  "result": "complete",
+  "root": "/private/tmp/prd-coverage-validation-20260909/vault/2026-09-09-15_18-json-preservation-r1/master-plans/2026-09-09-15_18-json-preservation-r1.md",
+  "leaf": "/private/tmp/prd-coverage-validation-20260909/vault/2026-09-09-15_18-json-preservation-r1/plans/2026-09-09-15_25-json-preservation.md",
+  "integration_commit": "a24f8c8c8f276b873d426b3dc0f994727782ec27",
+  "tree_equals_reviewed": true,
+  "closeout_commit": "2ede8ad85168c85d75a4742d5be9597ea7c7149c",
+  "local_origin_synced": true,
+  "pending_product_obligations": [],
+  "project_evaluation": "pending"
+}

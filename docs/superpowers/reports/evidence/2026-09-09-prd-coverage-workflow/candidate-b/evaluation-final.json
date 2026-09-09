@@ -1,0 +1,7 @@
+{
+  "verdict": "FAIL",
+  "report": "/private/tmp/prd-coverage-validation-20260909/candidate-b/vault/projects/2026-09-09-json-preservation/eval-reports/2026-09-09-15_49-r1.md",
+  "vault_commit": "4d7484633c46f73a7106c4cc03c2caa850661b48",
+  "evaluated_commit": "df5507166576550a4833c9bbf962419ea61f8681",
+  "judge_task": "/root/evaluator_b"
+}

@@ -1,0 +1,10 @@
+Command: timeout 60 python3 -m unittest -v test_product
+Working directory: /private/tmp/prd-coverage-validation-20260909/implementation
+Exit code: 0
+Output:
+test_malformed_json_preserves_existing_destination (test_product.JsonPreservationTest) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.008s
+
+OK

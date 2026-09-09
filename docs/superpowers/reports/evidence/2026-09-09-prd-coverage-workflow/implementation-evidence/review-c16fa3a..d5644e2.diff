@@ -1,0 +1,50 @@
+# Review package: c16fa3a1efa7b5eefb13a407ce12ffa39a280638..HEAD
+
+## Commits
+d5644e2 feat: preserve destination when JSON is invalid
+
+## Files changed
+ product.py      |  7 +++++++
+ test_product.py | 20 ++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+## Diff
+diff --git a/product.py b/product.py
+new file mode 100644
+index 0000000..bdaf6db
+--- /dev/null
++++ b/product.py
+@@ -0,0 +1,7 @@
++import json
++from pathlib import Path
++
++
++def reject_invalid_json(text: str, destination: Path) -> None:
++    """Reject malformed JSON without writing to the destination."""
++    json.loads(text)
+diff --git a/test_product.py b/test_product.py
+new file mode 100644
+index 0000000..edb7d52
+--- /dev/null
++++ b/test_product.py
+@@ -0,0 +1,20 @@
++import tempfile
++import unittest
++from pathlib import Path
++
++from product import reject_invalid_json
++
++
++class JsonPreservationTest(unittest.TestCase):
++    def test_malformed_json_preserves_existing_destination(self):
++        with tempfile.TemporaryDirectory() as directory:
++            destination = Path(directory) / "destination.bin"
++            destination.write_bytes(b"keep\x00\xff\n")
++            before = destination.read_bytes()
++            with self.assertRaises(ValueError):
++                reject_invalid_json('{"broken":', destination)
++            self.assertEqual(destination.read_bytes(), before)
++
++
++if __name__ == "__main__":
++    unittest.main()

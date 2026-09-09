@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-09T15:15:13.276719+00:00",
+  "user_message": "yes",
+  "applies_to": "v1 agreement and bounded scope presented in immediately preceding assistant final; preserved by PR #60",
+  "draft_repository_commit": "a02009896a3b0ad7a40bf35cce0a08f6ca0f3e6d",
+  "approved_sha256": {
+    "scope.md": "f37148431dc7885d59915ca6bcd8199eed089264ce126bcc1210d6da2fbe67d9",
+    "scratch/prd.md": "e61211de3dd5b3d27c4e23d196662ab6eb4a6b40d593cff1d30dfafdd8c0134f",
+    "scratch/evaluation.md": "efa7d14f80b86110a31fbd28ade59b525af916e2791179b7efc961b4b740e426",
+    "scratch/knowledge-base.md": "308a6c173de2d283f0fc4e58f3b9e0c9add37a2b14450548f726adb13c355ead",
+    "source/requirements.md": "d605d3842aa46ac89f6b62e024f4814b2633eb4b09ec14c5dce7c223a6e7d254",
+    "source/AGENTS.md": "be6801f0fc9176ff363ed9263485a4755e416607120cba47ca93340c1b9ac26a",
+    "source/.superenv": "8fbdf7cdd92c54a41caf27be24f02d6e33bb334470fd7e45c7ece8e36fe8d749"
+  },
+  "local_branch_merge_exception": true
+}

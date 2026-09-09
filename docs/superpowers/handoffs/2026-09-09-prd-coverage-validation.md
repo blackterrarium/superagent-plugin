@@ -2,7 +2,7 @@
 
 Date: 2026-09-09
 Workspace: `/Users/eugene/src/superagent-plugin`
-Status: source integrated and Codex plugin activated; bounded live check complete; full workflow and reliability validation outstanding.
+Status: source integrated and activated; bounded author-approved workflow validation complete. Reliability validation remains separate. Earlier sections below are historical; see the latest checkpoint.
 
 ## Restart request
 
@@ -85,3 +85,17 @@ The original outstanding-work list above is historical: documentation preservati
 the skipped timeout case have now been addressed. The full workflow is still awaiting
 real author approval of the concrete draft; no READY project or downstream execution is
 authorized by this checkpoint. The two existing schema mismatches remain documented.
+
+## Approved execution checkpoint — September 9
+
+The author subsequently approved v1 and bounded scope with “yes”. The actual workflow
+completed with seven child dispatches in approximately 36 minutes: positive acceptance
+PASS; existence-only negative rejected by delivery review and project evaluation despite
+both command suites passing. Separate snapshot vaults contain committed eval reports and
+completed ledgers. See [workflow report](../reports/2026-09-09-prd-coverage-workflow.md) and
+its portable evidence for revisions, limits and procedure deviations. The prior checkpoint’s
+approval-pending restriction is superseded by that specific approval and completed run.
+
+No further cohort or unattended run is authorized. Historical FAIL remains unchanged.
+The next substantial validation, if requested, needs a distinct design and budget; this
+one example does not establish reliability or operational readiness.
