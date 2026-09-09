@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import types
@@ -16,6 +17,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parent
 EVIDENCE_MODULE_PATH = SCRIPTS / "_coding_loop_evidence.py"
+TEMPLATE_PATH = SCRIPTS.parent / "templates" / "coding-loop-diagnosis.md"
 
 
 def load_evidence_module():
@@ -38,6 +40,46 @@ def validate_diagnosis(*args, **kwargs):
     if implementation is None:
         raise AssertionError("validate_diagnosis is not implemented")
     return implementation(*args, **kwargs)
+
+
+def run_git(path: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(path), *args],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.stdout.strip()
+
+
+def rendered_template(operation, eval_report):
+    replacements = {
+        "<Project title>": "Sample",
+        "<N>": str(operation["round"]),
+        "<STAMP>": "2026-09-09-14_45",
+        "<YYYY-MM-DD>": "2026-09-09",
+        "<32-character lowercase hexadecimal operation id>": operation["id"],
+        "<exact selected evaluation-report path>": eval_report,
+        "<selected code commit>": operation["code_commit"],
+        "<agreement fingerprint>": operation["agreement_revision"],
+        "<source-vault main commit>": operation["source_vault_commit"],
+        "<Resolved approved sources, selected round artifacts, and any unavailable or weak evidence.>": "All selected sources and round artifacts were available.",
+        "<comma-separated failed or missing C/J IDs, or none>": "C1",
+        "<comma-separated applicable approved AC IDs, or none>": "AC1",
+        "<observed evidence with file:line when available>": "src/parser.py:41",
+        "<evidence-grounded cause>": "The approved check is not implemented.",
+        "<high, medium, or low>": "high",
+        "<implementation defect, plan gap, PRD/evaluation defect, or execution/evidence failure>": "implementation defect",
+        "<Bounded guidance by problem ID. Carry only approved obligations; label optional suggestions nonbinding.>": "P1: implement the approved C1 behavior.",
+        "<REPAIR or AUTHOR INPUT>": "REPAIR",
+    }
+    text = TEMPLATE_PATH.read_text()
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    if "<" in text or ">" in text:
+        raise AssertionError("diagnosis template fixture has unreplaced instructions")
+    return text
 
 
 PROBE_CASES = [
@@ -206,6 +248,46 @@ class DiagnosisValidationTests(unittest.TestCase):
         self.assertTrue(result["may_start_next_round"])
         self.assertEqual([], result["unaccounted_ids"])
         self.assertEqual([], result["errors"])
+
+    def test_integrated_diagnosis_using_template_is_reconciled(self):
+        repo = self.root / "repo"
+        remote = self.root / "remote.git"
+        run_git(self.root, "init", "-q", "--bare", str(remote))
+        repo.mkdir()
+        run_git(repo, "init", "-q", "-b", "main")
+        run_git(repo, "config", "user.email", "diagnosis-test@example.invalid")
+        run_git(repo, "config", "user.name", "Diagnosis Test")
+        run_git(repo, "remote", "add", "origin", str(remote))
+        (repo / "README.md").write_text("selected code\n")
+        run_git(repo, "add", "README.md")
+        run_git(repo, "commit", "-q", "-m", "selected code")
+        selected_commit = run_git(repo, "rev-parse", "HEAD")
+        report = repo / "vault" / "projects" / "sample" / "diagnoses" / "r1.md"
+        report.parent.mkdir(parents=True)
+        operation = {
+            "id": "1" * 32,
+            "phase": "DIAGNOSING",
+            "round": 1,
+            "agreement_revision": "agreement-r1",
+            "code_commit": selected_commit,
+            "meta_plan": "vault/projects/sample/meta-plans/r1.md",
+            "goal_folder": "vault/goals/r1",
+            "report": "vault/projects/sample/diagnoses/r1.md",
+            "source_vault_commit": selected_commit,
+        }
+        eval_report = "vault/projects/sample/eval-reports/r1.md"
+        report.write_text(rendered_template(operation, eval_report))
+        run_git(repo, "add", "vault")
+        run_git(repo, "commit", "-q", "-m", "integrated diagnosis")
+        run_git(repo, "push", "-q", "-u", "origin", "main")
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertEqual(str(report.resolve()), result["artifacts"][0]["path"])
+        self.assertEqual(
+            run_git(repo, "rev-parse", "main"), result["artifacts"][0]["commit"]
+        )
 
     def test_omitted_failing_check_cannot_start_next_round(self):
         report = self.write_report(

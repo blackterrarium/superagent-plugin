@@ -1091,9 +1091,13 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
                     blob = _main_blob(artifact_repo, candidate_relative)
                     if blob is None:
                         continue
-                    identity, parse_errors = _report_identity(
-                        _decode_blob(blob, "operation report")
+                    report_text = _decode_blob(blob, "operation report")
+                    identity_parser = (
+                        _diagnosis_identity
+                        if operation["phase"] == "DIAGNOSING"
+                        else _report_identity
                     )
+                    identity, parse_errors = identity_parser(report_text)
                 except EvidenceError:
                     continue
                 if not parse_errors and _identity_matches(identity, operation):

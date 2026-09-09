@@ -43,9 +43,10 @@ evidence, and applicable approved AC rows. Old rounds may explain history but ar
 the selected round.
 
 If any required source, selected revision, evaluation result, round artifact, tool, dispatch
-receipt, or context is unavailable or contradictory, record a problem classified
-`execution/evidence failure` and choose `AUTHOR INPUT`. Do not fill missing evidence with a likely
-product cause and do not return REPAIR.
+receipt, or context is unavailable or untrustworthy, record an `execution/evidence failure` and
+choose `AUTHOR INPUT`. If the resolved approved requirements or evaluation contradict one another,
+record a `PRD/evaluation defect` and choose `AUTHOR INPUT`. Do not fill missing evidence with a
+likely product cause and do not return REPAIR.
 
 ## Operation targeting and recovery
 
@@ -142,8 +143,8 @@ Return exactly:
 **Eval report:** <exact selected report>
 **Report:** <diagnosis path>
 **Disposition:** REPAIR | AUTHOR INPUT
-**PR:** <url> (merged)
-**Commit:** <short-sha> in <vault-root>   (external vault; use instead of PR)
+**Integration commit:** <short-sha> in <target repository>
+**PR:** <url> (merged) | none (external vault)
 **Next:** REPAIR → next round may be planned | AUTHOR INPUT → wait for an author decision
 ```
 
