@@ -65,6 +65,13 @@ else
   systemctl --user disable --now "superagent-tick@$SLUG.timer" 2>/dev/null || true
   UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
   rm -rf "$UNIT_DIR/superagent-tick@$SLUG.timer.d"
+  if [[ "$PURGE" == "--purge" ]]; then
+    # Remove only install-timer's serialized environment and directive. Keep
+    # unrelated operator drop-ins and leave ordinary drain/rearm unchanged.
+    SERVICE_DROPIN="$UNIT_DIR/superagent-tick@$SLUG.service.d"
+    rm -f "$SERVICE_DROPIN/environment" "$SERVICE_DROPIN/environment.conf"
+    rmdir "$SERVICE_DROPIN" 2>/dev/null || true
+  fi
   systemctl --user daemon-reload 2>/dev/null || true
   STOPPED_DESC="superagent-tick@$SLUG.timer"
 fi

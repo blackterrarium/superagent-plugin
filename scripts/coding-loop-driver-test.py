@@ -260,16 +260,16 @@ None — command-only.
         self.assert_ok(result)
         self.assertEqual(len(self.model_invocations()), 1)
         self.assertIn('/skills/supercode/SKILL.md', str(self.model_invocations()))
-        self.assertIn(str(self.project), str(self.model_invocations()))
+        self.assertIn(str(self.project), self.model_invocations()[-1]['argv'][1])
 
     def test_gate_rereads_after_acquiring_lock(self):
         self.verified_build('DONE')
         replacement = self.root / 'replacement.md'
         d = state.read_state(self.outer); d['status'] = 'WAITING FOR META-PLAN'
         replacement.write_bytes(state._serialize_state(d))
-        mkdir = self.bin / 'mkdir'
-        mkdir.write_text('#!' + sys.executable + "\nimport os, subprocess, sys, shutil\nr=subprocess.run(['/bin/mkdir', *sys.argv[1:]])\nif r.returncode == 0 and sys.argv[-1].endswith('.lockd'): shutil.copyfile(os.environ['REPLACEMENT'], os.environ['LOOP_FILE'])\nsys.exit(r.returncode)\n")
-        mkdir.chmod(0o755)
+        python = self.bin / 'python3'
+        python.write_text('#!' + sys.executable + "\nimport os, subprocess, sys, shutil\nr=subprocess.run([" + repr(sys.executable) + ", *sys.argv[1:]])\nif r.returncode == 0 and 'acquire-lock' in sys.argv: shutil.copyfile(os.environ['REPLACEMENT'], os.environ['LOOP_FILE'])\nsys.exit(r.returncode)\n")
+        python.chmod(0o755)
         self.assert_ok(self.invoke_tick(REPLACEMENT=str(replacement)))
         self.assertEqual(self.outer.read_bytes(), replacement.read_bytes())
         self.assertEqual(self.model_invocations(), [])
@@ -340,16 +340,184 @@ None — command-only.
             self.assertEqual(conf.read_bytes(), original)
         self.assertEqual(self.logs(), [])
 
-    def test_systemd_installed_service_exec_uses_literal_registration(self):
+    def systemd_environment_contract(self, conf):
+        """Interpret only generated directive/assignment syntax, not systemd itself.
+
+        Quoting contract: systemd.exec EnvironmentFile and systemd.syntax.
+        https://github.com/systemd/systemd/blob/main/man/systemd.exec.xml
+        https://github.com/systemd/systemd/blob/main/man/systemd.syntax.xml
+        """
+        unit_dir = conf / 'systemd/user'
+        unit = (unit_dir / 'superagent-tick@.service').read_text()
+        fragments = [unit]
+        fragments += [p.read_text() for p in sorted((unit_dir / 'superagent-tick@outer.service.d').glob('*.conf'))]
+        paths = []
+        for fragment in fragments:
+            for line in fragment.splitlines():
+                if not line.startswith('EnvironmentFile='):
+                    continue
+                value = line.partition('=')[2]
+                if not value:
+                    paths.clear(); continue
+                # Installed override uses quoted C syntax; JSON shares the
+                # generated quote/backslash escapes. Then systemd specifiers.
+                value = json.loads(value) if value.startswith('"') else value
+                import re
+                value = re.sub(r'%(.)', lambda m: {'%': '%', 'i': 'outer', 'h': str(Path.home())}[m[1]], value)
+                paths.append(Path(value))
+        self.assertEqual(len(paths), 1, paths)
+        self.assertTrue(paths[0].is_relative_to(conf), f'EnvironmentFile escapes installed XDG configuration: {paths[0]}')
+        self.assertTrue(paths[0].is_file(), paths[0])
+        result = {}
+        for line in paths[0].read_text().splitlines():
+            if not line or line.startswith(('#', ';')):
+                continue
+            key, _, value = line.partition('=')
+            # Validate the documented double-quoted EnvironmentFile subset;
+            # no variable/command expansion occurs in this format.
+            self.assertTrue(value.startswith('"') and value.endswith('"'), line)
+            value = value[1:-1]
+            out = ''; index = 0
+            while index < len(value):
+                if value[index] == chr(92) and index + 1 < len(value) and value[index + 1] in ('"', chr(92), '`', '$'):
+                    index += 1
+                out += value[index]; index += 1
+            result[key] = out
+        return unit, result
+
+    def test_systemd_installed_environment_path_and_literal_contract(self):
+        self.env['XDG_CONFIG_HOME'] = str(self.root / 'config with spaces %h \\literal "quotes"')
+        # Backslashes in actual runtime values exercise EnvironmentFile's
+        # escaping, separately from the directive's path escaping.
+        moved = self.project.with_name('project \\literal $dollar `backticks` "quotes"')
+        self.project.rename(moved); self.project = moved
         self.assert_ok(self.launch(FAKE_OS='Linux'))
         conf = Path(self.env['XDG_CONFIG_HOME'])
-        registration = state._registration(conf / 'superagent/outer.env')
-        unit = (conf / 'systemd/user/superagent-tick@.service').read_text()
+        expected = state._registration(conf / 'superagent/outer.env')
+        unit, registration = self.systemd_environment_contract(conf)
+        self.assertEqual(registration, expected)
+        self.assertEqual(registration.get('XDG_CONFIG_HOME'), str(conf), 'detached tick must retain the installed registry root')
         command = next(line.split('=', 1)[1] for line in unit.splitlines() if line.startswith('ExecStart='))
         import shlex
+        # This executes the rendered ExecStart with the independently decoded
+        # contract environment. It is NOT real systemd daemon/parser evidence.
         self.assert_ok(subprocess.run(shlex.split(command), env=dict(self.env, **registration), text=True, capture_output=True))
         self.assertEqual(len(self.model_invocations()), 1)
-        self.assertIn('/skills/supercode/SKILL.md', str(self.model_invocations()))
+        self.assertIn(str(self.project), self.model_invocations()[-1]['argv'][1])
+
+    def test_two_bash_stale_contenders_cannot_replace_live_owner(self):
+        import time
+        lock = self.root / '.race.lockd'
+        lock.mkdir(); (lock / 'owner').write_text('999999999')
+        # Force the old rm/recreate implementation to cache the dead owner in
+        # BOTH Bash contenders. A reacquires first; B resumes its stale rm only
+        # after A has published success and remains alive. New serialized code
+        # need not call rm; simultaneous contenders still test actual ownership.
+        rm = self.bin / 'rm'
+        rm.write_text('#!' + sys.executable + "\n" + r"""import os, pathlib, subprocess, sys, time
+root = pathlib.Path(os.environ['RACE_ROOT']); role = os.environ['RACE_ROLE']
+if sys.argv[-1] == os.environ['RACE_LOCK']:
+    (root / ('rm-' + role)).touch()
+    deadline = time.monotonic() + 5
+    while not all((root / ('rm-' + x)).exists() for x in ('A', 'B')):
+        if time.monotonic() > deadline: sys.exit(90)
+        time.sleep(.01)
+    if role == 'B':
+        while not (root / 'result-A').exists():
+            if time.monotonic() > deadline: sys.exit(91)
+            time.sleep(.01)
+sys.exit(subprocess.run(['/bin/rm', *sys.argv[1:]]).returncode)
+""")
+        rm.chmod(0o755)
+        script = 'source "$1"; if superagent_acquire_gate_lock "$RACE_LOCK"; then printf "acquired %s\n" "$$" > "$RACE_ROOT/result-$RACE_ROLE"; read -r release; else printf "busy\n" > "$RACE_ROOT/result-$RACE_ROLE"; fi'
+        children = [subprocess.Popen(['/bin/bash', '-c', script, 'contender', str(SCRIPTS / '_common.sh')],
+                    env=dict(self.env, RACE_ROOT=str(self.root), RACE_LOCK=str(lock), RACE_ROLE=role),
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for role in ('A', 'B')]
+        try:
+            deadline = time.monotonic() + 8
+            while not all((self.root / ('result-' + role)).exists() for role in ('A', 'B')):
+                if time.monotonic() > deadline: self.fail('contenders did not finish acquisition')
+                time.sleep(.01)
+            results = [(self.root / ('result-' + role)).read_text().strip() for role in ('A', 'B')]
+            winners = [x.split()[1] for x in results if x.startswith('acquired ')]
+            self.assertEqual(len(winners), 1, results)
+            self.assertEqual((lock / 'owner').read_text().strip(), winners[0])
+            os.kill(int(winners[0]), 0)
+        finally:
+            for child in children:
+                if child.poll() is None: child.terminate()
+                child.communicate(timeout=5)
+
+    def test_killed_reclaimer_releases_persistent_guard(self):
+        import select
+        lock = self.root / '.crash.lockd'
+        lock.mkdir(); (lock / 'owner').write_text('999999999')
+        guard = lock.with_name(lock.name + '.reclaim')
+        holder = subprocess.Popen([sys.executable, '-c',
+            'import fcntl, sys; f=open(sys.argv[1], "a+b"); fcntl.flock(f, fcntl.LOCK_EX); print("locked", flush=True); sys.stdin.read()', str(guard)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertTrue(select.select([holder.stdout], [], [], 5)[0], 'reclaimer did not obtain guard')
+            self.assertEqual(holder.stdout.readline().strip(), 'locked')
+            inode = guard.stat().st_ino
+            script = 'source "$1"; superagent_acquire_gate_lock "$2"'
+            args = ['/bin/bash', '-c', script, 'lock', str(SCRIPTS / '_common.sh'), str(lock)]
+            blocked = subprocess.run(args, env=self.env, capture_output=True, text=True)
+            self.assertEqual(blocked.returncode, 1, blocked.stderr)
+            self.assertEqual((lock / 'owner').read_text(), '999999999')
+            holder.kill(); holder.communicate(timeout=5)
+            self.assert_ok(subprocess.run(args, env=self.env, capture_output=True, text=True))
+            self.assertNotEqual((lock / 'owner').read_text().strip(), '999999999')
+            self.assertEqual(guard.stat().st_ino, inode, 'persistent guard inode must never be replaced')
+        finally:
+            if holder.poll() is None: holder.kill()
+            holder.communicate(timeout=5)
+
+    def test_killed_acquirer_before_owner_publication_recovers(self):
+        lock = self.root / '.publication.lockd'
+        code = """import os, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import _coding_loop_state as state
+lock = Path(sys.argv[2]); mkdir = Path.mkdir
+def interrupted_mkdir(path, *args, **kwargs):
+    mkdir(path, *args, **kwargs)
+    if path == lock: os._exit(23)
+Path.mkdir = interrupted_mkdir
+state.acquire_gate_lock(lock, os.getpid())
+"""
+        crash = subprocess.run([sys.executable, '-c', code, str(SCRIPTS), str(lock)], capture_output=True, text=True)
+        self.assertEqual(crash.returncode, 23, crash.stderr)
+        self.assertTrue(lock.exists()); self.assertFalse((lock / 'owner').exists())
+        script = 'source "$1"; superagent_acquire_gate_lock "$2"'
+        recovered = subprocess.run(['/bin/bash', '-c', script, 'lock', str(SCRIPTS / '_common.sh'), str(lock)],
+            env=dict(self.env, SUPER_LOCK_STEAL_MIN='0'), capture_output=True, text=True)
+        self.assert_ok(recovered)
+        self.assertTrue((lock / 'owner').read_text().strip().isdigit())
+
+    def test_systemd_purge_removes_generated_environment_only(self):
+        self.assert_ok(self.launch(FAKE_OS='Linux'))
+        conf = Path(self.env['XDG_CONFIG_HOME'])
+        service = conf / 'systemd/user/superagent-tick@outer.service.d'
+        user_dropin = service / 'operator.conf'
+        user_dropin.write_text('[Service]\nNice=1\n')
+        loop = next(self.outer.parent.glob('*.md'))
+        saved = loop.read_bytes()
+        guard = loop.parent / ('.' + loop.name + '.lockd.reclaim')
+        guard_inode = guard.stat().st_ino
+        self.assert_ok(self.invoke('uninstall-timer.sh', 'outer', FAKE_OS='Linux'))
+        self.assertTrue((service / 'environment').exists())
+        self.assertTrue((service / 'environment.conf').exists())
+        self.assertTrue((conf / 'superagent/outer.env').exists())
+        self.assert_ok(self.launch(FAKE_OS='Linux'))
+        self.assert_ok(self.invoke('uninstall-timer.sh', 'outer', '--purge', FAKE_OS='Linux'))
+        self.assertFalse((service / 'environment').exists())
+        self.assertFalse((service / 'environment.conf').exists())
+        self.assertFalse((conf / 'superagent/outer.env').exists())
+        self.assertEqual(user_dropin.read_text(), '[Service]\nNice=1\n')
+        self.assertEqual(loop.read_bytes(), saved)
+        self.assertEqual(guard.stat().st_ino, guard_inode)
+        self.assertEqual(self.model_invocations(), [])
 
     def test_ledger_ahead_of_saved_state_refuses_reset(self):
         self.assert_ok(self.launch())

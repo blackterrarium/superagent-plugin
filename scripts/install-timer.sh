@@ -71,6 +71,8 @@ mkdir -p "$CONF_DIR"
 
 {
   echo "REPO=$REPO"
+  # Detached ticks must discover inner/outer registrations in the same root.
+  echo "XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}"
   # The plugin's own scripts/ dir — recorded at install time because the systemd
   # unit runs detached from any Claude Code session (no $CLAUDE_PLUGIN_ROOT in its
   # environment), and superagent-tick.sh lives in the plugin, not in $REPO.
@@ -147,6 +149,17 @@ else
   mkdir -p "$UNIT_DIR"
   install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.service" "$UNIT_DIR/superagent-tick@.service"
   install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.timer"   "$UNIT_DIR/superagent-tick@.timer"
+
+  # Override the template's default HOME location for this instance. A
+  # separate serialized view preserves literal registry values (notably \)
+  # without changing the format consumed by existing lifecycle scripts.
+  SERVICE_DROPIN="$UNIT_DIR/superagent-tick@$SLUG.service.d"
+  mkdir -p "$SERVICE_DROPIN"
+  superagent_systemd_environment "$CONF_DIR/$SLUG.env" >"$SERVICE_DROPIN/environment"
+  {
+    printf '[Service]\nEnvironmentFile=\nEnvironmentFile='
+    superagent_systemd_path "$SERVICE_DROPIN/environment"
+  } >"$SERVICE_DROPIN/environment.conf"
 
   # Per-instance interval override.
   DROPIN_DIR="$UNIT_DIR/superagent-tick@$SLUG.timer.d"

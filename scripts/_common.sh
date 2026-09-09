@@ -535,24 +535,39 @@ superagent_check_registration() {
   }
 }
 
-# L3's owner/acquired format, shared with model-owned locks and wrapper cleanup.
-# Never steal a live peer here: a cheap parked gate can safely retry next tick.
+# Project-only L3 acquisition. Preserve the shared main owner/acquired format,
+# but serialize reclamation AND publication through a persistent advisory-lock
+# inode; never unlink that guard. Kernel release on process death avoids a
+# stranded guard, and live peers are never removed on a cached observation.
+# Legacy goal launch/tick does not call this Python-requiring helper.
 superagent_acquire_gate_lock() {
-  local dir="${1:?lock directory}" owner acquired_epoch steal_min
-  if ! mkdir "$dir" 2>/dev/null; then
-    owner="$(superagent_lock_owner_state "$dir")"
-    case "$owner" in
-      dead\ *) ;;
-      none|malformed)
-        acquired_epoch="$(superagent_epoch_from_iso "$(cat "$dir/acquired" 2>/dev/null || true)")"
-        steal_min="${SUPER_LOCK_STEAL_MIN:-90}"
-        [[ "$steal_min" =~ ^[0-9]+$ ]] || steal_min=90
-        [[ -n "$acquired_epoch" && $(( $(date -u +%s) - acquired_epoch )) -gt $((10#$steal_min * 60)) ]] || return 1
-        ;;
-      *) return 1 ;;
-    esac
-    rm -rf "$dir"; mkdir "$dir" 2>/dev/null || return 1
-  fi
-  printf '%s\n' "${SUPERAGENT_TICK_PID:-$$}" >"$dir/owner"
-  date -u +%Y-%m-%dT%H:%M:%SZ >"$dir/acquired"
+  local dir="${1:?lock directory}" helper
+  helper="$(dirname "${BASH_SOURCE[0]}")/_coding_loop_state.py"
+  python3 "$helper" acquire-lock "$dir" --owner "${SUPERAGENT_TICK_PID:-$$}" --steal-min "${SUPER_LOCK_STEAL_MIN:-90}"
+}
+
+# systemd.exec EnvironmentFile supports double-quoted assignment values with
+# POSIX double-quote escapes. Keep the registry literal for lifecycle readers;
+# write this serialized adapter view separately from the *.env registry scan.
+superagent_systemd_environment() {
+  local registry="${1:?registry}" line key value
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" != \#* ]] || continue
+    key="${line%%=*}"; value="${line#*=}"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\$/\\\$}"
+    value="${value//\`/\\\`}"
+    printf '%s="%s"\n' "$key" "$value"
+  done <"$registry"
+}
+
+# A quoted systemd unit path: C-style quote/backslash escaping followed by
+# literal percent escaping, so config names never become unit specifiers.
+superagent_systemd_path() {
+  local value="${1:?path}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//%/%%}"
+  printf '"%s"\n' "$value"
 }

@@ -470,6 +470,70 @@ def _load_json(path: Path) -> dict:
     return value
 
 
+def acquire_gate_lock(lock_dir: Path, owner: int, steal_min: str = '90') -> bool:
+    """Acquire project L3 under a crash-released, persistent reclamation guard.
+
+    The sibling <lock-dir>.reclaim is an advisory-lock inode, never unlinked.
+    Its fcntl lock covers fresh mkdir too, plus stale re-read/removal and owner
+    publication. A delayed contender therefore cannot remove a new live owner.
+    Only project callers use this helper; legacy goal ticks remain Python-free.
+    """
+    import datetime
+    import fcntl
+    import shutil
+
+    if owner <= 0:
+        raise StateError('lock owner must be a positive process ID')
+    lock_dir = Path(lock_dir)
+    guard = lock_dir.with_name(lock_dir.name + '.reclaim')
+    descriptor = os.open(guard, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(descriptor, 'a+b') as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        try:
+            lock_dir.mkdir()
+        except FileExistsError:
+            try:
+                previous = (lock_dir / 'owner').read_text().strip()
+            except (OSError, UnicodeError):
+                previous = ''
+            stale = False
+            if re.fullmatch(r'[0-9]+', previous):
+                try:
+                    os.kill(int(previous), 0)
+                except ProcessLookupError:
+                    stale = True
+                except (PermissionError, OverflowError):
+                    return False
+                else:
+                    return False
+            if not stale:
+                try:
+                    try:
+                        acquired = datetime.datetime.fromisoformat((lock_dir / 'acquired').read_text().strip().replace('Z', '+00:00'))
+                        if acquired.tzinfo is None:
+                            return False
+                    except FileNotFoundError:
+                        # A killed acquirer may have created the directory but
+                        # not published either file yet. Age this incomplete
+                        # acquisition from its directory, never from a cached
+                        # pre-guard observation.
+                        acquired = datetime.datetime.fromtimestamp(lock_dir.stat().st_mtime, datetime.timezone.utc)
+                    minutes = int(steal_min) if re.fullmatch(r'[0-9]+', steal_min) else 90
+                    age = (datetime.datetime.now(datetime.timezone.utc) - acquired).total_seconds()
+                    if age <= minutes * 60:
+                        return False
+                except (OSError, ValueError, UnicodeError):
+                    return False
+            shutil.rmtree(lock_dir)
+            lock_dir.mkdir()
+        (lock_dir / 'owner').write_text(str(owner) + '\n')
+        (lock_dir / 'acquired').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '\n')
+        return True
+
+
 def _registration(path: Path) -> dict:
     """Read literal scheduler EnvironmentFile values; never evaluate shell code."""
     result = {}
@@ -703,6 +767,10 @@ def main(argv: list[str] | None = None) -> int:
     replace_parser.add_argument("state", type=Path)
     replace_parser.add_argument("--expected", required=True, type=Path)
     replace_parser.add_argument("--updated", required=True, type=Path)
+    lock_parser = subparsers.add_parser('acquire-lock')
+    lock_parser.add_argument('lock_dir', type=Path)
+    lock_parser.add_argument('--owner', type=int, required=True)
+    lock_parser.add_argument('--steal-min', default='90')
     prepare_parser = subparsers.add_parser('prepare-project')
     for name in ('repo', 'vault', 'project', 'conf'):
         prepare_parser.add_argument('--' + name, type=Path, required=True)
@@ -721,6 +789,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        if args.command == 'acquire-lock':
+            return 0 if acquire_gate_lock(args.lock_dir, args.owner, args.steal_min) else 1
         if args.command == "read":
             json.dump(read_state(args.state), sys.stdout, sort_keys=True)
             sys.stdout.write("\n")
