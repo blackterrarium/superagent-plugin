@@ -605,6 +605,8 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         manifest = self.manifest()
         for invalid, message in (
             (manifest + manifest, "duplicate"),
+            ([{key: value for key, value in manifest[0].items() if key != "path"}], "missing"),
+            ([{key: value for key, value in manifest[0].items() if key != "source_revision"}], "missing"),
             ([dict(manifest[0], path=str(self.root / "missing.md"))], "cannot read"),
             ([dict(manifest[0], sha256="0" * 64)], "digest"),
         ):
@@ -662,6 +664,40 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual("FAIL", duplicate["verdict"])
         self.assertTrue(any("duplicate" in item for item in duplicate["errors"]))
 
+    def test_malformed_or_additional_optional_evaluation_tables_are_rejected(self):
+        report = self.root / "report.md"
+        report.write_text(self.report_text(include_judgment=False, include_ac=False))
+        malformed = self.evaluation_text().replace(
+            "|---|---|---|---|\n| J1 |",
+            "|--|---|---|---|\n| J1 |",
+        ).replace(
+            "|---|---|---|---|---|\n| AC1 |",
+            "|---|---|--|---|---|\n| AC1 |",
+        )
+        self.evaluation.write_text(malformed)
+        result = evidence.validate_evaluation(
+            report, self.evaluation, self.expected_identity()
+        )
+        self.assertEqual("FAIL", result["verdict"])
+        self.assertTrue(any("malformed" in item for item in result["errors"]))
+
+        extra_table = (
+            "\n| Id | Objective | Criteria | Evidence to inspect |\n"
+            "|---|---|---|---|\n"
+            "| J2 | second | required | other.py |\n"
+        )
+        self.evaluation.write_text(
+            self.evaluation_text().replace(
+                "\n## Acceptance checklist", extra_table + "\n## Acceptance checklist"
+            )
+        )
+        report.write_text(self.report_text())
+        result = evidence.validate_evaluation(
+            report, self.evaluation, self.expected_identity()
+        )
+        self.assertEqual("FAIL", result["verdict"])
+        self.assertTrue(any("multiple" in item for item in result["errors"]))
+
     def test_command_only_legacy_report_can_pass_without_judgments(self):
         self.evaluation.write_text(self.evaluation_text(judged=False))
         report = self.root / "report.md"
@@ -672,6 +708,22 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         result = evidence.validate_evaluation(report, self.evaluation, expected)
         self.assertEqual("PASS", result["verdict"])
         self.assertEqual([], result["missing_ids"])
+
+    def test_blocking_evaluation_warning_prevents_command_only_pass(self):
+        self.evaluation.write_text(self.evaluation_text(judged=False))
+        report = self.root / "report.md"
+        report.write_text(
+            self.report_text(include_judgment=False, include_ac=False).replace(
+                "**Warnings:** none", "**Warnings:** acceptance context unavailable"
+            )
+        )
+        result = evidence.validate_evaluation(
+            report, self.evaluation, {"round": 1, "code_commit": "a" * 40}
+        )
+        self.assertEqual("FAIL", result["verdict"])
+        self.assertTrue(
+            any("acceptance context unavailable" in item for item in result["errors"])
+        )
 
     def test_nonfinal_report_is_not_accepted(self):
         report = self.root / "report.md"
@@ -832,6 +884,19 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual("CONFLICT", result["outcome"])
         self.assertIn("main", result["reason"])
 
+    def test_ledger_report_link_must_match_the_exact_artifact(self):
+        repo, vault, project, _report, operation = self.make_reconcile_fixture()
+        prd = project / "prd.md"
+        prd.write_text(
+            prd.read_text().replace("eval-reports/r1]]", "eval-reports/r10]]")
+        )
+        run_git(repo, "add", str(prd.relative_to(repo)))
+        run_git(repo, "commit", "-q", "-m", "wrong ledger link")
+        run_git(repo, "push", "-q")
+        result = evidence.reconcile_operation(repo, vault, operation)
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("does not link", result["reason"])
+
     def test_duplicate_matching_reports_conflict(self):
         repo, vault, project, report, operation = self.make_reconcile_fixture()
         duplicate = project / "eval-reports" / "duplicate.md"
@@ -870,6 +935,97 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         result = evidence.reconcile_operation(repo, vault, operation)
         self.assertEqual("CONFLICT", result["outcome"])
         self.assertIn("configured remote ref", result["reason"])
+
+    def test_meta_plan_committed_only_on_unmerged_branch_is_not_integrated(self):
+        repo = self.root / "meta-repo"
+        remote = self.root / "meta-remote.git"
+        run_git(self.root, "init", "-q", "--bare", str(remote))
+        repo.mkdir()
+        run_git(repo, "init", "-q", "-b", "main")
+        run_git(repo, "config", "user.email", "evidence-test@example.invalid")
+        run_git(repo, "config", "user.name", "Evidence Test")
+        run_git(repo, "remote", "add", "origin", str(remote))
+        master = repo / "vault" / "goals" / "round-1" / "master-plans" / "root.md"
+        master.parent.mkdir(parents=True)
+        master.write_text(
+            "# Other operation's goal\n"
+            "**Status:** READY · **Round:** 1 · **Operation:** "
+            + "9" * 32
+            + " · **Agreement revision:** agreement-r1\n"
+            "**Related:** [[vault/projects/sample/meta-plans/r1]]\n"
+        )
+        run_git(repo, "add", "vault")
+        run_git(repo, "commit", "-q", "-m", "unrelated goal")
+        run_git(repo, "push", "-q", "-u", "origin", "main")
+        source_commit = run_git(repo, "rev-parse", "main")
+        operation = {
+            "id": "1" * 32,
+            "phase": "META-PLANNING",
+            "round": 1,
+            "agreement_revision": "agreement-r1",
+            "code_commit": "",
+            "meta_plan": "vault/projects/sample/meta-plans/r1.md",
+            "goal_folder": "vault/goals/round-1",
+            "report": "",
+            "source_vault_commit": source_commit,
+        }
+        run_git(repo, "switch", "-q", "-c", "unmerged-meta")
+        master.write_text(
+            "# Round 1 goal\n"
+            "**Status:** READY · **Round:** 1 · **Operation:** "
+            + operation["id"]
+            + " · **Agreement revision:** agreement-r1 · **Source vault commit:** "
+            + source_commit
+            + "\n"
+            "**Related:** [[vault/projects/sample/meta-plans/r1]]\n"
+        )
+        run_git(repo, "add", str(master.relative_to(repo)))
+        run_git(repo, "commit", "-q", "-m", "unmerged matching goal")
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("main", result["reason"])
+
+    def test_meta_plan_with_matching_main_provenance_is_integrated(self):
+        repo = self.root / "integrated-meta-repo"
+        remote = self.root / "integrated-meta-remote.git"
+        run_git(self.root, "init", "-q", "--bare", str(remote))
+        repo.mkdir()
+        run_git(repo, "init", "-q", "-b", "main")
+        run_git(repo, "config", "user.email", "evidence-test@example.invalid")
+        run_git(repo, "config", "user.name", "Evidence Test")
+        run_git(repo, "remote", "add", "origin", str(remote))
+        (repo / "README.md").write_text("agreement source\n")
+        run_git(repo, "add", "README.md")
+        run_git(repo, "commit", "-q", "-m", "agreement")
+        source_commit = run_git(repo, "rev-parse", "main")
+        operation = {
+            "id": "1" * 32,
+            "phase": "META-PLANNING",
+            "round": 1,
+            "agreement_revision": "agreement-r1",
+            "code_commit": "",
+            "meta_plan": "vault/projects/sample/meta-plans/r1.md",
+            "goal_folder": "vault/goals/round-1",
+            "report": "",
+            "source_vault_commit": source_commit,
+        }
+        master = repo / "vault" / "goals" / "round-1" / "master-plans" / "root.md"
+        master.parent.mkdir(parents=True)
+        master.write_text(
+            "# Round 1 goal\n"
+            "**Status:** READY · **Round:** 1 · **Operation:** "
+            + operation["id"]
+            + " · **Agreement revision:** agreement-r1 · **Source vault commit:** "
+            + source_commit
+            + "\n"
+            "**Related:** [[vault/projects/sample/meta-plans/r1]]\n"
+        )
+        run_git(repo, "add", "vault")
+        run_git(repo, "commit", "-q", "-m", "integrated goal")
+        run_git(repo, "push", "-q", "-u", "origin", "main")
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertEqual(str(master.resolve()), result["artifacts"][0]["path"])
 
     def test_cli_subcommands_accept_json_inputs(self):
         manifest_path = self.root / "manifest.json"

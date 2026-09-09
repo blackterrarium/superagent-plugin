@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import posixpath
 import re
 import subprocess
 import sys
@@ -180,7 +181,7 @@ def _split_markdown_row(line: str) -> list[str]:
     return cells
 
 
-def _tables(section: str | None) -> list[tuple[list[str], list[list[str]]]]:
+def _table_groups(section: str | None) -> list[list[str]]:
     if section is None:
         return []
     groups: list[list[str]] = []
@@ -193,6 +194,11 @@ def _tables(section: str | None) -> list[tuple[list[str], list[list[str]]]]:
             current = []
     if current:
         groups.append(current)
+    return groups
+
+
+def _tables(section: str | None) -> list[tuple[list[str], list[list[str]]]]:
+    groups = _table_groups(section)
 
     parsed = []
     for group in groups:
@@ -206,6 +212,23 @@ def _tables(section: str | None) -> list[tuple[list[str], list[list[str]]]]:
     return parsed
 
 
+def _table_errors(section: str | None, label: str) -> list[str]:
+    errors = []
+    for group in _table_groups(section):
+        if len(group) < 2:
+            errors.append(f"malformed {label} table")
+            continue
+        header = _split_markdown_row(group[0])
+        separator = _split_markdown_row(group[1])
+        if (
+            not separator
+            or len(separator) != len(header)
+            or not all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator)
+        ):
+            errors.append(f"malformed {label} table separator")
+    return errors
+
+
 def _evaluation_ids(text: str) -> tuple[dict[str, list[str]], list[str]]:
     found = {"C": [], "J": [], "AC": []}
     errors = []
@@ -215,26 +238,37 @@ def _evaluation_ids(text: str) -> tuple[dict[str, list[str]], list[str]]:
         "AC": "Acceptance checklist",
     }
     for prefix, section_name in sections.items():
-        tables = _tables(_section(text, section_name))
-        if not tables:
+        section = _section(text, section_name)
+        if section is None:
             if prefix == "C":
                 errors.append("evaluation is missing the Command checks table")
             continue
-        header, rows = tables[0]
-        if not header or header[0] != "Id":
-            errors.append(f"evaluation {section_name} table has no Id column")
+        if section.strip().lower() == "none":
+            if prefix == "C":
+                errors.append("evaluation Command checks cannot be none")
             continue
-        for row in rows:
-            if not row or not row[0]:
+        errors.extend(_table_errors(section, f"evaluation {section_name}"))
+        tables = _tables(section)
+        if not tables:
+            errors.append(f"evaluation {section_name} has no valid table")
+            continue
+        if len(tables) > 1:
+            errors.append(f"evaluation {section_name} has multiple tables")
+        for header, rows in tables:
+            if not header or header[0] != "Id":
+                errors.append(f"evaluation {section_name} table has no Id column")
                 continue
-            identifier = row[0]
-            if not re.fullmatch(rf"{prefix}[1-9][0-9]*", identifier):
-                errors.append(f"invalid {prefix} id in evaluation: {identifier}")
-                continue
-            if identifier in found[prefix]:
-                errors.append(f"duplicate evaluation id: {identifier}")
-                continue
-            found[prefix].append(identifier)
+            for row in rows:
+                if not row or not row[0]:
+                    continue
+                identifier = row[0]
+                if not re.fullmatch(rf"{prefix}[1-9][0-9]*", identifier):
+                    errors.append(f"invalid {prefix} id in evaluation: {identifier}")
+                    continue
+                if identifier in found[prefix]:
+                    errors.append(f"duplicate evaluation id: {identifier}")
+                    continue
+                found[prefix].append(identifier)
     return found, errors
 
 
@@ -246,12 +280,21 @@ def _report_results(text: str) -> tuple[dict[str, dict[str, str]], list[str]]:
         "J": "Judged objectives",
     }
     for section_prefix, section_name in sections.items():
-        for header, rows in _tables(_section(text, section_name)):
+        section = _section(text, section_name)
+        if section is None:
+            continue
+        if section.strip().lower() == "none":
+            if section_prefix == "C":
+                errors.append("report Command checks cannot be none")
+            continue
+        errors.extend(_table_errors(section, f"report {section_name}"))
+        for header, rows in _tables(section):
             if not header:
                 continue
             first = header[0]
             prefix = "AC" if first == "AC" else section_prefix if first == "Id" else ""
             if not prefix:
+                errors.append(f"report {section_name} has an unrecognized table")
                 continue
             try:
                 result_index = header.index("Result")
@@ -387,6 +430,20 @@ def validate_evaluation(report: Path, evaluation: Path, expected: dict) -> dict:
     declared = verdicts[0] if len(verdicts) == 1 else ""
     if len(verdicts) != 1:
         errors.append("report must declare exactly one PASS or FAIL verdict")
+    warnings = _single_label(verdict_section, "Warnings", errors)
+    if not warnings:
+        errors.append("report is missing warnings")
+    else:
+        warning_text = warnings.lower()
+        blocking_warnings = (
+            "setup failed",
+            "evaluator unavailable",
+            "acceptance context unavailable",
+            "missing judged",
+        )
+        for warning in blocking_warnings:
+            if warning in warning_text:
+                errors.append(f"blocking warning: {warning}")
     checks_pass = not errors and not missing_ids and not failing_ids
     computed = "PASS" if checks_pass else "FAIL"
     if declared and declared != computed:
@@ -532,6 +589,36 @@ def _decode_blob(data: bytes, label: str) -> str:
         raise EvidenceError(f"{label} on main is not valid UTF-8") from exc
 
 
+def _normalize_document_locator(locator: str) -> str:
+    value = locator.strip()
+    if value.endswith(".md"):
+        value = value[:-3]
+    if value.startswith("/"):
+        return Path(value).resolve().as_posix()
+    return posixpath.normpath(value)
+
+
+def _meta_plan_matches(text: str, operation: dict) -> bool:
+    identity, errors = _report_identity(text)
+    if errors:
+        return False
+    required = {
+        "status": "READY",
+        "round": operation["round"],
+        "agreement_revision": operation["agreement_revision"],
+        "operation_id": operation["id"],
+        "source_vault_commit": operation["source_vault_commit"],
+    }
+    if any(identity.get(field) != expected for field, expected in required.items()):
+        return False
+    expected_meta_plan = _normalize_document_locator(operation["meta_plan"])
+    related = re.findall(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", text)
+    return any(
+        _normalize_document_locator(locator) == expected_meta_plan
+        for locator in related
+    )
+
+
 def _identity_matches(identity: dict[str, object], operation: dict) -> bool:
     if identity.get("status") != "FINAL":
         return False
@@ -580,7 +667,21 @@ def _ledger_error(
     if len(matches) != 1:
         return f"project iteration ledger has {len(matches)} rows for round {round_number}"
     row = matches[0]
-    if report_index >= len(row) or report.stem not in row[report_index]:
+    if report_index >= len(row):
+        return "project iteration ledger does not link the report"
+    link = re.fullmatch(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", row[report_index])
+    if link is None:
+        return "project iteration ledger does not link the report"
+    target = link.group(1).strip()
+    if target.endswith(".md"):
+        target = target[:-3]
+    if target.startswith("/"):
+        expected_target = report.with_suffix("").as_posix()
+        normalized_target = Path(target).resolve().as_posix()
+    else:
+        expected_target = report.relative_to(git_root).with_suffix("").as_posix()
+        normalized_target = posixpath.normpath(target)
+    if normalized_target != posixpath.normpath(expected_target):
         return "project iteration ledger does not link the report"
     if verdict_index >= len(row) or row[verdict_index] != verdict:
         return "project iteration ledger verdict disagrees with the report"
@@ -660,20 +761,45 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
         )
         artifact = _resolve_artifact(repo_root, vault_root, locator)
         if operation["phase"] == "META-PLANNING":
-            if not artifact.exists():
-                return {"outcome": "ABSENT", "artifacts": [], "reason": "recorded artifact is absent"}
-            if not artifact.is_dir():
-                return {"outcome": "CONFLICT", "artifacts": [], "reason": "goal artifact is not a directory"}
-            candidates = list((artifact / "master-plans").glob("*.md"))
+            try:
+                relative_folder = artifact.relative_to(artifact_repo).as_posix()
+            except ValueError:
+                return {"outcome": "CONFLICT", "artifacts": [], "reason": "recorded goal is outside its Git repository"}
+            dirty = _git_text(
+                artifact_repo, "status", "--porcelain", "--", relative_folder
+            )
+            if dirty:
+                return {"outcome": "CONFLICT", "artifacts": [], "reason": "goal output has uncommitted or untracked changes"}
+            relative_master_plans = f"{relative_folder}/master-plans"
+            integrated_paths = _git_text(
+                artifact_repo,
+                "ls-tree",
+                "-r",
+                "--name-only",
+                "refs/heads/main",
+                "--",
+                relative_master_plans,
+            ).splitlines()
             matching = []
-            for candidate in candidates:
-                text = _decode(candidate, "goal master plan")
-                identity, _ = _report_identity(text)
-                if identity["round"] == operation["round"] and Path(operation["meta_plan"]).stem in text:
-                    matching.append(candidate)
+            for candidate_relative in integrated_paths:
+                candidate_path = Path(candidate_relative)
+                if (
+                    candidate_path.parent.as_posix() != relative_master_plans
+                    or candidate_path.suffix != ".md"
+                ):
+                    continue
+                blob = _main_blob(artifact_repo, candidate_relative)
+                if blob is None:
+                    continue
+                if _meta_plan_matches(
+                    _decode_blob(blob, "goal master plan"), operation
+                ):
+                    matching.append((artifact_repo / candidate_relative).resolve())
             if len(matching) != 1:
+                if not integrated_paths and not artifact.exists():
+                    return {"outcome": "ABSENT", "artifacts": [], "reason": "recorded artifact is absent"}
                 noun = "no" if not matching else "multiple"
-                return {"outcome": "CONFLICT", "artifacts": [], "reason": f"{noun} matching goal master plans"}
+                return {"outcome": "CONFLICT", "artifacts": [], "reason": f"{noun} matching goal master plans on main"}
             artifact = matching[0]
         else:
             try:
