@@ -898,6 +898,7 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         missing_directives=False,
         mismatched_directives=False,
         missing_scaffold=None,
+        confirmation="auto-confirmed (SUPER_GOAL_AUTOCONFIRM=true, --autoconfirm) on 2026-09-09",
     ):
         goal = repo / operation["goal_folder"]
         master = goal / "master-plans" / "root.md"
@@ -915,7 +916,7 @@ class CodingLoopEvidenceTests(unittest.TestCase):
             directives.write_text(
                 "# Goal Directives\n"
                 "**Source:** [[vault/projects/sample/meta-plans/frozen-r1]]\n"
-                "**Confirmation:** auto-confirmed\n"
+                f"**Confirmation:** {confirmation}\n"
                 "**Operation:** "
                 + (("7" * 32) if mismatched_directives else (operation_id or operation["id"]))
                 + " · **Round:** 1 · **Agreement revision:** agreement-r1"
@@ -1002,6 +1003,42 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertTrue(result["goal_recoverable"])
         self.assertFalse(result["worker_complete"])
         self.assertIn("reports", result["completion_reason"])
+
+    def assert_confirmation_is_not_approval(self, confirmation):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, confirmation=confirmation)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("confirmation", result["completion_reason"].lower())
+
+    def test_pending_confirmation_is_not_approval(self):
+        self.assert_confirmation_is_not_approval("pending")
+
+    def test_unsupported_confirmation_is_not_approval(self):
+        self.assert_confirmation_is_not_approval("operator said yes")
+
+    def test_invalid_confirmation_date_is_not_approval(self):
+        self.assert_confirmation_is_not_approval("user-confirmed on 2026-99-99")
+
+    def test_human_confirmed_goal_scaffold_is_complete(self):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(
+            repo,
+            operation,
+            confirmation="user-confirmed on 2026-09-09",
+        )
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertTrue(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
 
     def test_conflicting_goal_identity_is_not_reused(self):
         repo, project, operation = self.make_meta_worker_fixture()
@@ -1323,6 +1360,15 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         skill = (SCRIPTS.parent / "skills" / "supermeta" / "SKILL.md").read_text()
         self.assertIn("validate_diagnosis(", skill)
         self.assertNotIn("_coding_loop_evidence.py validate-diagnosis", skill)
+
+    def test_supergoal_missing_directives_recovery_contract_is_coherent(self):
+        skill = (SCRIPTS.parent / "skills" / "supergoal" / "SKILL.md").read_text()
+        self.assertIn("goal_recoverable: true", skill)
+        self.assertIn(
+            "Do not require a missing file to carry metadata before creating it.",
+            skill,
+        )
+        self.assertIn("goal_recoverable: false", skill)
 
 
 if __name__ == "__main__":

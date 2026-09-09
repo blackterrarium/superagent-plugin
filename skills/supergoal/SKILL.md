@@ -305,10 +305,16 @@ Create the goal folder and the **six subfolders** — `master-plans/`, `plans/`,
 `master-plans/`. Drop a `.gitkeep` into **every subfolder that has no file written this run** (so empty
 folders are tracked — matches existing goal folders that keep `handoff/.gitkeep` and `todo/.gitkeep`).
 
-In operation mode, an existing exact goal folder is recoverable only when its root plan and
-`goal-directives.md` carry this Operation/source identity and every existing scaffold file matches
-the reviewed scratch draft. Reuse matching files, write only missing intended files, and resume the
-same A7 work. Do not overwrite mismatched bytes, add a second root plan, or create another folder.
+In operation-mode recovery, `goal_recoverable: true` means the exact root plan is already verified
+on `main` and only named scaffold artifacts are absent. Keep that root unchanged. After the normal
+confirmation gate, write a missing `goal-directives.md` from the reviewed scratch draft with the
+same Operation/source identity and supported Confirmation record, and create only the missing
+standard directories plus their intended `.gitkeep` files. Reuse every matching existing file and
+resume the same A7 work. Do not require a missing file to carry metadata before creating it.
+
+An existing directive with mismatched identity/provenance/confirmation, an extra root plan, or any
+other `goal_recoverable: false` result is a hard conflict. Do not overwrite its bytes, add another
+root, or create another folder.
 
 ### 9. Commit & merge via PR (superauthor A7)
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 import json
 from pathlib import Path
@@ -43,6 +44,21 @@ OPERATION_FIELDS = {
     "report",
     "source_vault_commit",
 }
+
+
+def _approved_confirmation(value: str) -> bool:
+    match = re.fullmatch(
+        r"(?:user-confirmed|auto-confirmed \(SUPER_GOAL_AUTOCONFIRM=true, --autoconfirm\))"
+        r" on ([0-9]{4}-[0-9]{2}-[0-9]{2})",
+        value,
+    )
+    if match is None:
+        return False
+    try:
+        date.fromisoformat(match.group(1))
+    except ValueError:
+        return False
+    return True
 
 
 def _read_bytes(path: Path, label: str) -> bytes:
@@ -1025,14 +1041,14 @@ def _goal_scaffold(
     if (
         errors
         or observed != expected
-        or not confirmation
+        or not _approved_confirmation(confirmation)
         or not source_matches
     ):
         return (
             False,
             False,
             [],
-            "goal-directives.md identity or provenance does not match the operation",
+            "goal-directives.md identity, confirmation, or provenance does not match the operation",
         )
 
     relative_goal = goal_folder.relative_to(git_root).as_posix()
