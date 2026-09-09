@@ -343,9 +343,11 @@ None — command-only.
     def systemd_environment_contract(self, conf):
         """Interpret only generated directive/assignment syntax, not systemd itself.
 
-        Quoting contract: systemd.exec EnvironmentFile and systemd.syntax.
-        https://github.com/systemd/systemd/blob/main/man/systemd.exec.xml
-        https://github.com/systemd/systemd/blob/main/man/systemd.syntax.xml
+        Directive contract: config_parse_unit_env_file expands specifiers and
+        checks an absolute path; conf-parser passes a stripped raw rvalue.
+        https://github.com/systemd/systemd/blob/main/src/core/load-fragment.c#L2496
+        https://github.com/systemd/systemd/blob/main/src/shared/conf-parser.c#L237
+        Assignment-value contract is separate: systemd.exec EnvironmentFile.
         """
         unit_dir = conf / 'systemd/user'
         unit = (unit_dir / 'superagent-tick@.service').read_text()
@@ -356,15 +358,18 @@ None — command-only.
             for line in fragment.splitlines():
                 if not line.startswith('EnvironmentFile='):
                     continue
-                value = line.partition('=')[2]
+                value = line.partition('=')[2].strip()
                 if not value:
                     paths.clear(); continue
-                # Installed override uses quoted C syntax; JSON shares the
-                # generated quote/backslash escapes. Then systemd specifiers.
-                value = json.loads(value) if value.startswith('"') else value
+                # Directive-specific parser: no unquoting or C-unescaping.
+                # Invalid nonabsolute values are ignored by systemd, even
+                # after a preceding empty assignment has cleared the list.
                 import re
                 value = re.sub(r'%(.)', lambda m: {'%': '%', 'i': 'outer', 'h': str(Path.home())}[m[1]], value)
-                paths.append(Path(value))
+                path = value[1:] if value.startswith('-') else value
+                if not path.startswith('/'):
+                    continue
+                paths.append(Path(path))
         self.assertEqual(len(paths), 1, paths)
         self.assertTrue(paths[0].is_relative_to(conf), f'EnvironmentFile escapes installed XDG configuration: {paths[0]}')
         self.assertTrue(paths[0].is_file(), paths[0])
@@ -384,6 +389,22 @@ None — command-only.
                 out += value[index]; index += 1
             result[key] = out
         return unit, result
+
+    def test_systemd_path_serializer_is_raw_except_specifier_escaping(self):
+        paths = ('/tmp/environment', '/tmp/with spaces/environment',
+                 '/tmp/with \\backslash/"quotes"/%h %i %%/environment')
+        for path in paths:
+            with self.subTest(path=path):
+                result = subprocess.run(['/bin/bash', '-c', 'source "$1"; superagent_systemd_path "$2"',
+                    'path', str(SCRIPTS / '_common.sh'), path], env=self.env, capture_output=True, text=True)
+                self.assert_ok(result)
+                self.assertEqual(result.stdout, path.replace('%', '%%') + '\n')
+
+    def test_systemd_ordinary_installed_path_survives_directive_parser(self):
+        self.assert_ok(self.launch(FAKE_OS='Linux'))
+        conf = Path(self.env['XDG_CONFIG_HOME'])
+        _, registration = self.systemd_environment_contract(conf)
+        self.assertEqual(registration, state._registration(conf / 'superagent/outer.env'))
 
     def test_systemd_installed_environment_path_and_literal_contract(self):
         self.env['XDG_CONFIG_HOME'] = str(self.root / 'config with spaces %h \\literal "quotes"')

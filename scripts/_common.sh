@@ -562,12 +562,12 @@ superagent_systemd_environment() {
   done <"$registry"
 }
 
-# A quoted systemd unit path: C-style quote/backslash escaping followed by
-# literal percent escaping, so config names never become unit specifiers.
+# EnvironmentFile's directive parser accepts a raw absolute path: it expands
+# specifiers but does not unquote or C-unescape. Preserve actual path bytes;
+# only double percent signs so literal names never become unit specifiers.
+# This is distinct from quoting assignment VALUES inside the environment file.
 superagent_systemd_path() {
   local value="${1:?path}"
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
   value="${value//%/%%}"
-  printf '"%s"\n' "$value"
+  printf '%s\n' "$value"
 }
