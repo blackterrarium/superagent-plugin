@@ -342,6 +342,32 @@ def verdict_sequence(evaluations, maximum):
     return result('FAIL' if len(evaluations) == maximum else 'INCOMPLETE', 'no passing repair evaluation')
 
 
+def validate_integration(repo, vault, evaluated, changes):
+    """Preserve authentic actor SHAs; prove squash delivery and later bookkeeping."""
+    integrated = changes['integrate']
+    reviewed = changes['review']['code_commit']
+    merged = integrated.get('merge_commit')
+    integration_head = integrated['code_commit']
+    require(changes['implement']['code_commit'] == reviewed == integrated.get('reviewed_commit'), 'implementation was not the reviewed head')
+    require(evidence._commit_resolves(repo, merged), 'integrator did not record the merge revision')
+    pr = integrated.get('pull_request', {})
+    require(pr.get('url') == integrated.get('pr_url') and pr.get('state') == 'MERGED'
+            and pr.get('baseRefName') == 'main' and pr.get('headRefOid') == reviewed
+            and pr.get('mergeCommit', {}).get('oid') == merged, 'PR provenance does not match reviewed head and merge')
+    parents = git(repo, 'rev-list', '--parents', '-n', '1', merged).split()
+    require(len(parents) == 2, 'expected normal squash integration commit')
+    # Reconstruct the actual Git merge tree, including concurrent changes on main.
+    # This compares tree contents, not an unverifiable message or rebased receipt.
+    expected_tree = git(repo, 'merge-tree', '--write-tree', parents[1], reviewed).splitlines()[0]
+    require(expected_tree == git(repo, 'rev-parse', merged + '^{tree}'), 'squash tree differs from reviewed change')
+    git(repo, 'merge-base', '--is-ancestor', merged, integration_head)
+    git(repo, 'merge-base', '--is-ancestor', integration_head, evaluated)
+    git(repo, 'merge-base', '--is-ancestor', evaluated, 'refs/heads/main')
+    paths = ['.']
+    if within(vault, repo): paths.append(':(exclude)' + vault.relative_to(repo).as_posix())
+    require(not git(repo, 'diff', '--name-only', merged, evaluated, '--', *paths), 'unreviewed code changed after integration')
+
+
 def inspect_evidence(m, harness, packet):
     """Validate actual revision-specific artifacts. PASS here is never live authority.
 
@@ -393,13 +419,16 @@ def inspect_evidence(m, harness, packet):
             sha = repaired['operation']['code_commit']
             require(sha != op['code_commit'], 'repair did not change selected revision')
             git(repo, 'merge-base', '--is-ancestor', op['code_commit'], sha)
+            changes_by_action = {}
             for action, role in (('implement', 'IMPLEMENTER'), ('review', 'BRANCH_REVIEWER'), ('integrate', 'EXECUTOR')):
                 changes = [c for c in packet.get('changes', []) if c.get('action') == action and c.get('round') == repaired['round']]
                 if not changes: return result('INCOMPLETE', 'missing inner ' + action + ' receipt')
                 require(len(changes) == 1, 'conflicting inner ' + action + ' receipts')
                 change = changes[0]; worker = by_id.get(change.get('dispatch_id'), {})
                 require(worker.get('role') == role and worker.get('parent') == 'inner-supervisor' and worker.get('status') == 'completed' and worker.get('harness') == harness and worker.get('round') == repaired['round'], 'controller-written repair or wrong inner role')
-                require(worker.get('source_commit') == sha == change.get('code_commit') and change.get('plan') == metas[repaired['round']]['meta_plan'], 'review/repair/integration SHA or plan mismatch')
+                source = change.get('code_commit')
+                require(evidence._commit_resolves(repo, source), 'unresolved worker revision')
+                require(worker.get('source_commit') == source and change.get('plan') == metas[repaired['round']]['meta_plan'], 'review/repair/integration SHA or plan mismatch')
                 artifact = change.get('artifact')
                 require(isinstance(artifact, dict), 'missing normal inner ' + action + ' artifact')
                 body = read_reference(artifact).decode('utf-8')
@@ -407,7 +436,9 @@ def inspect_evidence(m, harness, packet):
                 artifact_root = repo if within(path, repo) else vault
                 require(within(path, artifact_root), 'unlisted inner delivery artifact')
                 _, error = evidence._path_at_main(artifact_root, path)
-                require(not error and sha in body and re.search(r'\bPASS\b', body), 'unintegrated or revision-mismatched inner delivery/review artifact')
+                require(not error and source in body and re.search(r'\bPASS\b', body), 'unintegrated or revision-mismatched inner delivery/review artifact')
+                changes_by_action[action] = change
+            validate_integration(repo, vault, sha, changes_by_action)
         if outcome['status'] == 'PASS':
             history = packet.get('transitions', [])
             needed = ['WAITING FOR EVAL', 'WAITING FOR DIAGNOSIS', 'WAITING FOR META-PLAN', 'WAITING FOR BUILD', 'BUILDING', 'WAITING FOR EVAL', 'DONE']

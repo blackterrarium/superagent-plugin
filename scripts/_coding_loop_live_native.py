@@ -92,6 +92,15 @@ def pin_request(m, harness, event, entry, index=0):
                 tool=normalize_name(event['tool_name']), started=time.monotonic(), status='permitted')
 
 
+def observe_agreement(m, harness, snapshot):
+    h = m['harnesses'][harness]
+    bootstrap = (snapshot['agreement_revision'] == 'PENDING'
+                 and snapshot['status'] == 'WAITING FOR META-PLAN'
+                 and not any(snapshot.get('operation', {}).values()))
+    live.require(bootstrap or snapshot['agreement_revision'] == h['agreement_revision'], 'observed agreement revision changed')
+    live.check_agreement(m, harness, context=False)
+
+
 def reserve(data, m, requests):
     now = time.monotonic()
     if data['stopped'] or now >= data['deadline'] or time.time() >= data['wall_deadline']:
@@ -103,6 +112,14 @@ def reserve(data, m, requests):
     gate.attempts = {(int(parts[0]), parts[1], parts[2]): count
                      for key, count in data['attempts'].items() for parts in [key.split(':')]}
     h = m['harnesses'][data['harness']]
+    if h.get('runtime'):
+        snapshot = live.state.read_state(Path(h['runtime']['outer_loop']))
+        observe_agreement(m, data['harness'], snapshot)
+        # The first supervisor freezes discovered bindings. Workers cannot start
+        # against the launcher's deliberately incomplete bootstrap sentinel.
+        if any(request['role'] != 'SUPERVISOR' for request in requests):
+            live.require(snapshot['agreement_revision'] == h['agreement_revision'], 'full agreement fingerprint required before worker reservation')
+            live.check_agreement(m, data['harness'])
     for request in requests:
         permit = gate.authorize({key: request[key] for key in ('id', 'role', 'model', 'effort', 'round', 'operation', 'slug')} |
                                 dict(harness=data['harness'], code_root=h['code_root'], vault_root=h['vault_root']))
@@ -338,7 +355,7 @@ def routing_instructions(h):
             'dispatches:[{id: exact native permit id, operation_id: reserved operation id for phase workers, '
             'role: configured role, round: N, source_commit: exact evaluated/reviewed SHA}], '
             'changes:[{action: implement|review|integrate, dispatch_id: exact native permit id, '
-            'round: repaired round, code_commit: exact SHA, plan: exact meta-plan locator}]}. '
+            'round: repaired round, code_commit: actual worker completion SHA, plan: exact meta-plan locator, artifact: {path,sha256}}]}. '
             'Read actual permit IDs from the SUPER_STAGE3_RUN JSON path and its .events.jsonl; never invent IDs. '
             'Every IMPLEMENTER, BRANCH_REVIEWER and integrating EXECUTOR must run git rev-parse HEAD '
             'on the exact reviewed/integrated code checkout at completion so the native hook captures the '
@@ -346,7 +363,7 @@ def routing_instructions(h):
             'Each such worker must end its actual final response with one single line STAGE3_RESULT '
             '{"action":"implement|review|integrate","round":N,"code_commit":"SHA","plan":"meta-plan locator",'
             '"artifact":{"path":"absolute normal delivery/report path","sha256":"artifact hash"},"verdict":"PASS|FAIL"}. '
-            'The normal artifact must include the exact reviewed code SHA and its verdict and be integrated '
+            'For integrate, add reviewed_commit (the reviewed branch head), merge_commit (the squash commit) and pr_url to both STAGE3_RESULT and changes. Implement/review code_commit remains their authentic reviewed head; integrate code_commit remains its actual completion head (the merge or later vault-only bookkeeping). Never rewrite these SHAs to a later evaluation/bookkeeping SHA. The normal artifact must include the exact worker code SHA and its verdict and be integrated '
             'through the normal inner delivery workflow. The supervisor copies that artifact reference into changes. '
             'Copy exact operation objects from runtime operation_snapshot records. Do not alter runtime files. '
             'The collector replaces index dispatch identity/parent/transition claims with authenticated runtime data.')
@@ -365,15 +382,41 @@ def inject(harness, args, path):
     command = shlex.join([sys.executable, str(Path(__file__).resolve()), 'hook'])
     definitions = {kind: [{'matcher': '.*', 'hooks': [{'type': 'command', 'command': command, 'timeout': 5}]}]
                    for kind in ('SessionStart', 'PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'Stop')}
+    data = json.loads(Path(path).read_text())
+    m = live.load_manifest(data['manifest'], approved=True)
+    cwd = Path.cwd()
+    for index, arg in enumerate(args):
+        if arg in ('-C', '--cd') and index + 1 < len(args): cwd = Path(args[index + 1]).resolve()
+        if arg.startswith('--cd='): cwd = Path(arg.split('=', 1)[1]).resolve()
+        forbidden = ('--plugin-dir', '--settings', '--no-skills')
+        live.require(not any(arg == flag or arg.startswith(flag + '=') for flag in forbidden), 'caller cannot override approved package loading')
+        if harness == 'codex':
+            live.require(not (arg in ('-p', '--profile', '--enable', '--disable') or arg.startswith(('--profile=', '--enable=', '--disable=')) or arg.startswith('-p') and arg != '-p'), 'caller cannot override approved Codex profile/features')
+            live.require(not arg.startswith('--config=') and not (arg.startswith('-c') and arg != '-c'), 'caller cannot override approved Codex configuration')
+            if arg in ('-c', '--config') and index + 1 < len(args):
+                live.require(args[index + 1].split('=', 1)[0] == 'model_reasoning_effort', 'caller cannot override approved Codex configuration')
+    selected = selected_package(m, harness, cwd)
+    normalized = []; index = 0; skill_count = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == '--skill' or arg.startswith('--skill='):
+            live.require(harness == 'pi', 'unlisted native skill override')
+            if arg == '--skill':
+                live.require(index + 1 < len(args), 'missing Pi skill path')
+                index += 1; skill_path = args[index]
+            else: skill_path = arg.split('=', 1)[1]
+            skill_count += 1
+            live.require(skill_count == 1 and skill_path in (str(Path(selected['root']) / 'skills'), str(SCRIPTS.parent / 'pi/skills')), 'unlisted or duplicate Pi skill loading')
+        else: normalized.append(arg)
+        index += 1
+    args = normalized
     if harness == 'codex':
         return list(args) + ['--dangerously-bypass-hook-trust'] + [part for key, value in definitions.items() for part in ('-c', 'hooks.' + key + '=' + toml(value))]
     if harness == 'claude':
-        data = json.loads(Path(path).read_text())
-        m = live.load_manifest(data['manifest'], approved=True)
         agents = {'stage3_' + role: dict(description='Bounded Stage 3 ' + role, prompt='Execute only the supplied ' + role + ' task.',
                   model=pin['model'].split(':', 1)[1], effort=pin['effort']) for role, pin in m['harnesses']['claude']['roles'].items()}
-        return list(args) + ['--settings', json.dumps({'hooks': definitions}), '--agents', json.dumps(agents)]
-    if harness == 'pi': return list(args) + ['--extension', str(SCRIPTS / 'coding-loop-stage3-pi.ts')]
+        return list(args) + ['--plugin-dir', selected['root'], '--settings', json.dumps({'hooks': definitions, 'enabledPlugins': {name: False for name in selected['disable_plugins']}}), '--agents', json.dumps(agents)]
+    if harness == 'pi': return list(args) + ['--no-skills', '--skill', str(Path(selected['root']) / 'skills'), '--extension', str(SCRIPTS / 'coding-loop-stage3-pi.ts')]
     raise live.Invalid('unsupported native harness')
 
 
@@ -390,10 +433,102 @@ def admission_path(bin_dir):
     return ':'.join(dict.fromkeys(entries))
 
 
+def selection_environment(runtime):
+    return dict(os.environ, XDG_CONFIG_HOME=runtime['config_root'])
+
+
+def codex_skills(runtime, cwd):
+    """Read supported app-server skills/list; never create a thread/model turn."""
+    import selectors
+    process = subprocess.Popen(native_argv(runtime, ['app-server']), cwd=cwd,
+        env=selection_environment(runtime), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL)
+    selector = selectors.DefaultSelector(); selector.register(process.stdout, selectors.EVENT_READ)
+    deadline = time.monotonic() + 10
+    buffer = b''
+    def send(message):
+        process.stdin.write((json.dumps(message) + '\n').encode()); process.stdin.flush()
+    def receive(identity):
+        nonlocal buffer
+        while time.monotonic() < deadline:
+            if b'\n' not in buffer:
+                if not selector.select(max(0, deadline - time.monotonic())): break
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk: break
+                buffer += chunk
+                continue
+            line, buffer = buffer.split(b'\n', 1)
+            value = json.loads(line)
+            if value.get('id') == identity:
+                if 'error' in value: raise live.Incomplete('Codex selected-skills query failed')
+                return value['result']
+        raise live.Incomplete('Codex selected-skills query unavailable or timed out')
+    try:
+        send(dict(id=1, method='initialize', params=dict(clientInfo=dict(name='stage3-preflight', version='1'), capabilities=dict(experimentalApi=True))))
+        receive(1); send(dict(method='initialized'))
+        send(dict(id=2, method='skills/list', params=dict(cwds=[str(cwd)], forceReload=True)))
+        return receive(2)
+    finally:
+        selector.close()
+        process.terminate()
+        try: process.wait(timeout=2)
+        except subprocess.TimeoutExpired: process.kill(); process.wait()
+        process.stdin.close(); process.stdout.close()
+
+
+def selected_package(m, harness, cwd=None):
+    h = m['harnesses'][harness]; runtime = h.get('runtime', {})
+    selection = runtime.get('package_selection')
+    if not isinstance(selection, dict): raise live.Incomplete('native package selection missing')
+    live.fields(selection, ('root', 'plugin_id') if harness == 'codex' else ('root',))
+    root = live.absolute(selection['root']); cwd = Path(cwd or h['code_root']).resolve()
+    metadata_path = root / ({'claude': '.claude-plugin/plugin.json', 'codex': '.codex-plugin/plugin.json', 'pi': 'package.json'}[harness])
+    pins = {pin['path']: pin for pin in h['packages']}
+    required = {metadata_path}
+    for folder in ('skills', 'scripts', 'templates', 'hooks', 'agents'):
+        required.update(path for path in (root / folder).rglob('*') if path.is_file() and '__pycache__' not in path.parts)
+    live.require(all(str(path) in pins for path in required), 'selected package files are not bound by the manifest')
+    for path in required:
+        live.read_reference({k: pins[str(path)][k] for k in ('path', 'sha256')})
+    metadata = json.loads(metadata_path.read_text())
+    live.require(metadata.get('name') in ('superagent', 'superagent-pi') and metadata.get('version') == pins[str(metadata_path)]['version'], 'selected package name/version mismatch')
+    skills = {path.parent.name: str(path) for path in (root / 'skills').glob('*/SKILL.md')}
+    live.require({'supercode', 'supermeta', 'supereval', 'superdiagnose', 'superrun', 'superagent', 'supergoal', 'superplan', 'superfinish'} <= set(skills), 'selected package lacks required Stage 3 skills')
+    def query(args):
+        result = subprocess.run(native_argv(runtime, args), cwd=cwd, env=selection_environment(runtime), capture_output=True, text=True, timeout=10)
+        if result.returncode: raise live.Incomplete('native package selection query failed')
+        return result.stdout
+    help_text = query(['--help'])
+    result = dict(selection)
+    if harness == 'codex':
+        listed = json.loads(query(['plugin', 'list', '--json'])).get('installed', [])
+        candidates = [item for item in listed if item.get('name') == 'superagent' and item.get('installed') and item.get('enabled')]
+        live.require(len(candidates) == 1 and candidates[0].get('pluginId') == selection['plugin_id'] and candidates[0].get('version') == metadata['version'], 'missing, ambiguous or mismatched selected Codex plugin')
+        entries = codex_skills(runtime, cwd).get('data', [])
+        live.require(len(entries) == 1 and Path(entries[0]['cwd']).resolve() == cwd and not entries[0].get('errors'), 'Codex skill loading scope is unavailable or ambiguous')
+        loaded = entries[0]['skills']
+        live.require({item.get('path') for item in loaded if item.get('enabled') and item.get('pluginId') == selection['plugin_id']} == set(skills.values()), 'selected Codex plugin skill inventory differs from approved package')
+        for name, path in skills.items():
+            matches = [item for item in loaded if item.get('enabled') and item.get('name', '').split(':')[-1] == name]
+            live.require(len(matches) == 1 and matches[0].get('pluginId') == selection['plugin_id'] and matches[0].get('path') == path, 'selected Codex skill path is missing, ambiguous or mismatched: ' + name)
+        live.require('--dangerously-bypass-hook-trust' in help_text, 'Codex native CLI lacks reviewed hook-trust interface')
+    elif harness == 'claude':
+        live.require('--plugin-dir' in help_text and '--settings' in help_text, 'Claude lacks explicit reviewed plugin loading')
+        listed = json.loads(query(['plugin', 'list', '--json']))
+        candidates = [item for item in listed if item.get('enabled') and item.get('id', '').split('@')[0] == 'superagent']
+        live.require(len(candidates) <= 1, 'ambiguous enabled Claude superagent plugins')
+        # Disable the installed copy in this invocation only; --plugin-dir loads
+        # the explicitly reviewed package without mutating user configuration.
+        result['disable_plugins'] = [item['id'] for item in candidates]
+    else:
+        live.require('--skill' in help_text and '--no-skills' in help_text, 'Pi lacks explicit reviewed skill loading')
+    return result
+
+
 def native_preflight(m, harness):
     h = m['harnesses'][harness]; runtime = h.get('runtime')
     if not runtime: raise live.Incomplete('native adapter requires exact reviewed runtime CLI/version, scheduler/config and outer-loop identities')
-    live.fields(runtime, ('cli', 'cli_version', 'scripts_root', 'config_root', 'launchd_dir', 'outer_loop', 'interval_seconds'), ('node',))
+    live.fields(runtime, ('cli', 'cli_version', 'scripts_root', 'config_root', 'launchd_dir', 'outer_loop', 'interval_seconds'), ('node', 'package_selection'))
     for key in ('cli', 'scripts_root', 'config_root', 'launchd_dir', 'outer_loop'): live.absolute(runtime[key])
     live.require(type(runtime['interval_seconds']) is int and runtime['interval_seconds'] > 0, 'positive scheduler interval required')
     cli = Path(runtime['cli'])
@@ -414,16 +549,9 @@ def native_preflight(m, harness):
     if runtime.get('node'): required.add(runtime['node'])
     pinned = {p['path'] for p in h['packages']}
     live.require(required <= pinned, 'approved manifest does not bind native helper/extension bytes')
-    versions = []
     for pin in h['packages']:
-        content = live.read_reference({k: pin[k] for k in ('path', 'sha256')})
-        if Path(pin['path']).suffix == '.json':
-            try: metadata = json.loads(content)
-            except ValueError: continue
-            if isinstance(metadata, dict) and 'version' in metadata:
-                live.require(metadata['version'] == pin['version'], 'installed package version mismatch')
-                versions.append(metadata['version'])
-    if not versions: raise live.Incomplete('installed package manifest version receipt missing')
+        live.read_reference({k: pin[k] for k in ('path', 'sha256')})
+    selected_package(m, harness)
     live.require(runtime['scripts_root'] == str(SCRIPTS), 'native adapter requires this reviewed scheduler script root')
     for ref in h['auth_refs']:
         kind, value = ref.split(':', 1)
@@ -510,7 +638,14 @@ def wrapper(path, args):
         env['SUPER_MODEL_' + name] = configured['model']; env['SUPER_EFFORT_' + name] = configured['effort']
     if harness == 'pi': env['PI_SUBAGENT_PI_BINARY'] = str(path.parent / 'bin/pi')
     args = pinned_args(harness, args, pin)
-    process = subprocess.Popen(native_argv(runtime, inject(harness, args, path)), env=env, start_new_session=True,
+    injected = inject(harness, args, path)
+    # Loading verification is read-only but may take time. It cannot extend a
+    # reserved dispatch or start a model after the watchdog stopped the attempt.
+    with transaction(path) as data:
+        seconds = min(request['deadline'], data['deadline']) - time.monotonic()
+        if data['stopped'] or data['problems'] or seconds <= 0 or time.time() >= data['wall_deadline']:
+            raise live.Exhausted('native reservation expired during package selection')
+    process = subprocess.Popen(native_argv(runtime, injected), env=env, start_new_session=True,
                                stdin=subprocess.PIPE if stdin_data is not None else None)
     try:
         ownership = subprocess.run(['ps', '-p', str(process.pid), '-o', 'lstart='], capture_output=True, text=True, timeout=5)
@@ -535,6 +670,19 @@ def wrapper(path, args):
             data['permits'][request['id']]['status'] = 'completed' if process.returncode == 0 else 'failed'
     return code
 
+
+
+def merged_pull_request(h, change):
+    url = change.get('pr_url', '')
+    match = re.fullmatch(r'https://github.com/([^/]+/[^/]+)/pull/([1-9][0-9]*)', url)
+    live.require(match is not None, 'missing normal GitHub PR provenance')
+    remotes = h['remotes']['code'].values()
+    repository = match.group(1)
+    live.require(any(remote.removesuffix('.git') in ('https://github.com/' + repository, 'git@github.com:' + repository) for remote in remotes), 'PR belongs to an unlisted fixture remote')
+    query = subprocess.run(['gh', 'pr', 'view', url, '--json', 'url,state,baseRefName,headRefOid,mergeCommit'],
+                           cwd=h['code_root'], capture_output=True, text=True, timeout=15)
+    if query.returncode: raise live.Incomplete('cannot verify normal merged PR provenance')
+    return json.loads(query.stdout)
 
 
 class NativeAdapter:
@@ -746,8 +894,7 @@ class NativeAdapter:
                 self.registration(outer)
                 snapshot = live.state.read_state(Path(self.runtime['outer_loop']))
                 live.require(snapshot['round'] <= manifest['limits']['max_rounds'], 'observed project round ceiling exceeded')
-                live.require(snapshot['agreement_revision'] == self.h['agreement_revision'], 'observed agreement revision changed')
-                live.check_agreement(manifest, harness, context=False)
+                observe_agreement(manifest, harness, snapshot)
                 identity = json.dumps(snapshot, sort_keys=True)
                 if identity != last:
                     event_log(self.path, dict(kind='state', state=snapshot))
@@ -822,7 +969,9 @@ class NativeAdapter:
             live.read_reference({k: final_response[k] for k in ('path', 'sha256')})
             reported = worker.get('result')
             live.require(isinstance(reported, dict), 'missing actual native worker/reviewer final result')
-            live.require(all(reported.get(key) == change.get(key) for key in ('action', 'round', 'code_commit', 'plan', 'artifact')) and reported.get('verdict') == 'PASS', 'native reviewer output disagrees with evidence index')
+            live.require(all(reported.get(key) == change.get(key) for key in ('action', 'round', 'code_commit', 'plan', 'artifact', 'reviewed_commit', 'merge_commit', 'pr_url')) and reported.get('verdict') == 'PASS', 'native reviewer output disagrees with evidence index')
+            if change['action'] == 'integrate':
+                change['pull_request'] = merged_pull_request(self.h, change)
         packet['synthetic'] = False
         return packet
 

@@ -289,6 +289,14 @@ class DiagnosisValidationTests(unittest.TestCase):
             run_git(repo, "rev-parse", "main"), result["artifacts"][0]["commit"]
         )
 
+        run_git(repo, "switch", "-q", "-c", "unmerged-diagnosis")
+        report.write_text(report.read_text().replace("REPAIR", "AUTHOR INPUT"))
+        run_git(repo, "add", "vault")
+        run_git(repo, "commit", "-qm", "unmerged diagnosis cannot replace main")
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("differ from main", result["reason"])
+
     def test_omitted_failing_check_cannot_start_next_round(self):
         report = self.write_report(
             "omitted.md",

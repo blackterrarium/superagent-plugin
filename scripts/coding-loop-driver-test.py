@@ -241,6 +241,44 @@ None — command-only.
         self.full_tick(expected='WAITING FOR EVAL')
         self.assertEqual(len(self.full_events('invocation')), calls, 'BUILDING must stay shell-only')
 
+    def test_clean_feature_branch_cannot_promote_integrated_fail_to_done(self):
+        agreement = self.full_loop_fixture('claude')
+        self.full_tick('phase', 'META-PLANNING')
+        self.full_tick('launch'); self.complete_fake_inner()
+        self.full_tick('phase', 'EVALUATING', expected='WAITING FOR DIAGNOSIS')
+        document = state.read_state(self.outer)
+        self.git('switch', '-qc', 'unmerged-pass')
+        report = self.repo / document['last_eval']
+        report.write_text(report.read_text().replace('FAIL', 'PASS'))
+        self.git('add', str(report.relative_to(self.repo)))
+        self.git('commit', '-qm', 'unmerged report cannot override main FAIL')
+        context = state.acceptance_context(self.repo, self.repo / 'vault', self.project)
+        updated, receipt = state.reconcile_phase(document, self.repo, self.repo / 'vault', context, 2)
+        self.assertEqual(updated['status'], 'WAITING FOR INPUT', receipt)
+        self.assertIn('differ from main', updated['gate_reason'])
+
+    def test_clean_feature_agreement_and_binding_bytes_must_match_main(self):
+        self.git('add', '.'); self.git('commit', '-qm', 'approved project')
+        remote = self.root / 'origin.git'
+        subprocess.run(['git', 'init', '--bare', '-q', str(remote)], check=True)
+        self.git('remote', 'add', 'origin', str(remote)); self.git('push', '-qu', 'origin', 'main')
+        document = self.write_outer(status='WAITING FOR META-PLAN')
+        document['agreement_revision'] = state.acceptance_context(self.repo, self.repo / 'vault', self.project)['agreement_revision']
+        for index, name in enumerate(('prd.md', 'evaluation.md', 'knowledge-base.md')):
+            self.git('switch', '-qc', 'unmerged-input-' + str(index), 'main')
+            path = self.project / name
+            path.write_text(path.read_text() + '\nUnmerged alternative agreement.\n')
+            self.git('add', '.'); self.git('commit', '-qm', 'unmerged agreement')
+            context = state.acceptance_context(self.repo, self.repo / 'vault', self.project)
+            updated, receipt = state.reconcile_phase(document, self.repo, self.repo / 'vault', context, 2)
+            self.assertEqual(updated['status'], 'WAITING FOR INPUT', receipt)
+            self.assertIn(name + ': artifact bytes differ from main', updated['gate_reason'])
+        self.git('switch', '-qc', 'unmerged-binding', 'main')
+        (self.repo / 'README.md').write_text('unmerged binding source\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'unmerged binding')
+        with self.assertRaisesRegex(state.StateError, 'binding.*differ from main'):
+            state.acceptance_context(self.repo, self.repo / 'vault', self.project)
+
     def save_full_evidence(self, label):
         target = os.environ.get('CODING_LOOP_TEST_EVIDENCE_DIR')
         if not target:

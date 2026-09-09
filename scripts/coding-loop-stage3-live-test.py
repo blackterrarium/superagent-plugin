@@ -235,14 +235,26 @@ class EvidenceTests(unittest.TestCase):
         f.full_tick('launch'); f.complete_fake_inner()
         f.full_tick('phase', 'EVALUATING'); f.full_tick('phase', 'DIAGNOSING')
         f.full_tick('phase', 'META-PLANNING'); f.full_tick('launch')
-        f.complete_fake_inner(repair=True); f.full_tick('phase', 'EVALUATING')
+        f.git('switch', '-qc', 'normal-inner-repair')
+        (f.repo / 'behavior.txt').write_text('repaired\n')
+        f.git('add', 'behavior.txt'); f.git('commit', '-qm', 'implement approved repair')
+        cls.reviewed = f.git('rev-parse', 'HEAD')
+        f.git('switch', '-q', 'main'); f.git('merge', '--squash', 'normal-inner-repair')
+        f.git('commit', '-qm', 'squash reviewed repair')
+        cls.merged = f.git('rev-parse', 'HEAD')
+        (f.project / 'closeout.md').write_text('Normal internal-vault bookkeeping after squash.\n')
+        f.git('add', '.'); f.git('commit', '-qm', 'inner closeout')
+        cls.integrated = f.git('rev-parse', 'HEAD')
+        (f.project / 'retained-report.md').write_text('Retained inner bookkeeping.\n')
+        f.git('add', '.'); f.git('commit', '-qm', 'retain report'); f.git('push', '-q')
+        f.complete_fake_inner(); f.full_tick('phase', 'EVALUATING')
         cls.operations = [e['operation'] for e in f.full_events('worker')]
         # Internal-vault fixture planning commits precede its first EVAL. Select
         # that evaluated SHA for this synthetic collector fixture only.
         cls.baseline = next(op['code_commit'] for op in cls.operations if op['phase'] == 'EVALUATING')
         for action in ('implement', 'review', 'integrate'):
             path = f.project / (action + '-receipt.md')
-            path.write_text('# ' + action + '\nRevision: ' + cls.operations[-1]['code_commit'] + '\nVerdict: PASS\nOffline normal delivery artifact.\n')
+            path.write_text('# ' + action + '\nRevision: ' + (cls.integrated if action == 'integrate' else cls.reviewed) + '\nVerdict: PASS\nOffline normal delivery artifact.\n')
         f.git('add', '.'); f.git('commit', '-qm', 'offline delivery receipts'); f.git('push', '-q')
 
     def setUp(self):
@@ -263,11 +275,15 @@ class EvidenceTests(unittest.TestCase):
         sha = self.operations[-1]['code_commit']
         for role in ('IMPLEMENTER', 'BRANCH_REVIEWER', 'EXECUTOR'):
             self.packet['dispatches'].append({'id': role, 'role': role, 'harness': 'codex',
-                'round': 2, 'status': 'completed', 'source_commit': sha, 'parent': 'inner-supervisor',
+                'round': 2, 'status': 'completed', 'source_commit': self.integrated if role == 'EXECUTOR' else self.reviewed, 'parent': 'inner-supervisor',
                 'model': 'codex:pinned', 'effort': 'high'})
-        self.packet['changes'] = [dict(action=action, dispatch_id=role, code_commit=sha,
+        self.packet['changes'] = [dict(action=action, dispatch_id=role, code_commit=self.integrated if action == 'integrate' else self.reviewed,
             round=2, plan=self.operations[-2]['meta_plan']) for action, role in
             (('implement', 'IMPLEMENTER'), ('review', 'BRANCH_REVIEWER'), ('integrate', 'EXECUTOR'))]
+        self.packet['changes'][-1].update(reviewed_commit=self.reviewed, merge_commit=self.merged,
+            pr_url='https://github.com/offline/fixture/pull/1',
+            pull_request={'url': 'https://github.com/offline/fixture/pull/1', 'state': 'MERGED',
+                'baseRefName': 'main', 'headRefOid': self.reviewed, 'mergeCommit': {'oid': self.merged}})
         for change in self.packet['changes']:
             artifact = f.project / (change['action'] + '-receipt.md')
             change['artifact'] = {'path': str(artifact), 'sha256': digest(artifact.read_bytes())}
@@ -277,6 +293,39 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result['status'], 'PASS', result)
         self.assertFalse(result['acceptance_passed'])
         self.assertEqual(len(result['evaluations']), 2)
+
+    def test_provenance_rejects_wrong_pr_head_and_unreviewed_later_code(self):
+        self.packet['changes'][-1]['pull_request']['headRefOid'] = self.baseline
+        result = live.inspect_evidence(self.manifest, 'codex', self.packet)
+        self.assertEqual(result['status'], 'INVALID')
+        self.assertIn('PR provenance', result['reason'])
+        self.setUp()
+        with tempfile.TemporaryDirectory() as folder:
+            clone = Path(folder) / 'repo'
+            subprocess.run(['git', 'clone', '-q', str(self.fixture.repo), str(clone)], check=True)
+            def git(*args): return live.git(clone, *args)
+            git('config', 'user.name', 'Offline'); git('config', 'user.email', 'offline@example.invalid')
+            (clone / 'behavior.txt').write_text('unreviewed code\n')
+            git('add', 'behavior.txt'); git('commit', '-qm', 'unreviewed later change')
+            with self.assertRaisesRegex(live.Invalid, 'unreviewed code changed'):
+                live.validate_integration(clone, clone / 'vault', git('rev-parse', 'HEAD'),
+                    {row['action']: row for row in self.packet['changes']})
+
+    def test_native_pr_query_supplies_git_verified_squash_provenance(self):
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('pr_native', SCRIPTS / '_coding_loop_live_native.py')
+        native = importlib.util.module_from_spec(spec); spec.loader.exec_module(native)
+        change = self.packet['changes'][-1]
+        with tempfile.TemporaryDirectory() as folder:
+            gh = Path(folder) / 'gh'
+            gh.write_text('#!' + sys.executable + '\nimport json,sys\nassert sys.argv[1:3] == ["pr","view"]\nprint(' + repr(json.dumps(change['pull_request'])) + ')\n')
+            gh.chmod(0o700)
+            h = dict(self.manifest['harnesses']['codex'], remotes={'code': {'origin': 'https://github.com/offline/fixture.git'}})
+            with patch.dict(os.environ, PATH=folder + ':' + os.environ['PATH']):
+                change['pull_request'] = native.merged_pull_request(h, change)
+                self.assertEqual(live.inspect_evidence(self.manifest, 'codex', self.packet)['status'], 'PASS')
+                with self.assertRaisesRegex(native.live.Invalid, 'unlisted fixture remote'):
+                    native.merged_pull_request(h, dict(change, pr_url='https://github.com/unlisted/fixture/pull/1'))
 
     def test_missing_normal_review_artifact_is_invalid(self):
         self.packet['changes'][1].pop('artifact')
@@ -485,14 +534,22 @@ class NativeHookTests(unittest.TestCase):
         self.assertEqual(receipt['argv'], ['-p', '--allowedTools', 'Read,Edit,Write,Bash,Grep,Glob'])
 
     def test_native_wrapper_caps_actual_process_and_clears_inherited_bridge_role(self):
-        cli = self.root / 'fake-native'
+        h, _response = self.package_cli_fixture()
+        cli = Path(h['runtime']['cli'])
         output = self.root / 'native-process.json'
-        cli.write_text('#!' + sys.executable + '\nimport json,os,sys\nopen(' + repr(str(output)) +
-                       ',"w").write(json.dumps({"role":os.environ.get("SUPERAGENT_ROLE"),"argv":sys.argv[1:]}))\n')
-        cli.chmod(0o700)
-        self.manifest['harnesses']['codex']['runtime'] = {'cli': str(cli), 'cli_version': 'offline',
-            'scripts_root': str(SCRIPTS), 'config_root': str(self.root / 'config'),
-            'launchd_dir': str(self.root / 'LaunchAgents'), 'outer_loop': str(self.root / 'outer.md'), 'interval_seconds': 1}
+        cli.write_text(cli.read_text().replace("else: print(json.dumps", "elif 'exec' in sys.argv: open(" + repr(str(output)) + ", 'w').write(json.dumps({'role':os.environ.get('SUPERAGENT_ROLE'),'argv':sys.argv[1:]}))\nelse: print(json.dumps").replace('import sys,json', 'import sys,json,os'))
+        h['runtime'].update(cli_version='offline', scripts_root=str(SCRIPTS),
+            launchd_dir=str(self.root / 'LaunchAgents'), outer_loop=str(self.root / 'outer.md'), interval_seconds=1)
+        for name in ('prd.md', 'evaluation.md', 'knowledge-base.md'):
+            path = self.project / name
+            path.write_text(path.read_text() + '**Date:** 2026-09-09 · **Status:** READY\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'ready offline agreement')
+        h['agreement_revision'] = live.state.acceptance_context(self.repo, self.repo / 'vault', self.project)['agreement_revision']
+        for ref in h['agreement']: ref['sha256'] = digest(Path(ref['path']).read_bytes())
+        outer = {key: '' for key in live.state.REQUIRED_FIELDS}
+        outer.update(supervisor='supercode', project=str(self.project.relative_to(self.repo)), status='BUILDING', driver='external',
+            iteration=1, session_skill_count=0, round=1, agreement_revision=h['agreement_revision'], operation={key: '' for key in live.state.OPERATION_FIELDS})
+        Path(h['runtime']['outer_loop']).write_bytes(live.state._serialize_state(outer))
         self.save(); self.approve()
         bin_dir = self.root / 'bin'; bin_dir.mkdir()
         ps = bin_dir / 'ps'; ps.write_text('#!/bin/sh\nprintf \'offline-process-start\\n\'\n'); ps.chmod(0o700)
@@ -508,7 +565,7 @@ class NativeHookTests(unittest.TestCase):
         self.assertEqual(receipt['argv'].count('-m'), 1)
         self.assertEqual(json.loads(self.run.read_text())['used'], 1)
         # Loss of a child ownership receipt must reap the already-started group.
-        cli.write_text('#!' + sys.executable + '\nimport time\ntime.sleep(4)\n')
+        cli.write_text(cli.read_text().replace("elif 'exec' in sys.argv: open(", "elif 'exec' in sys.argv: __import__('time').sleep(4); open("))
         ps.write_text('#!/bin/sh\nexit 1\n')
         self.run = self.root / 'unowned-runtime.json'; self.native.initialize(self.path, 'codex', self.run)
         started = time.monotonic()
@@ -519,6 +576,19 @@ class NativeHookTests(unittest.TestCase):
         self.assertNotEqual(process.returncode, 0)
         self.assertIn('ownership receipt unavailable', process.stderr)
         self.assertLess(time.monotonic() - started, 3)
+
+        # Read-only package selection may consume time, but cannot extend the
+        # already reserved worker deadline or start a worker after it expires.
+        output.unlink()
+        ps.write_text('#!/bin/sh\nprintf "offline-process-start\\n"\n')
+        cli.write_text(cli.read_text().replace("__import__('time').sleep(4); ", '').replace("if '--help' in sys.argv:", "if '--help' in sys.argv: __import__('time').sleep(1.2);"))
+        self.run = self.root / 'expired-selection-runtime.json'; self.native.initialize(self.path, 'codex', self.run)
+        process = subprocess.run([sys.executable, str(SCRIPTS / '_coding_loop_live_native.py'), 'wrapper', str(self.run),
+            'exec', 'STAGE3 role=IMPLEMENTER operation=worker round=1'],
+            env=dict(os.environ, SUPERAGENT_ROLE='implementer', PATH=str(bin_dir) + ':' + os.environ['PATH']),
+            capture_output=True, text=True, timeout=3)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertFalse(output.exists(), 'expired reservation must not start a worker')
 
     def test_scheduler_path_augmentation_preserves_admission_wrapper(self):
         wrapper_dir = self.root / 'admission-bin'; wrapper_dir.mkdir()
@@ -591,6 +661,100 @@ class NativeHookTests(unittest.TestCase):
         self.assertEqual(json.loads(self.run.read_text())['used'], 1)
         self.assertEqual(json.loads(self.run.read_text()).get('actions', {}).get('parent'), ['a' * 40])
 
+    def package_cli_fixture(self, harness='codex'):
+        package = self.root / ('selected-' + harness)
+        manifest_dir = '.claude-plugin' if harness == 'claude' else '.codex-plugin'
+        metadata = package / ('package.json' if harness == 'pi' else manifest_dir + '/plugin.json')
+        metadata.parent.mkdir(parents=True, exist_ok=True)
+        metadata.write_text(json.dumps({'name': 'superagent', 'version': '0.8.1'}))
+        skills = []
+        for name in ('supercode', 'supermeta', 'supereval', 'superdiagnose', 'superrun', 'superagent', 'supergoal', 'superplan', 'superfinish'):
+            path = package / 'skills' / name / 'SKILL.md'; path.parent.mkdir(parents=True)
+            path.write_text('---\nname: ' + name + '\n---\nReviewed offline skill.\n')
+            skills.append(dict(name=name, path=str(path), pluginId='superagent@offline', enabled=True, scope='user'))
+        response = self.root / ('selection-' + harness + '.json')
+        response.write_text(json.dumps({'installed': [dict(pluginId='superagent@offline', name='superagent', version='0.8.1', installed=True, enabled=True)], 'skills': skills}))
+        cli = self.root / ('selection-cli-' + harness)
+        cli.write_text('#!' + sys.executable + '\n' + """import sys,json
+from pathlib import Path
+record=json.loads(Path(RESPONSE).read_text())
+if '--help' in sys.argv: print('--plugin-dir --settings --skill --no-skills --dangerously-bypass-hook-trust')
+elif 'app-server' in sys.argv:
+    for line in sys.stdin:
+        request=json.loads(line)
+        if 'id' not in request: continue
+        result={} if request['method']=='initialize' else {'data':[{'cwd':request['params']['cwds'][0],'errors':[], 'skills':record['skills']}]}
+        print(json.dumps({'id':request['id'],'result':result}),flush=True)
+else: print(json.dumps(record['installed'] if HARNESS=='claude' else {'installed':record['installed']}))
+""".replace('RESPONSE', repr(str(response))).replace('HARNESS', repr(harness)))
+        cli.chmod(0o700)
+        h = self.manifest['harnesses'][harness]
+        h['runtime'] = dict(cli=str(cli), config_root=str(self.root / 'config'),
+                            package_selection=dict(root=str(package), **({'plugin_id': 'superagent@offline'} if harness == 'codex' else {})))
+        Path(h['code_root']).mkdir(exist_ok=True)
+        h['packages'] = [dict(path=str(path), sha256=digest(path.read_bytes()), version='0.8.1') for path in package.rglob('*') if path.is_file()]
+        if harness == 'claude': response.write_text(json.dumps({'installed': []}))
+        return h, response
+
+    def test_codex_selection_requires_actual_enabled_skill_paths_and_version(self):
+        h, response = self.package_cli_fixture()
+        good = json.loads(response.read_text())
+        selected = self.native.selected_package(self.manifest, 'codex')
+        self.assertEqual(selected['root'], h['runtime']['package_selection']['root'])
+        variants = []
+        missing = copy.deepcopy(good); missing['installed'] = []; variants.append(missing)
+        disabled = copy.deepcopy(good); disabled['installed'][0]['enabled'] = False; variants.append(disabled)
+        ambiguous = copy.deepcopy(good); ambiguous['installed'] *= 2; variants.append(ambiguous)
+        wrong = copy.deepcopy(good); wrong['skills'][0]['path'] = str(self.protocol); variants.append(wrong)
+        duplicate = copy.deepcopy(good); duplicate['skills'].append(dict(good['skills'][0], pluginId='another@market')); variants.append(duplicate)
+        version = copy.deepcopy(good); version['installed'][0]['version'] = 'old'; variants.append(version)
+        for variant in variants:
+            response.write_text(json.dumps(variant))
+            with self.assertRaises((self.native.live.Invalid, self.native.live.Incomplete)):
+                self.native.selected_package(self.manifest, 'codex')
+        response.write_text(json.dumps(good))
+        Path(good['skills'][0]['path']).write_text('changed installed bytes')
+        with self.assertRaises(self.native.live.Invalid): self.native.selected_package(self.manifest, 'codex')
+
+    def test_explicit_claude_and_pi_selection_pins_loading_and_rejects_duplicates(self):
+        for harness in ('claude', 'pi'):
+            h, response = self.package_cli_fixture(harness)
+            selected = self.native.selected_package(self.manifest, harness)
+            self.assertEqual(selected['root'], h['runtime']['package_selection']['root'])
+            self.save(); self.approve()
+            argv = self.native.inject(harness, ['-p', 'offline'], self.run)
+            self.assertIn('--plugin-dir' if harness == 'claude' else '--skill', argv)
+            self.assertIn(selected['root'] if harness == 'claude' else selected['root'] + '/skills', argv)
+            if harness == 'pi':
+                argv = self.native.inject(harness, ['-p', '--skill', str(SCRIPTS.parent / 'pi/skills'), 'offline'], self.run)
+                self.assertEqual(argv.count('--skill'), 1)
+                with self.assertRaises(self.native.live.Invalid):
+                    self.native.inject(harness, ['--skill', str(self.root / 'unlisted')], self.run)
+            if harness == 'claude':
+                response.write_text(json.dumps({'installed': [{'id': 'superagent@a', 'enabled': True}]}))
+                argv = self.native.inject(harness, ['-p', 'offline'], self.run)
+                self.assertEqual(json.loads(argv[argv.index('--settings') + 1])['enabledPlugins'], {'superagent@a': False})
+                response.write_text(json.dumps({'installed': [{'id': 'superagent@a', 'enabled': True}, {'id': 'superagent@b', 'enabled': True}]}))
+                with self.assertRaises(self.native.live.Invalid): self.native.selected_package(self.manifest, harness)
+
+    def test_missing_selected_package_fails_preflight_before_scheduler(self):
+        from unittest.mock import patch
+        h, response = self.package_cli_fixture()
+        cli = Path(h['runtime']['cli'])
+        cli.write_text(cli.read_text().replace("if '--help' in sys.argv:", "if '--version' in sys.argv: print('offline-cli')\nelif '--help' in sys.argv:"))
+        h['runtime'].update(cli_version='offline-cli', scripts_root=str(SCRIPTS), launchd_dir=str(self.root / 'LaunchAgents'),
+            outer_loop=str(self.root / 'outer.md'), interval_seconds=1)
+        for path in [cli, Path(self.native.__file__), PATH] + [SCRIPTS / name for name in
+                ('launch.sh', 'stop.sh', 'install-timer.sh', 'uninstall-timer.sh', 'superagent-tick.sh', '_common.sh', 'role-bridge.sh')]:
+            h['packages'].append(dict(path=str(path), sha256=digest(path.read_bytes()), version='0.8.1'))
+        timeout = self.root / 'timeout'; timeout.write_text('#!/bin/sh\nprintf "GNU coreutils offline\\n"\n'); timeout.chmod(0o700)
+        record = json.loads(response.read_text()); record['installed'] = []; response.write_text(json.dumps(record))
+        with patch.object(self.native.shutil, 'which', return_value=str(timeout)):
+            with self.assertRaisesRegex(self.native.live.Invalid, 'selected Codex plugin'):
+                self.native.native_preflight(self.manifest, 'codex')
+        self.assertFalse(Path(h['runtime']['config_root']).exists())
+        self.assertFalse(Path(h['runtime']['outer_loop']).exists())
+
     def test_native_preflight_refuses_missing_gnu_timeout_before_arming(self):
         from unittest.mock import patch
         cli = self.root / 'fake-cli'
@@ -648,9 +812,43 @@ class NativeHookTests(unittest.TestCase):
         self.assertEqual(digest(archived.encode()), permit['final_response']['sha256'])
 
 
+    def test_native_observer_accepts_only_real_empty_operation_bootstrap(self):
+        spec = importlib.util.spec_from_file_location('bootstrap_fixture', SCRIPTS / 'coding-loop-driver-test.py')
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        f = module.DriverTests(); f.setUp(); self.addCleanup(f.doCleanups)
+        agreement = f.full_loop_fixture('claude')
+        snapshot = live.state.read_state(f.outer)
+        self.assertEqual(snapshot['agreement_revision'], 'PENDING')
+        h = self.manifest['harnesses']['codex']
+        h.update(project=str(f.project), code_root=str(f.repo), vault_root=str(f.repo / 'vault'),
+                 agreement_revision=agreement, runtime={'outer_loop': str(f.outer)})
+        h['agreement'] = [dict(path=str(f.project / name), sha256=digest(live.evidence._without_iteration_ledger((f.project / name).read_bytes()) if name == 'prd.md' else (f.project / name).read_bytes()),
+            mode='prd-without-ledger' if name == 'prd.md' else 'bytes')
+            for name in ('prd.md', 'evaluation.md', 'knowledge-base.md')]
+        with self.native.transaction(self.run) as data:
+            deadline = data['deadline']
+            self.native.observe_agreement(self.manifest, 'codex', snapshot)
+            self.assertEqual(data['deadline'], deadline)
+            request = self.native.pin_request(self.manifest, 'codex', self.event(), self.event()['tool_input'])
+            with self.assertRaisesRegex(self.native.live.Invalid, 'fingerprint'):
+                self.native.reserve(data, self.manifest, [request])
+            self.assertEqual(data['used'], 0)
+            frozen = dict(snapshot, agreement_revision=agreement)
+            f.outer.write_bytes(live.state._serialize_state(frozen))
+            self.native.reserve(data, self.manifest, [request])
+            self.assertEqual(data['used'], 1)
+            self.assertEqual(data['deadline'], deadline)
+        for changes in ({'status': 'WAITING FOR EVAL'}, {'operation': {'phase': 'EVALUATING'}}, {'agreement_revision': 'wrong'}):
+            with self.assertRaises(self.native.live.Invalid):
+                self.native.observe_agreement(self.manifest, 'codex', dict(snapshot, **changes))
+        (f.project / 'evaluation.md').write_text('changed')
+        with self.assertRaises(self.native.live.Invalid):
+            self.native.observe_agreement(self.manifest, 'codex', snapshot)
+
     def test_native_cli_argv_injection_has_no_shell_interpolation(self):
         for harness in ('codex', 'claude', 'pi'):
-            argv = self.native.inject(harness, ['-p', 'literal;$(touch NEVER)'], self.run)
+            self.package_cli_fixture(harness); self.save(); self.approve()
+            argv = self.native.inject(harness, ['literal;$(touch NEVER)'], self.run)
             self.assertIn('literal;$(touch NEVER)', argv)
             self.assertTrue(all(isinstance(arg, str) for arg in argv))
             self.assertFalse((self.repo / 'NEVER').exists())

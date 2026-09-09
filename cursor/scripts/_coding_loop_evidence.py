@@ -844,6 +844,11 @@ def _path_at_main(git_root: Path, artifact: Path) -> tuple[str, str]:
     )
     if tracked.returncode:
         return "", "artifact is not tracked on main"
+    # Callers parse local files after reconciliation. A clean feature branch is
+    # not main: require the same bytes before returning a reusable local path.
+    blob = _main_blob(git_root, relative)
+    if not artifact.is_file() or artifact.read_bytes() != blob:
+        return "", "artifact bytes differ from main"
     commit = _git_text(
         git_root, "log", "-1", "--format=%H", "refs/heads/main", "--", relative
     )
@@ -1082,12 +1087,14 @@ def _goal_scaffold(
         if Path(path).parent.as_posix() == f"{relative_goal}/master-plans"
         and Path(path).suffix == ".md"
     ]
-    if master_docs != [master_root]:
+    # reconcile_operation already requires exactly one operation-matching root.
+    # superplan legitimately adds descendant masters to this same directory.
+    if master_root not in master_docs:
         return (
             False,
             False,
             [],
-            "goal scaffold does not contain exactly the recorded root plan",
+            "goal scaffold does not contain the recorded root plan",
         )
     return (
         True,
