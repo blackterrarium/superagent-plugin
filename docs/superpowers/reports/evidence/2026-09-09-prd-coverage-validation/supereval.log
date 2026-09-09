@@ -1,0 +1,12 @@
+ok   - evalspec_env prints setup<US>cwd
+ok   - evalspec_checks unescapes \| to | in the command field
+ok   - evalspec_checks emits one J record (5 US-fields) and no C record for a judged-only spec
+ok   - case 1 all pass -> exit 0, C1 & C2 PASS
+ok   - case 2 one failing exit -> exit 1, C2 FAIL, ### C2 output block present
+ok   - case 3 sleep 70 / timeout 1 -> exit 1, C1 TIMEOUT
+ok   - case 4 nonexistent binary -> exit 1, C1 ERROR
+ok   - case 5 setup fails -> exit 1, all rows 'ERROR setup failed'
+ok   - case 6 \| command round-trips -> exit 0, C1 PASS, evidence shows a\|b
+ok   - case 7 judged-only -> exit 0, empty command table, one J record
+ok   - case 8 --worktree used as-is and not removed
+supereval-test: 0 failure(s)
