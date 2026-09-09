@@ -1,7 +1,7 @@
 ---
 name: supermeta
 description: Turn a READY coding-loop project folder into the next round's meta-plan and drive supergoal (auto-confirmed) to scaffold the goal folder the inner loop will build. Writes meta-plans/<STAMP>-r<N>.md, dispatches one PLANNER subagent that runs supergoal, appends the iteration-ledger row, and commits per superauthor A7. Stage 2 of the coding loop; runs unattended.
-argument-hint: "<project-dir>"
+argument-hint: "<project-dir> [--operation <path>]"
 license: MIT
 related skills: superauthor, supergoal, superprd, supereval
 ---
@@ -18,7 +18,9 @@ supermeta **never plans the work itself and never touches source code** (superau
 structural docs (a meta-plan and a ledger row) and dispatches exactly **one** PLANNER-role subagent
 that invokes `superagent:supergoal`.
 
-**Input:** `<project-dir>` — an existing coding-loop project folder. **Required.**
+**Input:** `<project-dir>` — an existing coding-loop project folder. **Required.** Optional:
+`--operation <path>` uses a supervisor-persisted operation identity. With no operation, all manual
+defaults remain unchanged.
 
 ## Repo configuration (.superenv)
 
@@ -72,6 +74,23 @@ Resolve `<primary_root>` (the code checkout: `dirname "$(git rev-parse --path-fo
 2. Run `PRD_LINT_REPO_ROOT="<primary_root>" "${CLAUDE_PLUGIN_ROOT}/scripts/prd-lint.sh" "<project-dir>"`.
    A non-zero exit is the same refusal, quoting the FAIL lines, then **exit** without writing.
 
+When `--operation <path>` is present, load duplicate-key-rejecting JSON containing exactly `id`,
+`phase`, `round`, `agreement_revision`, `code_commit`, `meta_plan`, `goal_folder`, `report`, and
+`source_vault_commit`. Apply the types and locator rules from `_coding_loop_state.py` and
+`_coding_loop_evidence.py`. Require `phase` = `META-PLANNING`, empty `code_commit` and `report`, a
+32-character lowercase hexadecimal `id`, and nonempty remaining identity fields. The recorded
+`meta_plan` must resolve inside `<project-dir>/meta-plans`; `goal_folder` must resolve inside
+`<vault_root>`. Keep the file unchanged for the child.
+
+Operation mode has a machine-readable completion contract. Its last output line is one compact JSON
+object with keys `outcome`, `phase`, `operation_id`, `round`, `meta_plan`, `goal_folder`,
+`root_plan`, `goal_complete`, `goal_recoverable`, `goal_completion_reason`, `worker_complete`, `completion_reason`,
+`artifacts`, and `reason`. `outcome` uses the reconciler's
+`INTEGRATED`, `ABSENT`, or `CONFLICT` artifact classification; an integrated reusable goal can still
+have `worker_complete: false`. That flag becomes true only after the goal, meta-plan and ledger are
+verified on `main`. Paths are absolute and each verified artifact has `path` and `commit`. The caller
+uses this result for recovery; the human Final Report is not phase-completion evidence.
+
 ### 3. Derive identifiers
 
 - `<STAMP>` — `date -u +%Y-%m-%d-%H_%M`, taken once per run.
@@ -82,6 +101,37 @@ Resolve `<primary_root>` (the code checkout: `dirname "$(git rev-parse --path-fo
 - **Repair guidance** — if `<project-dir>/diagnoses/<…>-r<N-1>.md` exists (never in Stage 2; the
   file layout is fixed so Stage 3 needs no change here), read it and quote its per-problem guidance;
   otherwise repair guidance is `none — first round`.
+
+In operation mode, do not derive identities from the clock or ledger. Use the recorded `round`, exact
+`meta_plan`, and only permitted `goal_folder`; derive `<STAMP>` from the frozen basenames and reject
+inconsistent round, stamp, slug, ledger, or project identities. Require `source_vault_commit` on
+vault `main` and the current agreement fingerprint equal to `agreement_revision` before dispatch.
+For round 1, repair guidance is `none — first round`. For a later round, locate the unique FINAL
+diagnosis linked to the previous ledger row's failed report and validate it with
+the existing Python API and its complete authoritative inputs:
+
+```python
+validate_diagnosis(
+    diagnosis_path,
+    {
+        "round": N - 1,
+        "eval_report": previous_eval_report,
+        "code_commit": previous_evaluated_commit,
+        "agreement_revision": agreement_revision,
+        "source_vault_commit": diagnosis_source_vault_commit,
+        "failing_ids": validated_previous_eval["failing_ids"],
+        "missing_ids": validated_previous_eval["missing_ids"],
+    },
+)
+```
+
+First run `validate_evaluation` on the previous report to obtain those failed/missing IDs and exact
+evaluated commit; take the report path from the previous ledger row and require the diagnosis's
+recorded source-vault revision on `main`. `validate_diagnosis` itself requires a unique operation ID
+in the report. The result must match the previous round/report, evaluated commit, agreement and
+source revision, return disposition `REPAIR`, and set `may_start_next_round: true`. Missing,
+ambiguous, AUTHOR INPUT, or mismatched context is `CONFLICT`; never label a later round as a first
+round.
 
 ### 4. Read the knowledge base
 
@@ -105,6 +155,7 @@ then self-review it (A4 — spec coverage against the PRD/evaluation, A3 placeho
 ```
 # <Project title> — meta-plan round <N> — <STAMP>-r<N>
 **Date:** <YYYY-MM-DD> · **Status:** READY · **Related:** [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/prd]] · **Round:** <N>
+**Operation:** <operation id> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit>   (operation mode only; omit this line manually)
 
 ## Goal for this round
 <one or two paragraphs: what the inner loop must build or repair this round, written as a goal
@@ -146,7 +197,8 @@ doc-url/context7 rows.>
 
 Then **move** the reviewed file from scratch into `<project-dir>/meta-plans/<STAMP>-r<N>.md`
 (uncommitted until the ledger commit in step 7) so the goal folder's `**Source:**` link can point at
-its vault path.
+its vault path. In operation mode, if the exact path already exists, require its Operation line and
+complete identity to match and resume it; never replace it or choose another timestamped name.
 
 ### 6. Dispatch supergoal via one PLANNER subagent
 
@@ -178,6 +230,18 @@ The subagent's prompt instructs it to invoke the `superagent:supergoal` skill vi
 
 and to **return supergoal's complete Final Report verbatim** as its final message.
 
+In operation mode append `--operation <the same absolute operation JSON path>`. Before dispatch,
+run `_coding_loop_evidence.py reconcile <primary_root> <vault_root> --operation <path>`. An
+`INTEGRATED` result supplies the exact `goal_folder` and `root_plan`. If `worker_complete` is true,
+return the existing completed operation. If `goal_complete` is true, reuse the scaffold and skip the
+PLANNER dispatch while finishing meta/ledger work. If `goal_complete` is false and
+`goal_recoverable` is true, dispatch PLANNER once with the same operation so supergoal explicitly
+repairs only the missing matching scaffold. A false `goal_recoverable` is a hard conflict. For
+`ABSENT`, dispatch once. For `CONFLICT`, resume only exact pending A7 work owned by this operation,
+finish its normal integration, and reconcile again. An identity mismatch or
+unrelated partial output is a hard conflict. Never infer success from child text, a folder
+collision, working-tree bytes, or an unmerged commit.
+
 Parse `**Goal folder:**` and `**Root plan:**` from the returned report. **If** the report is missing
 either line, **or** supergoal reports a refusal — the key is not `true`
 (`--autoconfirm ignored: SUPER_GOAL_AUTOCONFIRM is not true`), the goal folder already exists (the
@@ -194,6 +258,11 @@ Append this row to `prd.md`'s `## Iteration ledger` table (the goal-folder path 
 | <N> | [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/meta-plans/<STAMP>-r<N>]] | [[<goal-folder-path-from-vault-root>]] | - | - | - |
 ```
 
+In operation mode, inspect `main` for round `N` first. Reuse its one row only when it exactly links
+the recorded meta-plan and goal. If absent, append it once. A duplicate or different identity is a
+conflict. Commit or resume the exact pending A7 work; do not create another branch, row, meta-plan,
+or goal.
+
 Then apply **A7** with:
 
 - **branch prefix:** `project/<project-slug>-r<N>-meta`
@@ -205,6 +274,11 @@ Then apply **A7** with:
   explicit list keeps that commit and this one disjoint.)
 - **External vault:** A7's target is the vault repo — a direct commit, no PR (see A7 **Target
   repo**); its precondition applies (STOP and report if `<vault_root>` is not its own repository).
+
+After A7, operation mode reconciles again and separately verifies the exact meta-plan and one ledger
+row on `main` alongside the reconciled goal plan. Dirty bytes, an unmerged commit, missing or
+duplicate output, or an identity mismatch produces a non-integrated JSON result and no phase
+completion.
 
 ### 8. Final Report (A8)
 
@@ -221,3 +295,5 @@ Then apply **A7** with:
 ```
 
 After printing the report, take no further action and ask no follow-up question.
+
+In operation mode only, print the compact operation-result JSON as the final line after the report.

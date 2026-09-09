@@ -847,12 +847,267 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         run_git(vault, "commit", "-q", "-m", "evaluation")
         return repo, vault, report, operation
 
+    def make_meta_worker_fixture(self):
+        repo = self.root / "worker-repo"
+        remote = self.root / "worker-remote.git"
+        run_git(self.root, "init", "-q", "--bare", str(remote))
+        repo.mkdir()
+        run_git(repo, "init", "-q", "-b", "main")
+        run_git(repo, "config", "user.email", "worker-test@example.invalid")
+        run_git(repo, "config", "user.name", "Worker Test")
+        run_git(repo, "remote", "add", "origin", str(remote))
+        project = repo / "vault" / "projects" / "sample"
+        (project / "meta-plans").mkdir(parents=True)
+        (project / "prd.md").write_text(
+            "# PRD\n\n## Iteration ledger\n"
+            "| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |\n"
+            "|---|---|---|---|---|---|\n"
+        )
+        (repo / "README.md").write_text("source\n")
+        run_git(repo, "add", "README.md", "vault")
+        run_git(repo, "commit", "-q", "-m", "approved project")
+        run_git(repo, "push", "-q", "-u", "origin", "main")
+        source_commit = run_git(repo, "rev-parse", "main")
+        operation = {
+            "id": "4" * 32,
+            "phase": "META-PLANNING",
+            "round": 1,
+            "agreement_revision": "agreement-r1",
+            "code_commit": "",
+            "meta_plan": "vault/projects/sample/meta-plans/frozen-r1.md",
+            "goal_folder": "vault/2026-09-09-12_00-sample-r1",
+            "report": "",
+            "source_vault_commit": source_commit,
+        }
+        return repo, project, operation
+
+    @staticmethod
+    def count_ledger_rows(prd: Path) -> int:
+        return sum(
+            1
+            for line in prd.read_text().splitlines()
+            if re.match(r"^\|\s*\d+\s*\|", line)
+        )
+
+    def write_integrated_goal(
+        self,
+        repo: Path,
+        operation: dict,
+        *,
+        operation_id=None,
+        missing_directives=False,
+        mismatched_directives=False,
+        missing_scaffold=None,
+        confirmation="auto-confirmed (SUPER_GOAL_AUTOCONFIRM=true, --autoconfirm) on 2026-09-09",
+    ):
+        goal = repo / operation["goal_folder"]
+        master = goal / "master-plans" / "root.md"
+        master.parent.mkdir(parents=True)
+        master.write_text(
+            "# Round 1 goal\n"
+            "**Status:** READY · **Round:** 1 · **Operation:** "
+            + (operation_id or operation["id"])
+            + " · **Agreement revision:** agreement-r1 · **Source vault commit:** "
+            + operation["source_vault_commit"]
+            + "\n**Related:** [[vault/projects/sample/meta-plans/frozen-r1]]\n"
+        )
+        if not missing_directives:
+            directives = goal / "goal-directives.md"
+            directives.write_text(
+                "# Goal Directives\n"
+                "**Source:** [[vault/projects/sample/meta-plans/frozen-r1]]\n"
+                f"**Confirmation:** {confirmation}\n"
+                "**Operation:** "
+                + (("7" * 32) if mismatched_directives else (operation_id or operation["id"]))
+                + " · **Round:** 1 · **Agreement revision:** agreement-r1"
+                " · **Source vault commit:** "
+                + operation["source_vault_commit"]
+                + "\n"
+            )
+        for name in ("plans", "findings", "reports", "handoff", "todo"):
+            if name == missing_scaffold:
+                continue
+            folder = goal / name
+            folder.mkdir()
+            (folder / ".gitkeep").write_text("")
+        run_git(repo, "add", operation["goal_folder"])
+        run_git(repo, "commit", "-q", "-m", "integrated goal")
+        run_git(repo, "push", "-q")
+        return goal.resolve(), master.resolve()
+
+    def test_meta_moved_but_uncommitted_is_not_completion(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        meta = repo / operation["meta_plan"]
+        meta.write_text(
+            "# Frozen meta-plan\n**Operation:** " + operation["id"] + "\n"
+        )
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("ABSENT", result["outcome"])
+        self.assertEqual(1, len(list((project / "meta-plans").glob("*.md"))))
+        self.assertEqual(0, len(list((repo / "vault").glob("*-sample-r1"))))
+        self.assertEqual(0, self.count_ledger_rows(project / "prd.md"))
+
+    def test_integrated_goal_is_reused_after_cursor_crash(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        committed_goal, committed_master = self.write_integrated_goal(repo, operation)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertEqual(str(committed_goal), result["goal_folder"])
+        self.assertEqual(str(committed_master), result["root_plan"])
+        self.assertTrue(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("meta-plan", result["completion_reason"])
+        self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
+        self.assertEqual(0, len(list((project / "meta-plans").glob("*.md"))))
+        self.assertEqual(0, self.count_ledger_rows(project / "prd.md"))
+
+    def test_missing_goal_directives_requires_explicit_scaffold_recovery(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, missing_directives=True)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertTrue(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("goal-directives.md", result["completion_reason"])
+        self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
+        self.assertEqual(0, self.count_ledger_rows(project / "prd.md"))
+
+    def test_mismatched_goal_directives_requires_explicit_scaffold_recovery(self):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, mismatched_directives=True)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("goal-directives.md identity", result["completion_reason"])
+
+    def test_missing_goal_scaffold_directory_requires_explicit_recovery(self):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, missing_scaffold="reports")
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertTrue(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("reports", result["completion_reason"])
+
+    def assert_confirmation_is_not_approval(self, confirmation):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, confirmation=confirmation)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("confirmation", result["completion_reason"].lower())
+
+    def test_pending_confirmation_is_not_approval(self):
+        self.assert_confirmation_is_not_approval("pending")
+
+    def test_unsupported_confirmation_is_not_approval(self):
+        self.assert_confirmation_is_not_approval("operator said yes")
+
+    def test_invalid_confirmation_date_is_not_approval(self):
+        self.assert_confirmation_is_not_approval("user-confirmed on 2026-99-99")
+
+    def test_human_confirmed_goal_scaffold_is_complete(self):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(
+            repo,
+            operation,
+            confirmation="user-confirmed on 2026-09-09",
+        )
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertTrue(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+
+    def test_conflicting_goal_identity_is_not_reused(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, operation_id="5" * 32)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("no matching goal", result["reason"])
+        self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
+        self.assertEqual(0, self.count_ledger_rows(project / "prd.md"))
+
+    def test_integrated_meta_goal_and_ledger_are_worker_complete_on_replay(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        committed_goal, _master = self.write_integrated_goal(repo, operation)
+        meta = repo / operation["meta_plan"]
+        meta.write_text(
+            "# Frozen meta-plan\n"
+            "**Status:** READY · **Round:** 1\n"
+            "**Operation:** "
+            + operation["id"]
+            + " · **Agreement revision:** agreement-r1 · **Source vault commit:** "
+            + operation["source_vault_commit"]
+            + "\n"
+        )
+        (project / "prd.md").write_text(
+            "# PRD\n\n## Iteration ledger\n"
+            "| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |\n"
+            "|---|---|---|---|---|---|\n"
+            "| 1 | [[vault/projects/sample/meta-plans/frozen-r1]] | "
+            "[[vault/2026-09-09-12_00-sample-r1]] | - | - | - |\n"
+        )
+        run_git(repo, "add", "vault/projects/sample")
+        run_git(repo, "commit", "-q", "-m", "integrated meta and ledger")
+        run_git(repo, "push", "-q")
+
+        first = evidence.reconcile_operation(repo, repo / "vault", operation)
+        replay = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual(first, replay)
+        self.assertTrue(replay["worker_complete"])
+        self.assertTrue(replay["goal_complete"])
+        self.assertFalse(replay["goal_recoverable"])
+        self.assertEqual("", replay["completion_reason"])
+        self.assertEqual(str(committed_goal), replay["goal_folder"])
+        self.assertEqual(4, len(replay["artifacts"]))
+        self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
+        self.assertEqual(1, len(list((project / "meta-plans").glob("*.md"))))
+        self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
+
     def test_tracked_integrated_matching_result_is_reusable(self):
         repo, vault, _project, report, operation = self.make_reconcile_fixture()
         result = evidence.reconcile_operation(repo, vault, operation)
         self.assertEqual("INTEGRATED", result["outcome"])
         self.assertEqual(str(report.resolve()), result["artifacts"][0]["path"])
         self.assertEqual(run_git(repo, "rev-parse", "main"), result["artifacts"][0]["commit"])
+
+    def test_report_commit_before_cursor_update_replays_identically(self):
+        repo, vault, project, report, operation = self.make_reconcile_fixture()
+
+        first = evidence.reconcile_operation(repo, vault, operation)
+        replay = evidence.reconcile_operation(repo, vault, operation)
+
+        self.assertEqual(first, replay)
+        self.assertEqual("INTEGRATED", replay["outcome"])
+        self.assertEqual(str(report.resolve()), replay["report"])
+        self.assertEqual(1, len(list((project / "eval-reports").glob("*.md"))))
+        self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
+        self.assertEqual(0, len(list(vault.glob("*-sample-r1"))))
 
     def test_synced_main_is_authority_from_a_clean_older_branch(self):
         repo, vault, _project, _report, operation = self.make_reconcile_fixture()
@@ -868,7 +1123,7 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual("INTEGRATED", result["outcome"])
 
     def test_report_committed_on_unmerged_branch_is_not_integrated(self):
-        repo, vault, _project, report, operation = self.make_reconcile_fixture()
+        repo, vault, project, report, operation = self.make_reconcile_fixture()
         run_git(repo, "switch", "-q", "-c", "unmerged")
         report.write_text(
             self.report_text(
@@ -880,9 +1135,13 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         operation["id"] = "2" * 32
         run_git(repo, "add", str(report.relative_to(repo)))
         run_git(repo, "commit", "-q", "-m", "unmerged report")
+        run_git(repo, "update-ref", "refs/pull/1/head", "HEAD")
         result = evidence.reconcile_operation(repo, vault, operation)
         self.assertEqual("CONFLICT", result["outcome"])
         self.assertIn("main", result["reason"])
+        self.assertEqual(1, len(list((project / "eval-reports").glob("*.md"))))
+        self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
+        self.assertEqual(0, len(list(vault.glob("*-sample-r1"))))
 
     def test_ledger_report_link_must_match_the_exact_artifact(self):
         repo, vault, project, _report, operation = self.make_reconcile_fixture()
@@ -897,6 +1156,35 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual("CONFLICT", result["outcome"])
         self.assertIn("does not link", result["reason"])
 
+    def test_report_committed_before_ledger_is_recoverable_without_duplicate(self):
+        repo, vault, project, _report, operation = self.make_reconcile_fixture()
+        operation.update(
+            id="6" * 32,
+            round=2,
+            meta_plan="vault/projects/sample/meta-plans/r2.md",
+            goal_folder="vault/goals/r2",
+            report="vault/projects/sample/eval-reports/r2.md",
+        )
+        report = repo / operation["report"]
+        report.write_text(
+            self.report_text(
+                round_number=2,
+                operation_id=operation["id"],
+                code_commit=operation["code_commit"],
+                source_vault_commit=operation["source_vault_commit"],
+            )
+        )
+        run_git(repo, "add", str(report.relative_to(repo)))
+        run_git(repo, "commit", "-q", "-m", "report before ledger")
+        run_git(repo, "push", "-q")
+
+        result = evidence.reconcile_operation(repo, vault, operation)
+
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("0 rows for round 2", result["reason"])
+        self.assertEqual(2, len(list((project / "eval-reports").glob("*.md"))))
+        self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
+
     def test_duplicate_matching_reports_conflict(self):
         repo, vault, project, report, operation = self.make_reconcile_fixture()
         duplicate = project / "eval-reports" / "duplicate.md"
@@ -909,7 +1197,7 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertIn("multiple", result["reason"])
 
     def test_untracked_result_is_not_success(self):
-        repo, vault, _project, report, operation = self.make_reconcile_fixture()
+        repo, vault, project, report, operation = self.make_reconcile_fixture()
         report.write_text(
             self.report_text(
                 operation_id="3" * 32,
@@ -921,6 +1209,8 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         result = evidence.reconcile_operation(repo, vault, operation)
         self.assertEqual("CONFLICT", result["outcome"])
         self.assertIn("uncommitted", result["reason"])
+        self.assertEqual(1, len(list((project / "eval-reports").glob("*.md"))))
+        self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
 
     def test_external_vault_without_remote_accepts_its_local_main(self):
         repo, vault, _report, operation = self.make_external_reconcile_fixture()
@@ -1065,6 +1355,20 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(0, validation.returncode, validation.stderr)
         self.assertEqual("PASS", json.loads(validation.stdout)["verdict"])
+
+    def test_supermeta_uses_the_callable_diagnosis_validation_api(self):
+        skill = (SCRIPTS.parent / "skills" / "supermeta" / "SKILL.md").read_text()
+        self.assertIn("validate_diagnosis(", skill)
+        self.assertNotIn("_coding_loop_evidence.py validate-diagnosis", skill)
+
+    def test_supergoal_missing_directives_recovery_contract_is_coherent(self):
+        skill = (SCRIPTS.parent / "skills" / "supergoal" / "SKILL.md").read_text()
+        self.assertIn("goal_recoverable: true", skill)
+        self.assertIn(
+            "Do not require a missing file to carry metadata before creating it.",
+            skill,
+        )
+        self.assertIn("goal_recoverable: false", skill)
 
 
 if __name__ == "__main__":
