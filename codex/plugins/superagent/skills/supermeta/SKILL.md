@@ -150,7 +150,10 @@ Round N>1: the objective restated plus the repair scope from the diagnosis.>
 
 ## Success criteria and checks
 <every SC row from prd.md verbatim, then every C/J row from evaluation.md verbatim, including the
-Environment setup/cwd lines. These are the acceptance tests the plan must make pass.>
+Environment setup/cwd lines, the full Acceptance checklist with its approval record, and all
+binding contract notes. Preserve source references and identify the source project revision
+(commit plus file paths). Carry optional suggestions separately as nonbinding context.
+These are the approved conditions the plan must satisfy; do not derive a new coverage inventory.>
 
 ## Knowledge base
 | Id | Kind | Locator | Read for | Excerpt |
@@ -168,6 +171,12 @@ doc-url/context7 rows.>
 - Goal folder slug: `<project-slug>-r<N>`.
 - Every implementation plan's verification steps must run the checks above by id; the loop's
   evaluator will run them unchanged afterwards.
+- Carry relevant approved AC IDs, their full requirements and expected results into each leaf
+  plan, together with the source revision. Keep a resolvable path to the full agreement. Report
+  ambiguity or conflict for PRD revision; do not adopt extra test cases as new acceptance scope.
+- Legacy projects without a checklist retain their existing explicit criteria and binding notes;
+  do not fabricate an approval or retroactively require the new format. Ambiguous coverage needs
+  an author decision, not a fresh unattended checklist.
 - Do not modify `evaluation.md`, `prd.md`, or `knowledge-base.md`; a defect in them is reported as
   a finding, not fixed.
 ```

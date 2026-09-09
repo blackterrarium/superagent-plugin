@@ -178,5 +178,32 @@ fi
 rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's#| `exit 0` | 5 |#| `exit 0` | 08 |#' "$T/p/evaluation.md"
 expect "leading-zero timeout is accepted" 0 'PASS evaluation.md:C1 Pass when' "$T/p"
 
+# Coverage agreement is human-reviewed prose, outside the C/J parser contract.
+rm -rf "$T/p"; valid_project "$T/p"
+cat >>"$T/p/evaluation.md" <<'EOF'
+
+## Acceptance checklist
+**Approval:** Approved by fixture author for this test revision.
+| Id | Source | Required case or rule | Expected result | Verification and check ids |
+|---|---|---|---|---|
+| AC1 | prd.md SC2 | Invalid field | Error names the field | Inspect the error assertion; J1 |
+
+## Coverage suggestions and decisions
+| Suggestion | Status |
+|---|---|
+| Add gzip export | Optional, unapproved |
+EOF
+expect "acceptance prose preserves legacy lint compatibility" 0 'PASS evaluation.md:J1' "$T/p"
+(
+  . "$ROOT/scripts/_evalspec.sh"
+  evalspec_checks "$T/p/evaluation.md"
+) >"$T/coverage-records"
+if [[ "$(wc -l <"$T/coverage-records" | tr -d ' ')" == 2 ]] &&
+   ! grep -q 'AC1\|gzip' "$T/coverage-records"; then
+  ok "acceptance and suggestion tables do not become executable checks"
+else
+  fail "acceptance prose contaminated parsed C/J checks"
+fi
+
 echo "prd-lint-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]

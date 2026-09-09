@@ -181,7 +181,12 @@ them:
 plan directly (A2), so nothing has pre-checked it — run the full checklist with fresh eyes:
 
 1. **Spec coverage against the caller's source material** — skim each section/requirement of the topic.
-   Point to a task that implements it; add a task for any gap.
+   Point to a task that implements it; add a task for any gap. When the source includes an approved
+   acceptance checklist, carry its relevant IDs, source revision, full conditions and expected
+   results through root, sub-master and leaf plans. Link the complete agreement so a fresh agent
+   can resolve it. Check task coverage against that agreement; do not re-author the test inventory.
+   Conflicting or ambiguous acceptance inputs are findings for the author, not new conditions
+   for the implementer. This does not restrict implementation choices or ordinary code review.
 2. **Placeholder scan** — search the plan for the A3 patterns. Fix every hit.
 3. **Type/term consistency** — do the types, signatures, and names used in later tasks match what
    earlier tasks defined? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in

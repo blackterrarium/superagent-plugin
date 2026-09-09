@@ -490,6 +490,19 @@ The pieces:
 | SUPER_GOAL_AUTOCONFIRM | `false` | Two-factor gate: `supergoal --autoconfirm` skips supergoal's step-7 human confirmation **only** when this is `true` (used by `supermeta`'s dispatch). Either alone does nothing; a direct `supergoal` user is unaffected. |
 | SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
 
+### Acceptance coverage ownership
+
+During PRD authoring, `supercoverage` proposes required cases, observable outcomes and optional
+extra tests. `superprd` resolves ambiguities with the author and records the approved checklist
+in `evaluation.md`. The checklist preserves general behavior requirements as well as named
+examples; it is an agreement about verification, not proof of exhaustive coverage.
+
+Planning carries that agreement forward. Implementation review and `supereval` inspect whether
+the delivered tests and other evidence satisfy its approved items. New test ideas remain advice;
+changes to acceptance scope return to PRD authoring. Existing projects retain their explicit
+criteria and do not need a retroactive format migration. Mechanical lint checks C/J links and
+runnable syntax; semantic checklist review and author approval remain separate responsibilities.
+
 ## Other harnesses: Codex, Cursor, Pi
 
 Each non-Claude build is generated from the canonical skills by a `scripts/build-<harness>-skills.sh`
@@ -592,6 +605,7 @@ unprefixed on Codex, Cursor, and Pi.
 |---|---|
 | `init` | Bootstrap a repo: prerequisite checks, `.superenv`, vault seed, gitignore entry, per-role agent definitions. Idempotent. |
 | `supergoal` | Turn a goal description into a goal folder plus root master plan. |
+| `supercoverage` | Advise during PRD authoring on explicit cases, general rules and meaningful assertions; prepare a checklist for author approval. |
 | `superprd` | Turn a planning conversation into a coding-loop project folder (`prd.md`, `knowledge-base.md`, `evaluation.md`) after a readiness rubric passes; `--check` prints the readiness report only. |
 | `supermeta` | Meta-planner of the coding loop: turn a READY project folder into the round's meta-plan and drive `supergoal` (auto-confirmed) to scaffold the goal folder the inner loop builds; appends the iteration-ledger row. |
 | `supereval` | Evaluator of the coding loop: run a round's `evaluation.md` command checks against the latest `main` in a detached worktree, grade judged objectives with a read-only evaluator, and record one PASS/FAIL verdict in the eval report and iteration ledger. |
