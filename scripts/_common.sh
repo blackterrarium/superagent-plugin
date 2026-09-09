@@ -225,7 +225,7 @@ superagent_scheduler() {
 
 superagent_launchd_domain() { echo "gui/$(id -u)"; }
 superagent_launchd_label()  { echo "com.superagent.tick.${1:?slug}"; }
-superagent_launchd_plist()  { echo "$HOME/Library/LaunchAgents/com.superagent.tick.${1:?slug}.plist"; }
+superagent_launchd_plist()  { echo "${SUPERAGENT_LAUNCHD_DIR:-$HOME/Library/LaunchAgents}/com.superagent.tick.${1:?slug}.plist"; }
 
 # Job state as launchd reports it: "running" while a tick process is executing,
 # another value (e.g. "waiting") while loaded but idle, empty when not loaded.
@@ -503,4 +503,71 @@ superagent_kick_tick() {
   else
     systemctl --user start --no-block "superagent-tick@$slug.service"
   fi
+}
+
+# Literal identity readers: loop state is data, never shell input. Legacy absence
+# resolves to superagent; duplicate/unknown explicit fields refuse dispatch.
+superagent_supervisor() {
+  local file="${1:?state file}" explicit="${2:-superagent}" value
+  case "$explicit" in superagent|supercode) ;; *) echo "invalid supervisor: $explicit" >&2; return 2 ;; esac
+  value="$(awk 'NR==1 { if ($0 != "---") exit; next } /^---$/ {exit} /^supervisor:/ {sub(/^supervisor:[ \t]*/, ""); print}' "$file")"
+  [[ -n "$value" ]] || value=superagent
+  case "$value" in superagent|supercode) ;; *) echo "invalid state supervisor: $value" >&2; return 2 ;; esac
+  [[ "$value" == "$explicit" ]] || { echo "registration/state supervisor identity conflict" >&2; return 2; }
+  printf '%s\n' "$value"
+}
+
+superagent_registration_field() {
+  local file="${1:?registration}" key="${2:?field}"
+  awk -v key="$key" 'index($0,key "=")==1 {n++; value=substr($0,length(key)+2)} END {if(n==1) print value; else if(n>1) exit 2}' "$file"
+}
+
+superagent_check_registration() {
+  local slug="${1:?slug}" loop="${2:?loop}" supervisor="${3:?supervisor}"
+  local file="${XDG_CONFIG_HOME:-$HOME/.config}/superagent/$slug.env" registered
+  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "invalid slug: $slug" >&2; return 2; }
+  [[ -f "$file" ]] || return 0
+  registered="$(superagent_registration_field "$file" SUPERAGENT_SUPERVISOR)" || return 2
+  [[ "${registered:-superagent}" == "$supervisor" &&
+     "$(superagent_registration_field "$file" REPO)" == "$REPO" &&
+     "$(superagent_registration_field "$file" LOOP_FILE)" == "$loop" ]] || {
+    echo "registration collision for slug $slug" >&2; return 2;
+  }
+}
+
+# Project-only L3 acquisition. Preserve the shared main owner/acquired format,
+# but serialize reclamation AND publication through a persistent advisory-lock
+# inode; never unlink that guard. Kernel release on process death avoids a
+# stranded guard, and live peers are never removed on a cached observation.
+# Legacy goal launch/tick does not call this Python-requiring helper.
+superagent_acquire_gate_lock() {
+  local dir="${1:?lock directory}" helper
+  helper="$(dirname "${BASH_SOURCE[0]}")/_coding_loop_state.py"
+  python3 "$helper" acquire-lock "$dir" --owner "${SUPERAGENT_TICK_PID:-$$}" --steal-min "${SUPER_LOCK_STEAL_MIN:-90}"
+}
+
+# systemd.exec EnvironmentFile supports double-quoted assignment values with
+# POSIX double-quote escapes. Keep the registry literal for lifecycle readers;
+# write this serialized adapter view separately from the *.env registry scan.
+superagent_systemd_environment() {
+  local registry="${1:?registry}" line key value
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" != \#* ]] || continue
+    key="${line%%=*}"; value="${line#*=}"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\$/\\\$}"
+    value="${value//\`/\\\`}"
+    printf '%s="%s"\n' "$key" "$value"
+  done <"$registry"
+}
+
+# EnvironmentFile's directive parser accepts a raw absolute path: it expands
+# specifiers but does not unquote or C-unescape. Preserve actual path bytes;
+# only double percent signs so literal names never become unit specifiers.
+# This is distinct from quoting assignment VALUES inside the environment file.
+superagent_systemd_path() {
+  local value="${1:?path}"
+  value="${value//%/%%}"
+  printf '%s\n' "$value"
 }
