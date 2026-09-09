@@ -23,7 +23,7 @@ REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 load_superenv "$REPO"
 
 usage() {
-  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi]" >&2
+  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--supervisor superagent|supercode] [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi]" >&2
   exit 2
 }
 
@@ -32,6 +32,7 @@ SLUG="${1:-}"; LOOP_FILE_IN="${2:-}"
 shift 2
 
 INTERVAL="${SUPER_TICK_INTERVAL:-30m}"; TICK_TIMEOUT=""; OUTPUT_FORMAT="stream"; MODEL=""
+SUPERVISOR=superagent
 HARNESS="$(superagent_harness)" || exit 2
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +40,7 @@ while [[ $# -gt 0 ]]; do
     --timeout)  TICK_TIMEOUT="${2:?--timeout needs a value}"; shift 2 ;;
     --output)   OUTPUT_FORMAT="${2:?--output needs a value}"; shift 2 ;;
     --model)    MODEL="${2:?--model needs a value}"; shift 2 ;;
+    --supervisor) SUPERVISOR="${2:?--supervisor needs a value}"; shift 2 ;;
     --harness)  HARNESS="${2:?--harness needs a value}"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage ;;
   esac
@@ -54,6 +56,8 @@ if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then
 fi
 LOOP_FILE="$(cd "$(dirname "$LOOP_FILE_IN")" && pwd -P)/$(basename "$LOOP_FILE_IN")"
 
+SUPERVISOR="$(superagent_supervisor "$LOOP_FILE" "$SUPERVISOR")" || exit 2
+superagent_check_registration "$SLUG" "$LOOP_FILE" "$SUPERVISOR" || exit 2
 SCHEDULER="$(superagent_scheduler)"
 # Validate the interval up front on launchd (StartInterval takes seconds only),
 # before any state is written.
@@ -75,6 +79,7 @@ mkdir -p "$CONF_DIR"
   # The goal slug, so a tick can find its own scheduler entry for the DONE
   # self-disarm (superagent-tick.sh; SUPER_AUTO_DISARM_ON_DONE).
   echo "SUPERAGENT_SLUG=$SLUG"
+  echo "SUPERAGENT_SUPERVISOR=$SUPERVISOR"
   # Only pin TICK_TIMEOUT when a cap is explicitly given; otherwise omit it so the
   # wrapper runs uncapped (no systemd/script wall-clock ceiling).
   [[ -n "$TICK_TIMEOUT" ]] && echo "TICK_TIMEOUT=$TICK_TIMEOUT"
@@ -100,9 +105,15 @@ if [[ "$SCHEDULER" == launchd ]]; then
   mkdir -p "$(dirname "$PLIST")"
 
   NEW_PLIST="$(mktemp)"
+  # Shell-quote the input redirection target, then XML-escape the rendered
+  # argument and sed-escape replacement bytes. Values inside the env file are
+  # loaded literally by the template, never sourced/evaluated.
+  env_shell="'$(printf '%s' "$CONF_DIR/$SLUG.env" | sed "s/'/'\\\\''/g")'"
+  env_xml="$(printf '%s' "$env_shell" | sed -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+  env_sed="$(printf '%s' "$env_xml" | sed 's/[\\&|]/\\&/g')"
   sed -e "s|@SLUG@|$SLUG|g" \
       -e "s|@INTERVAL_SECS@|$INTERVAL_SECS|g" \
-      -e "s|@ENV_FILE@|$CONF_DIR/$SLUG.env|g" \
+      -e "s|@ENV_FILE@|$env_sed|g" \
       "$SCRIPT_DIR/launchd/com.superagent.tick.plist.template" >"$NEW_PLIST"
 
   if [[ -f "$PLIST" ]] && cmp -s "$NEW_PLIST" "$PLIST" && [[ -n "$(superagent_launchd_state "$SLUG")" ]]; then

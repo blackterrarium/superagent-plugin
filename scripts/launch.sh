@@ -21,10 +21,20 @@ REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 [[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
+# Project launch from a linked checkout uses the primary checkout's config.
+previous_arg=""
+for launch_arg in "$@"; do
+  if [[ "$previous_arg" == --supervisor && "$launch_arg" == supercode ]]; then
+    primary_git="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)"
+    REPO="$(cd "$primary_git/.." && pwd -P)"
+    break
+  fi
+  previous_arg="$launch_arg"
+done
 load_superenv "$REPO"
 
 usage() {
-  echo "usage: launch.sh <PLAN.md> [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi] [--dry-run]" >&2
+  echo "usage: launch.sh <PLAN.md|PROJECT> [--supervisor superagent|supercode] [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi] [--dry-run]" >&2
   exit 2
 }
 
@@ -33,6 +43,7 @@ PLAN="${1:-}"
 shift
 
 INTERVAL="${SUPER_TICK_INTERVAL:-30m}"; TICK_TIMEOUT=""; SLUG=""; OUTPUT_FORMAT="stream"; MODEL=""; DRY=0
+SUPERVISOR=superagent
 HARNESS="$(superagent_harness)" || exit 2
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --slug)     SLUG="${2:?--slug needs a value}"; shift 2 ;;
     --output)   OUTPUT_FORMAT="${2:?--output needs a value}"; shift 2 ;;
     --model)    MODEL="${2:?--model needs a value}"; shift 2 ;;
+    --supervisor) SUPERVISOR="${2:?--supervisor needs a value}"; shift 2 ;;
     --harness)  HARNESS="${2:?--harness needs a value}"; shift 2 ;;
     --dry-run)  DRY=1; shift ;;
     *) echo "unknown arg: $1" >&2; usage ;;
@@ -48,7 +60,45 @@ while [[ $# -gt 0 ]]; do
 done
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
 case "$HARNESS" in claude|cursor|codex|pi) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor|codex|pi)" >&2; exit 2 ;; esac
+case "$SUPERVISOR" in superagent|supercode) ;; *) echo "invalid supervisor: $SUPERVISOR" >&2; exit 2 ;; esac
 export SUPER_HARNESS="$HARNESS"
+if [[ "$SUPERVISOR" == supercode ]]; then
+  command -v python3 >/dev/null || { echo "supercode requires python3" >&2; exit 2; }
+  # Internal vault resolution is anchored to the physical primary checkout.
+  REPO="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)"
+  REPO="$(cd "$REPO/.." && pwd -P)"
+  export REPO
+  [[ -n "$SLUG" ]] || SLUG="$(basename "$PLAN" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9]{2}-//; s/[^A-Za-z0-9_.-]/-/g')"
+  prepare_args=(prepare-project --repo "$REPO" --vault "$(vault_root "$REPO")" --project "$PLAN"
+    --conf "${XDG_CONFIG_HOME:-$HOME/.config}/superagent" --slug "$SLUG"
+    --max-rounds "${SUPER_CODE_MAX_ITERATIONS:-10}" --dirname "${SUPER_LOOP_STATUS_DIRNAME:-loop-status}")
+  prepared="$(python3 "$SCRIPT_DIR/_coding_loop_state.py" "${prepare_args[@]}")" || exit 2
+  project_values=(); while IFS= read -r value; do project_values+=("$value"); done <<<"$prepared"
+  REPO="${project_values[0]}"; PROJECT="${project_values[1]}"; PLAN_REL="${project_values[2]}"; LOOP_FILE="${project_values[3]}"; SLUG="${project_values[4]}"
+  PRD_LINT_REPO_ROOT="$REPO" "$SCRIPT_DIR/prd-lint.sh" "$PROJECT" >/dev/null || { echo "project PRD lint failed" >&2; exit 2; }
+  set -a; [[ -f "$REPO/.env" ]] && . "$REPO/.env"; set +a
+  ensure_cli_bin; ensure_gh_auth
+  if [[ "$DRY" == 1 ]]; then
+    echo "[dry-run] supercode project: $PLAN_REL; slug: $SLUG; loop: $LOOP_FILE"
+    exit 0
+  fi
+  mkdir -p "$(dirname "$LOOP_FILE")"
+  launch_lock="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").lockd"
+  if SUPERAGENT_TICK_PID=$$ superagent_acquire_gate_lock "$launch_lock"; then
+    trap '[[ "$(cat "$launch_lock/owner" 2>/dev/null)" != "$$" ]] || rm -rf "$launch_lock"' EXIT
+    python3 "$SCRIPT_DIR/_coding_loop_state.py" "${prepare_args[@]}" --write >/dev/null || exit 2
+    rm -rf "$launch_lock"; trap - EXIT
+  elif [[ ! -f "$LOOP_FILE" ]]; then
+    echo "project bootstrap in progress; retry launch" >&2; exit 2
+  fi
+  install_args=(--supervisor supercode --interval "$INTERVAL" --output "$OUTPUT_FORMAT" --harness "$HARNESS")
+  [[ -n "$TICK_TIMEOUT" ]] && install_args+=(--timeout "$TICK_TIMEOUT")
+  [[ -n "$MODEL" ]] && install_args+=(--model "$MODEL")
+  "$SCRIPT_DIR/install-timer.sh" "$SLUG" "$LOOP_FILE" "${install_args[@]}"
+  superagent_kick_tick "$SLUG" 2>/dev/null || true
+  echo "Launched supercode external loop: $SLUG; project: $PLAN_REL; loop: $LOOP_FILE"
+  exit 0
+fi
 # Effective model shown in reports (the wrapper's default when unset).
 if [[ -n "$MODEL" ]]; then MODEL_SHOWN="$MODEL"
 elif [[ "$HARNESS" == codex ]]; then MODEL_SHOWN="config default"
@@ -101,6 +151,10 @@ if [[ -d "$LOOP_DIR" ]]; then
   done
 fi
 
+prospective_loop="${LOOP_FILE:-$LOOP_DIR/$(date +%Y-%m-%d)-$SLUG.md}"
+superagent_check_registration "$SLUG" "$prospective_loop" "$SUPERVISOR" || exit 2
+[[ -z "$LOOP_FILE" ]] || superagent_supervisor "$LOOP_FILE" "$SUPERVISOR" >/dev/null || exit 2
+
 if [[ "$DRY" == 1 ]]; then
   echo "[dry-run] would launch superagent external loop:"
   echo "  goal slug:  $SLUG"
@@ -130,6 +184,7 @@ else
   # FRESH START — superloop L1 loop-status format (gitignored, local-only state).
   cat >"$LOOP_FILE" <<EOF
 ---
+supervisor: superagent
 master_plan: $PLAN_REL
 status: WAITING FOR PLAN
 plan_exhausted: false
@@ -153,7 +208,7 @@ fi
 
 # Arm the per-goal systemd user timer. Only forward --timeout when a cap was given;
 # passing --timeout "" would trip install-timer's ${2:?} null-check and abort.
-install_args=(--interval "$INTERVAL" --output "$OUTPUT_FORMAT" --harness "$HARNESS")
+install_args=(--supervisor "$SUPERVISOR" --interval "$INTERVAL" --output "$OUTPUT_FORMAT" --harness "$HARNESS")
 [[ -n "$TICK_TIMEOUT" ]] && install_args+=(--timeout "$TICK_TIMEOUT")
 [[ -n "$MODEL" ]] && install_args+=(--model "$MODEL")
 "$SCRIPT_DIR/install-timer.sh" "$SLUG" "$LOOP_FILE" "${install_args[@]}"

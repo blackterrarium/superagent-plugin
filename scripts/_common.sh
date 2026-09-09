@@ -225,7 +225,7 @@ superagent_scheduler() {
 
 superagent_launchd_domain() { echo "gui/$(id -u)"; }
 superagent_launchd_label()  { echo "com.superagent.tick.${1:?slug}"; }
-superagent_launchd_plist()  { echo "$HOME/Library/LaunchAgents/com.superagent.tick.${1:?slug}.plist"; }
+superagent_launchd_plist()  { echo "${SUPERAGENT_LAUNCHD_DIR:-$HOME/Library/LaunchAgents}/com.superagent.tick.${1:?slug}.plist"; }
 
 # Job state as launchd reports it: "running" while a tick process is executing,
 # another value (e.g. "waiting") while loaded but idle, empty when not loaded.
@@ -503,4 +503,56 @@ superagent_kick_tick() {
   else
     systemctl --user start --no-block "superagent-tick@$slug.service"
   fi
+}
+
+# Literal identity readers: loop state is data, never shell input. Legacy absence
+# resolves to superagent; duplicate/unknown explicit fields refuse dispatch.
+superagent_supervisor() {
+  local file="${1:?state file}" explicit="${2:-superagent}" value
+  case "$explicit" in superagent|supercode) ;; *) echo "invalid supervisor: $explicit" >&2; return 2 ;; esac
+  value="$(awk 'NR==1 { if ($0 != "---") exit; next } /^---$/ {exit} /^supervisor:/ {sub(/^supervisor:[ \t]*/, ""); print}' "$file")"
+  [[ -n "$value" ]] || value=superagent
+  case "$value" in superagent|supercode) ;; *) echo "invalid state supervisor: $value" >&2; return 2 ;; esac
+  [[ "$value" == "$explicit" ]] || { echo "registration/state supervisor identity conflict" >&2; return 2; }
+  printf '%s\n' "$value"
+}
+
+superagent_registration_field() {
+  local file="${1:?registration}" key="${2:?field}"
+  awk -v key="$key" 'index($0,key "=")==1 {n++; value=substr($0,length(key)+2)} END {if(n==1) print value; else if(n>1) exit 2}' "$file"
+}
+
+superagent_check_registration() {
+  local slug="${1:?slug}" loop="${2:?loop}" supervisor="${3:?supervisor}"
+  local file="${XDG_CONFIG_HOME:-$HOME/.config}/superagent/$slug.env" registered
+  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "invalid slug: $slug" >&2; return 2; }
+  [[ -f "$file" ]] || return 0
+  registered="$(superagent_registration_field "$file" SUPERAGENT_SUPERVISOR)" || return 2
+  [[ "${registered:-superagent}" == "$supervisor" &&
+     "$(superagent_registration_field "$file" REPO)" == "$REPO" &&
+     "$(superagent_registration_field "$file" LOOP_FILE)" == "$loop" ]] || {
+    echo "registration collision for slug $slug" >&2; return 2;
+  }
+}
+
+# L3's owner/acquired format, shared with model-owned locks and wrapper cleanup.
+# Never steal a live peer here: a cheap parked gate can safely retry next tick.
+superagent_acquire_gate_lock() {
+  local dir="${1:?lock directory}" owner acquired_epoch steal_min
+  if ! mkdir "$dir" 2>/dev/null; then
+    owner="$(superagent_lock_owner_state "$dir")"
+    case "$owner" in
+      dead\ *) ;;
+      none|malformed)
+        acquired_epoch="$(superagent_epoch_from_iso "$(cat "$dir/acquired" 2>/dev/null || true)")"
+        steal_min="${SUPER_LOCK_STEAL_MIN:-90}"
+        [[ "$steal_min" =~ ^[0-9]+$ ]] || steal_min=90
+        [[ -n "$acquired_epoch" && $(( $(date -u +%s) - acquired_epoch )) -gt $((10#$steal_min * 60)) ]] || return 1
+        ;;
+      *) return 1 ;;
+    esac
+    rm -rf "$dir"; mkdir "$dir" 2>/dev/null || return 1
+  fi
+  printf '%s\n' "${SUPERAGENT_TICK_PID:-$$}" >"$dir/owner"
+  date -u +%Y-%m-%dT%H:%M:%SZ >"$dir/acquired"
 }

@@ -1,0 +1,486 @@
+#!/usr/bin/env python3
+"""Offline real-driver tests: disposable Git roots and fake external executables."""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS))
+import _coding_loop_state as state
+
+
+class DriverTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='coding driver ')
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.repo = self.root / 'repo'
+        self.repo.mkdir()
+        self.git('init', '-q', '-b', 'main')
+        self.git('config', 'user.email', 'driver@example.invalid')
+        self.git('config', 'user.name', 'Driver Test')
+        (self.repo / 'README.md').write_text('fixture\n')
+        (self.repo / '.gitignore').write_text('loop-status/\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'fixture')
+        self.project = self.repo / 'vault/projects/project with spaces'
+        self.project.mkdir(parents=True)
+        self.valid_project()
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+        self.calls = self.root / 'calls.jsonl'
+        fake = '''#!PYTHON
+import json, os, pathlib, sys
+name = pathlib.Path(sys.argv[0]).name
+with open(os.environ['FAKE_CALLS'], 'a') as out:
+    out.write(json.dumps({'name': name, 'argv': sys.argv[1:], 'stdin': sys.stdin.read() if name == 'pi' else ''}) + '\\n')
+if name == 'uname': print(os.environ.get('FAKE_OS', 'Linux'))
+elif name == 'gh':
+    if sys.argv[1:] == ['auth', 'token']: print('offline-fixture-token')
+elif name == 'launchctl' and 'print' in sys.argv:
+    value = os.environ.get('FAKE_JOB', 'waiting')
+    if value == 'stopped': sys.exit(113)
+    print('state = ' + value)
+elif name == 'systemctl' and 'is-active' in sys.argv:
+    service = any(a.endswith('.service') for a in sys.argv)
+    active = os.environ.get('FAKE_JOB', 'waiting') == 'running' if service else os.environ.get('FAKE_JOB', 'waiting') != 'stopped'
+    print('active' if active else 'inactive'); sys.exit(0 if active else 3)
+'''.replace('PYTHON', sys.executable)
+        for name in ('claude', 'codex', 'pi', 'agent', 'gh', 'systemctl', 'loginctl', 'launchctl', 'uname'):
+            p = self.bin / name
+            p.write_text(fake)
+            p.chmod(0o755)
+        self.env = dict(os.environ, REPO=str(self.repo), PATH=str(self.bin) + ':' + str(Path.home() / '.local/bin') + ':' + os.environ['PATH'], SUPERAGENT_CLI_PATH=str(self.bin),
+                        XDG_CONFIG_HOME=str(self.root / 'config'), SUPERAGENT_LAUNCHD_DIR=str(self.root / 'LaunchAgents'),
+                        FAKE_CALLS=str(self.calls), SUPER_MODEL_SUPERVISOR='inherit', SUPER_HARNESS='claude',
+                        SUPER_GOAL_ROOT='vault', SUPER_NOTIFY_CMD='true', SUPER_AUTO_DISARM_ON_DONE='false',
+                        LOG_FILE=str(self.root / 'tick.log'), GH_CONFIG_DIR=str(self.root / 'gh'), FAKE_JOB='waiting')
+        for key in ('GH_TOKEN', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CURSOR_API_KEY', 'SUPERAGENT_SUPERVISOR', 'LOOP_FILE'):
+            self.env.pop(key, None)
+        self.outer = self.project / 'loop-status/outer.md'
+        self.goal = self.repo / 'vault/goals/goal'
+        self.plan = self.goal / 'master-plans/PLAN.md'
+        self.plan.parent.mkdir(parents=True)
+        self.plan.write_text('# Plan\n')
+        self.running_inner = self.goal / 'loop-status/inner.md'
+        self.running_inner.parent.mkdir()
+
+    def git(self, *args):
+        return subprocess.run(['git', '-C', str(self.repo), *args], check=True, text=True, capture_output=True).stdout.strip()
+
+    def valid_project(self):
+        header = '**Date:** 2026-09-09 · **Status:** READY\n'
+        (self.project / 'prd.md').write_text('# PRD\n' + header + '''\n## Objective
+Demo.
+## Success criteria
+| Id | Criterion | Verified by (check ids) |
+|---|---|---|
+| SC1 | Works | C1 |
+## Constraints and non-goals
+None.
+## Locked decisions
+None.
+## Iteration ledger
+| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |
+|---|---|---|---|---|---|
+''')
+        (self.project / 'knowledge-base.md').write_text('# Knowledge\n' + header + '\n| Id | Kind | Locator | Read for |\n|---|---|---|---|\n| K1 | `repo-file` | `README.md` | Fixture |\n')
+        (self.project / 'evaluation.md').write_text('# Evaluation\n' + header + '''\n## Environment
+- setup: `true`
+- cwd: `.`
+## Command checks
+| Id | Command | Cwd | Pass when | Timeout |
+|---|---|---|---|---|
+| C1 | `true` | `.` | `exit 0` | 5 |
+## Judged objectives
+| Id | Objective | Criteria | Evidence to inspect |
+|---|---|---|---|
+None — command-only.
+''')
+
+    def invoke(self, script, *args, **env):
+        return subprocess.run(['/bin/bash', str(SCRIPTS / script), *map(str, args)], env=dict(self.env, **env), cwd=self.repo, text=True, capture_output=True)
+
+    def launch(self, **env):
+        return self.invoke('launch.sh', self.project, '--supervisor', 'supercode', '--slug', 'outer', **env)
+
+    def assert_ok(self, result):
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def logs(self):
+        return [json.loads(x) for x in self.calls.read_text().splitlines()] if self.calls.exists() else []
+
+    def model_invocations(self):
+        return [x for x in self.logs() if x['name'] in ('claude', 'codex', 'pi', 'agent')]
+
+    def write_outer(self, status='BUILDING', inner=None):
+        self.outer.parent.mkdir(exist_ok=True)
+        document = {k: '' for k in state.REQUIRED_FIELDS}
+        document.update(supervisor='supercode', project=str(self.project.relative_to(self.repo)), status=status,
+                        driver='external', iteration=0, session_skill_count=0, round=1, agreement_revision='a'*64,
+                        inner_loop=str((inner or self.running_inner).relative_to(self.repo)), inner_slug='inner',
+                        operation={k: '' for k in state.OPERATION_FIELDS})
+        self.outer.write_bytes(state._serialize_state(document) + b'\n## Pending decision\n\n## Decisions\n\n## Iteration log\n')
+        self.register('outer', self.outer, 'supercode')
+        self.running_inner.write_text('---\nmaster_plan: ' + str(self.plan.relative_to(self.repo)) + '\nstatus: RUNNING\ndriver: external\n---\n')
+        self.register('inner', self.running_inner, 'superagent')
+        return document
+
+    def register(self, slug, path, supervisor, repo=None):
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent'
+        conf.mkdir(parents=True, exist_ok=True)
+        (conf / (slug + '.env')).write_text(f'REPO={repo or self.repo}\nLOOP_FILE={path}\nSUPERAGENT_SLUG={slug}\nSUPERAGENT_SUPERVISOR={supervisor}\n')
+
+    def invoke_tick(self, **env):
+        return self.invoke('superagent-tick.sh', LOOP_FILE=str(self.outer), SUPERAGENT_SUPERVISOR='supercode', SUPERAGENT_SLUG='outer', **env)
+
+    def outer_status(self):
+        return state.read_state(self.outer)['status']
+
+    def verified_build(self, inner_status='RUNNING'):
+        import _coding_loop_evidence as evidence
+        d = self.write_outer()
+        remote = self.root / 'origin.git'
+        subprocess.run(['git', 'init', '--bare', '-q', str(remote)], check=True)
+        self.git('remote', 'add', 'origin', str(remote))
+        self.git('add', '.')
+        self.git('commit', '-qm', 'approved inputs')
+        self.git('push', '-qu', 'origin', 'main')
+        source = self.git('rev-parse', 'HEAD')
+        meta = self.project / 'meta-plans/frozen-r1.md'
+        meta.parent.mkdir()
+        meta_locator = str(meta.relative_to(self.repo))
+        goal_locator = str(self.goal.relative_to(self.repo))
+        op = dict(id='4'*32, phase='META-PLANNING', round=1, agreement_revision=d['agreement_revision'],
+                  code_commit='', meta_plan=meta_locator, goal_folder=goal_locator, report='', source_vault_commit=source)
+        identity = f"**Operation:** {op['id']} · **Round:** 1 · **Agreement revision:** {op['agreement_revision']} · **Source vault commit:** {source}"
+        meta.write_text('# Meta\n**Status:** READY\n' + identity + '\n')
+        self.plan.write_text('# Plan\n**Status:** READY\n' + identity + f'\n**Related:** [[{meta_locator[:-3]}]]\n')
+        (self.goal / 'goal-directives.md').write_text('# Directives\n' + identity + f'\n**Source:** [[{meta_locator[:-3]}]]\n**Confirmation:** user-confirmed on 2026-09-09\n')
+        for name in ('plans', 'findings', 'reports', 'handoff', 'todo'):
+            (self.goal / name).mkdir()
+            (self.goal / name / '.gitkeep').touch()
+        with (self.project / 'prd.md').open('a') as out:
+            out.write(f'| 1 | [[{meta_locator[:-3]}]] | [[{goal_locator}]] | - | - | - |\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'integrated meta scaffold and ledger')
+        self.git('push', '-q')
+        receipt = evidence.reconcile_operation(self.repo, self.repo / 'vault', op)
+        self.assertTrue(receipt.get('worker_complete'), receipt)
+        d.update(operation=op, meta_plan=meta_locator)
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\n\n## Decisions\n')
+        self.running_inner.write_text(self.running_inner.read_text().replace('status: RUNNING', 'status: ' + inner_status))
+        return d
+
+    def test_verified_building_stays_pending_without_auth(self):
+        self.verified_build()
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.outer_status(), 'BUILDING')
+        self.assertEqual(self.model_invocations(), [])
+        self.assertFalse(any(x['name'] == 'gh' for x in self.logs()))
+
+    def test_all_inner_status_gate_outcomes(self):
+        self.verified_build()
+        original = self.outer.read_bytes()
+        inner = self.running_inner.read_text()
+        for status, job, expected in (
+            ('RUNNING', 'running', 'BUILDING'), ('PLANNING', 'waiting', 'BUILDING'),
+            ('WAITING FOR PLAN', 'waiting', 'BUILDING'), ('WAITING FOR RUN', 'waiting', 'BUILDING'),
+            ('WAITING FOR CI', 'waiting', 'BUILDING'), ('WAITING FOR INPUT', 'waiting', 'BUILDING'),
+            ('RUNNING', 'stopped', 'WAITING FOR INPUT'), ('garbage', 'waiting', 'WAITING FOR INPUT'),
+            ('DONE', 'stopped', 'WAITING FOR EVAL')):
+            for adapter in ('Linux', 'Darwin'):
+                with self.subTest(status=status, job=job, adapter=adapter):
+                    self.outer.write_bytes(original)
+                    self.running_inner.write_text(inner.replace('status: RUNNING', 'status: ' + status))
+                    self.assert_ok(self.invoke_tick(FAKE_JOB=job, FAKE_OS=adapter))
+                    self.assertEqual(self.outer_status(), expected)
+                    self.assertEqual(self.model_invocations(), [])
+        self.assertFalse(any(x['name'] == 'gh' for x in self.logs()))
+
+    def test_bad_inner_identities_never_evaluate(self):
+        self.verified_build('DONE')
+        original = self.outer.read_bytes()
+        inner = self.running_inner.read_bytes()
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent/inner.env'
+        registration = conf.read_bytes()
+        for corruption in ('missing', 'malformed', 'wrong-plan', 'wrong-repo', 'wrong-registration', 'missing-registration', 'wrong-round'):
+            with self.subTest(corruption=corruption):
+                self.outer.write_bytes(original); self.running_inner.write_bytes(inner); conf.write_bytes(registration)
+                if corruption == 'missing': self.running_inner.unlink()
+                elif corruption == 'malformed': self.running_inner.write_text('status: DONE\n')
+                elif corruption == 'wrong-plan': self.running_inner.write_text(inner.decode().replace('PLAN.md', 'OTHER.md'))
+                elif corruption == 'wrong-repo': self.register('inner', self.running_inner, 'superagent', self.root)
+                elif corruption == 'wrong-registration': self.register('inner', self.outer, 'superagent')
+                elif corruption == 'missing-registration': conf.unlink()
+                else:
+                    data = state.read_state(self.outer); data['round'] = 2; data['operation']['round'] = 2
+                    self.outer.write_bytes(state._serialize_state(data))
+                self.assert_ok(self.invoke_tick())
+                self.assertEqual(self.outer_status(), 'WAITING FOR INPUT')
+                self.assertEqual(self.model_invocations(), [])
+
+    def test_live_lock_blocks_gate_write_and_dead_lock_recovers(self):
+        self.verified_build('DONE')
+        before = self.outer.read_bytes()
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        lock.mkdir(); (lock / 'owner').write_text(str(os.getpid()))
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.outer.read_bytes(), before)
+        self.assertEqual((lock / 'owner').read_text(), str(os.getpid()))
+        (lock / 'owner').write_text('999999999')
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.outer_status(), 'WAITING FOR EVAL')
+        self.assertFalse(lock.exists())
+
+    def test_ready_lint_round_limit_and_own_vault_fail_before_registration(self):
+        self.assertNotEqual(self.launch(SUPER_CODE_MAX_ITERATIONS='0').returncode, 0)
+        self.assertNotEqual(self.launch(SUPER_CODE_MAX_ITERATIONS='one').returncode, 0)
+        evaluation = self.project / 'evaluation.md'
+        text = evaluation.read_text(); evaluation.write_text(text.replace('READY', 'DRAFT'))
+        self.assertNotEqual(self.launch().returncode, 0)
+        evaluation.write_text(text.replace('| C1 |', '| BAD |'))
+        self.assertNotEqual(self.launch().returncode, 0)
+        self.assertFalse((Path(self.env['XDG_CONFIG_HOME']) / 'superagent/outer.env').exists())
+
+    def test_rendered_launchd_exec_preserves_literal_paths(self):
+        import plistlib
+        config = self.root / 'config & $literal `literal` \"quoted\" \'single\''
+        self.env['XDG_CONFIG_HOME'] = str(config)
+        self.assert_ok(self.launch(FAKE_OS='Darwin'))
+        plist = Path(self.env['SUPERAGENT_LAUNCHD_DIR']) / 'com.superagent.tick.outer.plist'
+        data = plistlib.loads(plist.read_bytes())
+        result = subprocess.run(data['ProgramArguments'], env=self.env, text=True, capture_output=True)
+        self.assert_ok(result)
+        self.assertEqual(len(self.model_invocations()), 1)
+        self.assertIn('/skills/supercode/SKILL.md', str(self.model_invocations()))
+        self.assertIn(str(self.project), str(self.model_invocations()))
+
+    def test_gate_rereads_after_acquiring_lock(self):
+        self.verified_build('DONE')
+        replacement = self.root / 'replacement.md'
+        d = state.read_state(self.outer); d['status'] = 'WAITING FOR META-PLAN'
+        replacement.write_bytes(state._serialize_state(d))
+        mkdir = self.bin / 'mkdir'
+        mkdir.write_text('#!' + sys.executable + "\nimport os, subprocess, sys, shutil\nr=subprocess.run(['/bin/mkdir', *sys.argv[1:]])\nif r.returncode == 0 and sys.argv[-1].endswith('.lockd'): shutil.copyfile(os.environ['REPLACEMENT'], os.environ['LOOP_FILE'])\nsys.exit(r.returncode)\n")
+        mkdir.chmod(0o755)
+        self.assert_ok(self.invoke_tick(REPLACEMENT=str(replacement)))
+        self.assertEqual(self.outer.read_bytes(), replacement.read_bytes())
+        self.assertEqual(self.model_invocations(), [])
+
+    def test_incomplete_scaffold_done_is_not_evaluable(self):
+        self.verified_build('DONE')
+        self.git('rm', '-q', str((self.goal / 'goal-directives.md').relative_to(self.repo)))
+        self.git('commit', '-qm', 'incomplete scaffold'); self.git('push', '-q')
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.outer_status(), 'WAITING FOR INPUT')
+
+    def test_launcher_reconciles_completed_meta_cursor_under_lock(self):
+        d = self.verified_build()
+        d.update(status='META-PLANNING', inner_loop='', inner_slug='')
+        self.outer.write_bytes(state._serialize_state(d))
+        self.assert_ok(self.launch())
+        self.assertEqual(self.outer_status(), 'WAITING FOR BUILD')
+        self.assertEqual(state.read_state(self.outer)['round'], 1)
+        self.assertEqual(len(list(self.outer.parent.glob('*.md'))), 1)
+
+    def test_registered_project_reuses_slug_and_internal_primary_config(self):
+        self.assert_ok(self.launch())
+        self.assert_ok(self.invoke('launch.sh', self.project, '--supervisor', 'supercode'))
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent'
+        self.assertEqual([x.name for x in conf.glob('*.env')], ['outer.env'])
+        worktree = self.root / 'linked checkout'
+        self.git('worktree', 'add', '-q', '-b', 'linked', str(worktree))
+        (self.repo / '.superenv').write_text('SUPER_GOAL_ROOT=vault\n')
+        env = self.env.pop('SUPER_GOAL_ROOT')
+        try:
+            self.assert_ok(self.launch(REPO=str(worktree)))
+        finally:
+            self.env['SUPER_GOAL_ROOT'] = env
+
+    def test_bootstrap_pending_cannot_be_operation_evidence(self):
+        d = self.verified_build()
+        d['agreement_revision'] = 'PENDING'
+        d['operation']['agreement_revision'] = 'PENDING'
+        self.outer.write_bytes(state._serialize_state(d))
+        self.assertNotEqual(self.invoke_tick().returncode, 0)
+        self.assertEqual(self.model_invocations(), [])
+
+    def test_selected_supervisor_skill_for_each_harness(self):
+        self.write_outer(status='WAITING FOR META-PLAN')
+        plugin = self.root / 'plugin'
+        (plugin / 'scripts').mkdir(parents=True)
+        for name in ('superagent-tick.sh', '_common.sh', '_coding_loop_state.py', '_coding_loop_evidence.py'):
+            shutil.copyfile(SCRIPTS / name, plugin / 'scripts' / name)
+        for path in ('skills/supercode', 'codex/plugins/superagent/skills/supercode', 'pi/skills/supercode', 'cursor/skills/supercode'):
+            folder = plugin / path; folder.mkdir(parents=True); (folder / 'SKILL.md').write_text('# fixture skill availability\n')
+        for harness, expected_cli in (('claude', 'claude'), ('codex', 'codex'), ('pi', 'pi'), ('cursor', 'agent')):
+            with self.subTest(harness=harness):
+                result = subprocess.run(['/bin/bash', str(plugin / 'scripts/superagent-tick.sh')],
+                    env=dict(self.env, LOOP_FILE=str(self.outer), SUPERAGENT_SUPERVISOR='supercode', SUPER_HARNESS=harness),
+                    text=True, capture_output=True)
+                self.assert_ok(result)
+                call = self.model_invocations()[-1]
+                self.assertEqual(call['name'], expected_cli)
+                self.assertIn('/skills/supercode/SKILL.md', str(call))
+
+    def test_installer_conflict_and_invalid_supervisor_are_nonmutating(self):
+        self.write_outer(status='WAITING FOR META-PLAN')
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent/outer.env'
+        original = conf.read_bytes()
+        for supervisor in ('superagent', 'bad'):
+            result = self.invoke('install-timer.sh', 'outer', self.outer, '--supervisor', supervisor)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(conf.read_bytes(), original)
+        self.assertEqual(self.logs(), [])
+
+    def test_systemd_installed_service_exec_uses_literal_registration(self):
+        self.assert_ok(self.launch(FAKE_OS='Linux'))
+        conf = Path(self.env['XDG_CONFIG_HOME'])
+        registration = state._registration(conf / 'superagent/outer.env')
+        unit = (conf / 'systemd/user/superagent-tick@.service').read_text()
+        command = next(line.split('=', 1)[1] for line in unit.splitlines() if line.startswith('ExecStart='))
+        import shlex
+        self.assert_ok(subprocess.run(shlex.split(command), env=dict(self.env, **registration), text=True, capture_output=True))
+        self.assertEqual(len(self.model_invocations()), 1)
+        self.assertIn('/skills/supercode/SKILL.md', str(self.model_invocations()))
+
+    def test_ledger_ahead_of_saved_state_refuses_reset(self):
+        self.assert_ok(self.launch())
+        loop = next(self.outer.parent.glob('*.md')); before = loop.read_bytes()
+        with (self.project / 'prd.md').open('a') as out:
+            out.write('| 3 | meta3 | goal3 | inner3 | report3 | FAIL |\n')
+        self.assertNotEqual(self.launch().returncode, 0)
+        self.assertEqual(loop.read_bytes(), before)
+
+    def test_unowned_external_vault_is_rejected(self):
+        external = self.root / 'not a git vault'
+        shutil.move(str(self.repo / 'vault'), external)
+        self.project = external / 'projects/project with spaces'
+        self.assertNotEqual(self.launch(SUPER_GOAL_ROOT=str(external)).returncode, 0)
+        self.assertEqual(self.logs(), [])
+
+    def test_old_unowned_lock_is_recovered_without_touching_live_peer(self):
+        self.verified_build('DONE')
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        lock.mkdir(); (lock / 'acquired').write_text('2000-01-01T00:00:00Z\n')
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.outer_status(), 'WAITING FOR EVAL')
+        self.assertFalse(lock.exists())
+
+    def test_multiple_ledger_tables_never_become_empty_round_one(self):
+        with (self.project / 'prd.md').open('a') as out:
+            out.write('\nAdditional ledger\n\n| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |\n|---|---|---|---|---|---|\n| 4 | meta4 | goal4 | inner4 | eval4 | FAIL |\n')
+        self.assertNotEqual(self.launch().returncode, 0)
+        self.assertFalse(self.outer.parent.exists())
+
+    def test_default_goal_launch_and_tick(self):
+        result = self.invoke('launch.sh', self.plan, '--slug', 'legacy')
+        self.assert_ok(result)
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent/legacy.env'
+        self.assertIn('SUPERAGENT_SUPERVISOR=superagent', conf.read_text())
+        loop = next(self.running_inner.parent.glob('*legacy.md'))
+        self.assert_ok(self.invoke('superagent-tick.sh', LOOP_FILE=str(loop)))
+        self.assertEqual(len(self.model_invocations()), 1)
+        self.assertIn('/skills/superagent/SKILL.md', str(self.model_invocations()))
+
+    def test_invalid_supervisor_refuses_without_side_effects(self):
+        result = self.invoke('launch.sh', self.plan, '--supervisor', '../bad')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.logs(), [])
+
+    def test_project_launch_and_relaunch_each_adapter(self):
+        for adapter in ('Linux', 'Darwin'):
+            with self.subTest(adapter=adapter):
+                self.assert_ok(self.launch(FAKE_OS=adapter))
+                loops = list((self.project / 'loop-status').glob('*.md'))
+                self.assertEqual(len(loops), 1)
+                data = loops[0].read_bytes()
+                self.assertEqual(state.read_state(loops[0])['round'], 1)
+                self.assertNotIn(b'master_plan:', data)
+                self.assert_ok(self.launch(FAKE_OS=adapter, FAKE_JOB='running'))
+                self.assertEqual(loops[0].read_bytes(), data)
+        self.assertTrue(any(x['name'] == 'launchctl' for x in self.logs()))
+        self.assertTrue(any(x['name'] == 'systemctl' for x in self.logs()))
+        self.assertFalse(any(x['name'] == 'launchctl' and '-k' in x['argv'] for x in self.logs()))
+
+    def test_slug_collision_does_not_mutate(self):
+        self.register('outer', self.running_inner, 'superagent')
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent/outer.env'
+        before = conf.read_bytes()
+        self.assertNotEqual(self.launch().returncode, 0)
+        self.assertEqual(conf.read_bytes(), before)
+        self.assertFalse(self.outer.parent.exists())
+
+    def test_identity_conflict_refuses_before_auth(self):
+        self.write_outer(status='WAITING FOR META-PLAN')
+        result = self.invoke('superagent-tick.sh', LOOP_FILE=str(self.outer), SUPERAGENT_SUPERVISOR='superagent')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.logs(), [])
+
+    def test_building_does_not_start_model(self):
+        self.verified_build()
+        before = self.model_invocations()
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.model_invocations(), before)
+        self.assertEqual(self.outer_status(), 'BUILDING')
+
+    def test_outer_transients_return_ten_and_preserve_live_peer(self):
+        for phase in state.RECOVER_READY:
+            d = self.write_outer(status='WAITING FOR META-PLAN')
+            d['status'] = phase
+            d['operation'].update(id='1'*32, phase=phase, round=1, agreement_revision=d['agreement_revision'],
+                                  meta_plan='meta.md', goal_folder='goal', source_vault_commit='b'*40,
+                                  code_commit='' if phase == 'META-PLANNING' else 'c'*40,
+                                  report='' if phase == 'META-PLANNING' else 'report.md')
+            self.outer.write_bytes(state._serialize_state(d))
+            self.assertEqual(self.invoke_tick().returncode, 10)
+            lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+            lock.mkdir(exist_ok=True)
+            (lock / 'owner').write_text(str(os.getpid()))
+            self.assert_ok(self.invoke_tick())
+            self.assertTrue(lock.exists())
+            shutil.rmtree(lock)
+
+    def test_existing_ledger_is_not_reset(self):
+        with (self.project / 'prd.md').open('a') as out:
+            out.write('| 3 | [[meta-plans/r3]] | [[goals/g3]] | inner3 | [[eval-reports/r3]] | FAIL |\n')
+        self.assert_ok(self.launch())
+        loop = next((self.project / 'loop-status').glob('*.md'))
+        d = state.read_state(loop)
+        self.assertEqual(d['round'], 3)
+        self.assertEqual(d['status'], 'WAITING FOR INPUT')
+        self.assertIn('r3', d['last_eval'])
+
+    def test_missing_python_fails_project_but_not_legacy(self):
+        python = self.bin / 'python3'
+        python.write_text('#!/bin/sh\nexit 127\n'); python.chmod(0o755)
+        self.assertNotEqual(self.launch().returncode, 0)
+        self.assert_ok(self.invoke('launch.sh', self.plan, '--slug', 'legacy'))
+        loop = next(self.running_inner.parent.glob('*legacy.md'))
+        self.assert_ok(self.invoke('superagent-tick.sh', LOOP_FILE=str(loop)))
+        self.assertEqual(len(self.model_invocations()), 1)
+
+    def test_external_vault_and_linked_checkout(self):
+        external = self.root / 'external vault'
+        shutil.move(str(self.repo / 'vault'), external)
+        subprocess.run(['git', 'init', '-q', str(external)], check=True)
+        (external / '.gitignore').write_text('loop-status/\n')
+        self.project = external / 'projects/project with spaces'
+        worktree = self.root / 'linked checkout'
+        self.git('worktree', 'add', '-q', '-b', 'linked', str(worktree))
+        self.assert_ok(self.launch(REPO=str(worktree), SUPER_GOAL_ROOT=str(external)))
+        loop = next((self.project / 'loop-status').glob('*.md'))
+        self.assertEqual(state.read_state(loop)['project'], str(self.project))
+        conf = Path(self.env['XDG_CONFIG_HOME']) / 'superagent/outer.env'
+        self.assertIn('REPO=' + str(self.repo), conf.read_text())
+
+
+if __name__ == '__main__':
+    unittest.main()
