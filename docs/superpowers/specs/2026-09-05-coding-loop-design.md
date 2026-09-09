@@ -7,7 +7,9 @@ existing plan-tree machinery, evaluates the result, diagnoses failures, and repe
 fixes the architecture and the split into three stages; each stage gets its own spec and plan.
 
 Stage specs: [Stage 1 — project inputs and superprd](2026-09-05-coding-loop-stage1-prd-design.md);
-Stage 2 and Stage 3 specs are written when their stage starts.
+[Stage 2 — one manual round](2026-09-06-coding-loop-stage2-design.md);
+[Stage 3 — automatic diagnosis and repair](2026-09-09-coding-loop-stage3-design.md)
+(approved; implementation planned, not yet complete).
 
 ## Problem
 
@@ -163,4 +165,5 @@ loop installed. The loop only ever *calls* them.
 - The original plan scoped verification through Stage 3 to `SUPER_HARNESS=claude`. The
   [2026-09-07 compatibility follow-up](../reports/2026-09-07-coding-loop-harnesses.md) extends
   Stage 1/2 skill verification to Codex and Pi. Cursor and the full scheduler-driven coding-loop
-  acceptance on Codex/Pi remain outside that follow-up.
+  acceptance on Codex/Pi remain outside that follow-up. The approved September 9 Stage 3
+  spec now requires separate live acceptance on Claude, Codex and Pi.
