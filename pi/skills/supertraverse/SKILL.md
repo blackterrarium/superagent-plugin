@@ -69,7 +69,7 @@ A seed/master/sub-master plan carries a progress-report table with these columns
 - **Plan** — a vault wikilink to the plan generated for this step: **either** a child master/seed plan
   (an *internal node* — itself carries a progress-report table) **or** an implementation plan (a *leaf*
   — carries no table). **Blank when no plan exists yet** — a blank `Plan` on a not-completed row is
-  exactly what marks the step an *available task to plan*.
+  what marks an ordinary step an *available task to plan*. C8 repair requests are also eligible.
 - **PR** — one or more pull requests associated with the step.
 - **Comments** — notes; for a completed step, a one-line close-out summary plus a
   `Closeout: [[…reports/…]]` link. The plan link lives in the **Plan** column, **not** here.
@@ -121,6 +121,9 @@ incomplete  →  in progress (planning underway)  →  PLAN WRITTEN — ready to
 
 `deferred` / `declined` / `out-of-scope` are terminal off-ramps available from any earlier state.
 Both ascents are forbidden from downgrading a row to a state earlier in this sequence.
+**Authorized repair is a separate transition (C8):** `repair requested` marks an adopted
+repair awaiting a successor plan. C8 alone may reopen the affected row and ancestors;
+ordinary ascent never does. `repair requested` is neither closed nor merged-on-main.
 
 ## C3. Inferring a row's child-plan link (legacy-compatible — REQUIRED)
 
@@ -141,7 +144,9 @@ order:
 5. If none found → the row has **no child plan** (treat as blank). A broken or missing link is also
    treated as blank — a dangling link must **never** silently halt traversal.
 
-In every case **ignore** links into `reports/` (closeouts) and `findings/`, and ignore PR refs
+In every case **ignore** `Repair:`, `Previous plan:`, `Supersedes:` and `Historical closeout:`
+links (and links inside the repair record); these are history, never active child plans.
+Also ignore links into `reports/` (closeouts) and `findings/`, and ignore PR refs
 (`#NNN`, GitHub URLs) — those are not child plans.
 
 ## C4. Detecting closed rows & the leaf/internal test
@@ -149,6 +154,12 @@ In every case **ignore** links into `reports/` (closeouts) and `findings/`, and 
 Two predicates — used at different points in the walk. The distinction matters because
 `executed — PR open` rows are *past consideration* for descent (the work is done) but **not yet
 merged on `main`** for the completion-mode parent-flip check.
+
+Apply the **repair override first**: a `repair requested` row with its adopted C8 record
+is open for planning regardless of old Plan/Closeout links or a predecessor banner.
+A missing/invalid repair record is BLOCKED, never permission to execute the old plan.
+Status matching below means affirmative state in the Status cell, not substrings in
+comments (`not merged` is not `merged`). A closeout proves an attempt ended, not integration.
 
 - **Closed-for-descent row** (descent skip rule, C6): its **Status** text contains any of
   `completed-and-merged` / `done` / `merged` / `shipped` / `closed-out` / `executed — PR open` /
@@ -196,8 +207,8 @@ leaf/internal + completed-row tests, and `not-traversable` root handling — is 
   planning-mode ascent; `superfinish` performs completion-mode ascent later via parent-seed
   chaining, C5/C7).
 
-Both modes return **`none`** when no node yields a target, and **`not-traversable`** when the root
-is not a progress-report tree.
+Both modes return **`none`** when no node yields a target, **BLOCKED** for invalid repair state,
+and **`not-traversable`** when the root is not a progress-report tree.
 
 Pre-order DFS, honoring priority order (top-to-bottom = highest rank first):
 
@@ -210,7 +221,10 @@ Pre-order DFS, honoring priority order (top-to-bottom = highest rank first):
    C4's leaf/internal test already confirmed it carries a progress-report table; a node reached via a
    `Plan` link that turns out to lack one is a **leaf**, skipped, not an error.)
 1. Walk that progress-report table's rows top to bottom.
-2. For each row, **skip** if it is a closed-for-descent row (C4); otherwise apply the mode's per-row rule:
+2. For each row, first handle `repair requested` per C8: **planning → target this row**,
+   **execution → skip** (the predecessor is not executable again). Validate its repair record;
+   if absent/inconsistent return BLOCKED with the row and reason. Otherwise **skip** if it is
+   a closed-for-descent row (C4); otherwise apply the mode's per-row rule:
    - **planning mode:** if the row has **no child-plan link** (C3) → **this is the target.** Stop.
      (The first not-done row with no child plan, in DFS order, is the highest-priority unplanned
      task.) If it links to a plan, apply the leaf/internal test (C4): **internal → recurse into
@@ -259,8 +273,11 @@ the immediate parent and the path is the descent path (C6) reversed. For **compl
 is the executed leaf and the path is the parent chain obtained by following parent-seed references
 (C5) upward.
 
-At each **ancestor** along the path, locate the row whose child-plan link (C3) points at the child you
-just came from, then apply the mode's update:
+At each **ancestor** along the path, locate the row whose **active** child-plan link (C3) points
+at the child you just came from. For completion ascent, a `repair requested` row or a row
+whose active Plan now points to a successor MUST NOT be advanced by the predecessor's
+closeout. Record historical evidence only and return without changing active rows or ancestors.
+Never match a row through its repair history. Otherwise apply the mode's update:
 
 - **Planning mode** (superplan, after a new plan is written): set that row's **Status** →
   `in progress (planning underway)` **only if** it was previously not-started / `incomplete`. **Never
@@ -304,3 +321,104 @@ return immediately. Record every plan file touched (the calling skill's later co
 explicit `git add`; supertraverse itself never commits). **After the ascent, return control to the
 calling skill (`superplan` in planning mode, `superfinish` in completion mode) and continue executing
 its next section without printing a separate report.**
+
+
+## C8. Authorized repair — durable request and successor publication
+
+**Consumer:** superagent applies an adopted re-plan decision; superplan publishes its successor.
+This is an explicit repair transition, not a relaxation of ordinary C4/C7 idempotency.
+
+### Request (superagent, before changing loop status)
+
+1. Identify the affected active leaf, immediate-parent row and ancestor path. Read its finding,
+   closeout, PR/branch/worktree and the adopted panel/user decision. If the target or authority
+   is ambiguous, return BLOCKED for escalation; never reopen unrelated completed work.
+2. Write a durable `findings/<timestamp>-repair-<topic>.md` record. Required fields: **Decision ID**
+   (stable across replay), **Decision** (adopter, date, rationale, authorized corrections),
+   **Root**, **Parent and step**, **Previous plan**, **Previous closeout**, **Code PR / branch /
+   worktree** (or explicitly absent), **Successor** (initially `pending`), **Disposition**
+   (initially `pending`), **Resolution** (initially `active`; later `integrated`, `superseded`
+   with the next decision/record link, or `declined`/`deferred` with adopted disposition).
+   Capture the decision itself here, not only in the gitignored loop.
+3. Set that step's Status to `repair requested` and Comments to include `Repair: [[record]]`.
+   Keep the existing active Plan, PR and closeout links until successor publication. Reopen
+   ancestors along this path to `in progress (partially executed)`; move stale ancestor Closeout
+   links/banners into the repair record so they cannot hide the path. This is the only authorized
+   backward transition; preserve unaffected siblings and the original leaf/closeout files.
+4. Commit the repair record and tree edits under superauthor A7 (external vault: vault commit;
+   internal: docs PR), sync and verify all are present in the authoritative tree. Only then set
+   `plan_exhausted: false`, `status: WAITING FOR PLAN`. Persist the decision ID and record link
+   in the loop's Decisions entry. A log-only decision is not an applied repair.
+
+**Replay/fresh tick:** before dispatch, reconcile adopted decisions against the tree. If a
+legacy Decisions entry has no record, create the C8 request using that recorded authority;
+if it cannot uniquely identify the target, escalate. An existing record with `Successor: pending`
+resumes the same request. If the record names a successor and the active link agrees, continue
+from that plan's current state; do not reset the row or create another successor. For repeated
+repairs, follow recorded successor → next repair links to the current active plan: a verified
+chain `P0 → P1 → P2` resolves the earlier decision as historical, not contradictory. Mark the
+previous record `superseded` with the next decision link when adopting a new repair. Process
+only the latest unresolved request after validating the chain; cycles, divergent successors or
+missing adopted authority are BLOCKED. An `integrated` or authorized `declined`/`deferred`
+resolution with matching evidence is settled and must not reopen work, even if Successor was
+still pending when declined. Reconcile missing resolution annotations from verified publication
+or disposition evidence; do not infer resolution from a status word alone. A partial
+publication must be reconciled from files and commit evidence before dispatch; contradictory
+links or multiple successors are BLOCKED. Reuse the decision ID; do not duplicate records on retry.
+
+### Publish (superplan)
+
+For the selected repair row, read the C8 record, predecessor, finding and closeout. Write a
+**new implementation plan** in `plans/` with a fresh filename and parent reference to the same
+immediate parent. Include `Supersedes: [[predecessor]]`, `Repair: [[record]]`, explicit corrections,
+remaining work, regression checks and integration disposition. Preserve the predecessor unchanged.
+Do not copy its closeout banner or checked-off tasks into the successor.
+
+The integration disposition must state whether to resume the existing PR/worktree or create a
+replacement. When reusing it, verify its branch/head and rerun the required review/test gates after
+correction. When replacing it, explicitly resolve the old PR (with authority to close it, if needed)
+and account for its changes. An old open PR is not silently forgiven by supersession.
+
+Publish together: successor file; record's **Successor** link and planned **Disposition**;
+row's active **Plan** link to successor and Status `PLAN WRITTEN — ready to execute`. Move the
+row's predecessor Plan/Closeout markers into the repair record; retain only `Repair: [[record]]`
+as historical navigation in Comments. Preserve PR provenance in the record; the row's PR column
+identifies the PR being reused or is blank pending replacement. Apply the same rules to bullet rows.
+Commit/sync/verify before returning success. On interruption, reuse the record's named successor
+or the unique draft referencing this Decision ID; never generate a second one blindly.
+
+A successor is now an ordinary active leaf for execution and closeout. Its closeout records how
+the predecessor PR was resolved and the actual integration evidence; C9 checks that evidence.
+
+## C9. Completion audit — empty queues are not completion
+
+**Consumers:** superagent before any transition to DONE; superrun when execution descent is `none`.
+Return **complete**, **incomplete** (eligible planning/execution work), or **BLOCKED** with concrete
+rows, PRs and missing evidence. This audit is read-only; reconcile via the owning skills.
+
+1. Read the synchronized authoritative tree from the root. Visit active child links recursively
+   even when internal rows carry closed status or closeout banners. Track visited paths: cycles,
+   unreadable/missing active plans, non-traversable roots and ambiguous links are BLOCKED. An
+   intentionally declined/deferred/out-of-scope subtree with recorded authority and disposition
+   need not be descended into. A root banner alone never proves completion.
+2. At each active leaf/step, accept only (a) completed-and-merged/done or affirmative legacy
+   merged/shipped/closed-out state **with verified integration evidence**, or (b) a recorded
+   authorized declined/deferred/out-of-scope disposition. For PR work, verify PR state MERGED,
+   its merge commit in the code repository's main history and tracked closeout. For direct/no-PR
+   work, verify the recorded integration commit on main (local main when no remote) and closeout.
+   Documentation-only work uses its tracked committed deliverable on the authoritative main/vault
+   branch. A docs closeout commit alone never substitutes for the code integration evidence.
+3. If the audit discovers unfinished work hidden by an ancestor's closed-for-descent status
+   or closeout marker, return **BLOCKED** with that path for authorized reconciliation.
+   Returning `incomplete` without restoring reachability would repeat the same empty queues.
+   Otherwise, `executed — PR open`, closed-but-unmerged PR, pending CI, unresolved repair or BLOCKED finding,
+   missing/unverifiable integration evidence, or inconsistent state => **BLOCKED**, even if a
+   report also says `none`. Ordinary unplanned/ready work => **incomplete**. A valid pending C8
+   request => **incomplete** with its repair planning target; invalid repair state => **BLOCKED**.
+4. For repair history, verify each predecessor PR's disposition: reused and now merged, or
+   explicitly replaced/closed with authority, or intentionally declined/deferred with reason.
+   Historical closeout links never suppress active repair work. Supersession alone does not
+   satisfy an unresolved predecessor PR. Do not execute or reopen finished predecessors.
+5. **complete** requires every active obligation to pass, no unresolved blocker/repair/CI wait,
+   and no conflicting report evidence. Report checked rows and integration/disposition evidence
+   to the caller. Unknown evidence => BLOCKED, never optimistic completion.

@@ -1,0 +1,62 @@
+{
+  "adopted_replan": {
+    "planning": "none",
+    "done": false,
+    "durable_repair": false,
+    "reason": "Superagent BLOCKED branch applies re-plan by routing to WAITING FOR PLAN and recording Decisions only; it specifies no repair publication. Supertraverse C4/C6 skip executed \u2014 PR open and Closeout-linked rows, and superplan Input returns none. DONE is not yet entered at the decision/planning stage; the later none/none sequence can enter it."
+  },
+  "mixed_none_blocked": {
+    "outcome": "done",
+    "done": true,
+    "reason": "Literal none-result branch of superagent WAITING FOR RUN step 5 maps plan_exhausted=true plus none to DONE. Ambiguity: the separate BLOCKED branch says do not terminate and calls the panel; no priority rule resolves simultaneous none and BLOCKED. This answer follows the explicit none transition, as in the earlier baseline."
+  },
+  "closeout_repair": {
+    "planning": "none",
+    "execution": "none",
+    "done": true,
+    "reason": "The original C2 has no repair requested state or repair-record eligibility rule. C4/C6 skip any row with a Closeout link regardless of that unfamiliar status; leaf banner separately prevents execution. If these empty queues are processed by superagent step 5, its two-signal rule yields DONE despite the record."
+  },
+  "merged": {
+    "done": true,
+    "reason": "Superagent WAITING FOR RUN step 5 marks DONE for none with plan_exhausted=true. C4/C6 skip completed-and-merged; supplied verified integration and tracked closeout satisfy the existing post-dispatch be-sure requirements."
+  },
+  "declined": {
+    "done": true,
+    "reason": "C4 skips declined and merged rows; C4/C7 count declined as non-blocking for parent completion. Superagent step 5 accepts both queues empty as DONE."
+  },
+  "fresh_tick": {
+    "planning": "none",
+    "durable_repair": false,
+    "done": false,
+    "reason": "The original supervisor defines no replay/publication procedure for an adopted re-plan in Decisions. Routing to WAITING FOR PLAN leaves C4/C6 closed-row skip intact. No repair is materialized; at this pre-dispatch/recovered-decision stage DONE has not yet been entered, though the later two-empty-queue transitions can enter it."
+  },
+  "successor": {
+    "execution": "successor",
+    "done": false,
+    "reason": "C3 prefers the dedicated active Plan cell; C6 execution selects a ready leaf without a closeout banner. This assumes history links remain outside the active row: original C4 would skip a row carrying a Closeout link even if characterized as historical. Work remains executable so the two-empty-queue condition does not hold."
+  },
+  "stale_ancestor": {
+    "done": true,
+    "outcome": "done",
+    "reason": "C4/C6 skip the completed-and-merged root row before descending, hiding the open-PR child. The original supervisor has no full-tree completion audit, and WAITING FOR RUN step 5 maps the supplied empty queues to DONE. C7 would refuse a fresh parent completion flip but is not invoked by this completion decision."
+  },
+  "missing_evidence": {
+    "done": true,
+    "outcome": "done",
+    "reason": "C4/C6 trust done and Closeout for skipping. The original supervisor maps two empty queues to DONE without an independent all-leaf evidence audit. Its post-dispatch be-sure gate checks reported merges, but the fixture supplies empty-queue reports, not a newly reported merge; a reported merge requiring verification would instead STOP."
+  },
+  "late_closeout": {
+    "overwrite_successor": false,
+    "reason": "Superfinish After-Run step 4 and supertraverse C7 locate the row whose child-plan link points at the executed input, and preserve its Plan link. C3 prefers the dedicated Plan successor over predecessor history, so this is not a matching predecessor row. No explicit stale-closeout recovery is provided, but no rule authorizes replacing the active successor or completing an unmatched row."
+  },
+  "replay": {
+    "duplicate_successor": false,
+    "reset_repair": false,
+    "reason": "The original skills define no adopted-repair replay mechanism. Normal planning C6 skips an already-planned successor leaf, producing no second plan. Neither C2/C7 nor supervisor re-plan routing instructs a reset to repair requested; ascents cannot downgrade advanced states."
+  },
+  "closed_pr": {
+    "done": true,
+    "outcome": "done",
+    "reason": "C4/C6 treat closed-out status as closed-for-descent; superagent step 5 maps the empty queues to DONE. No completion-audit rule checks CLOSED-without-merge PR disposition when consuming none reports, although this conflicts with the C4 semantic description of merged-on-main."
+  }
+}

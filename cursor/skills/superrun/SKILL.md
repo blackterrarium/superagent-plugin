@@ -90,10 +90,22 @@ Invoke the `superagent:supertraverse` skill (Skill tool) and run its **DESCENT i
 
 - **`not-traversable`** — the root is not maintained as a progress-report tree (only orchestration
   tables / no step-tracking list). Report this and exit; there is nothing to execute.
-- **`none`** — no incomplete implementation plan exists under this root. Everything is either still
-  **unplanned** (a blank-`Plan` row — use `superagent:superplan` to plan it) or **already complete**.
-  Report which case applies and exit.
+- **BLOCKED** — report the row and reason; exit without execution.
+- **`none`** — no execution target exists; invoke **supertraverse C9 completion audit** before
+  reporting. **complete**: report none with integration/disposition evidence. **incomplete**:
+  report none with the planning/repair gap. **BLOCKED**: return a BLOCKED report naming the
+  unresolved leaf/PR/evidence, even though traversal returned none. An open-PR closeout is not
+  completion. Do not run superfinish on a fabricated target.
 - **a target leaf plan file path** — the highest-priority written-but-unexecuted leaf. Proceed.
+
+## Repair successor context
+
+For a C8 successor, read its Repair record and integration disposition before Step 2. If it
+reuses a PR/worktree, verify their current branch/head and use that isolated worktree; do not
+create a conflicting second checkout or blindly recreate the PR. Execute the successor's
+remaining/corrective tasks and all required review/test gates, then close out the **successor**.
+For a replacement, follow the plan's explicit predecessor PR disposition. Missing or conflicting
+integration instructions are BLOCKED. Supersession alone authorizes neither merge nor deletion.
 
 ## Step 2 — Isolate the workspace (enter a worktree)
 
@@ -130,6 +142,32 @@ repo profile below**.
   review or proceed with unfixed issues.
 - When the tasks are done, superrun integrates the code PR **itself**, autonomously, per **Step 3a**
   below. Capture the resulting **code PR** URL for the Final Report.
+
+### Verify delivery against the approved acceptance agreement
+
+For each implementer and spec reviewer, provide the relevant approved checklist rows verbatim,
+source revision, binding notes and resolvable full-agreement path from the plan. The final
+whole-branch reviewer receives the complete agreement as context, plus the current leaf/PR's
+assigned AC IDs and any explicit division of a shared item across leaves. If the plan omitted these, recover them
+from its named authoritative source before dispatch; report BLOCKED if required context cannot
+be resolved. Do not run a contract-only inventory stage or invoke `supercoverage` here.
+
+Implementers report, by approved AC ID: test/subtest identifier, distinguishing input, assertion
+location and meaning, and execution evidence tied to the reviewed revision (local or CI per
+profile). Use concrete file evidence for non-test obligations. Parameterized tests may satisfy
+multiple rows. Reviewers inspect actual evidence; mappings, test counts and green commands
+alone do not establish the required assertions. Missing or ineffective evidence for an approved
+item is a spec-review finding and follows the existing fix/review path. Check all assigned items
+at task review and all items assigned to this leaf/PR at whole-branch review. Items explicitly
+assigned to later leaves are not failures of this PR; record their ownership without marking
+them delivered. If ownership is missing or conflicting, report BLOCKED for plan clarification.
+Project-wide acceptance belongs to `supereval`; a leaf review cannot claim project completion.
+
+Additional test ideas are advisory unless needed to meet an existing explicit requirement.
+Ambiguity or conflict between checklist and PRD is BLOCKED for author resolution through the
+existing escalation path; never silently expand or weaken acceptance scope. Ordinary bug and
+code-quality review still applies. Legacy plans without a checklist retain their explicit written
+requirements: verify those directly, do not invent an approval or impose a new checklist gate.
 
 ### Repo profile — apply these overrides to subagent-driven-development
 

@@ -121,7 +121,7 @@ Format — YAML frontmatter is the machine state; the body is an append-only hum
 ---
 master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # ROOT seed: repo-relative (internal vault) or ABSOLUTE (external vault)
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
-plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's two-signal DONE; other consumers add their own work-model fields here
+plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's queue-exhaustion hint; other consumers add their own work-model fields here
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
 driver: cron                      # cron (attended, in-session) | external (Desktop routine / OS cron — fresh context per tick)
 cron_id:                          # CronCreate job id (cron driver only; empty in external mode)
@@ -144,7 +144,7 @@ session_skill_count: 0            # heavy skills run in the CURRENT cron session
 
 The baseline fields (`master_plan`, `status`, `prior_status`, `driver`, `cron_id`, `created`,
 `iteration`, `session_skill_count`) are owned by superloop. `plan_exhausted` is **caller-specific** —
-it is superagent's two-signal-DONE field; other consumers add their own work-model fields here.
+it is superagent's queue-exhaustion field (not completion proof); other consumers add their own work-model fields here.
 
 ### Status vocabulary
 
@@ -152,7 +152,7 @@ it is superagent's two-signal-DONE field; other consumers add their own work-mod
 - a **ready** state — the loop is poised to run the caller's per-tick body (superagent: `WAITING FOR PLAN`, `WAITING FOR RUN`).
 - a **transient/running** state — set at the start of a tick, replaced before the tick ends; **persisted ⇒ a crashed tick**, self-healed by L2's crash-recovery (superagent: `PLANNING`, `RUNNING`).
 - **`WAITING FOR INPUT`** — a decision the escalation ladder (L7) could not resolve is awaiting the user.
-- **`DONE`** — the caller's DONE-condition is satisfied (superagent: tree-exhaustion).
+- **`DONE`** — the caller's DONE-condition is satisfied (superagent: queue exhaustion plus verified supertraverse C9 completion audit).
 
 The caller declares its concrete `status:` values and supplies the role→value mapping when it invokes superloop.
 

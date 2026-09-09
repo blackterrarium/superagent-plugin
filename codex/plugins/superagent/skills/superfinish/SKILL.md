@@ -192,6 +192,11 @@ this work, do nothing and move on.
 
 Identify the **immediate parent** seed/master plan `<PLAN.md>` was derived from — read the parent-seed
 reference near the top of `<PLAN.md>` (superplan injects one; this is the `supertraverse` C5 "up" link).
+Before ascent, check **supertraverse C7/C8's active-plan guard**. A predecessor closeout must
+not overwrite a pending repair or a successor's active row. Record its outcome as historical
+only. For a successor, include actual predecessor PR disposition and integration evidence in
+the closeout and repair record; mark Resolution `integrated` only after all integration and
+predecessor dispositions are verified. Leave unresolved dispositions explicitly blocking.
 Then **invoke the `superagent:supertraverse` skill** (Skill tool) and run its **ASCENT in completion mode**,
 chaining parent-seed references from this completed leaf up to the root. supertraverse C7 specifies
 the per-row update precisely; this section need not restate it. In brief:

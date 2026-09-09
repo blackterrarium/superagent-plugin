@@ -53,7 +53,7 @@ cron/external driver + guard/bootstrap/resume (L2), the overlap lock (L3), the c
 (L4), the sync gate (L5), the PR integration discipline (L6), and the decision-escalation ladder (L7).
 superloop owns the **chassis**; superagent supplies the **work model** below — the `WAITING FOR PLAN` /
 `WAITING FOR RUN` status vocabulary, the one-skill-per-tick `superplan` / `superrun` dispatch (Step 1),
-and the two-signal `DONE` condition. superagent's `<consumer>` value for L2's tick prompt is
+and the verified-completion `DONE` condition. superagent's `<consumer>` value for L2's tick prompt is
 `superagent`; its `<bootstrap-input>` is the root `<PLAN.md>`; its status-role mapping is ready =
 `WAITING FOR PLAN` / `WAITING FOR RUN`, transient = `PLANNING` / `RUNNING`, plus `WAITING FOR INPUT`,
 `DONE`, and a superagent-specific **parked** state `WAITING FOR CI` (see **CI wait — monitor-parked**);
@@ -66,7 +66,7 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 |---------|---------|
 | "I'll plan this step and then run it in the same tick while I'm here" | NO. **One skill per tick.** Set the next status and let the next cron tick run it. superplan and superrun contexts must never intermix. |
 | "I'll just invoke `superplan`/`superrun` via the Skill tool here — it's simpler" | NO. **Every `superplan`/`superrun` invocation runs in its own `general-purpose` subagent** (see **Subagent dispatch**). superagent's own context ingests only the returned Final Report (which it then relays verbatim to the caller), never the full skill execution — that is what keeps the supervisor lean and the per-session threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6) meaningful. |
-| "I'll detect the next step / execute the plan myself" | NO. superagent never traverses, plans, or executes. It dispatches `superplan` / `superrun` (each in its own subagent) and reacts to their Final Reports. |
+| "I'll detect the next step / execute the plan myself" | NO. superagent never independently traverses, plans, or executes. It dispatches `superplan` / `superrun` (each in its own subagent) and reacts to their Final Reports. |
 | "A fresh/empty context means I lost the loop state" | NO. All state is in the loop file. A `--tick` works identically in a clean context (external driver) or an accumulating one (cron). Acquire the lock, read the file, run one tick. |
 | "A skill raised a question — I'll just ask the user" | NO. First run the **subagent panel** (Decision-escalation ladder). Ask the user only if the panel cannot converge. |
 | "The work is blocked — terminate the loop" | NO. Run the panel on the blocker first (retry / re-plan / decline / escalate). Stop the driver only when DONE or an escalation pauses the loop. |
@@ -117,7 +117,7 @@ are **superloop L1**. superagent's `status:` values map to L1's generic roles as
 PLAN` / `WAITING FOR RUN`; transient = `PLANNING` / `RUNNING`; plus `WAITING FOR INPUT` and `DONE`.
 `WAITING FOR CI` is a superagent-specific **parked** role — durable like a ready state (a persisted
 `WAITING FOR CI` is normal, NOT a crash), but its tick branch dispatches nothing heavy. superagent adds
-the `plan_exhausted` frontmatter field (its two-signal DONE) and, while parked, a `ci_wait:` block (see
+the `plan_exhausted` frontmatter field (its queue-exhaustion hint, never completion proof) and, while parked, a `ci_wait:` block (see
 **CI wait — monitor-parked**).
 
 ### Status vocabulary
@@ -130,7 +130,7 @@ the `plan_exhausted` frontmatter field (its two-signal DONE) and, while parked, 
   is **parked** on the run(s) behind a completion Monitor (cron) or a one-curl-per-tick check
   (external). Durable, not a crash. See **CI wait — monitor-parked**.
 - `WAITING FOR INPUT` — a decision the subagent panel could not resolve is awaiting the user.
-- `DONE` — every step is both planned and executed (the two-signal terminal; see below).
+- `DONE` — every active obligation passed supertraverse C9, with verified integration or an authorized disposition and no unresolved blockers (see below).
 
 ---
 
@@ -435,6 +435,16 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
   - All terminal → run the **Resuming** flow (CI wait — monitor-parked) this tick: verify, dispatch
     the resume process, then continue `WAITING FOR RUN` steps 4–6 on its Final Report.
 
+### Repair reconciliation — before either ready-state dispatch
+
+After the pre-sync gate in `WAITING FOR PLAN` or `WAITING FOR RUN`, reconcile adopted re-plan
+Decisions with the authoritative tree using **supertraverse C8**. This also applies after crash
+recovery and a resumed user decision. Apply missing requests; reconcile partial publications;
+reuse already-published successors. Clear `plan_exhausted` when a repair is newly requested.
+If reconciliation changes the ready state, run that state's dispatch instead. Never dispatch a
+normal traversal against a log-only repair decision. Ambiguous or uncommitted repair state goes
+to the decision ladder; no queue exhaustion or DONE transition is allowed from that state.
+
 ### `WAITING FOR PLAN`
 1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superplan` reads a fresh tree. If it STOPs, pause and end
    this tick.
@@ -456,7 +466,9 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
 5. **Retain `superplan`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
    Report — per tick**) and **note any issue it surfaces** — a CRITICAL / ⚠️ finding, a plan error, a
    seed contradiction, a `not-traversable` result — for the `Findings & issues` line, independent of
-   whether it triggers escalation. Then parse the report → next state:
+   whether it triggers escalation. **A BLOCKED/inconsistent repair report takes precedence over
+   any `none` phrase**: run the decision ladder, not the exhaustion branch. Otherwise parse:
+
    - **Plan type: implementation plan** → `status: WAITING FOR RUN`, `plan_exhausted: false`.
    - **Plan type: seed/master plan** (a sub-master was written) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (next tick descends into it and plans deeper).
@@ -490,23 +502,26 @@ The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-p
 5. **Retain `superrun`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
    Report — per tick**) and **note any issue it surfaces** — a CRITICAL / ⚠️ finding, an implementation
    inconsistency, a BLOCKED task, a CI-red code PR — for the `Findings & issues` line, independent of
-   whether it triggers escalation. Then parse the report → next state:
+   whether it triggers escalation. **A BLOCKED/inconsistent repair report takes precedence over
+   any `none` phrase**: run the decision ladder, not the exhaustion branch. Otherwise parse:
+
    - **CI-PENDING report** (not a Final Report — `superrun` queued long CI and yielded) → **park**:
      run the **Parking** flow (CI wait — monitor-parked): write `ci_wait:`, `status: WAITING FOR CI`,
      arm the resume signal per driver, and end the tick there (skip step 4's be-sure — nothing merged
      yet; the sync gate + be-sure run on the resume tick instead). Not a failure, not BLOCKED.
-   - **Executed a leaf** (code PR merged, closeout PR merged) → `status: WAITING FOR PLAN`,
+   - **BLOCKED, unresolved code PR, CI-red, or contradictory report evidence** takes precedence
+     over `none` or a claimed completed leaf. Run the **Decision-escalation ladder** below.
+     Apply adopted re-plan through **supertraverse C8**, not just a loop-status edit. If the panel
+     cannot converge, use `WAITING FOR INPUT`. Never silently spin on an invisible blocked leaf.
+   - **Executed a leaf** (integration and closeout verified) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
-   - **`none`** (no incomplete implementation plan to execute):
-     - `plan_exhausted == true` → **`status: DONE`** (nothing to plan AND nothing to run = complete).
-     - else → `status: WAITING FOR PLAN` (steps remain to be planned).
-   - **BLOCKED** (a task could not complete) **or code PR CI-red** → **do not terminate.** Run the
-     **Decision-escalation ladder** (below) on the blocker. If the panel converges → apply it (retry
-     `superagent:superrun` with guidance — per **Subagent dispatch**, model per its **Model
-     resolution** from `SUPER_MODEL_EXECUTOR` — route to `WAITING FOR PLAN` for a re-plan, or mark
-     the step declined),
-     log the decision, continue. If the panel cannot converge → escalate via `WAITING FOR INPUT`.
-     Never silently spin on a blocked plan.
+   - **`none`** (no execution target, with no higher-priority blocker):
+     - If `plan_exhausted` is false → `status: WAITING FOR PLAN`.
+     - If true → invoke **supertraverse C9 completion audit** on the synchronized tree.
+       **complete** → `status: DONE`, record audited integration/disposition evidence in this
+       iteration log. **incomplete** → clear `plan_exhausted`, `status: WAITING FOR PLAN`.
+       **BLOCKED** → decision ladder with the audit's concrete blockers. An empty queue pair
+       is only a reason to audit; it is never sufficient to set DONE.
 6. Append an iteration-log entry (skill, result, code PR + closeout PR URLs). Go to **Step 2**.
 
 ---
@@ -564,8 +579,20 @@ a separate plane that can be started/stopped independently.
 Resolve raised decisions per **superloop L7** (Rung 1 = 3-subagent panel, ≥2/3 converge; Rung 2 = user
 escalation via `WAITING FOR INPUT` / `AskUserQuestion` / durable `answer:` polling). superagent's
 **trigger surface**: a CRITICAL / ⚠️ finding, a `not-traversable` result, or a `superrun` BLOCKED /
-CI-red Final Report. superagent's **option-set**: {retry `superrun` with guidance / route to `WAITING
-FOR PLAN` for a re-plan / mark the step declined}.
+CI-red Final Report, failed completion audit, or unreconciled repair. superagent's **option-set**:
+
+- **Re-plan:** apply **supertraverse C8** and verify the durable request before routing to
+  `WAITING FOR PLAN`. Logging the vote alone does not implement this outcome.
+- **Retry:** only retry a still-eligible execution target or an explicit supported resume packet.
+  If closeout already removed the leaf from descent, use C8 to author a successor containing
+  the retry/integration guidance; a blind root superrun retry would return none again.
+- **Decline/defer:** record adopted authority, rationale and PR disposition in tracked findings
+  and the target row; mark outstanding repair records resolved with that adopted disposition
+  and reconcile ancestors. This is an intentional
+  scope disposition, not a claim of code integration. Clear `plan_exhausted` and re-audit later.
+
+Apply the same transitions for a converged panel and a resumed human answer. Persist and verify
+plan-tree changes under A7 before the ready-state loop write; recovery is C8's idempotent replay.
 
 **Always surface the outcome to the caller.** Whenever the ladder fires — even when the Rung-1 panel
 resolves it **autonomously** — name the triggering issue and how it was resolved (e.g. "panel 2/3:
@@ -606,5 +633,6 @@ tick, even one the loop already resolved itself.
     ⚠️ **Needs you:** <only when status == WAITING FOR INPUT — the pending question + how to answer
     (interactive prompt, or `answer.sh <slug> "<option>"` for a scheduled loop)>
 
-On **DONE**, replace the body with a completion summary: every step planned + executed, the PRs merged,
+On **DONE**, replace the body with the C9 completion evidence: active steps integrated, PRs merged,
+intentional declined/deferred dispositions (distinct from delivered work),
 report** and any still-open `Findings & issues`.

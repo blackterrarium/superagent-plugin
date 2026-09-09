@@ -140,17 +140,56 @@ verdict (step 7) keys on it (`0` = every command check PASS).
 
 ### 6. Judged objectives
 
-Read the `## Judged objectives` table from `<project-dir>/evaluation.md`. **If it has no `J` rows**,
-the report's `## Judged objectives` section is `none` and no subagent is dispatched. **Otherwise
-dispatch exactly one read-only `EVALUATOR`-role subagent.** Resolve `SUPER_MODEL_EVALUATOR` /
+First resolve the acceptance sources and evidence roots listed in the packet specification
+below, including for projects with only command checks. Missing required binding text or an
+unresolvable required evidence root sets `acceptance context unavailable`: do not dispatch an
+evaluator; report overall FAIL with that warning and preserve the command results. A legacy
+project's absent checklist is not a missing required source.
+
+Then read the `## Judged objectives` table from `<project-dir>/evaluation.md`. **If it has no
+`J` rows**, the report's `## Judged objectives` section is `none` and no subagent is dispatched.
+Command-only evaluation makes only the claims its written command checks support; it does not
+prove assertion completeness. **Otherwise, with acceptance context available, dispatch exactly
+one read-only `EVALUATOR`-role subagent.** Resolve `SUPER_MODEL_EVALUATOR` /
 `SUPER_EFFORT_EVALUATOR`.
 The evaluator gets no `.pi/agents/` definition; dispatch it exactly as `superagent`'s Subagent-dispatch section does a read-only role on Pi — a blocking `role-bridge.sh --tools evaluator` process with the model/effort from `SUPER_MODEL_EVALUATOR` / `SUPER_EFFORT_EVALUATOR` (a bridged prefix runs that harness's CLI). Wait on it; never poll.
-The subagent's prompt contains **only**: the kept **worktree path** (from step 5), the `J` rows
-**verbatim**, and this instruction sentence:
+Give that one evaluator a single evidence packet containing:
+
+- The kept worktree path and evaluated commit from step 5.
+- The full `evaluation.md` verbatim, including J rows, the approved acceptance checklist,
+  approval record, and binding contract notes; identify its source revision separately from
+  the evaluated code commit. Include `prd.md` requirements/constraints/decisions verbatim,
+  excluding its iteration ledger and prior verdicts.
+- Any explicitly referenced binding acceptance text verbatim, with its source path/revision.
+  Resolve references before dispatch; do not silently summarize away cases or general rules.
+- Named evidence paths with their roots (code worktree versus project/vault), and step 5's
+  command results. Implementer mappings may be supplied as claims to verify, never authority.
+
+Do not supply prior evaluator answers, operator answer keys, or unrelated history. If required
+binding text or evidence roots cannot be resolved, record no judged results and make the overall
+verdict FAIL with an `acceptance context unavailable` warning; do not dispatch an incomplete
+packet. Keep command results and the context error in the report.
+
+The evaluator instruction is:
 
 ```
-For each objective, inspect only the evidence paths named; answer PASS or FAIL against the written criteria with a two-sentence rationale citing file:line; never modify anything.
+Inspect only the named evidence and acceptance sources; never modify anything. For each J
+objective, verify its written criteria and applicable approved checklist items against actual
+code, assertions and revision-specific execution evidence. Return PASS or FAIL with a concise
+rationale citing file:line and relevant AC IDs; provide an item-to-evidence table for applicable
+AC rows. An input occurrence, test name, mapping claim or green suite alone does not demonstrate
+an assertion's required meaning. Distinguish product behavior, executed checks and assertion
+coverage as specified by the written objectives. Extra coverage suggestions are advisory and
+cannot cause FAIL unless grounded in an existing explicit requirement. Do not derive a new
+comprehensive test inventory. For an ambiguous/conflicting acceptance input, report the input
+defect and FAIL the affected objective pending author resolution; do not invent its meaning.
+Legacy inputs without a checklist are judged against their explicit criteria and binding notes,
+without a new format requirement or fabricated approval.
 ```
+
+This is delivery verification of the authored agreement, not PRD coverage advice. Retain the
+returned item-to-evidence table beneath the judged results in the report. A missing J result
+cannot count as PASS.
 
 It returns a table `| Id | Result | Rationale |`. If the dispatch **fails** (the evaluator is
 unavailable), record no judged results and treat the verdict as FAIL with a warning naming the
@@ -170,6 +209,8 @@ Write `<project-dir>/eval-reports/<STAMP>-r<N>.md` with **exactly** this layout:
 | Id | Result | Rationale |
 …or `none`
 
+<Returned AC item-to-evidence table, when applicable>
+
 ## Verdict
 **PASS** | **FAIL** — <comma-separated failing ids, or `all checks passed`>
 **Inner loop:** `<loop-file path>` (status <status>) | none found
@@ -181,13 +222,13 @@ Write `<project-dir>/eval-reports/<STAMP>-r<N>.md` with **exactly** this layout:
   `## Environment`, `## Command checks` table, and per-check `### <Id> output` blocks — embedded
   unchanged.
 - **Verdict rule:** the verdict is `PASS` **iff** the runner exited `0` **and** every judged (`J`)
-  row is `PASS`. Otherwise it is `FAIL`, and the `— <…>` clause names the failing ids
-  (command-check ids that are not PASS and/or judged ids that are FAIL), or `all checks passed` when
-  the only reason for FAIL is a non-command/judged failure such as an unavailable evaluator. An
+  row has a returned `PASS` and acceptance context is available. Otherwise it is `FAIL`; name
+  failing or missing C/J IDs and any context/dispatch error in the verdict reason. An empty J
+  table is allowed for command-only projects but does not waive acceptance-context resolution. An
   **unavailable evaluator** (step 6 dispatch failed) makes the verdict `FAIL` with the
   `evaluator unavailable` warning — never PASS by omission.
 - **Warnings** collects: `inner loop not DONE` (step 4), `setup failed` (the runner reported
-  `ERROR setup failed`), `evaluator unavailable` (step 6) — or `none`.
+  `ERROR setup failed`), `evaluator unavailable`, `acceptance context unavailable`, or missing judged IDs (step 6) — or `none`.
 
 ### 8. Ledger
 

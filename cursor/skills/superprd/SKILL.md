@@ -3,7 +3,7 @@ name: superprd
 description: Use at the end of an interactive planning conversation to turn it into a coding-loop project folder — grades whether the session holds enough context (objective, measurable success criteria, knowledge-base sources, runnable evaluation checks, constraints, decisions), asks for each gap one question at a time, drafts prd.md / knowledge-base.md / evaluation.md, has a zero-context reviewer confirm they are self-sufficient, then writes the folder and merges it via PR after you confirm. `--check` only prints the readiness report.
 argument-hint: "[--check] [<project-dir>]"
 license: MIT
-related skills: superauthor, supergoal, supermeta
+related skills: superauthor, supergoal, supermeta, supercoverage
 ---
 
 <!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
@@ -71,7 +71,7 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 | Thought | Reality |
 |---|---|
-| "The objective is obvious from the chat, I'll infer the success criteria" | NO. superprd never invents a criterion, source, or command. Every rubric gap is a question to the user. |
+| "Coverage advice lets me approve new requirements myself" | NO. Propose cases and verification methods with `supercoverage`; unresolved criteria, sources, and commands go to the author. Suggestions become binding only when approved. |
 | "I'll write the project folder now and ask afterwards" | NO. Draft to scratch, confirm, then write. The gate is not waived by auto-accept modes. |
 | "The user said run it, I'll start planning the work" | NO. superprd produces inputs only (superauthor A1). `supermeta` / `supergoal` plan; `superrun` executes. |
 | "prd-lint WARNs are fine to ignore" | They are carried into the report and the confirmation gate so the user decides. FAILs are fixed before the gate. |
@@ -111,6 +111,17 @@ Collect, quoting the conversation where possible:
 5. **constraints and non-goals**;
 6. **decisions** made in the conversation, each with the alternative rejected and why.
 
+### 3a. Advise on coverage before approval
+
+Invoke **superagent:supercoverage** on the extracted requirements. Put its draft acceptance
+checklist in `evaluation.md`, with stable AC IDs and owning C/J IDs. Keep optional suggestions
+and unresolved questions separate from required rows. Resolve the latter with the author
+under step 5. This is where coverage is interpreted and agreed; downstream agents receive
+that agreement and verify the delivered evidence.
+
+For `--check`, inspect existing text only: report missing or ambiguous coverage as R8 gaps,
+without invoking the interactive advisory workflow or creating new obligations.
+
 ### 4. Grade readiness
 
 | Id | Rubric item | PASS when |
@@ -122,8 +133,10 @@ Collect, quoting the conversation where possible:
 | R5 | Evaluation runnable | The setup command and every check command name a binary on `PATH` or a repo path, each with a timeout ≤ `SUPER_EVAL_TIMEOUT_MIN`. |
 | R6 | Constraints and non-goals | Stated, or explicitly "none". |
 | R7 | Locked decisions | Every decision the conversation made is captured with its rejected alternative. |
+| R8 | Acceptance agreement | The draft checklist accounts for explicit cases and general rules, has observable outcomes and valid owning C/J IDs, and leaves no unresolved required coverage decisions. Suggestions are separate. |
 
-R1, R2, R6, R7 are judged by you from the extraction. R3, R4, R5 are mechanical: write the
+R1, R2, R6, R7, R8 are judged by you from the extraction and draft. R8 is a semantic review;
+`prd-lint.sh` checks neither checklist completeness nor approval. R3, R4, R5 are mechanical: write the
 current drafts to scratch (step 6's formats) and run
 
 ```
@@ -141,7 +154,7 @@ A `FAIL` maps to a rubric item by its `<file>:<loc>` and message:
 - every other `evaluation.md:*` (an empty command, a malformed `Pass when`, a non-numeric or excessive timeout, a judged row with empty criteria or evidence, duplicate or missing ids, `Environment`, `setup`, `config`, `file`) → **R5**;
 - every other `prd.md:*` (`file`, `header`, a missing or out-of-order section, the ledger header, no success-criteria rows) → **R2** (the criteria table is not in the shape the loop reads).
 
-Never report R1–R7 all PASS while `prd-lint.sh` exits non-zero: a FAIL matching none of the rules above is an R2 gap naming its `<file>:<loc>`. WARNs are not gaps; keep them for the report.
+Never report R1–R8 all PASS while `prd-lint.sh` exits non-zero: a FAIL matching none of the rules above is an R2 gap naming its `<file>:<loc>`. WARNs are not gaps; keep them for the report.
 
 When the `mcp__context7__resolve-library-id` tool is available, also resolve every `context7` row live and turn a non-resolving id into an R4 gap.
 
@@ -153,7 +166,7 @@ Each item is `PASS` or `GAP <what is missing>`.
 
 **Otherwise:** for each `GAP`, in rubric order, ask the user **one question at a time**
 (AskUserQuestion where the harness has it, plain chat otherwise), re-grade after each answer,
-and continue until R1–R7 all PASS. A question names the gap and offers the concrete options the
+and continue until R1–R8 all PASS. A question names the gap and offers the concrete options the
 conversation supports (e.g. "SC2 'fast enough' needs a threshold: p95 < 200 ms on the fixture,
 or a judged objective?"). Never fill a gap with your own guess.
 
@@ -214,10 +227,24 @@ All three open with the header block:
 | Id | Objective | Criteria | Evidence to inspect |
 |---|---|---|---|
 | J1 | Errors are user-readable | Every failure path returns a message naming the offending field | `src/cli/*.py` |
+
+## Acceptance checklist
+**Approval:** DRAFT — awaiting author approval of this revision.
+| Id | Source | Required case or rule | Expected result | Verification and check ids |
+|---|---|---|---|---|
+| AC1 | prd.md SC1 | … | … | …; C1, J1 |
+
+## Coverage suggestions and decisions
+<Optional suggestions, explicitly unapproved; accepted/rejected author decisions and rationale.>
 ```
 
 `Pass when` is exactly `exit <n>` or `stdout ~ /<regex>/`; `Timeout` is whole minutes. Check ids
-are unique across both tables. A literal `|` inside a cell must be written `\|`.
+are unique across both tables. AC IDs identify agreement rows; they are not runnable check IDs
+and do not replace the PRD's C/J links. Every AC row names existing C/J checks. When acceptance
+requires assertions to exist and be meaningful, include an explicit judged objective to inspect
+those assertions and list its evidence paths; a suite-exit check alone cannot establish that.
+Keep checklist and suggestions under separate level-two headings so command/J table parsing
+is unchanged. Preserve binding contract notes and resolve conflicts before approval. A literal `|` inside a cell must be written `\|`.
 
 Run `prd-lint.sh` on the scratch folder (with `PRD_LINT_REPO_ROOT="<primary_root>"`, as in step 4).
 Fix every FAIL (returning to step 5 when the fix needs the user). Keep the WARNs.
@@ -227,16 +254,20 @@ Fix every FAIL (returning to step 5 when the fix needs the user). Keep the WARNs
 Dispatch **one** read-only `PRD_REVIEWER` subagent. Resolve `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`.
 If the model is `inherit` or a bare model name **and** the effort is `inherit`, dispatch with the plain subagent mechanism — `model: <name>` when named, no `model:` when `inherit`. Otherwise dispatch with `subagent_type: super-prd-reviewer` and omit `model:`; that is the definition `superagent:init` generates in `.cursor/agents/`, and a missing definition is a hard error: report "re-run `superagent:init`" and stop.
 The prompt contains **only** the three scratch files
-verbatim and these two questions:
+verbatim and these three questions:
 
 1. Could a fresh planner, given these files and the sources they name and nothing else, write
    a root master plan for this objective? List every piece of missing context.
 2. Could a fresh agent run `evaluation.md` unaided and reach a PASS/FAIL verdict? List every
    ambiguity in a check or a judged criterion.
+3. Does the acceptance checklist retain each explicitly required case and general rule, with
+   distinguishing expected results and valid owning check IDs? Identify omissions, conflicts,
+   and suggestions accidentally promoted to requirements. Do not add acceptance conditions.
 
 The reviewer returns a findings list. Fix what the conversation already answers; ask the user
 about the rest (step 5 rules); re-dispatch at most **twice**. Findings still open after that
-go into the report as WARNs.
+go into the report as WARNs. A finding that leaves R8 (or another readiness item) unmet remains
+a GAP and must be resolved before READY; the retry limit cannot waive required decisions.
 
 ### 8. Confirmation gate (REQUIRED — overrides A5)
 
@@ -244,7 +275,8 @@ Nothing has been written to the vault. Present:
 
 - the project folder path that **will** be created;
 - the objective in one line;
-- the success-criteria table;
+- the success-criteria table and complete draft acceptance checklist;
+- optional coverage suggestions and the author's decisions, clearly distinguished;
 - the check ids (command and judged) and the knowledge-base ids with kinds;
 - every WARN from `prd-lint.sh` and every open reviewer finding.
 
@@ -254,6 +286,11 @@ re-present. Declined → write nothing, report the scratch path, exit. This paus
 and is **not** waived by auto-accept / `bypassPermissions` mode.
 
 ### 9. Write-out and PR (superauthor A7)
+
+Record `**Approval:** Approved by the author on <date>; applies to this checklist and its
+source requirements at this project revision.` Replace the date with the actual approval date,
+and retain the approval reference in Locked decisions. Do not infer approval from lint/reviewer
+success. For an already approved identical revision, carry its existing approval forward.
 
 Create the project folder; write the three files with `**Status:** READY`; create
 `meta-plans/`, `eval-reports/`, `diagnoses/` each with a `.gitkeep`. Then A7 with:
@@ -277,7 +314,7 @@ Create the project folder; write the three files with `**Status:** READY`; creat
 **PRD:** <path>   **Knowledge base:** <path>   **Evaluation:** <path>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
-**Readiness:** R1–R7 all PASS
+**Readiness:** R1–R8 all PASS
 **Warnings:** <prd-lint WARNs and open reviewer findings, or none>
 **Next:** superagent:supermeta <project-dir>   (Stage 2 of the coding loop)
 ```
@@ -297,6 +334,7 @@ After printing the report, take no further action and ask no follow-up question.
 | R5 Evaluation runnable | PASS | |
 | R6 Constraints and non-goals | PASS | |
 | R7 Locked decisions | GAP | the ORM choice was discussed but not settled |
+| R8 Acceptance agreement | PASS | |
 **Verdict:** NOT READY (3 gaps)
 **Warnings:** <prd-lint WARNs, or none>
 ```
