@@ -949,6 +949,102 @@ def _ledger_error(
     return ""
 
 
+def _linked_artifact(
+    cell: str, artifact: Path, git_root: Path, vault_root: Path
+) -> bool:
+    link = re.fullmatch(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", cell)
+    if link is None:
+        return False
+    target = link.group(1).strip()
+    if target.endswith(".md"):
+        target = target[:-3]
+    expected = artifact.with_suffix("")
+    if target.startswith("/"):
+        return Path(target).resolve() == expected.resolve()
+    candidates = set()
+    for root in (git_root, vault_root):
+        try:
+            candidates.add(expected.relative_to(root).as_posix())
+        except ValueError:
+            pass
+    return posixpath.normpath(target) in {
+        posixpath.normpath(candidate) for candidate in candidates
+    }
+
+
+def _meta_completion(
+    git_root: Path,
+    vault_root: Path,
+    meta_plan: Path,
+    goal_folder: Path,
+    operation: dict,
+) -> tuple[bool, list[dict[str, str]], str]:
+    meta_commit, meta_error = _path_at_main(git_root, meta_plan)
+    if meta_error:
+        return False, [], f"meta-plan is not integrated: {meta_error}"
+    relative = meta_plan.relative_to(git_root).as_posix()
+    blob = _main_blob(git_root, relative)
+    if blob is None:
+        return False, [], "meta-plan is missing on main"
+    identity, errors = _report_identity(_decode_blob(blob, "meta-plan"))
+    expected = {
+        "status": "READY",
+        "round": operation["round"],
+        "agreement_revision": operation["agreement_revision"],
+        "operation_id": operation["id"],
+        "source_vault_commit": operation["source_vault_commit"],
+    }
+    if errors or any(identity.get(key) != value for key, value in expected.items()):
+        return False, [], "meta-plan identity does not match the operation"
+
+    prd = meta_plan.parent.parent / "prd.md"
+    ledger_commit, ledger_error = _path_at_main(git_root, prd)
+    if ledger_error:
+        return False, [], f"project ledger is not integrated: {ledger_error}"
+    ledger_relative = prd.relative_to(git_root).as_posix()
+    ledger_blob = _main_blob(git_root, ledger_relative)
+    if ledger_blob is None:
+        return False, [], "project ledger is missing on main"
+    tables = _tables(
+        _section(_decode_blob(ledger_blob, "project ledger"), "Iteration ledger")
+    )
+    if not tables:
+        return False, [], "project iteration ledger table is missing"
+    header, rows = tables[0]
+    try:
+        round_index = header.index("Round")
+        meta_index = header.index("Meta-plan")
+        goal_index = header.index("Goal folder")
+    except ValueError:
+        return False, [], "project iteration ledger has incompatible columns"
+    matches = [
+        row
+        for row in rows
+        if round_index < len(row) and row[round_index] == str(operation["round"])
+    ]
+    if len(matches) != 1:
+        return (
+            False,
+            [],
+            f"project iteration ledger has {len(matches)} rows for round {operation['round']}",
+        )
+    row = matches[0]
+    if meta_index >= len(row) or goal_index >= len(row):
+        return False, [], "project iteration ledger has incomplete meta identity"
+    if not _linked_artifact(row[meta_index], meta_plan, git_root, vault_root):
+        return False, [], "project iteration ledger does not link the meta-plan"
+    if not _linked_artifact(row[goal_index], goal_folder, git_root, vault_root):
+        return False, [], "project iteration ledger does not link the goal folder"
+    return (
+        True,
+        [
+            {"path": str(meta_plan.resolve()), "commit": meta_commit},
+            {"path": str(prd.resolve()), "commit": ledger_commit},
+        ],
+        "",
+    )
+
+
 def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
     """Classify a recorded operation artifact using identity and Git integration."""
     try:
@@ -1022,6 +1118,7 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
         )
         artifact = _resolve_artifact(repo_root, vault_root, locator)
         if operation["phase"] == "META-PLANNING":
+            recorded_goal = artifact.resolve()
             try:
                 relative_folder = artifact.relative_to(artifact_repo).as_posix()
             except ValueError:
@@ -1134,7 +1231,42 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
             if ledger_git_error:
                 return {"outcome": "CONFLICT", "artifacts": artifacts, "reason": ledger_git_error}
             artifacts.append({"path": str(ledger.resolve()), "commit": ledger_commit})
-        return {"outcome": "INTEGRATED", "artifacts": artifacts, "reason": ""}
+        result = {
+            "outcome": "INTEGRATED",
+            "phase": operation["phase"],
+            "operation_id": operation["id"],
+            "round": operation["round"],
+            "artifacts": artifacts,
+            "reason": "",
+        }
+        if operation["phase"] == "META-PLANNING":
+            meta_plan = _resolve_artifact(
+                repo_root, vault_root, operation["meta_plan"]
+            )
+            (
+                worker_complete,
+                completion_artifacts,
+                completion_reason,
+            ) = _meta_completion(
+                artifact_repo,
+                vault_root,
+                meta_plan,
+                recorded_goal,
+                operation,
+            )
+            artifacts.extend(completion_artifacts)
+            result.update(
+                goal_folder=str(recorded_goal),
+                root_plan=str(artifact.resolve()),
+                meta_plan=str(meta_plan),
+                worker_complete=worker_complete,
+                completion_reason=completion_reason,
+            )
+        else:
+            result["report"] = str(artifact.resolve())
+            result["worker_complete"] = True
+            result["completion_reason"] = ""
+        return result
     except (EvidenceError, OSError, KeyError, TypeError) as exc:
         return {"outcome": "CONFLICT", "artifacts": [], "reason": str(exc)}
 

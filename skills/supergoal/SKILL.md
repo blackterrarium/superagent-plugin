@@ -1,7 +1,7 @@
 ---
 name: supergoal
 description: Use when starting a brand-new multi-PR initiative from a goal description (not an existing plan file) — creates the goal vault folder (YYYY-MM-DD-hh_mm-<slug>), its goal-directives.md, the standard subfolders, and the ROOT master plan that seeds the planning tree.
-argument-hint: "<goal description | path/to/goal.md> [--autoconfirm] [--slug <slug>]"
+argument-hint: "<goal description | path/to/goal.md> [--autoconfirm] [--slug <slug>] [--operation <path>]"
 license: MIT
 related skills: superauthor, superplan, supertraverse
 ---
@@ -12,7 +12,10 @@ Given a **goal description** (a prose prompt, or a path to an existing `.md` fil
 and author the **root master plan** that seeds the planning tree — the document `superplan` later
 descends into.
 
-**Input:** `<GOAL>` — the argument string: a prose goal description **or** a path to an existing `.md` file holding one, optionally followed by `--autoconfirm` and/or `--slug <slug>` (parsed in step 1). **Required.**
+**Input:** `<GOAL>` — the argument string: a prose goal description **or** a path to an existing
+`.md` file holding one, optionally followed by `--autoconfirm`, `--slug <slug>`, and
+`--operation <path>` (parsed in step 1). **Required.** Without `--operation`, manual behavior is
+unchanged.
 
 ## What supergoal is — and how it differs from superplan
 
@@ -85,13 +88,23 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 `<GOAL>` is the full argument string. **Parse the optional flags off the *end* of it first** — so a prose
 goal that happens to contain the words "slug" or "autoconfirm" is never mis-parsed: strip a trailing
-`--autoconfirm` (record it as a boolean for step 7), and a trailing `--slug <slug>` (record `<slug>` for
-step 2). What remains, trimmed, is the **goal source**.
+`--autoconfirm` (record it as a boolean for step 7), a trailing `--slug <slug>` (record `<slug>` for
+step 2), and a trailing `--operation <path>`. What remains, trimmed, is the **goal source**.
 
 - If the goal source is empty → respond with exactly `I need a goal description` and **exit**.
 - If the goal source names an **existing `.md` file** → read that file; its contents are the goal
   description. Remember the file's path — step 5 cites it as `**Source:**`.
 - Otherwise the goal source is a **prose** goal description (there is no source file).
+
+With `--operation`, load duplicate-key-rejecting JSON with exactly the operation fields accepted by
+`_coding_loop_state.py`. Require `phase` = `META-PLANNING`, empty `code_commit` and `report`, and
+valid nonempty remaining identity. The goal source must resolve to the recorded `meta_plan`, and the
+recorded `goal_folder` must resolve inside `<vault_root>`. The operation file is read-only. Reject a
+caller slug that does not equal the recorded goal folder's `<project-slug>-r<N>` suffix.
+
+The operation-mode last output line is compact JSON with `outcome`, `phase`, `operation_id`, `round`,
+`meta_plan`, `goal_folder`, `root_plan`, `artifacts`, and `reason`. Only verified integration on
+`main` yields `INTEGRATED`; prose output, a local folder, or an unmerged commit never does.
 
 Nothing else changes: the input-gate message is exactly `I need a goal description`, and a direct user
 who passes a bare prose goal with no flags sees identical behaviour to before.
@@ -112,6 +125,16 @@ who passes a bare prose goal with no flags sees identical behaviour to before.
   from `--slug`, do **not** auto-disambiguate — report the collision and **exit**, because the caller
   (e.g. supermeta) depends on the exact `<STAMP>-<slug>`.
 
+In operation mode, take `N`, `<STAMP>`, `<slug>`, the source revision and exact goal folder only from
+the recorded identity; never consult the clock or disambiguate. Before authoring, run
+`_coding_loop_evidence.py reconcile <primary_root> <vault_root> --operation <path>`. If it returns
+`INTEGRATED`, verify on `main` that the root plan, `goal-directives.md`, and six subfolders carry or
+belong to the same identity, then return the exact goal/root paths and skip authoring and A7.
+`ABSENT` permits one normal draft/approval/write flow. On `CONFLICT`, resume only exact matching scaffolding or a pending A7
+branch/PR owned by this operation, then reconcile again. Any different Operation, source, round,
+agreement, meta-plan, or folder identity is a hard conflict. Never validate feature-branch bytes as
+main evidence.
+
 ### 3. Invoke superagent:superauthor
 
 Invoke the `superagent:superauthor` skill (Skill tool) and apply A1–A8 for the rest of the run.
@@ -122,6 +145,8 @@ Author the root plan yourself per superauthor's A2 authoring standard, drafting 
 outside the goal folder. The root plan MUST:
 
 - be a **seed/master plan**, routed to `master-plans/<STAMP>-<slug>.md`;
+- in operation mode only, add one header line immediately after the normal header:
+  `**Operation:** <id> · **Round:** <N> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit> · **Related:** [[<recorded meta_plan without .md>]]`;
 - contain a **progress-report table** using the `supertraverse` C1 schema and C2 status vocabulary
   (do not redefine the columns or statuses here):
 
@@ -173,7 +198,8 @@ author it directly, drafting to scratch alongside the plan. It must be fully
    lives inside `<vault_root>` (wikilink form, path-from-vault-root without the `.md`), or
    `**Source:** <relative repo path>` when it is a file outside the vault (a plain relative path). When
    `<GOAL>` was prose, write **no** source line. The step-7 `**Confirmation:**` line, when written, sits
-   immediately **below** this source line.
+   immediately **below** this source line. In operation mode only, add immediately below those lines:
+   `**Operation:** <id> · **Round:** <N> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit>`.
 2. **Goal / Objectives — FIRST**, immediately after the title (and after the optional `**Source:**` /
    `**Confirmation:**` header lines when present): the *why*, the target outcome, and success criteria
    distilled from `<GOAL>`. (This is the one intentional deviation from older directives docs that open
@@ -273,6 +299,11 @@ Create the goal folder and the **six subfolders** — `master-plans/`, `plans/`,
 `master-plans/`. Drop a `.gitkeep` into **every subfolder that has no file written this run** (so empty
 folders are tracked — matches existing goal folders that keep `handoff/.gitkeep` and `todo/.gitkeep`).
 
+In operation mode, an existing exact goal folder is recoverable only when its root plan and
+`goal-directives.md` carry this Operation/source identity and every existing scaffold file matches
+the reviewed scratch draft. Reuse matching files, write only missing intended files, and resume the
+same A7 work. Do not overwrite mismatched bytes, add a second root plan, or create another folder.
+
 ### 9. Commit & merge via PR (superauthor A7)
 
 Apply A7 with these caller parameters:
@@ -287,6 +318,9 @@ Apply A7 with these caller parameters:
   `<vault_root>`, committed directly there; no branch, no PR (see A7 **Target repo**). A7's
   **precondition** applies: if `<vault_root>` is not its own repository, STOP and report — never
   improvise a `git init`.
+
+After A7 in operation mode, run reconciliation again. Return `INTEGRATED` only when it names the
+recorded goal folder and unique root plan at `main`; dirty or unmerged work remains non-integrated.
 
 ### 10. Final Report (superauthor A8)
 
@@ -312,3 +346,5 @@ the merged PR URL (external vault: the vault commit SHA):
 ```
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.
+
+In operation mode only, print the compact operation-result JSON as the final line after the report.
