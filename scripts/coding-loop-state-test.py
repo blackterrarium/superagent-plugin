@@ -236,6 +236,15 @@ class CodingLoopStateTests(unittest.TestCase):
         with self.assertRaisesRegex(state.StateError, "operation phase.*status"):
             state.read_state(self.state_path)
 
+    def test_transient_status_requires_operation_record(self):
+        for status in ("META-PLANNING", "EVALUATING", "DIAGNOSING"):
+            with self.subTest(status=status):
+                self.state_path.write_text(
+                    self.valid_document(overrides={"status": status})
+                )
+                with self.assertRaisesRegex(state.StateError, "operation.*required"):
+                    state.read_state(self.state_path)
+
     def test_operation_id_is_generated_once_and_preserved_across_retry(self):
         original = state.read_state(self.state_path)
         operation = self.valid_operation(
@@ -342,14 +351,17 @@ class CodingLoopStateTests(unittest.TestCase):
         with self.assertRaises(state.StateError):
             state.replace_state(self.state_path, original, updated)
 
-    def test_replace_preserves_unrelated_frontmatter_fields(self):
+    def test_replace_preserves_unrelated_frontmatter_fields_omitted_by_caller(self):
         self.state_path.write_text(
             self.valid_document().replace("driver: external\n", "driver: external\ncustom: keep-me\n")
         )
         original = state.read_state(self.state_path)
-        state.replace_state(
-            self.state_path, original, dict(original, status="WAITING FOR BUILD")
-        )
+        updated = {
+            key: value
+            for key, value in dict(original, status="WAITING FOR BUILD").items()
+            if key != "custom"
+        }
+        state.replace_state(self.state_path, original, updated)
         self.assertEqual("keep-me", state.read_state(self.state_path)["custom"])
 
     def test_recovery_mapping_changes_only_transient_phases(self):
@@ -374,8 +386,24 @@ class CodingLoopStateTests(unittest.TestCase):
         updated_path = self.root / "updated.json"
         expected_path.write_text(json.dumps(parsed))
         updated_path.write_text(json.dumps(dict(parsed, status="WAITING FOR BUILD")))
-        changed = dict(parsed, iteration=1)
-        state.replace_state(self.state_path, parsed, changed)
+
+        replace = subprocess.run(
+            [
+                sys.executable,
+                str(MODULE_PATH),
+                "replace",
+                str(self.state_path),
+                "--expected",
+                str(expected_path),
+                "--updated",
+                str(updated_path),
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(0, replace.returncode, replace.stderr)
+        self.assertEqual("WAITING FOR BUILD", state.read_state(self.state_path)["status"])
 
         replace = subprocess.run(
             [
@@ -394,6 +422,17 @@ class CodingLoopStateTests(unittest.TestCase):
         )
         self.assertEqual(2, replace.returncode)
         self.assertIn("stale", replace.stderr.lower())
+
+    def test_cli_rejects_malformed_state(self):
+        self.state_path.write_text("---\nround: nope\n---\n")
+        read = subprocess.run(
+            [sys.executable, str(MODULE_PATH), "read", str(self.state_path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(2, read.returncode)
+        self.assertIn("missing required fields", read.stderr)
 
 
 if __name__ == "__main__":

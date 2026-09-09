@@ -184,8 +184,11 @@ def _validate_operation(document: dict) -> None:
             continue
         _require_string(operation, key)
 
+    status = document["status"]
     populated = any(value != "" for value in operation.values())
     if not populated:
+        if status in RECOVER_READY:
+            raise StateError(f"operation record is required for transient status {status}")
         return
 
     phase = operation["phase"]
@@ -215,7 +218,6 @@ def _validate_operation(document: dict) -> None:
             if not operation[key]:
                 raise StateError(f"operation {key} is required for {phase}")
 
-    status = document["status"]
     if status in RECOVER_READY and phase != status:
         raise StateError(f"operation phase {phase} does not match transient status {status}")
 
@@ -400,7 +402,14 @@ def replace_state(path: Path, expected: dict, updated: dict) -> None:
     if current != expected:
         raise StateError("stale state: current frontmatter does not match expected state")
 
-    prepared = _operation_with_identity(current, updated)
+    if not isinstance(updated, dict):
+        raise StateError("updated state must be a mapping")
+    missing = REQUIRED_FIELDS - set(updated)
+    if missing:
+        raise StateError(f"updated state is missing required fields: {', '.join(sorted(missing))}")
+    merged = dict(current)
+    merged.update(updated)
+    prepared = _operation_with_identity(current, merged)
     _validate_state(prepared)
     frontmatter = _serialize_state(prepared)
     try:
