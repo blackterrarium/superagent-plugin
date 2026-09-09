@@ -44,7 +44,10 @@ not permission to dispatch a second phase in the same tick.
    never touch a live peer's state. The persistent `.reclaim` file must never be unlinked.
 3. **Consume/validate a recorded operator answer.** Read only `## Pending decision`. Preserve
    unanswered and rejected answers. Append accepted answers and their action to Decisions; retain
-   last_operator_answer as the durable transition receipt if a crash precedes that log append. The exact permitted commands are below; never infer author
+   last_operator_answer as the durable transition receipt. The helper atomically appends an
+   `author-meta` Decisions receipt for accepted adoption/replan and stores `meta_authorization_json`
+   bound to project, prior/new round and agreement. Reservation binds its operation id; retries
+   preserve it. `previous_round_json` retains the independent evidence for autonomous repair. The exact permitted commands are below; never infer author
    consent from config edits, elapsed time, a panel vote, or a new fingerprint. The helper's
    `reconcile-phase --consume-answer` validates the command and gates the resulting state.
 4. **Apply sync and acceptance-context gates.** L5 synchronizes code main and external vault main.
@@ -121,7 +124,10 @@ an ignored JSON packet; workers read that exact packet with `--operation`. Retri
 field and output path, including id. Do not fabricate successful receipts or manually bypass a
 refused reservation using generic state replacement.
 
-For META dispatch `supermeta PROJECT --operation JSON`. For EVAL invoke
+For META dispatch `supermeta PROJECT --operation JSON --supervisor-state STATE`. The worker must
+run `_coding_loop_state.py meta-entry` against that registered state itself. This validates either
+first-round entry, strict automatic FAIL+REPAIR entry, or the exact recorded author-approved entry;
+a prompt assertion is never authorization. For EVAL invoke
 `supereval PROJECT --operation JSON`; that skill dispatches its own single EVALUATOR, so do not
 create a second evaluator. For DIAGNOSIS dispatch
 `superdiagnose PROJECT --round N --eval-report EXACT_LAST_EVAL --operation JSON`, supplying the

@@ -583,6 +583,177 @@ P1: implement the approved behavior.
         self.assertEqual(self.phase(2)['state']['round'], 2)
         self.assertEqual(len(list((self.project / 'diagnoses').glob('*.md'))), 1)
 
+    def test_relative_binding_names_are_resolved_per_source_before_deduplication(self):
+        self.verified_build()
+        for folder in ('a', 'b'):
+            base = self.repo / folder; base.mkdir()
+            (base / 'spec.md').write_text('[required](requirements.md)\n')
+            (base / 'requirements.md').write_text(folder + ' required assertion\n')
+        (self.repo / 'requirements.md').write_text('Unrelated root target must not shadow source-relative links.\n')
+        kb = self.project / 'knowledge-base.md'
+        kb.write_text(kb.read_text() + '| K2 | `repo-file` | `a/spec.md` | binding |\n| K3 | `repo-file` | `b/spec.md` | binding |\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'two scoped binding names'); self.git('push', '-q')
+        args = ('--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project)
+        result = self.helper('context', *args); self.assert_ok(result)
+        packet = json.loads(result.stdout)
+        self.assertIn('a/requirements.md', {m['locator'] for m in packet['manifest']})
+        self.assertIn('b/requirements.md', {m['locator'] for m in packet['manifest']})
+        (self.repo / 'b/requirements.md').write_text('Changed b obligation.\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'changed only b'); self.git('push', '-q')
+        changed = self.helper('context', *args); self.assert_ok(changed)
+        self.assertNotEqual(packet['agreement_revision'], json.loads(changed.stdout)['agreement_revision'])
+        (self.repo / 'b/requirements.md').unlink()
+        self.assertNotEqual(self.helper('context', *args).returncode, 0)
+
+    def test_all_knowledge_base_kinds_resolve_and_nonfile_captures_are_required(self):
+        import hashlib
+        self.verified_build()
+        source = self.repo / 'src'; source.mkdir()
+        (source / 'entry.py').write_text('def required_symbol(): pass\n')
+        (source / 'one.md').write_text('First required clause.\n')
+        (source / 'two.md').write_text('Second required clause.\n')
+        kb = self.project / 'knowledge-base.md'
+        header = kb.read_text().split('| K1 |')[0]
+        rows = [('instructions', 'README.md'), ('repo-file', 'README.md'), ('sample-code', 'src/entry.py'),
+                ('repo-glob', 'src/*.md'), ('entry-point', 'src/entry.py:required_symbol'), ('entry-point', 'README.md:fixture'),
+                ('doc-url', 'https://example.invalid/doc'), ('context7', '/org/library')]
+        kb.write_text(header + ''.join(f'| K{i} | `{kind}` | `{locator}` | approved source |\n' for i, (kind, locator) in enumerate(rows, 1)))
+        self.git('add', '.'); self.git('commit', '-qm', 'all valid source kinds'); self.git('push', '-q')
+        self.assert_ok(self.invoke('prd-lint.sh', self.project, PRD_LINT_REPO_ROOT=str(self.repo)))
+        captures = []
+        for i, (_, locator) in enumerate(rows[-2:]):
+            path = self.root / f'capture-{i}.txt'; path.write_text('Approved library text.\n')
+            captures.append(dict(locator=locator, path=str(path), source_revision='v1', sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
+        capture_file = self.root / 'kb-captures.json'; capture_file.write_text(json.dumps(captures))
+        args = ('--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project, '--captures', capture_file)
+        result = self.helper('context', *args); self.assert_ok(result)
+        locators = {m['locator'] for m in json.loads(result.stdout)['manifest']}
+        self.assertTrue({'src/one.md', 'src/two.md', 'src/entry.py', '/org/library', 'https://example.invalid/doc'} <= locators)
+        for missing in captures:
+            capture_file.write_text(json.dumps([entry for entry in captures if entry != missing]))
+            rejected = self.helper('context', *args)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn(missing['locator'], rejected.stderr)
+
+    def reserve_next_meta_for_worker(self):
+        d = state.read_state(self.outer)
+        op = {k: '' for k in state.OPERATION_FIELDS}
+        op.update(phase='META-PLANNING', round=d['round'], agreement_revision=d['agreement_revision'],
+                  meta_plan=str((self.project / f"meta-plans/approved-r{d['round']}.md").relative_to(self.repo)),
+                  goal_folder=f"vault/goals/approved-r{d['round']}", source_vault_commit=self.git('rev-parse', 'HEAD'))
+        opfile = self.root / 'worker-operation.json'; opfile.write_text(json.dumps(op))
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        self.assert_ok(self.helper('acquire-lock', lock, '--owner', os.getpid()))
+        try:
+            result = self.helper('reserve', self.outer, '--repo', self.repo, '--vault', self.repo / 'vault',
+                                 '--operation', opfile, '--owner', os.getpid(), '--max-rounds', 3)
+            self.assert_ok(result)
+        finally:
+            shutil.rmtree(lock)
+        opfile.write_text(json.dumps(json.loads(result.stdout)['operation']))
+        return opfile
+
+    def worker_meta_entry(self, opfile):
+        return self.helper('meta-entry', self.outer, '--repo', self.repo, '--vault', self.repo / 'vault',
+                           '--operation', opfile, '--conf', Path(self.env['XDG_CONFIG_HOME']) / 'superagent')
+
+    def test_author_adopted_round_is_consumable_by_meta_worker_after_pass(self):
+        self.evaluation_fixture(); self.phase()
+        prd = self.project / 'prd.md'; prd.write_text(prd.read_text().replace('Demo.', 'Author adopted different scope.'))
+        self.git('add', '.'); self.git('commit', '-qm', 'new author scope'); self.git('push', '-q')
+        parked = self.phase(3)['state']
+        command = 'adopt-agreement ' + parked['proposed_agreement_revision']
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', command))
+        self.phase(3, True)
+        opfile = self.reserve_next_meta_for_worker()
+        result = self.worker_meta_entry(opfile); self.assert_ok(result)
+        receipt = json.loads(result.stdout)
+        self.assertEqual(receipt['entry'], 'AUTHOR_APPROVED')
+        self.assertEqual(receipt['answer'], command)
+        self.assertEqual(receipt['round'], 2)
+        self.assertEqual(receipt['operation_id'], state.read_state(self.outer)['operation']['id'])
+        self.assertEqual(self.worker_meta_entry(opfile).stdout, result.stdout)
+        # A worker prompt or stale packet cannot authorize another operation.
+        op = json.loads(opfile.read_text()); op['id'] = 'a'*32; opfile.write_text(json.dumps(op))
+        self.assertNotEqual(self.worker_meta_entry(opfile).returncode, 0)
+
+    def test_explicit_author_replan_is_worker_consumable_but_not_automatic_repair(self):
+        report = self.diagnosis_fixture()
+        report.write_text(report.read_text().replace('implementation defect', 'PRD/evaluation defect').replace('**REPAIR**', '**AUTHOR INPUT**'))
+        self.git('add', '.'); self.git('commit', '-qm', 'author diagnosis'); self.git('push', '-q')
+        self.assertEqual(self.phase(3)['state']['pending_kind'], 'author')
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'replan'))
+        self.phase(3, True)
+        opfile = self.reserve_next_meta_for_worker()
+        result = self.worker_meta_entry(opfile); self.assert_ok(result)
+        self.assertEqual(json.loads(result.stdout)['entry'], 'AUTHOR_APPROVED')
+        self.assertEqual(json.loads(result.stdout)['answer'], 'replan')
+        original = self.outer.read_bytes()
+        d, body = state._frontmatter_parts(self.outer)
+        d['meta_authorization_json'] = ''
+        self.outer.write_bytes(state._serialize_state(d) + body)
+        self.assertNotEqual(self.worker_meta_entry(opfile).returncode, 0)
+        self.outer.write_bytes(original)
+        before = state.read_state(self.outer)['meta_authorization_json']
+        retried = self.reserve_next_meta_for_worker()
+        self.assertEqual(state.read_state(self.outer)['meta_authorization_json'], before)
+        self.assertEqual(self.worker_meta_entry(retried).stdout, result.stdout)
+        self.assertEqual(self.outer.read_text().count('\nauthor-meta: '), 1)
+
+    def test_legacy_adoption_without_eval_or_diagnosis_is_worker_consumable(self):
+        d = self.verified_build()
+        fingerprint = d['agreement_revision']
+        d.update(status='WAITING FOR INPUT', prior_status='WAITING FOR META-PLAN', agreement_revision='PENDING',
+                 adoption_goal_folder='[[vault/goals/goal]]', adoption_verdict='-', last_eval='',
+                 operation={k: '' for k in state.OPERATION_FIELDS})
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\nanswer:\n')
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'adopt-agreement ' + fingerprint))
+        self.phase(3, True)
+        opfile = self.reserve_next_meta_for_worker()
+        result = self.worker_meta_entry(opfile); self.assert_ok(result)
+        self.assertEqual(json.loads(result.stdout)['entry'], 'AUTHOR_APPROVED')
+        original = self.outer.read_bytes()
+        self.outer.write_bytes(original.replace(b'author-meta: ', b'unverified-prompt-assertion: '))
+        self.assertNotEqual(self.worker_meta_entry(opfile).returncode, 0)
+        self.outer.write_bytes(original)
+        for key, value in (('round', 3), ('agreement_revision', 'f'*64), ('operation_id', 'a'*32)):
+            d, body = state._frontmatter_parts(self.outer)
+            authorization = json.loads(d['meta_authorization_json']); authorization[key] = value
+            d['meta_authorization_json'] = json.dumps(authorization)
+            self.outer.write_bytes(state._serialize_state(d) + body)
+            self.assertNotEqual(self.worker_meta_entry(opfile).returncode, 0)
+            self.outer.write_bytes(original)
+
+    def test_autonomous_worker_entry_keeps_exact_fail_repair_gate(self):
+        self.diagnosis_fixture()
+        self.phase(3)
+        opfile = self.reserve_next_meta_for_worker()
+        result = self.worker_meta_entry(opfile); self.assert_ok(result)
+        self.assertEqual(json.loads(result.stdout)['entry'], 'AUTONOMOUS_REPAIR')
+        original = self.outer.read_bytes()
+        d, body = state._frontmatter_parts(self.outer)
+        previous = json.loads(d['previous_round_json'])
+        previous['last_diagnosis'] = str(self.project / 'diagnoses/unselected.md')
+        d['previous_round_json'] = json.dumps(previous)
+        self.outer.write_bytes(state._serialize_state(d) + body)
+        self.assertNotEqual(self.worker_meta_entry(opfile).returncode, 0)
+        self.outer.write_bytes(original)
+        d, body = state._frontmatter_parts(self.outer)
+        previous = json.loads(d['previous_round_json'])
+        previous['agreement_revision'] = 'f'*64
+        d['previous_round_json'] = json.dumps(previous)
+        self.outer.write_bytes(state._serialize_state(d) + body)
+        self.assertNotEqual(self.worker_meta_entry(opfile).returncode, 0)
+
+    def test_raised_limit_round_is_consumable_as_strict_automatic_repair(self):
+        self.diagnosis_fixture()
+        self.phase(1)
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'raise-limit 3'))
+        self.phase(3, True)
+        opfile = self.reserve_next_meta_for_worker()
+        result = self.worker_meta_entry(opfile); self.assert_ok(result)
+        self.assertEqual(json.loads(result.stdout)['entry'], 'AUTONOMOUS_REPAIR')
+
     def test_verified_building_stays_pending_without_auth(self):
         self.verified_build()
         self.assert_ok(self.invoke_tick())
