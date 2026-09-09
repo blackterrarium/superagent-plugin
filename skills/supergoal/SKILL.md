@@ -103,7 +103,8 @@ recorded `goal_folder` must resolve inside `<vault_root>`. The operation file is
 caller slug that does not equal the recorded goal folder's `<project-slug>-r<N>` suffix.
 
 The operation-mode last output line is compact JSON with `outcome`, `phase`, `operation_id`, `round`,
-`meta_plan`, `goal_folder`, `root_plan`, `artifacts`, and `reason`. Only verified integration on
+`meta_plan`, `goal_folder`, `root_plan`, `goal_complete`, `goal_recoverable`,
+`goal_completion_reason`, `artifacts`, and `reason`. Only verified integration on
 `main` yields `INTEGRATED`; prose output, a local folder, or an unmerged commit never does.
 
 Nothing else changes: the input-gate message is exactly `I need a goal description`, and a direct user
@@ -128,9 +129,12 @@ who passes a bare prose goal with no flags sees identical behaviour to before.
 In operation mode, take `N`, `<STAMP>`, `<slug>`, the source revision and exact goal folder only from
 the recorded identity; never consult the clock or disambiguate. Before authoring, run
 `_coding_loop_evidence.py reconcile <primary_root> <vault_root> --operation <path>`. If it returns
-`INTEGRATED`, verify on `main` that the root plan, `goal-directives.md`, and six subfolders carry or
-belong to the same identity, then return the exact goal/root paths and skip authoring and A7.
-`ABSENT` permits one normal draft/approval/write flow. On `CONFLICT`, resume only exact matching scaffolding or a pending A7
+`INTEGRATED` with `goal_complete: true`, return the exact goal/root paths and skip authoring and A7.
+If `goal_complete` is false and `goal_recoverable` is true, use `goal_completion_reason` to repair
+only the missing matching `goal-directives.md` or tracked scaffold directories through the normal
+draft, confirmation and A7 flow. A false `goal_recoverable`, including a mismatched directive or
+extra root plan, is a hard conflict; never overwrite it. `ABSENT` permits one normal
+draft/approval/write flow. On `CONFLICT`, resume only exact matching scaffolding or a pending A7
 branch/PR owned by this operation, then reconcile again. Any different Operation, source, round,
 agreement, meta-plan, or folder identity is a hard conflict. Never validate feature-branch bytes as
 main evidence.
@@ -283,7 +287,9 @@ write.** Present a concise summary — do **not** dump the full drafts:
 Then ask explicitly — e.g. *"Write this goal folder and root plan to the vault and open the PR?"* — and
 **wait for the user's answer:**
 
-- **Approved** → proceed to step 8 (write-out) and step 9 (commit & PR).
+- **Approved** → in operation mode, add
+  `**Confirmation:** user-confirmed on <DATE>` in the same header position as the auto-confirm line;
+  then proceed to step 8 (write-out) and step 9 (commit & PR). Manual mode keeps its existing output.
 - **Changes requested** → revise the relevant scratch draft(s), re-run self-review (step 6), and
   re-present this gate. Still no vault write.
 - **Declined** → write nothing and open no PR. Report that no vault changes were made and where the

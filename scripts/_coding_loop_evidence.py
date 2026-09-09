@@ -972,6 +972,115 @@ def _linked_artifact(
     }
 
 
+def _goal_scaffold(
+    git_root: Path,
+    vault_root: Path,
+    goal_folder: Path,
+    root_plan: Path,
+    operation: dict,
+) -> tuple[bool, bool, list[dict[str, str]], str]:
+    directives = goal_folder / "goal-directives.md"
+    directives_commit, directives_error = _path_at_main(git_root, directives)
+    if directives_error:
+        return (
+            False,
+            "not tracked on main" in directives_error,
+            [],
+            f"goal-directives.md is not integrated: {directives_error}",
+        )
+    directives_relative = directives.relative_to(git_root).as_posix()
+    directives_blob = _main_blob(git_root, directives_relative)
+    if directives_blob is None:
+        return False, True, [], "goal-directives.md is missing on main"
+    directives_text = _decode_blob(directives_blob, "goal-directives.md")
+    errors: list[str] = []
+    round_text = _single_label(directives_text, "Round", errors)
+    expected = {
+        "operation_id": operation["id"],
+        "round": str(operation["round"]),
+        "agreement_revision": operation["agreement_revision"],
+        "source_vault_commit": operation["source_vault_commit"],
+    }
+    observed = {
+        "operation_id": _single_label(directives_text, "Operation", errors),
+        "round": round_text,
+        "agreement_revision": _single_label(
+            directives_text, "Agreement revision", errors
+        ),
+        "source_vault_commit": _single_label(
+            directives_text, "Source vault commit", errors
+        ),
+    }
+    source = _single_label(directives_text, "Source", errors)
+    confirmation = _single_label(directives_text, "Confirmation", errors)
+    source_link = re.fullmatch(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", source)
+    meta_plan = _resolve_artifact(
+        git_root, vault_root, operation["meta_plan"]
+    )
+    source_matches = source_link is not None and (
+        _normalize_document_locator(source_link.group(1))
+        == _normalize_document_locator(operation["meta_plan"])
+        or _linked_artifact(source, meta_plan, git_root, vault_root)
+    )
+    if (
+        errors
+        or observed != expected
+        or not confirmation
+        or not source_matches
+    ):
+        return (
+            False,
+            False,
+            [],
+            "goal-directives.md identity or provenance does not match the operation",
+        )
+
+    relative_goal = goal_folder.relative_to(git_root).as_posix()
+    tracked = _git_text(
+        git_root,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "refs/heads/main",
+        "--",
+        relative_goal,
+    ).splitlines()
+    required = ("master-plans", "plans", "findings", "reports", "handoff", "todo")
+    missing = [
+        name
+        for name in required
+        if not any(path.startswith(f"{relative_goal}/{name}/") for path in tracked)
+    ]
+    if missing:
+        reason = "goal scaffold is missing tracked directories: " + ", ".join(missing)
+        return (
+            False,
+            True,
+            [],
+            reason,
+        )
+    master_root = root_plan.relative_to(git_root).as_posix()
+    master_docs = [
+        path
+        for path in tracked
+        if Path(path).parent.as_posix() == f"{relative_goal}/master-plans"
+        and Path(path).suffix == ".md"
+    ]
+    if master_docs != [master_root]:
+        return (
+            False,
+            False,
+            [],
+            "goal scaffold does not contain exactly the recorded root plan",
+        )
+    return (
+        True,
+        False,
+        [{"path": str(directives.resolve()), "commit": directives_commit}],
+        "",
+    )
+
+
 def _meta_completion(
     git_root: Path,
     vault_root: Path,
@@ -1244,9 +1353,21 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
                 repo_root, vault_root, operation["meta_plan"]
             )
             (
-                worker_complete,
-                completion_artifacts,
-                completion_reason,
+                goal_complete,
+                goal_recoverable,
+                goal_artifacts,
+                goal_completion_reason,
+            ) = _goal_scaffold(
+                artifact_repo,
+                vault_root,
+                recorded_goal,
+                artifact,
+                operation,
+            )
+            (
+                meta_complete,
+                meta_artifacts,
+                meta_completion_reason,
             ) = _meta_completion(
                 artifact_repo,
                 vault_root,
@@ -1254,13 +1375,21 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
                 recorded_goal,
                 operation,
             )
-            artifacts.extend(completion_artifacts)
+            artifacts.extend(goal_artifacts)
+            artifacts.extend(meta_artifacts)
             result.update(
                 goal_folder=str(recorded_goal),
                 root_plan=str(artifact.resolve()),
                 meta_plan=str(meta_plan),
-                worker_complete=worker_complete,
-                completion_reason=completion_reason,
+                goal_complete=goal_complete,
+                goal_recoverable=goal_recoverable,
+                goal_completion_reason=goal_completion_reason,
+                worker_complete=goal_complete and meta_complete,
+                completion_reason=(
+                    goal_completion_reason
+                    if not goal_complete
+                    else meta_completion_reason
+                ),
             )
         else:
             result["report"] = str(artifact.resolve())

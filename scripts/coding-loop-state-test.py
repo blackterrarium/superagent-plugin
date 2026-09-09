@@ -889,7 +889,16 @@ class CodingLoopEvidenceTests(unittest.TestCase):
             if re.match(r"^\|\s*\d+\s*\|", line)
         )
 
-    def write_integrated_goal(self, repo: Path, operation: dict, *, operation_id=None):
+    def write_integrated_goal(
+        self,
+        repo: Path,
+        operation: dict,
+        *,
+        operation_id=None,
+        missing_directives=False,
+        mismatched_directives=False,
+        missing_scaffold=None,
+    ):
         goal = repo / operation["goal_folder"]
         master = goal / "master-plans" / "root.md"
         master.parent.mkdir(parents=True)
@@ -901,6 +910,25 @@ class CodingLoopEvidenceTests(unittest.TestCase):
             + operation["source_vault_commit"]
             + "\n**Related:** [[vault/projects/sample/meta-plans/frozen-r1]]\n"
         )
+        if not missing_directives:
+            directives = goal / "goal-directives.md"
+            directives.write_text(
+                "# Goal Directives\n"
+                "**Source:** [[vault/projects/sample/meta-plans/frozen-r1]]\n"
+                "**Confirmation:** auto-confirmed\n"
+                "**Operation:** "
+                + (("7" * 32) if mismatched_directives else (operation_id or operation["id"]))
+                + " · **Round:** 1 · **Agreement revision:** agreement-r1"
+                " · **Source vault commit:** "
+                + operation["source_vault_commit"]
+                + "\n"
+            )
+        for name in ("plans", "findings", "reports", "handoff", "todo"):
+            if name == missing_scaffold:
+                continue
+            folder = goal / name
+            folder.mkdir()
+            (folder / ".gitkeep").write_text("")
         run_git(repo, "add", operation["goal_folder"])
         run_git(repo, "commit", "-q", "-m", "integrated goal")
         run_git(repo, "push", "-q")
@@ -929,11 +957,51 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual("INTEGRATED", result["outcome"])
         self.assertEqual(str(committed_goal), result["goal_folder"])
         self.assertEqual(str(committed_master), result["root_plan"])
+        self.assertTrue(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
         self.assertFalse(result["worker_complete"])
         self.assertIn("meta-plan", result["completion_reason"])
         self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
         self.assertEqual(0, len(list((project / "meta-plans").glob("*.md"))))
         self.assertEqual(0, self.count_ledger_rows(project / "prd.md"))
+
+    def test_missing_goal_directives_requires_explicit_scaffold_recovery(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, missing_directives=True)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertTrue(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("goal-directives.md", result["completion_reason"])
+        self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
+        self.assertEqual(0, self.count_ledger_rows(project / "prd.md"))
+
+    def test_mismatched_goal_directives_requires_explicit_scaffold_recovery(self):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, mismatched_directives=True)
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertFalse(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("goal-directives.md identity", result["completion_reason"])
+
+    def test_missing_goal_scaffold_directory_requires_explicit_recovery(self):
+        repo, _project, operation = self.make_meta_worker_fixture()
+        self.write_integrated_goal(repo, operation, missing_scaffold="reports")
+
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+
+        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertFalse(result["goal_complete"])
+        self.assertTrue(result["goal_recoverable"])
+        self.assertFalse(result["worker_complete"])
+        self.assertIn("reports", result["completion_reason"])
 
     def test_conflicting_goal_identity_is_not_reused(self):
         repo, project, operation = self.make_meta_worker_fixture()
@@ -975,9 +1043,11 @@ class CodingLoopEvidenceTests(unittest.TestCase):
 
         self.assertEqual(first, replay)
         self.assertTrue(replay["worker_complete"])
+        self.assertTrue(replay["goal_complete"])
+        self.assertFalse(replay["goal_recoverable"])
         self.assertEqual("", replay["completion_reason"])
         self.assertEqual(str(committed_goal), replay["goal_folder"])
-        self.assertEqual(3, len(replay["artifacts"]))
+        self.assertEqual(4, len(replay["artifacts"]))
         self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
         self.assertEqual(1, len(list((project / "meta-plans").glob("*.md"))))
         self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
@@ -1248,6 +1318,11 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(0, validation.returncode, validation.stderr)
         self.assertEqual("PASS", json.loads(validation.stdout)["verdict"])
+
+    def test_supermeta_uses_the_callable_diagnosis_validation_api(self):
+        skill = (SCRIPTS.parent / "skills" / "supermeta" / "SKILL.md").read_text()
+        self.assertIn("validate_diagnosis(", skill)
+        self.assertNotIn("_coding_loop_evidence.py validate-diagnosis", skill)
 
 
 if __name__ == "__main__":

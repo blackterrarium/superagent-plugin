@@ -84,7 +84,8 @@ When `--operation <path>` is present, load duplicate-key-rejecting JSON containi
 
 Operation mode has a machine-readable completion contract. Its last output line is one compact JSON
 object with keys `outcome`, `phase`, `operation_id`, `round`, `meta_plan`, `goal_folder`,
-`root_plan`, `worker_complete`, `completion_reason`, `artifacts`, and `reason`. `outcome` uses the reconciler's
+`root_plan`, `goal_complete`, `goal_recoverable`, `goal_completion_reason`, `worker_complete`, `completion_reason`,
+`artifacts`, and `reason`. `outcome` uses the reconciler's
 `INTEGRATED`, `ABSENT`, or `CONFLICT` artifact classification; an integrated reusable goal can still
 have `worker_complete: false`. That flag becomes true only after the goal, meta-plan and ledger are
 verified on `main`. Paths are absolute and each verified artifact has `path` and `commit`. The caller
@@ -107,9 +108,30 @@ inconsistent round, stamp, slug, ledger, or project identities. Require `source_
 vault `main` and the current agreement fingerprint equal to `agreement_revision` before dispatch.
 For round 1, repair guidance is `none — first round`. For a later round, locate the unique FINAL
 diagnosis linked to the previous ledger row's failed report and validate it with
-`_coding_loop_evidence.py validate-diagnosis`. It must match the previous round/report, evaluated
-commit, agreement and source-vault revision and have disposition `REPAIR`. Missing, ambiguous,
-AUTHOR INPUT, or mismatched context is `CONFLICT`; never label a later round as a first round.
+the existing Python API and its complete authoritative inputs:
+
+```python
+validate_diagnosis(
+    diagnosis_path,
+    {
+        "round": N - 1,
+        "eval_report": previous_eval_report,
+        "code_commit": previous_evaluated_commit,
+        "agreement_revision": agreement_revision,
+        "source_vault_commit": diagnosis_source_vault_commit,
+        "failing_ids": validated_previous_eval["failing_ids"],
+        "missing_ids": validated_previous_eval["missing_ids"],
+    },
+)
+```
+
+First run `validate_evaluation` on the previous report to obtain those failed/missing IDs and exact
+evaluated commit; take the report path from the previous ledger row and require the diagnosis's
+recorded source-vault revision on `main`. `validate_diagnosis` itself requires a unique operation ID
+in the report. The result must match the previous round/report, evaluated commit, agreement and
+source revision, return disposition `REPAIR`, and set `may_start_next_round: true`. Missing,
+ambiguous, AUTHOR INPUT, or mismatched context is `CONFLICT`; never label a later round as a first
+round.
 
 ### 4. Read the knowledge base
 
@@ -210,9 +232,13 @@ and to **return supergoal's complete Final Report verbatim** as its final messag
 
 In operation mode append `--operation <the same absolute operation JSON path>`. Before dispatch,
 run `_coding_loop_evidence.py reconcile <primary_root> <vault_root> --operation <path>`. An
-`INTEGRATED` result supplies the exact `goal_folder` and `root_plan`; reuse them and skip the PLANNER
-dispatch. For `ABSENT`, dispatch once. For `CONFLICT`, resume only exact pending A7 work owned by
-this operation, finish its normal integration, and reconcile again. An identity mismatch or
+`INTEGRATED` result supplies the exact `goal_folder` and `root_plan`. If `worker_complete` is true,
+return the existing completed operation. If `goal_complete` is true, reuse the scaffold and skip the
+PLANNER dispatch while finishing meta/ledger work. If `goal_complete` is false and
+`goal_recoverable` is true, dispatch PLANNER once with the same operation so supergoal explicitly
+repairs only the missing matching scaffold. A false `goal_recoverable` is a hard conflict. For
+`ABSENT`, dispatch once. For `CONFLICT`, resume only exact pending A7 work owned by this operation,
+finish its normal integration, and reconcile again. An identity mismatch or
 unrelated partial output is a hard conflict. Never infer success from child text, a folder
 collision, working-tree bytes, or an unmerged commit.
 
