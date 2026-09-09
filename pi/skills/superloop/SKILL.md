@@ -75,8 +75,8 @@ report** (the caller's per-tick report).
 ## Caller-supplied parameters (the work-model seam)
 
 The caller supplies, once, at invocation:
-- **`<consumer>`** — the caller's own slash-command name, used in the driver's tick prompt (`/<consumer> --tick <loop-file>`) — see L2. For superagent this is `superagent`.
-- **`<bootstrap-input>`** — the caller's required bootstrap input, the L2 hard gate (no input + no existing loop file ⇒ print the hard-gate message and exit). Must be the goal's **root** seed/master plan (superagent: the root `<PLAN.md>`) — see L2.
+- **`<consumer>`** — the caller's own slash-command name, used in the driver's tick prompt (`/<consumer> --tick <loop-file>`) — see L2. For superagent this is `superagent`; the project consumer is `supercode`.
+- **`<bootstrap-input>`** — the caller's required bootstrap input, the L2 hard gate (no input + no existing loop file ⇒ print the hard-gate message and exit). Defaults to the goal's **root** seed/master plan (superagent: root `<PLAN.md>`); supercode supplies the real project directory and external driver only — see L2.
 - **Status vocabulary + role→value mapping** — the caller's concrete `status:` values *and* the mapping of each onto L1's generic roles (a *ready* state, a *transient/running* state, `WAITING FOR INPUT`, `DONE`), plus any extra frontmatter fields the caller stores beyond the L1 baseline — see L1.
 - **Heavy-step definition + THRESHOLD** — what increments `session_skill_count`, and the handoff THRESHOLD (this plugin's callers resolve it from `SUPER_HEAVY_STEP_LIMIT`, default 6) — see L4.
 - **Be-sure artifact list** — the output file(s)/PR(s) the caller's just-completed sub-step reports, which the Be-sure verification confirms are present and tracked (L5's two-kind rule) — see L5/L6.
@@ -96,6 +96,11 @@ The caller supplies, once, at invocation:
 ---
 
 ## L1 — The loop-status file
+
+The supercode consumer instead uses its existing registered project state (default
+`<project>/<SUPER_LOOP_STATUS_DIRNAME>/supercode.md`), stores `project` rather than `master_plan`,
+and supplies its own operation-aware transient recovery and DONE validation. These project overrides
+do not alter the following plan-tree defaults.
 
 State lives in a single per-goal file: `<goal-folder>/<SUPER_LOOP_STATUS_DIRNAME>/<YYYY-MM-DD>-<slug>.md`.
 
@@ -282,6 +287,12 @@ end — and run the **Context-handoff gate (L4)** before the body, exactly like 
 
 ### Crash recovery — a persisted transient/running state means a crashed tick
 
+**Consumer recovery seam:** supercode must reconcile committed operation artifacts and full
+acceptance context before any transient reset. Its mappings are META-PLANNING → WAITING FOR
+META-PLAN, EVALUATING → WAITING FOR EVAL, DIAGNOSING → WAITING FOR DIAGNOSIS. Incomplete reusable
+META keeps its original goal/operation. Conflicts park. The following plan-tree recovery defaults
+remain unchanged; neither consumer resets a live peer's transient or lock.
+
 The transient/running role (L1) is transient *within* a tick: the loop sets it, runs the body
 synchronously, then sets the next status — all in one turn. Ticks never overlap: in `cron` mode they
 fire between turns; in `external` mode the **lock (L3)** serializes them. So a **persisted** transient
@@ -360,6 +371,14 @@ interval, each in a **fresh session = clean context**.
 External ticks run in **independent sessions**, so a long tick (a run with a 30-min CI gate) can
 still be running when the next interval fires. Guard every tick with an atomic file lock in the
 loop-status dir so two ticks never run concurrently:
+- **Project consumer (`supercode`) override:** use the installed
+  `scripts/_coding_loop_state.py acquire-lock LOCK_DIR --owner DRIVER_PID --steal-min MIN` for
+  **every** acquire/reclaim path, including answers and force recovery. The helper serializes
+  mkdir, stale re-read/removal, and owner/acquired publication under `fcntl.flock` on the persistent
+  sibling `LOCK_DIR.reclaim`. Never unlink that inode, even during stop/recovery. Exit on return 1
+  (busy); report return 2 as invalid/error. A live owner is never age-stolen. Release the main
+  `.lockd` only if owner still names this driver PID. Do not execute the legacy rm/reacquire recipe
+  below for projects. Legacy goal consumers retain the Python-free default.
 - **`acquire_lock()`** — atomically `mkdir "<loop-file-dir>/.<loop-file-basename>.lockd"`. The lock
   derives from the **loop file's own directory** (`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/`),
   never from `primary_root` (see **L1**). `<loop-file-dir>` is an absolute path — inside the primary
@@ -502,6 +521,10 @@ consumer whose per-tick body opens its own PRs applies the full clause.
 ---
 
 ## L7 — Decision-escalation ladder — autonomy posture
+
+For the project consumer, this ladder may resolve routine operation failures only. Specification
+changes, agreement adoption and raised round-limit decisions require an explicit recorded author
+answer; no panel vote can approve them or weaken acceptance.
 
 The bar is **not** "never ask the user." Routine actions (commits, PR merges) never need approval, but
 delegated skills legitimately surface genuine decision points. The loop resolves them itself first,

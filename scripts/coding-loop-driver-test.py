@@ -183,6 +183,253 @@ None — command-only.
         return subprocess.run([sys.executable, str(SCRIPTS / '_coding_loop_state.py'), command, *map(str, args)],
                               env=self.env, cwd=self.repo, text=True, capture_output=True)
 
+    def full_loop_fixture(self, harness='codex'):
+        """Real tick, copied package and native subprocesses; no model/scheduler."""
+        package_source = SCRIPTS.parent / harness
+        if harness == 'claude':
+            package_source = SCRIPTS.parent
+        elif harness == 'codex':
+            package_source /= 'plugins/superagent'
+        package = self.root / 'copied-package'
+        for folder in ('scripts', 'skills', 'templates'):
+            shutil.copytree(package_source / folder, package / folder)
+        self.events = self.root / 'events.jsonl'
+        self.env.update(FAKE_PACKAGE=str(package), FAKE_EVENTS=str(self.events),
+                        FAKE_SCHEDULER_SCRIPTS=str(SCRIPTS), SUPER_HARNESS=harness,
+                        SUPER_CODE_MAX_ITERATIONS='2', SUPER_AUTO_DISARM_ON_DONE='true')
+        for cli in ('claude', 'codex', 'pi', 'agent'):
+            target = self.bin / cli
+            target.write_text('#!' + sys.executable + '\n' + (SCRIPTS / 'coding-loop-fake-worker.py').read_text())
+            target.chmod(0o755)
+        (self.repo / 'behavior.txt').write_text('broken\n')
+        evaluation = self.project / 'evaluation.md'
+        evaluation.write_text(evaluation.read_text().replace('| C1 | `true`', '| C1 | `test "$(cat behavior.txt)" = repaired`'))
+        self.git('add', '.'); self.git('commit', '-qm', 'approved failing baseline')
+        remote = self.root / 'origin.git'
+        subprocess.run(['git', 'init', '--bare', '-q', str(remote)], check=True)
+        self.git('remote', 'add', 'origin', str(remote)); self.git('push', '-qu', 'origin', 'main')
+        self.assert_ok(self.launch())
+        self.outer = next((self.project / 'loop-status').glob('*.md'))
+        return state.acceptance_context(self.repo, self.repo / 'vault', self.project)['agreement_revision']
+
+    def full_events(self, kind):
+        return [e for e in map(json.loads, self.events.read_text().splitlines()) if e['kind'] == kind] if self.events.exists() else []
+
+    def full_tick(self, action='reconcile', phase='', fault='', expected=None):
+        result = self.invoke_tick(FAKE_ACTION=action, FAKE_PHASE=phase, FAKE_FAULT=fault)
+        if fault:
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        else:
+            if result.returncode:
+                self.fail(result.stdout + result.stderr + Path(self.env['LOG_FILE']).read_text()[-9000:])
+        if expected:
+            self.assertEqual(self.outer_status(), expected, self.outer.read_text() + result.stdout + result.stderr)
+        return result
+
+    def complete_fake_inner(self, repair=False):
+        # The implementation transport is intentionally fake: this is NOT live
+        # acceptance. It supplies an integrated change, then the exact child DONE.
+        if repair:
+            self.assertEqual(state.read_state(self.outer)['round'], 2)
+            (self.repo / 'behavior.txt').write_text('repaired\n')
+            self.git('add', 'behavior.txt'); self.git('commit', '-qm', 'fake inner implements approved repair'); self.git('push', '-q')
+        child = self.repo / state.read_state(self.outer)['inner_loop']
+        original = child.read_text()
+        import re
+        child.write_text(re.sub(r'(?m)^status:.*$', 'status: DONE', original))
+        calls = len(self.full_events('invocation'))
+        self.full_tick(expected='WAITING FOR EVAL')
+        self.assertEqual(len(self.full_events('invocation')), calls, 'BUILDING must stay shell-only')
+
+    def save_full_evidence(self, label):
+        target = os.environ.get('CODING_LOOP_TEST_EVIDENCE_DIR')
+        if not target:
+            return
+        folder = Path(target) / label
+        folder.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(self.events, folder / 'events.jsonl')
+        shutil.copyfile(self.outer, folder / 'outer.md')
+        shutil.copyfile(Path(self.env['LOG_FILE']), folder / 'tick.log')
+        (folder / 'commits.txt').write_text(self.git('log', '--all', '--format=%H %s') + '\n')
+        for source, name in ((self.project, 'project'), (self.repo / 'vault/goals', 'goals'),
+                             (Path(self.env['XDG_CONFIG_HOME']) / 'superagent', 'registrations')):
+            shutil.copytree(source, folder / name, dirs_exist_ok=True)
+
+    def assert_round_artifacts(self, rounds=2):
+        import re
+        self.assertEqual(len(list((self.project / 'meta-plans').glob('*.md'))), rounds)
+        self.assertEqual(len(list((self.repo / 'vault/goals').glob('frozen-r*'))), rounds)
+        self.assertEqual(len(list((self.project / 'eval-reports').glob('*.md'))), rounds)
+        self.assertEqual(len(list((self.project / 'diagnoses').glob('*.md'))), 1)
+        rows = re.findall(r'(?m)^\| ([0-9]+) \|.*$', (self.project / 'prd.md').read_text())
+        self.assertEqual(rows, [str(n) for n in range(1, rounds + 1)])
+        registrations = list((Path(self.env['XDG_CONFIG_HOME']) / 'superagent').glob('project-r*.env'))
+        self.assertEqual(len(registrations), rounds)
+        self.assertEqual([e['slug'] for e in self.full_events('registration')], ['project-r' + str(n) for n in range(1, rounds + 1)])
+        workers = self.full_events('worker')
+        ids = {e['operation']['id'] for e in workers}
+        self.assertEqual(len(ids), 5)
+        for entry in self.full_events('worker-receipt'):
+            self.assertTrue(entry['receipt']['worker_complete'])
+            self.assertEqual(entry['receipt']['outcome'], 'INTEGRATED')
+
+    def test_real_ticks_copied_native_packages_fail_diagnose_repair_pass_replay(self):
+        for harness in ('claude', 'codex', 'pi', 'cursor'):
+            with self.subTest(harness=harness):
+                if harness != 'claude':
+                    self.temp.cleanup(); self.setUp()
+                fingerprint = self.full_loop_fixture(harness)
+                self.full_tick('phase', 'META-PLANNING', expected='WAITING FOR BUILD')
+                self.full_tick('launch', expected='BUILDING')
+                count = len(self.full_events('invocation'))
+                self.full_tick(expected='BUILDING')
+                self.assertEqual(len(self.full_events('invocation')), count)
+                self.complete_fake_inner()
+                self.full_tick('phase', 'EVALUATING', expected='WAITING FOR DIAGNOSIS')
+                self.full_tick('phase', 'DIAGNOSING', expected='WAITING FOR META-PLAN')
+                self.full_tick('phase', 'META-PLANNING', expected='WAITING FOR BUILD')
+                self.full_tick('launch', expected='BUILDING')
+                self.complete_fake_inner(repair=True)
+                self.full_tick('phase', 'EVALUATING', expected='DONE')
+                self.assertEqual(state.read_state(self.outer)['round'], 2)
+                self.assertEqual(state.read_state(self.outer)['agreement_revision'], fingerprint)
+                self.assertEqual([e['verdict'] for e in self.full_events('evaluation')], ['FAIL', 'PASS'])
+                self.assertEqual([e['entry'] for e in self.full_events('meta-entry')], ['FIRST_ROUND', 'AUTONOMOUS_REPAIR'])
+                workers = self.full_events('worker')
+                self.assertEqual(len(workers), 5)
+                self.assertEqual(len(self.full_events('invocation')), 12)  # 7 supervisor + 5 worker processes
+                supervisors = [e for e in self.full_events('invocation') if e['role'] == 'supervisor']
+                self.assertTrue(all('/skills/supercode/SKILL.md' in str(e) for e in supervisors))
+                if harness == 'codex': self.assertIn('--dangerously-bypass-approvals-and-sandbox', supervisors[0]['argv'])
+                if harness == 'cursor':
+                    for flag in ('--trust', '--force', '--plugin-dir'): self.assertIn(flag, supervisors[0]['argv'])
+                if harness == 'pi':
+                    for flag in ('--approve', '--skill', '--thinking'): self.assertIn(flag, supervisors[0]['argv'])
+                    self.assertNotIn('--tools', supervisors[0]['argv'])
+                self.assert_round_artifacts()
+                before = self.outer.read_bytes()
+                events = {kind: self.full_events(kind) for kind in ('worker', 'commit', 'registration')}
+                for _ in range(2): self.full_tick(expected='DONE')
+                self.assertEqual(self.outer.read_bytes(), before)
+                self.assertEqual({kind: self.full_events(kind) for kind in events}, events)
+                self.assertEqual(len(self.full_events('invocation')), 14)  # two manually forced terminal reconciliation ticks
+                disarms = [e for e in self.logs() if e['name'] == 'systemctl' and 'disable' in e['argv']]
+                self.assertTrue(disarms)
+                self.assertTrue(all('superagent-tick@outer.timer' in e['argv'] for e in disarms))
+                self.assert_round_artifacts()
+                self.save_full_evidence('full-' + harness)
+
+    def test_real_tick_fault_boundaries_keep_exact_operations_and_registration(self):
+        fingerprint = self.full_loop_fixture()
+
+        def interrupted_phase(phase, expected, partial=False):
+            before = len(self.full_events('worker'))
+            self.full_tick('phase', phase, fault='before-worker')
+            op = state.read_state(self.outer)['operation']
+            self.assertEqual(len(self.full_events('worker')), before)
+            self.assertNotEqual(self.outer_status(), 'DONE')
+            self.full_tick(expected=state.RECOVER_READY[phase])
+            self.assertEqual(state.read_state(self.outer)['operation'], op)
+            self.full_tick('phase', phase, fault='before-commit')
+            self.full_tick(expected=state.RECOVER_READY[phase])
+            self.assertEqual(self.full_events('reconcile')[-1]['receipt']['outcome'], 'ABSENT')
+            self.assertEqual(state.read_state(self.outer)['operation'], op)
+            if partial:
+                self.full_tick('phase', phase, fault='partial-meta')
+                self.full_tick(expected=state.RECOVER_READY[phase])
+                receipt = self.full_events('reconcile')[-1]['receipt']
+                self.assertEqual(receipt['outcome'], 'INTEGRATED')
+                self.assertFalse(receipt['worker_complete'])
+                self.assertEqual(len(list((self.repo / 'vault/goals').glob('frozen-r*'))), 1)
+                self.assertEqual(state.read_state(self.outer)['operation'], op)
+            self.full_tick('phase', phase, fault='after-commit')
+            workers = len(self.full_events('worker'))
+            self.full_tick(expected=expected)
+            self.assertEqual(len(self.full_events('worker')), workers, 'integrated output must reconcile without worker redispatch')
+            self.assertTrue(self.full_events('reconcile')[-1]['receipt']['worker_complete'])
+            attempts = [e['operation'] for e in self.full_events('worker') if e['operation']['id'] == op['id']]
+            self.assertTrue(all(attempt == op for attempt in attempts))
+            self.assertEqual(len(attempts), 3 if partial else 2)
+            self.assertEqual(state.read_state(self.outer)['agreement_revision'], fingerprint)
+
+        interrupted_phase('META-PLANNING', 'WAITING FOR BUILD', partial=True)
+        self.full_tick('launch', fault='before-registration', expected='WAITING FOR BUILD')
+        inner = {key: state.read_state(self.outer)[key] for key in ('inner_loop', 'inner_slug')}
+        self.assertEqual(self.full_events('registration'), [])
+        self.full_tick('launch', fault='after-registration', expected='WAITING FOR BUILD')
+        self.assertEqual(len(self.full_events('registration')), 1)
+        registration = Path(self.env['XDG_CONFIG_HOME']) / 'superagent' / (inner['inner_slug'] + '.env')
+        registered_bytes = registration.read_bytes()
+        scheduler_mutations = [e for e in self.logs() if e['name'] == 'systemctl' and 'enable' in e['argv']]
+        self.full_tick('launch', expected='BUILDING')
+        self.assertEqual(registration.read_bytes(), registered_bytes)
+        self.assertEqual({key: state.read_state(self.outer)[key] for key in inner}, inner)
+        self.assertEqual([e for e in self.logs() if e['name'] == 'systemctl' and 'enable' in e['argv']], scheduler_mutations)
+        self.complete_fake_inner()
+        interrupted_phase('EVALUATING', 'WAITING FOR DIAGNOSIS')
+        interrupted_phase('DIAGNOSING', 'WAITING FOR META-PLAN')
+        self.full_tick('phase', 'META-PLANNING', expected='WAITING FOR BUILD')
+        self.full_tick('launch', expected='BUILDING'); self.complete_fake_inner(repair=True)
+        self.full_tick('phase', 'EVALUATING', expected='DONE')
+        self.assert_round_artifacts()
+        self.assertEqual(len(self.full_events('worker')), 9)
+        self.assertEqual(len(self.full_events('commit')), 6)  # partial META plus 5 complete phases
+        self.assertEqual(len(self.full_events('fault')), 12)
+        calls = len(self.full_events('invocation'))
+        self.full_tick(expected='DONE'); self.full_tick(expected='DONE')
+        self.assertEqual(len(self.full_events('invocation')), calls + 2)
+        self.assertEqual(len(self.full_events('worker')), 9)
+        self.assert_round_artifacts()
+        self.save_full_evidence('fault-boundaries')
+
+    def test_shell_gate_reloads_inner_and_preserves_new_input_after_lock(self):
+        self.verified_build('DONE')
+        # Real Bash gate sees DONE before acquire; the instrumented Python CLI
+        # publishes an inner input and body answer immediately after acquisition.
+        python = self.bin / 'python3'
+        python.write_text('#!' + sys.executable + '\n' +
+            'import os, pathlib, subprocess, sys\n' +
+            'r=subprocess.run([' + repr(sys.executable) + ', *sys.argv[1:]])\n' +
+            "if r.returncode == 0 and 'acquire-lock' in sys.argv:\n" +
+            " p=pathlib.Path(os.environ['INNER']); p.write_text(p.read_text().replace('status: DONE', 'status: WAITING FOR INPUT') + '\\n## Pending decision\\nanswer: preserve-inner-answer\\n')\n" +
+            'sys.exit(r.returncode)\n')
+        python.chmod(0o755)
+        self.assert_ok(self.invoke_tick(INNER=str(self.running_inner)))
+        self.assertEqual(self.outer_status(), 'BUILDING')
+        self.assertIn('answer: preserve-inner-answer', self.running_inner.read_text())
+        self.assertEqual(self.model_invocations(), [])
+
+    def test_generated_meta_worker_consumes_author_adoption_after_pass(self):
+        self.full_loop_fixture('codex')
+        # A valid command-only PASS baseline; author subsequently edits scope.
+        (self.repo / 'behavior.txt').write_text('repaired\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'passing baseline'); self.git('push', '-q')
+        self.full_tick('phase', 'META-PLANNING', expected='WAITING FOR BUILD')
+        self.full_tick('launch', expected='BUILDING'); self.complete_fake_inner()
+        self.full_tick('phase', 'EVALUATING', expected='DONE')
+        prd = self.project / 'prd.md'; prd.write_text(prd.read_text().replace('Demo.', 'Author-approved changed scope.'))
+        self.git('add', '.'); self.git('commit', '-qm', 'author agreement edit'); self.git('push', '-q')
+        self.assert_ok(self.launch())
+        self.assertEqual(self.outer_status(), 'WAITING FOR INPUT')
+        before = len(self.full_events('worker'))
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'retry'))
+        self.full_tick(expected='WAITING FOR INPUT')
+        self.assertIn('answer: retry', self.outer.read_text())
+        self.assertEqual(len(self.full_events('worker')), before)
+        answer = 'adopt-agreement ' + state.read_state(self.outer)['proposed_agreement_revision']
+        self.assert_ok(self.invoke('answer.sh', '--replace', '--no-kick', 'outer', answer))
+        self.full_tick(expected='WAITING FOR META-PLAN')
+        self.full_tick('phase', 'META-PLANNING', expected='WAITING FOR BUILD')
+        entry = self.full_events('meta-entry')[-1]
+        self.assertEqual(entry['entry'], 'AUTHOR_APPROVED'); self.assertEqual(entry['answer'], answer)
+        self.assertEqual(entry['operation_id'], state.read_state(self.outer)['operation']['id'])
+        self.assertEqual(entry['round'], 2)
+        self.assertNotEqual(entry['agreement_revision'], self.full_events('meta-entry')[0]['agreement_revision'])
+        count = len(self.full_events('worker')); self.full_tick(expected='WAITING FOR BUILD')
+        self.assertEqual(len(self.full_events('worker')), count)
+        self.assertEqual(len(list((self.repo / 'vault/goals').glob('frozen-r*'))), 2)
+        self.save_full_evidence('author-adoption')
+
     def test_outer_monitor_and_independent_stop_targets(self):
         self.write_outer()
         for adapter in ('Linux', 'Darwin'):

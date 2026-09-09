@@ -64,6 +64,16 @@ repo-root `.superenv` file, (3) the plugin default
 (checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults —
 which is exactly the case Step 2 below fixes by creating one.
 
+## Project-only prerequisite
+
+Stage 3 is under acceptance at 0.8.1. Before launching a coding-loop **project**, verify
+`python3 -c 'import sys; assert sys.version_info >= (3, 9)'`. Missing/older Python blocks project
+launch; it does not block legacy goal initialization, launch or controls. `SUPER_CODE_MAX_ITERATIONS`
+must be a positive integer and limits created project rounds, not ticks/retries. The supervisor must
+be native to `SUPER_HARNESS`; bridged worker roles remain supported. Outer/inner registrations stop
+independently. Adoption of changed agreement and AUTHOR INPUT resume require the author's explicit
+answer; init or a configuration edit does not provide that authorization.
+
 ## Step 1 — Prerequisite checks
 
 1. `git rev-parse --path-format=absolute --git-common-dir` succeeds — else ABORT: "init

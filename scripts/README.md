@@ -720,3 +720,29 @@ chains and verified completion. Each answer must include its rule/evidence reaso
 These are interpreted-skill behavior probes; they do not execute a real scheduler/PR lifecycle.
 Saved answers document a particular probe run; validating them again is not a fresh agent test.
 See `docs/superpowers/reports/2026-09-07-lifecycle-verification.md` for baseline and repaired results.
+
+## Coding-loop Stage 3 (under acceptance, 0.8.1)
+
+`launch.sh PROJECT --supervisor supercode` uses the shared external driver. Project-only preflight
+requires Python 3.9+, READY PRD inputs and a positive `SUPER_CODE_MAX_ITERATIONS`. This limit counts
+created project rounds, not ticks/transport retries. A final-round PASS completes; FAIL may receive
+a diagnosis but parks before another round. Raising configuration alone does not resume: record
+`raise-limit N` with `answer.sh`. Legacy goal launch/control retains its Python-free path.
+
+`_coding_loop_state.py` validates project identity, locks, context, reserved operations, reconciliation
+and author-approved META entry. `_coding_loop_evidence.py` validates fingerprints and integrated
+worker receipts. Both helpers and `templates/coding-loop-diagnosis.md` ship in Codex/Cursor/Pi
+packages; scheduler scripts remain source-repository infrastructure. Run the shared launcher from
+this repository. Supervisors must be native to the selected harness; workers can use role bridges.
+
+`stop.sh PROJECT` stops only the outer registration and displays a still-running child's separate
+stop command. Outer and inner drain/hard stop are independent. Changed agreement requires an exact
+`adopt-agreement FINGERPRINT` answer; AUTHOR INPUT may resume with explicit `replan` under the
+unchanged agreement. The generated META worker independently validates the durable author receipt.
+
+`coding-loop-package-test.sh` runs isolated copied-package imports/CLIs and native marker checks.
+`coding-loop-driver-test.py` exercises real shell ticks/lifecycle and state/evidence APIs with fake
+native executables and disposable Git remotes. `coding-loop-fake-worker.py` is its explicit-action
+test fixture, never shipped or imported by production. These deterministic transport tests establish no
+live model obedience or scheduler acceptance. Release 0.9.0 remains gated on independent live
+Claude, Codex and Pi runs; Cursor requires generated compatibility only.

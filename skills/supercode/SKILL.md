@@ -24,6 +24,18 @@ Resolve configuration in order: process environment, physical primary `.superenv
 `SUPER_MODEL_DIAGNOSER`, `SUPER_EFFORT_DIAGNOSER`, and the existing worker/driver keys.
 SUPERVISOR must be native to `SUPER_HARNESS`; refuse a foreign supervisor pin.
 
+## Helper and scheduler locations
+
+`SCRIPTS` below means `${CLAUDE_PLUGIN_ROOT}/scripts` in the installed package. Require its
+`_coding_loop_state.py` and `_coding_loop_evidence.py`; never fall back to helpers from a source
+checkout. The diagnosis template likewise comes from this package's `templates/` directory.
+Scheduler infrastructure is separate in generated packages: define local `SUPERAGENT_SCRIPTS`
+from the registration's literal `SUPERAGENT_SCRIPT_DIR` (normally inherited by the tick), or an
+explicit operator-provided source-repository `scripts/` path. Require that directory contains
+`launch.sh` and `superagent-tick.sh` before a scheduler action. Never infer it by walking above a
+copied package. Every `launch.sh`/stop/control reference below uses `SUPERAGENT_SCRIPTS`; the
+Python validation commands use installed `SCRIPTS`.
+
 ## Tick order
 
 Run this order exactly, including on a restarted transient. At most **one expensive phase

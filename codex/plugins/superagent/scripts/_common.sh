@@ -225,7 +225,7 @@ superagent_scheduler() {
 
 superagent_launchd_domain() { echo "gui/$(id -u)"; }
 superagent_launchd_label()  { echo "com.superagent.tick.${1:?slug}"; }
-superagent_launchd_plist()  { echo "$HOME/Library/LaunchAgents/com.superagent.tick.${1:?slug}.plist"; }
+superagent_launchd_plist()  { echo "${SUPERAGENT_LAUNCHD_DIR:-$HOME/Library/LaunchAgents}/com.superagent.tick.${1:?slug}.plist"; }
 
 # Job state as launchd reports it: "running" while a tick process is executing,
 # another value (e.g. "waiting") while loaded but idle, empty when not loaded.
@@ -503,4 +503,129 @@ superagent_kick_tick() {
   else
     systemctl --user start --no-block "superagent-tick@$slug.service"
   fi
+}
+
+# Literal identity readers: loop state is data, never shell input. Legacy absence
+# resolves to superagent; duplicate/unknown explicit fields refuse dispatch.
+superagent_supervisor() {
+  local file="${1:?state file}" explicit="${2:-superagent}" value
+  case "$explicit" in superagent|supercode) ;; *) echo "invalid supervisor: $explicit" >&2; return 2 ;; esac
+  value="$(awk 'NR==1 { if ($0 != "---") exit; next } /^---$/ {exit} /^supervisor:/ {sub(/^supervisor:[ \t]*/, ""); print}' "$file")"
+  [[ -n "$value" ]] || value=superagent
+  case "$value" in superagent|supercode) ;; *) echo "invalid state supervisor: $value" >&2; return 2 ;; esac
+  [[ "$value" == "$explicit" ]] || { echo "registration/state supervisor identity conflict" >&2; return 2; }
+  printf '%s\n' "$value"
+}
+
+superagent_registration_field() {
+  local file="${1:?registration}" key="${2:?field}"
+  awk -v key="$key" 'index($0,key "=")==1 {n++; value=substr($0,length(key)+2)} END {if(n==1) print value; else if(n>1) exit 2}' "$file"
+}
+
+superagent_check_registration() {
+  local slug="${1:?slug}" loop="${2:?loop}" supervisor="${3:?supervisor}"
+  local file="${XDG_CONFIG_HOME:-$HOME/.config}/superagent/$slug.env" registered
+  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "invalid slug: $slug" >&2; return 2; }
+  [[ -f "$file" ]] || return 0
+  registered="$(superagent_registration_field "$file" SUPERAGENT_SUPERVISOR)" || return 2
+  [[ "${registered:-superagent}" == "$supervisor" &&
+     "$(superagent_registration_field "$file" REPO)" == "$REPO" &&
+     "$(superagent_registration_field "$file" LOOP_FILE)" == "$loop" ]] || {
+    echo "registration collision for slug $slug" >&2; return 2;
+  }
+}
+
+# Project-only L3 acquisition. Preserve the shared main owner/acquired format,
+# but serialize reclamation AND publication through a persistent advisory-lock
+# inode; never unlink that guard. Kernel release on process death avoids a
+# stranded guard, and live peers are never removed on a cached observation.
+# Legacy goal launch/tick does not call this Python-requiring helper.
+superagent_acquire_gate_lock() {
+  local dir="${1:?lock directory}" helper
+  helper="$(dirname "${BASH_SOURCE[0]}")/_coding_loop_state.py"
+  python3 "$helper" acquire-lock "$dir" --owner "${SUPERAGENT_TICK_PID:-$$}" --steal-min "${SUPER_LOCK_STEAL_MIN:-90}"
+}
+
+# systemd.exec EnvironmentFile supports double-quoted assignment values with
+# POSIX double-quote escapes. Keep the registry literal for lifecycle readers;
+# write this serialized adapter view separately from the *.env registry scan.
+superagent_systemd_environment() {
+  local registry="${1:?registry}" line key value
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" != \#* ]] || continue
+    key="${line%%=*}"; value="${line#*=}"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\$/\\\$}"
+    value="${value//\`/\\\`}"
+    printf '%s="%s"\n' "$key" "$value"
+  done <"$registry"
+}
+
+# EnvironmentFile's directive parser accepts a raw absolute path: it expands
+# specifiers but does not unquote or C-unescape. Preserve actual path bytes;
+# only double percent signs so literal names never become unit specifiers.
+# This is distinct from quoting assignment VALUES inside the environment file.
+superagent_systemd_path() {
+  local value="${1:?path}"
+  value="${value//%/%%}"
+  printf '%s\n' "$value"
+}
+
+# Resolve one registered lifecycle identity without evaluating registration data.
+# Plan-only consumers remain shell-only; project state validation uses its helper.
+# Outputs globals SLUG, LOOP_FILE, REPO, SUPERVISOR, TARGET_LOCATOR.
+superagent_control_target() {
+  local target="${1:-}" selected="${2:-}" conf="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
+  local envf lf rr kind locator physical wanted="" found="" candidate regslug requested_repo="${REPO:-}"
+  if [[ -n "$selected" && ! "$selected" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then echo 'invalid slug' >&2; return 2; fi
+  if [[ -n "$target" ]]; then
+    [[ -e "$target" ]] || { echo "target does not exist: $target" >&2; return 2; }
+    if [[ -d "$target" ]]; then wanted="$(cd "$target" && pwd -P)";
+    else wanted="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"; fi
+  fi
+  if [[ -n "$requested_repo" ]]; then
+    requested_repo="$(git -C "$requested_repo" rev-parse --path-format=absolute --git-common-dir)" || return 2
+    requested_repo="$(cd "$(dirname "$requested_repo")" && pwd -P)"
+  fi
+  for envf in "$conf"/*.env; do
+    [[ -f "$envf" ]] || continue
+    candidate="$(basename "$envf" .env)"
+    [[ -z "$selected" || "$selected" == "$candidate" ]] || continue
+    lf="$(superagent_registration_field "$envf" LOOP_FILE)" || return 2
+    rr="$(superagent_registration_field "$envf" REPO)" || return 2
+    [[ -f "$lf" && -d "$rr" ]] || { [[ -z "$selected" ]] && continue; echo 'registration state/repo missing' >&2; return 2; }
+    rr="$(cd "$rr" && pwd -P)"
+    kind="$(superagent_registration_field "$envf" SUPERAGENT_SUPERVISOR)" || return 2
+    kind="${kind:-superagent}"
+    locator="$(awk -v k="$([[ "$kind" == supercode ]] && echo project || echo master_plan)" 'NR==1{next} /^---$/{exit} index($0,k ":")==1 {sub(/^[^:]*:[ \t]*/, ""); print}' "$lf")"
+    [[ -n "$locator" ]] || { [[ -z "$selected" ]] && continue; echo 'registered target missing' >&2; return 2; }
+    case "$locator" in /*) physical="$locator" ;; *) physical="$rr/$locator" ;; esac
+    if [[ -d "$physical" ]]; then physical="$(cd "$physical" && pwd -P)";
+    elif [[ -f "$physical" ]]; then physical="$(cd "$(dirname "$physical")" && pwd -P)/$(basename "$physical")";
+    else [[ -z "$selected" ]] && continue; echo 'registered target does not exist' >&2; return 2; fi
+    [[ -z "$wanted" || "$physical" == "$wanted" ]] || { [[ -z "$selected" ]] && continue; echo 'target/slug identity mismatch' >&2; return 2; }
+    [[ -z "$requested_repo" || "$requested_repo" == "$rr" ]] || { [[ -z "$selected" ]] && continue; echo 'registered repo identity mismatch' >&2; return 2; }
+    superagent_supervisor "$lf" "$kind" >/dev/null || return 2
+    regslug="$(superagent_registration_field "$envf" SUPERAGENT_SLUG)" || return 2
+    [[ -z "$regslug" || "$regslug" == "$candidate" ]] || { echo 'registered slug identity mismatch' >&2; return 2; }
+    if [[ "$kind" == supercode ]]; then
+      python3 "$SCRIPT_DIR/_coding_loop_state.py" read "$lf" >/dev/null || return 2
+      [[ "$physical" == "$(cd "$(dirname "$lf")/.." && pwd -P)" ]] || { echo 'project/state location mismatch' >&2; return 2; }
+    fi
+    [[ -z "$found" ]] || { echo 'multiple registered target identities' >&2; return 2; }
+    found="$candidate"; SLUG="$candidate"; LOOP_FILE="$lf"; REPO="$rr"; SUPERVISOR="$kind"; TARGET_LOCATOR="$locator"
+  done
+  [[ -n "$found" ]] || { echo 'no registered loop matches target' >&2; return 2; }
+}
+
+superagent_remaining_child() {
+  [[ "${SUPERVISOR:-superagent}" == supercode ]] || return 0
+  local child child_file
+  child="$(sed -n 's/^inner_slug:[[:space:]]*//p' "$LOOP_FILE" | head -1)"
+  [[ "$child" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || return 0
+  child_file="${XDG_CONFIG_HOME:-$HOME/.config}/superagent/$child.env"
+  [[ -f "$child_file" ]] || { echo "  child: $child (registration missing; inspect recorded inner_loop)"; return 0; }
+  echo "  child registration remains: $child (outer action does not stop it)"
+  printf '  child stop command: REPO=%q %q --slug %q\n' "$REPO" "$SCRIPT_DIR/stop.sh" "$child"
 }

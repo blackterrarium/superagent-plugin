@@ -457,10 +457,14 @@ inner `superagent` loop to build it, and evaluates the result (design:
 `docs/superpowers/specs/2026-09-05-coding-loop-design.md`; Stage 2:
 `docs/superpowers/specs/2026-09-06-coding-loop-stage2-design.md`). One round is
 `superagent:supermeta` → `superagent:superagent-external` → `superagent:supereval`; diagnosing a
-failed round and closing the loop automatically are Stage 3.
+failed round and closing the loop automatically are Stage 3. Stage 3 is implemented **under
+acceptance** at version 0.8.1; release 0.9.0 requires separate live acceptance on Claude, Codex and
+Pi. Cursor receives generated compatibility checks.
 
-Stage 1/2 skills also support Codex and Pi. Both generated packages include the validator and
-evaluation runner dependencies. Pi requires `pi-subagents >= 0.58.0`; re-run `init` after upgrading
+The generated Codex, Cursor and Pi packages include the project state/evidence helpers, diagnosis
+template, validator and evaluation runner dependencies. Scheduler scripts remain source-repository
+infrastructure; point the external launcher at this checkout. Pi requires `pi-subagents >= 0.58.0`;
+re-run `init` after upgrading
 to generate named SDD agents even when model/effort settings inherit. Live Codex/Pi checks cover
 PRD approval, planner dispatch, and command/judged FAIL/PASS evaluations; see the
 [verification report](docs/superpowers/reports/2026-09-07-coding-loop-harnesses.md) for scope and
@@ -483,12 +487,23 @@ The pieces:
   latest `main` in a detached worktree, grades the judged objectives with a read-only evaluator, and
   records one PASS/FAIL verdict in the eval report and the iteration ledger.
 
+Stage 3 adds `superdiagnose` (one failed-round diagnosis), `supercode` (one native supervisor
+operation per external tick), and `supercode-external <project-dir>` (bootstrap/resume). Project
+launches require Python 3.9 or newer; legacy goal launch/control remains Python-free. A supervisor
+must be native to the selected harness; foreign worker roles use the existing bridges.
+
+The outer registration and each inner registration stop independently. Stopping the project leaves
+its child running and prints the child's separate stop command. Changed binding agreement requires
+an exact `adopt-agreement FINGERPRINT` author answer; AUTHOR INPUT requires `replan` under the
+unchanged agreement. Configuration changes, retries and old PASS reports never authorize new
+criteria. Accepted author decisions are durably checked again by the META worker.
+
 | Key | Default | Meaning |
 |---|---|---|
 | SUPER_PROJECT_DIRNAME | `projects` | Where project folders live under `SUPER_GOAL_ROOT`. A project folder has no `master-plans/`, so the plan-tree skills never mistake it for a goal. |
 | SUPER_EVAL_TIMEOUT_MIN | `60` | Ceiling for any `evaluation.md` check timeout; `prd-lint.sh` FAILs a larger value. |
 | SUPER_GOAL_AUTOCONFIRM | `false` | Two-factor gate: `supergoal --autoconfirm` skips supergoal's step-7 human confirmation **only** when this is `true` (used by `supermeta`'s dispatch). Either alone does nothing; a direct `supergoal` user is unaffected. |
-| SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
+| SUPER_CODE_MAX_ITERATIONS | `5` | Positive limit on created project rounds, not ticks or retries. PASS on the last round completes; FAIL can be diagnosed, then parks before creating another round. Raising the value requires an explicit `raise-limit N` answer to resume. |
 
 ### Acceptance coverage ownership
 

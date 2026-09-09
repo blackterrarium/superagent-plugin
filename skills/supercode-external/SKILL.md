@@ -21,7 +21,14 @@ Input is the real project directory; never fabricate PLAN.md or store it as `mas
    the context with `_coding_loop_state.py context --repo PRIMARY --vault VAULT --project PROJECT`,
    supplying revision-labelled captures when required. Missing context refuses launch; do not
    accept an empty manifest as proof no binding sources exist. Do not change approved inputs.
-3. Invoke the installed `scripts/launch.sh PROJECT --supervisor supercode` with only requested
+3. Resolve installed helpers from `${CLAUDE_PLUGIN_ROOT}/scripts` and the diagnosis template from
+   this package's `templates/`; missing package files are an installation error, never a reason to
+   fall back to a source checkout. Scheduler scripts are source-repository infrastructure in the
+   generated packages. Define local `SUPERAGENT_SCRIPTS` from an existing registration's literal
+   `SUPERAGENT_SCRIPT_DIR`, or the explicit operator-provided source-repository `scripts/` path.
+   Require `launch.sh` and `superagent-tick.sh` in that directory before any scheduler action; do not
+   guess by walking above the installed package. Invoke
+   `"$SUPERAGENT_SCRIPTS/launch.sh" PROJECT --supervisor supercode` with only requested
    overrides (`--slug`, `--interval`, harness/model/timeout options). The launcher validates identity,
    reuses the existing registered slug/state, and holds project L3 for bootstrap reconciliation.
    Repeat launch reuses the same outer registration. Conflicting identities refuse mutation.

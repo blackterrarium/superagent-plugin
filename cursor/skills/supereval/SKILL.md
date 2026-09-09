@@ -1,7 +1,7 @@
 ---
 name: supereval
 description: Evaluate a coding-loop round — run the project's evaluation.md command checks against the latest main commit in a detached worktree (via scripts/supereval.sh), grade the judged objectives with a read-only evaluator subagent, and write eval-reports/<STAMP>-r<N>.md with one PASS/FAIL verdict. Fills the iteration-ledger row supermeta opened and commits per superauthor A7. Stage 2 of the coding loop; runs unattended.
-argument-hint: "<project-dir> [--commit <sha>] [--round <N>]"
+argument-hint: "<project-dir> [--commit <sha>] [--round <N>] [--operation <path>]"
 license: MIT
 related skills: superauthor, supermeta, superprd, superloop
 ---
@@ -46,7 +46,8 @@ folder (the eval report and the ledger cells).
 
 **Input:** `<project-dir>` — an existing coding-loop project folder. **Required.**
 Optional: `--commit <sha>` (evaluate this commit instead of the synced `main` tip); `--round <N>`
-(evaluate ledger round `N` instead of the latest).
+(evaluate ledger round `N` instead of the latest); `--operation <path>` uses the supervisor's
+persisted phase identity and exact report target. Without an operation, manual behavior is unchanged.
 
 ## Repo configuration (.superenv)
 
@@ -110,12 +111,36 @@ Resolve `<primary_root>` (the code checkout: `dirname "$(git rev-parse --path-fo
      otherwise print `supereval: no ledger row for round <N>; run supermeta first` and **exit**
      without writing.
 
+When `--operation <path>` is present, load duplicate-key-rejecting JSON containing exactly the
+operation fields accepted by `_coding_loop_state.py`. Require `phase` = `EVALUATING`, a valid
+operation id, round, agreement revision, `code_commit`, `meta_plan`, `goal_folder`, `report`, and
+`source_vault_commit`. The report must resolve inside this project's `eval-reports` and end in
+`-r<N>.md`. Use the recorded round, commit and exact report path, deriving `<STAMP>` only from its
+frozen basename. Explicit `--round` or `--commit` values are permitted only when equal to the
+recorded values. Require the current agreement fingerprint and source-vault revision to match before
+running commands.
+
+Operation mode's final output line is compact JSON with `outcome`, `phase`, `operation_id`, `round`,
+`report`, `verdict`, `worker_complete`, `completion_reason`, `artifacts`, and `reason`.
+`worker_complete: true` and `INTEGRATED` require the exact report and its one ledger row on `main`;
+`ABSENT` or `CONFLICT` includes a recovery reason. The Final Report and partial
+worker output are not phase-completion evidence.
+
 ### 3. Sync
 
 Apply superloop **L5**: run `sync_main()` on `<primary_root>` and, for an external vault (see **Vault
 root**), `sync_vault()`. If the sync gate STOPs (a divergent or dirty tree), do not evaluate —
 surface the git state exactly as L5 requires and stop. After the sync, `<sha>` (the commit to
 evaluate) defaults to `git -C "<primary_root>" rev-parse main`; `--commit <sha>` overrides it.
+
+In operation mode, the recorded `code_commit` is the only `<sha>` and must resolve on synced
+`main`. Reconcile before the runner. If the exact report and ledger are `INTEGRATED`, validate the
+report against `evaluation.md`, return its verdict and skip both runner and EVALUATOR. For
+`CONFLICT`, resume only exact pending A7 work owned by this operation. In particular, when the exact
+FINAL report is already committed on `main` but its ledger cells are empty, validate those `main`
+bytes and finish the ledger/A7 work without rerunning commands or dispatching another EVALUATOR.
+Any different identity, dirty report, unrelated open PR, or conflicting ledger row is a hard
+conflict. Never use unmerged report bytes as evidence.
 
 ### 4. Inner-loop link
 
@@ -203,6 +228,7 @@ Write `<project-dir>/eval-reports/<STAMP>-r<N>.md` with **exactly** this layout:
 ```
 # <Project title> — eval report round <N> — <STAMP>-r<N>
 **Date:** <YYYY-MM-DD> · **Status:** FINAL · **Related:** [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/prd]] · [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/meta-plans/<meta-plan basename of round N>]] · **Round:** <N>
+**Operation:** <operation id> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit>   (operation mode only; omit this line manually)
 
 <results.md content verbatim: Environment, Command checks, per-check output blocks>
 
@@ -230,6 +256,8 @@ Write `<project-dir>/eval-reports/<STAMP>-r<N>.md` with **exactly** this layout:
   `evaluator unavailable` warning — never PASS by omission.
 - **Warnings** collects: `inner loop not DONE` (step 4), `setup failed` (the runner reported
   `ERROR setup failed`), `evaluator unavailable`, `acceptance context unavailable`, or missing judged IDs (step 6) — or `none`.
+- Operation mode writes only the recorded report target. If verified matching report bytes already
+  exist, preserve them exactly; never create a second timestamped report.
 
 ### 8. Ledger
 
@@ -239,6 +267,11 @@ Fill row `N`'s three trailing cells in `prd.md`'s `## Iteration ledger` table, p
 - *Inner loop* — the inner-loop file link from step 4 (if found), else leave `-`.
 - *Eval report* — `[[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/eval-reports/<STAMP>-r<N>]]`.
 - *Verdict* — `PASS` or `FAIL`.
+
+In operation mode, require exactly one round-`N` row and preserve its first three cells. Fill only
+empty trailing cells or reuse already identical values. A second row, a different report link,
+inner-loop link, or verdict is a conflict. This makes replay after a report commit or ledger commit
+idempotent.
 
 ### 9. Commit (A7)
 
@@ -252,6 +285,11 @@ Apply **A7** with:
   `git add -A`.
 - **External vault:** A7's target is the vault repo — a direct commit, no PR (see A7 **Target
   repo**); its precondition applies (STOP and report if `<vault_root>` is not its own repository).
+
+Operation mode commits or resumes the exact pending A7 work and then runs reconciliation plus
+`validate-evaluation` against `main` bytes. Verify both report and ledger commits before publishing
+completion. An open/unmerged PR, dirty path, wrong selected SHA, or incomplete validation emits a
+non-integrated JSON result and does not advance the phase.
 
 Then remove the kept worktree: `git -C "<primary_root>" worktree remove --force "<worktree path>"`
 (the path read in step 5).
@@ -270,3 +308,5 @@ Then remove the kept worktree: `git -C "<primary_root>" worktree remove --force 
 ```
 
 After printing the report, take no further action and ask no follow-up question.
+
+In operation mode only, print the compact operation-result JSON as the final line after the report.

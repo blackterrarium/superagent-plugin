@@ -141,7 +141,9 @@ Report block (fill every value):
 EOF
 
 mkdir -p "$TMP/templates" "$TMP/scripts"
+cp "$ROOT/scripts/_coding_loop_state.py" "$ROOT/scripts/_coding_loop_evidence.py" "$TMP/scripts/"
 cp "$ROOT/templates/super-role-pi-agent.md" "$ROOT/templates/super-role-pi-bridge-agent.md" "$ROOT/templates/vault-root.md" "$TMP/templates/"
+cp "$ROOT/templates/coding-loop-diagnosis.md" "$TMP/templates/"
 cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/bridge-fanout.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/scripts/"
 chmod +x "$TMP/scripts/role-bridge.sh" "$TMP/scripts/bridge-fanout.sh"
 
