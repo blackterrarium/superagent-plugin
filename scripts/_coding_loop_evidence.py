@@ -22,6 +22,16 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$")
 OPERATION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 RESULTS = {"PASS", "FAIL"}
+DIAGNOSIS_CLASSIFICATIONS = {
+    "implementation defect",
+    "plan gap",
+    "PRD/evaluation defect",
+    "execution/evidence failure",
+}
+AUTHOR_CLASSIFICATIONS = {
+    "PRD/evaluation defect",
+    "execution/evidence failure",
+}
 OPERATION_FIELDS = {
     "id",
     "phase",
@@ -462,6 +472,257 @@ def validate_evaluation(report: Path, evaluation: Path, expected: dict) -> dict:
     }
 
 
+def _diagnosis_identity(text: str) -> tuple[dict[str, object], list[str]]:
+    errors: list[str] = []
+    round_text = _single_label(text, "Round", errors)
+    identity: dict[str, object] = {
+        "date": _single_label(text, "Date", errors),
+        "status": _single_label(text, "Status", errors),
+        "round": int(round_text) if round_text.isdigit() else None,
+        "operation_id": _single_label(text, "Operation", errors),
+        "eval_report": _single_label(text, "Eval report", errors),
+        "code_commit": _single_label(text, "Evaluated commit", errors),
+        "agreement_revision": _single_label(text, "Agreement revision", errors),
+        "source_vault_commit": _single_label(text, "Source vault commit", errors),
+    }
+    if round_text and not round_text.isdigit():
+        errors.append(f"invalid round in report: {round_text}")
+    if identity["date"] and not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}", str(identity["date"])
+    ):
+        errors.append(f"invalid date in report: {identity['date']}")
+    return identity, errors
+
+
+def _diagnosis_ids(
+    value: str, prefix_pattern: str, label: str
+) -> tuple[list[str], list[str]]:
+    source = value.strip()
+    if not source:
+        return [], [f"diagnosis {label} IDs cannot be empty; use none"]
+    if source.lower() == "none":
+        return [], []
+    identifiers = [item.strip() for item in source.split(",") if item.strip()]
+    errors = []
+    for identifier in identifiers:
+        if not re.fullmatch(prefix_pattern, identifier):
+            errors.append(f"invalid {label} id: {identifier}")
+    if len(identifiers) != len(set(identifiers)):
+        errors.append(f"duplicate {label} id in problem row")
+    return identifiers, errors
+
+
+def _diagnosis_problems(text: str) -> tuple[list[dict[str, object]], list[str]]:
+    errors: list[str] = []
+    section = _section(text, "Problems")
+    if section is None:
+        return [], ["report is missing the Problems section"]
+    errors.extend(_table_errors(section, "diagnosis Problems"))
+    tables = _tables(section)
+    if len(tables) != 1:
+        errors.append("diagnosis Problems must contain exactly one table")
+        return [], errors
+    header, rows = tables[0]
+    expected_header = [
+        "Problem",
+        "C/J IDs",
+        "AC IDs",
+        "Evidence",
+        "Cause",
+        "Confidence",
+        "Classification",
+    ]
+    if header != expected_header:
+        errors.append("diagnosis Problems table has incompatible columns")
+        return [], errors
+    if not rows:
+        errors.append("diagnosis Problems table has no problem rows")
+    problems = []
+    names = set()
+    for number, row in enumerate(rows, start=1):
+        if len(row) != len(expected_header):
+            errors.append(f"diagnosis problem row {number} has incompatible columns")
+            continue
+        problem, check_text, ac_text, observed, cause, confidence, classification = row
+        if not problem:
+            errors.append(f"diagnosis problem row {number} has no Problem")
+        elif problem in names:
+            errors.append(f"duplicate diagnosis problem: {problem}")
+        names.add(problem)
+        checks, check_errors = _diagnosis_ids(
+            check_text, r"(?:C|J)[1-9][0-9]*", "C/J"
+        )
+        acs, ac_errors = _diagnosis_ids(ac_text, r"AC[1-9][0-9]*", "AC")
+        errors.extend(check_errors)
+        errors.extend(ac_errors)
+        if not observed:
+            errors.append(f"diagnosis problem {problem or number} has no Evidence")
+        if not cause:
+            errors.append(f"diagnosis problem {problem or number} has no Cause")
+        if confidence not in {"high", "medium", "low"}:
+            errors.append(
+                f"diagnosis problem {problem or number} has unsupported Confidence: "
+                f"{confidence or '<empty>'}"
+            )
+        if classification not in DIAGNOSIS_CLASSIFICATIONS:
+            errors.append(
+                f"diagnosis problem {problem or number} has unsupported Classification: "
+                f"{classification or '<empty>'}"
+            )
+        problems.append(
+            {
+                "problem": problem,
+                "check_ids": checks,
+                "ac_ids": acs,
+                "evidence": observed,
+                "cause": cause,
+                "confidence": confidence,
+                "classification": classification,
+            }
+        )
+    return problems, errors
+
+
+def validate_diagnosis(path: Path, expected: dict) -> dict:
+    """Validate diagnosis structure, selected evidence identity, and safe disposition."""
+    errors: list[str] = []
+    try:
+        text = _decode(Path(path), "diagnosis report")
+    except EvidenceError as exc:
+        return {
+            "disposition": "AUTHOR INPUT",
+            "declared_disposition": "",
+            "may_start_next_round": False,
+            "unaccounted_ids": [],
+            "errors": [str(exc)],
+            "identity": {},
+            "problems": [],
+        }
+    if not isinstance(expected, dict):
+        errors.append("expected diagnosis evidence must be an object")
+        expected = {}
+
+    identity, identity_errors = _diagnosis_identity(text)
+    errors.extend(identity_errors)
+    required_identity = (
+        "date",
+        "status",
+        "round",
+        "operation_id",
+        "eval_report",
+        "code_commit",
+        "agreement_revision",
+        "source_vault_commit",
+    )
+    for field in required_identity:
+        if identity.get(field) in (None, ""):
+            errors.append(f"report is missing {field}")
+    if identity.get("status") and identity["status"] != "FINAL":
+        errors.append("report status must be FINAL")
+
+    expected_fields = {
+        "round": ("round",),
+        "operation_id": ("operation_id", "id"),
+        "eval_report": ("eval_report",),
+        "code_commit": ("code_commit", "evaluated_commit"),
+        "agreement_revision": ("agreement_revision",),
+        "source_vault_commit": ("source_vault_commit",),
+    }
+    for report_field, aliases in expected_fields.items():
+        supplied = next((expected[key] for key in aliases if key in expected), None)
+        if supplied in (None, ""):
+            continue
+        observed = identity.get(report_field)
+        if observed in (None, ""):
+            errors.append(f"report is missing {report_field}")
+        elif observed != supplied:
+            errors.append(
+                f"{report_field} mismatch: expected {supplied}, found {observed}"
+            )
+
+    for section_name in (
+        "Inputs and limitations",
+        "Problems",
+        "Repair guidance",
+        "Disposition",
+    ):
+        occurrences = len(
+            re.findall(rf"(?m)^##[ \t]+{re.escape(section_name)}[ \t]*$", text)
+        )
+        if occurrences != 1:
+            errors.append(
+                f"report must contain exactly one {section_name} section"
+            )
+            continue
+        if not (_section(text, section_name) or "").strip():
+            errors.append(f"report {section_name} section is empty")
+
+    problems, problem_errors = _diagnosis_problems(text)
+    errors.extend(problem_errors)
+
+    required_ids = []
+    for key in ("failing_ids", "missing_ids"):
+        values = expected.get(key, [])
+        if not isinstance(values, list):
+            errors.append(f"expected {key} must be an array")
+            continue
+        for identifier in values:
+            if not isinstance(identifier, str) or not re.fullmatch(
+                r"(?:C|J|AC)[1-9][0-9]*", identifier
+            ):
+                errors.append(f"invalid expected check id: {identifier}")
+            elif re.fullmatch(r"(?:C|J)[1-9][0-9]*", identifier):
+                required_ids.append(identifier)
+    required_set = set(required_ids)
+    accounted_set = {
+        identifier for problem in problems for identifier in problem["check_ids"]
+    }
+    unaccounted_ids = sorted(required_set - accounted_set)
+    unexpected_ids = sorted(accounted_set - required_set)
+    if unaccounted_ids:
+        errors.append(
+            "diagnosis does not account for failed/missing checks: "
+            + ", ".join(unaccounted_ids)
+        )
+    if unexpected_ids:
+        errors.append(
+            "diagnosis includes checks not failed or missing: " + ", ".join(unexpected_ids)
+        )
+
+    disposition_section = _section(text, "Disposition") or ""
+    declarations = re.findall(
+        r"(?m)^\*\*(REPAIR|AUTHOR INPUT)\*\*\s*$", disposition_section
+    )
+    declared = declarations[0] if len(declarations) == 1 else ""
+    if len(declarations) != 1:
+        errors.append("report must declare exactly one REPAIR or AUTHOR INPUT disposition")
+
+    unreliable = any(
+        problem["confidence"] == "low"
+        or problem["classification"] not in DIAGNOSIS_CLASSIFICATIONS
+        for problem in problems
+    )
+    author_cause = any(
+        problem["classification"] in AUTHOR_CLASSIFICATIONS for problem in problems
+    )
+    computed = "AUTHOR INPUT" if errors or unreliable or author_cause else "REPAIR"
+    if declared and declared != computed:
+        errors.append(
+            f"declared disposition {declared} conflicts with validated disposition {computed}"
+        )
+        computed = "AUTHOR INPUT"
+    may_start = computed == "REPAIR" and not errors and bool(problems)
+    return {
+        "disposition": computed,
+        "declared_disposition": declared,
+        "may_start_next_round": may_start,
+        "unaccounted_ids": unaccounted_ids,
+        "errors": errors,
+        "identity": identity,
+        "problems": problems,
+    }
+
+
 def _git(path: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     try:
         return subprocess.run(
@@ -830,9 +1091,13 @@ def reconcile_operation(repo: Path, vault: Path, operation: dict) -> dict:
                     blob = _main_blob(artifact_repo, candidate_relative)
                     if blob is None:
                         continue
-                    identity, parse_errors = _report_identity(
-                        _decode_blob(blob, "operation report")
+                    report_text = _decode_blob(blob, "operation report")
+                    identity_parser = (
+                        _diagnosis_identity
+                        if operation["phase"] == "DIAGNOSING"
+                        else _report_identity
                     )
+                    identity, parse_errors = identity_parser(report_text)
                 except EvidenceError:
                     continue
                 if not parse_errors and _identity_matches(identity, operation):
