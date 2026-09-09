@@ -152,6 +152,35 @@ class CodingLoopStateTests(unittest.TestCase):
         )
         return "\n".join([*lines, "---", "", pending])
 
+    def test_author_and_previous_round_json_survive_cli_replacement_as_scalars(self):
+        authorization = dict(decision_id='d' * 32, answer='adopt-agreement ' + 'a' * 64,
+                             project='vault/projects/sample', from_round=1, round=2,
+                             operation_id='e' * 32, agreement_revision='a' * 64)
+        previous = dict(status='DONE', round=1, operation={'id': 'f' * 32},
+                        note='prior input: preserve\nstatus: DONE')
+        scalars = {key: json.dumps(value, separators=(',', ':')) for key, value in
+                   (('meta_authorization_json', authorization), ('previous_round_json', previous))}
+        self.state_path.write_text(self.valid_document(overrides=scalars))
+        result = subprocess.run([sys.executable, str(MODULE_PATH), 'read', str(self.state_path)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        original = json.loads(result.stdout)
+        for key, expected in scalars.items():
+            self.assertIsInstance(original[key], str)
+            self.assertEqual(original[key], expected)
+        before_body = self.state_path.read_bytes().split(b'---\n', 2)[2]
+        expected_path, updated_path = self.root / 'expected.json', self.root / 'updated.json'
+        expected_path.write_text(json.dumps(original))
+        updated_path.write_text(json.dumps(dict(original, iteration=1)))
+        result = subprocess.run([sys.executable, str(MODULE_PATH), 'replace', str(self.state_path),
+                                 '--expected', str(expected_path), '--updated', str(updated_path)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        current = state.read_state(self.state_path)
+        self.assertEqual({key: current[key] for key in scalars}, scalars)
+        self.assertEqual(current['status'], 'WAITING FOR META-PLAN')
+        self.assertEqual(self.state_path.read_bytes().split(b'---\n', 2)[2], before_body)
+
     def test_read_state_parses_valid_frontmatter(self):
         parsed = state.read_state(self.state_path)
         self.assertEqual("supercode", parsed["supervisor"])
