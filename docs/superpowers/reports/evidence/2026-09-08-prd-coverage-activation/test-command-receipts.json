@@ -1,0 +1,46 @@
+[
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_15",
+      "type": "command_execution",
+      "command": "/bin/zsh -lc 'env PYTHONDONTWRITEBYTECODE=1 python3 test_positive.py'",
+      "aggregated_output": "python3: error: couldn't create cache file '/tmp/xcrun_db-uLkvi0Qg' (errno=Operation not permitted)\nE\n======================================================================\nERROR: test_rejected_input_preserves_bytes (__main__.Coverage)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/tmp/prd-coverage-activation/test_positive.py\", line 6, in test_rejected_input_preserves_bytes\n    with tempfile.TemporaryDirectory() as d:\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 779, in __init__\n    self.name = mkdtemp(suffix, prefix, dir)\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 348, in mkdtemp\n    prefix, suffix, dir, output_type = _sanitize_params(prefix, suffix, dir)\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 118, in _sanitize_params\n    dir = gettempdir()\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 287, in gettempdir\n    tempdir = _get_default_tempdir()\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 219, in _get_default_tempdir\n    raise FileNotFoundError(_errno.ENOENT,\nFileNotFoundError: [Errno 2] No usable temporary directory found in ['/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/', '/tmp', '/var/tmp', '/usr/tmp', '/private/tmp/prd-coverage-activation']\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (errors=1)\n",
+      "exit_code": 1,
+      "status": "failed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_16",
+      "type": "command_execution",
+      "command": "/bin/zsh -lc 'env PYTHONDONTWRITEBYTECODE=1 python3 test_negative.py'",
+      "aggregated_output": "python3: error: couldn't create cache file '/tmp/xcrun_db-zldk2FLy' (errno=Operation not permitted)\nE\n======================================================================\nERROR: test_rejected_input_preserves_bytes (__main__.Coverage)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/tmp/prd-coverage-activation/test_negative.py\", line 6, in test_rejected_input_preserves_bytes\n    with tempfile.TemporaryDirectory() as d:\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 779, in __init__\n    self.name = mkdtemp(suffix, prefix, dir)\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 348, in mkdtemp\n    prefix, suffix, dir, output_type = _sanitize_params(prefix, suffix, dir)\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 118, in _sanitize_params\n    dir = gettempdir()\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 287, in gettempdir\n    tempdir = _get_default_tempdir()\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tempfile.py\", line 219, in _get_default_tempdir\n    raise FileNotFoundError(_errno.ENOENT,\nFileNotFoundError: [Errno 2] No usable temporary directory found in ['/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/', '/tmp', '/var/tmp', '/usr/tmp', '/private/tmp/prd-coverage-activation']\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (errors=1)\n",
+      "exit_code": 1,
+      "status": "failed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_18",
+      "type": "command_execution",
+      "command": "/bin/zsh -lc 'env PYTHONDONTWRITEBYTECODE=1 python3 test_positive.py'",
+      "aggregated_output": ".\n----------------------------------------------------------------------\nRan 1 test in 0.004s\n\nOK\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_19",
+      "type": "command_execution",
+      "command": "/bin/zsh -lc 'env PYTHONDONTWRITEBYTECODE=1 python3 test_negative.py'",
+      "aggregated_output": ".\n----------------------------------------------------------------------\nRan 1 test in 0.004s\n\nOK\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  }
+]
