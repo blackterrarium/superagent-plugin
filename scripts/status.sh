@@ -42,8 +42,10 @@ _collect() {
   local slug="$1" envf="$CONF_DIR/$1.env"
   REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""
   if [[ -f "$envf" ]]; then
-    set -a; # shellcheck disable=SC1090
-    . "$envf"; set +a
+    REPO="$(superagent_registration_field "$envf" REPO)"
+    LOOP_FILE="$(superagent_registration_field "$envf" LOOP_FILE)"
+    TICK_TIMEOUT="$(superagent_registration_field "$envf" TICK_TIMEOUT)"
+
   fi
   status=""; iteration=""; pending=0; done_=0; exists=0; answer_recorded=false
   if [[ -n "$LOOP_FILE" && -f "$LOOP_FILE" ]]; then
@@ -55,6 +57,36 @@ _collect() {
       if superagent_pending_answer "$LOOP_FILE" >/dev/null; then pending=2; answer_recorded=true; else pending=1; fi
     fi
     [[ "$status" == "DONE" ]] && done_=1
+  fi
+  supervisor="$(superagent_registration_field "$envf" SUPERAGENT_SUPERVISOR)"; supervisor="${supervisor:-superagent}"
+  project=""; round=""; inner_slug=""; inner_status=""; last_verdict=""; pending_owner=""
+  if [[ "$exists" == 1 && "$supervisor" == supercode ]]; then
+    project="$(_field "$LOOP_FILE" project)"; round="$(_field "$LOOP_FILE" round)"
+    inner_slug="$(_field "$LOOP_FILE" inner_slug)"; pending_owner="$(_field "$LOOP_FILE" pending_decision_owner)"
+    last_verdict="$(_field "$LOOP_FILE" last_verdict)"
+    local inner_file; inner_file="$(_field "$LOOP_FILE" inner_loop)"
+    if [[ -n "$inner_file" ]]; then
+      case "$inner_file" in /*) ;; *) inner_file="$REPO/$inner_file" ;; esac
+      if [[ -f "$inner_file" ]]; then inner_status="$(_field "$inner_file" status)"; else inner_status=missing; fi
+      local child_env child_timer child_tick child_ld
+      child_env="$CONF_DIR/$inner_slug.env"
+      if [[ ! "$inner_slug" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ || ! -f "$child_env" ]]; then
+        inner_status=missing
+      elif [[ "$(superagent_registration_field "$child_env" LOOP_FILE)" != "$inner_file" ||
+              "$(superagent_registration_field "$child_env" REPO)" != "$REPO" ]]; then
+        inner_status=MISMATCH
+      elif [[ "$inner_status" != DONE && "$inner_status" != missing ]]; then
+        if [[ "$(superagent_scheduler)" == launchd ]]; then
+          child_ld="$(superagent_launchd_state "$inner_slug")"
+          [[ -n "$child_ld" ]] || inner_status=STOPPED
+        else
+          child_timer="$(systemctl --user is-active "superagent-tick@$inner_slug.timer" 2>/dev/null || true)"
+          child_tick="$(systemctl --user is-active "superagent-tick@$inner_slug.service" 2>/dev/null || true)"
+          [[ "$child_timer" == active || "$child_tick" == active || "$child_tick" == activating ]] || inner_status=STOPPED
+        fi
+      fi
+      [[ "$inner_status" != 'WAITING FOR INPUT' ]] || pending_owner=inner
+    fi
   fi
   if [[ "$(superagent_scheduler)" == launchd ]]; then
     # One launchd job is both timer and service: loaded (any state) ~ timer
@@ -107,10 +139,10 @@ if [[ "$JSON" == 1 ]]; then
   for slug in "${slugs[@]}"; do
     _collect "$slug"
     [[ $first == 1 ]] && first=0 || out+=","
-    out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
+    out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s","supervisor":"%s","project":"%s","round":"%s","inner_slug":"%s","inner_status":"%s","last_verdict":"%s","pending_owner":"%s"}' \
       "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
       "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
-      "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$GH_STATE")")
+      "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$GH_STATE")" "$(_json_escape "$supervisor")" "$(_json_escape "$project")" "$(_json_escape "$round")" "$(_json_escape "$inner_slug")" "$(_json_escape "$inner_status")" "$(_json_escape "$last_verdict")" "$(_json_escape "$pending_owner")")
   done
   out+="]"
   echo "$out"
@@ -121,6 +153,8 @@ fi
 if [[ -n "$ONE" ]]; then
   _collect "$ONE"
   echo "Loop:        $ONE"
+  echo "Supervisor:  $supervisor   project=$project   round=$round"
+  echo "Inner:       $inner_slug   status=$inner_status   last-verdict=$last_verdict   pending-owner=$pending_owner"
   echo "Repo:        ${REPO:-?}"
   echo "Loop file:   ${LOOP_FILE:-?}  (exists=$([[ $exists == 1 ]] && echo yes || echo no))"
   echo "Status:      ${status:-<none>}   iteration=${iteration:-?}"
@@ -167,6 +201,7 @@ for slug in "${slugs[@]}"; do
     "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
     "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
     "$input_col"
+  [[ "$supervisor" != supercode ]] || printf '  supercode project=%s round=%s inner=%s (%s) verdict=%s pending=%s\n' "$project" "$round" "$inner_slug" "$inner_status" "$last_verdict" "$pending_owner"
 done
 echo
 echo "Drill in: $SCRIPT_DIR/status.sh <slug>   |   JSON: $SCRIPT_DIR/status.sh --json"

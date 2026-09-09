@@ -153,6 +153,7 @@ None — command-only.
         self.git('commit', '-qm', 'approved inputs')
         self.git('push', '-qu', 'origin', 'main')
         source = self.git('rev-parse', 'HEAD')
+        d['agreement_revision'] = state.acceptance_context(self.repo, self.repo / 'vault', self.project)['agreement_revision']
         meta = self.project / 'meta-plans/frozen-r1.md'
         meta.parent.mkdir()
         meta_locator = str(meta.relative_to(self.repo))
@@ -177,6 +178,410 @@ None — command-only.
         self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\n\n## Decisions\n')
         self.running_inner.write_text(self.running_inner.read_text().replace('status: RUNNING', 'status: ' + inner_status))
         return d
+
+    def helper(self, command, *args):
+        return subprocess.run([sys.executable, str(SCRIPTS / '_coding_loop_state.py'), command, *map(str, args)],
+                              env=self.env, cwd=self.repo, text=True, capture_output=True)
+
+    def test_outer_monitor_and_independent_stop_targets(self):
+        self.write_outer()
+        for adapter in ('Linux', 'Darwin'):
+            with self.subTest(adapter=adapter):
+                result = self.invoke('status.sh', '--json', 'outer', FAKE_OS=adapter)
+                self.assert_ok(result)
+                item = json.loads(result.stdout)[0]
+                for field in ('supervisor', 'project', 'round', 'inner_slug', 'inner_status', 'last_verdict', 'pending_owner', 'iteration', 'timer_active'):
+                    self.assertIn(field, item)
+                self.assertEqual(item['supervisor'], 'supercode')
+                self.assertEqual(item['inner_status'], 'RUNNING')
+                before = self.running_inner.read_bytes()
+                self.calls.unlink(missing_ok=True)
+                result = self.invoke('stop.sh', self.project, FAKE_OS=adapter)
+                self.assert_ok(result)
+                self.assertIn('--slug inner', result.stdout)
+                self.assertEqual(before, self.running_inner.read_bytes())
+                self.assertFalse(any('inner' in str(c['argv']) for c in self.logs() if c['name'] in ('systemctl', 'launchctl')))
+                self.calls.unlink(missing_ok=True)
+                self.assert_ok(self.invoke('stop.sh', '--slug', 'inner', '--hard', FAKE_OS=adapter))
+                self.assertFalse(any('outer' in str(c['argv']) for c in self.logs()))
+
+    def test_lifecycle_identity_mismatch_refuses_before_scheduler(self):
+        self.write_outer()
+        for script, args in (('stop.sh', (self.project, '--slug', 'inner')),
+                             ('force-stop.sh', (self.project, '--slug', 'inner', '--apply'))):
+            result = self.invoke(script, *args)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(self.logs(), [])
+        self.register('outer', self.outer, 'superagent')
+        before = self.outer.read_bytes()
+        for script, args in (('stop.sh', ('--slug', 'outer')),
+                             ('force-stop.sh', ('--slug', 'outer', '--apply')),
+                             ('answer.sh', ('--no-kick', 'outer', 'retry'))):
+            self.assertNotEqual(self.invoke(script, *args).returncode, 0)
+        self.assertEqual(self.outer.read_bytes(), before)
+        self.assertEqual(self.logs(), [])
+
+    def test_project_answer_uses_guard_and_preserves_replace(self):
+        d = self.write_outer()
+        d.update(status='WAITING FOR INPUT', prior_status='BUILDING')
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\nreason: stopped\nanswer:\n')
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        lock.mkdir(); (lock / 'owner').write_text('999999999')
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'retry'))
+        guard = Path(str(lock) + '.reclaim')
+        self.assertTrue(guard.exists())
+        inode = guard.stat().st_ino
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'wrong'))
+        self.assertIn('answer: retry', self.outer.read_text())
+        self.assert_ok(self.invoke('answer.sh', '--replace', '--no-kick', 'outer', 'replacement'))
+        self.assertIn('answer: replacement', self.outer.read_text())
+        self.assertEqual(inode, guard.stat().st_ino)
+        lock.mkdir(); (lock / 'owner').write_text(str(os.getpid()))
+        self.assertEqual(self.invoke('answer.sh', '--replace', '--no-kick', 'outer', 'blocked').returncode, 4)
+        self.assertNotIn('answer: blocked', self.outer.read_text())
+
+    def test_outer_force_recovery_preserves_phase_and_live_peer_guard(self):
+        d = self.verified_build()
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        for phase, ready in state.RECOVER_READY.items():
+            d['status'] = phase; d['operation']['phase'] = phase
+            d['operation']['code_commit'] = '' if phase == 'META-PLANNING' else self.git('rev-parse', 'HEAD')
+            d['operation']['report'] = '' if phase == 'META-PLANNING' else str(self.project / 'eval-reports/missing.md')
+            self.outer.write_bytes(state._serialize_state(d))
+            lock.mkdir(); (lock / 'owner').write_text('999999999')
+            before = self.outer.read_bytes()
+            result = self.invoke('force-stop.sh', '--slug', 'outer', '--apply')
+            self.assert_ok(result)
+            self.assertIn(ready, result.stdout)
+            self.assertEqual(before, self.outer.read_bytes())
+            self.assertTrue(Path(str(lock) + '.reclaim').exists())
+            self.assertFalse(lock.exists())
+        lock.mkdir(); (lock / 'owner').write_text(str(os.getpid()))
+        self.assertNotEqual(self.invoke('force-stop.sh', '--slug', 'outer', '--apply', '--no-kick').returncode, 0)
+        self.assertEqual((lock / 'owner').read_text(), str(os.getpid()))
+
+    def test_context_discovers_transitive_binding_and_refuses_missing(self):
+        self.verified_build()
+        (self.repo / 'README.md').write_text('Binding: [requirements](requirements.md)\n')
+        (self.repo / 'requirements.md').write_text('Required assertion.\n')
+        self.git('add', 'README.md', 'requirements.md'); self.git('commit', '-qm', 'binding'); self.git('push', '-q')
+        args = ('--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project)
+        result = self.helper('context', *args)
+        self.assert_ok(result)
+        packet = json.loads(result.stdout)
+        self.assertEqual({m['locator'] for m in packet['manifest']}, {'README.md', 'requirements.md'})
+        old = packet['agreement_revision']
+        with (self.project / 'prd.md').open('a') as out: out.write('\n')
+        self.assertEqual(json.loads(self.helper('context', *args).stdout)['agreement_revision'], old)
+        (self.repo / 'requirements.md').unlink()
+        self.assertNotEqual(self.helper('context', *args).returncode, 0)
+
+    def evaluation_fixture(self, verdict='PASS', missing_j=False, wrong_sha=False):
+        d = self.verified_build()
+        if missing_j:
+            p = self.project / 'evaluation.md'
+            p.write_text(p.read_text().replace('None — command-only.', '| J1 | Required assertion | inspect | README.md |'))
+            self.git('add', str(p.relative_to(self.repo))); self.git('commit', '-qm', 'judged agreement'); self.git('push', '-q')
+        context = json.loads(self.helper('context', '--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project).stdout)
+        sha = self.git('rev-parse', 'HEAD')
+        report = self.project / 'eval-reports/frozen-r1.md'; report.parent.mkdir()
+        op = dict(d['operation'], id='5'*32, phase='EVALUATING', agreement_revision=context['agreement_revision'],
+                  code_commit=sha, source_vault_commit=sha, report=str(report.relative_to(self.repo)))
+        report.write_text(f"""# Eval
+**Date:** 2026-09-09 · **Status:** FINAL · **Round:** 1
+**Operation:** {op['id']} · **Agreement revision:** {op['agreement_revision']} · **Source vault commit:** {sha}
+## Environment
+- commit: `{'0'*40 if wrong_sha else sha}` · worktree: `/tmp/work` · setup: `true` → ok
+## Command checks
+| Id | Result | Exit | Seconds | Evidence |
+|---|---|---|---|---|
+| C1 | {verdict} | 0 | 0 | README.md:1 |
+## Judged objectives
+none
+## Verdict
+**{verdict}** — observed result
+**Inner loop:** none found
+**Warnings:** none
+""")
+        prd = self.project / 'prd.md'
+        prd.write_text(prd.read_text().replace('| - | - | - |', '| - | [[' + op['report'][:-3] + ']] | ' + verdict + ' |'))
+        self.git('add', '.'); self.git('commit', '-qm', 'integrated evaluation'); self.git('push', '-q')
+        d.update(status='EVALUATING', operation=op, agreement_revision=op['agreement_revision'])
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\nanswer:\n')
+        return d
+
+    def phase(self, maximum=1, consume=False):
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        self.assert_ok(self.helper('acquire-lock', lock, '--owner', os.getpid()))
+        try:
+            result = self.helper('reconcile-phase', self.outer, '--repo', self.repo, '--vault', self.repo / 'vault',
+                                 '--max-rounds', maximum, '--write', '--owner', os.getpid(), *(['--consume-answer'] if consume else []))
+            self.assert_ok(result)
+            return json.loads(result.stdout)
+        finally:
+            shutil.rmtree(lock)
+
+    def test_final_allowed_round_pass_and_negative_acceptance(self):
+        self.evaluation_fixture()
+        result = self.phase()
+        self.assertEqual(result['state']['status'], 'DONE', result)
+        self.assertEqual(result['state']['round'], 1)
+        self.assertEqual(len(list((self.project / 'eval-reports').glob('*.md'))), 1)
+
+    def test_missing_j_and_wrong_revision_never_done(self):
+        # Separate fixtures preserve actual Git authority without test-side verdict injection.
+        self.evaluation_fixture(missing_j=True)
+        self.assertEqual(self.phase()['state']['status'], 'WAITING FOR INPUT')
+
+    def test_wrong_evaluation_revision_never_done(self):
+        self.evaluation_fixture(wrong_sha=True)
+        self.assertEqual(self.phase()['state']['status'], 'WAITING FOR INPUT')
+
+    def test_actual_adoption_answer_starts_new_round_without_old_pass(self):
+        self.evaluation_fixture()
+        self.phase()
+        prd = self.project / 'prd.md'
+        prd.write_text(prd.read_text().replace('Demo.', 'Changed approved scope.'))
+        self.git('add', str(prd.relative_to(self.repo))); self.git('commit', '-qm', 'author changed scope'); self.git('push', '-q')
+        self.assert_ok(self.launch())
+        result = self.phase(2)
+        self.assertEqual(result['state']['status'], 'WAITING FOR INPUT')
+        # Explicit relaunch must expose adoption even after a previously terminal PASS.
+        self.assert_ok(self.launch())
+        self.assertEqual(self.outer_status(), 'WAITING FOR INPUT')
+        old = result['state']['agreement_revision']
+        new = result['state']['proposed_agreement_revision']
+        self.assertNotEqual(old, new)
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'retry'))
+        self.assertEqual(self.phase(2, True)['state']['agreement_revision'], old)
+        self.assert_ok(self.launch())
+        self.assertIn('\nanswer: retry', self.outer.read_text())
+        self.assert_ok(self.invoke('answer.sh', '--replace', '--no-kick', 'outer', 'adopt-agreement ' + new))
+        result = self.phase(2, True)
+        self.assertEqual(result['state']['status'], 'WAITING FOR META-PLAN', result)
+        self.assertEqual(result['state']['round'], 2)
+        self.assertEqual(result['state']['agreement_revision'], new)
+        self.assertEqual(result['state']['operation']['phase'], '')
+        self.assertNotIn('\nanswer: adopt-agreement', self.outer.read_text())
+
+    def test_reservation_refuses_round_max_plus_one_and_pending_context(self):
+        d = self.evaluation_fixture()
+        d.update(status='WAITING FOR META-PLAN', round=2, operation={k: '' for k in state.OPERATION_FIELDS})
+        self.outer.write_bytes(state._serialize_state(d))
+        opfile = self.root / 'op.json'
+        opfile.write_text(json.dumps(dict(d['operation'], phase='META-PLANNING', round=2, agreement_revision=d['agreement_revision'],
+                                         meta_plan=str(self.project / 'meta-plans/new-r2.md'), goal_folder=str(self.repo / 'vault/goals/next'),
+                                         source_vault_commit=self.git('rev-parse', 'HEAD'))))
+        before = self.outer.read_bytes()
+        result = self.helper('reserve', self.outer, '--repo', self.repo, '--vault', self.repo / 'vault', '--operation', opfile, '--max-rounds', 1)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('round limit', result.stderr)
+        self.assertEqual(before, self.outer.read_bytes())
+
+    def diagnosis_fixture(self):
+        self.evaluation_fixture(verdict='FAIL')
+        self.assertEqual(self.phase()['state']['status'], 'WAITING FOR DIAGNOSIS')
+        d = state.read_state(self.outer)
+        report = self.project / 'diagnoses/frozen-r1.md'; report.parent.mkdir()
+        source = self.git('rev-parse', 'HEAD')
+        op = dict(d['operation'], id='6'*32, phase='DIAGNOSING', report=str(report.relative_to(self.repo)), source_vault_commit=source)
+        report.write_text(f"""# Diagnosis
+**Date:** 2026-09-09 · **Status:** FINAL · **Round:** 1
+**Operation:** `{op['id']}`
+**Eval report:** `{d['last_eval']}`
+**Evaluated commit:** `{d['evaluated_commit']}`
+**Agreement revision:** `{d['agreement_revision']}`
+**Source vault commit:** `{source}`
+## Inputs and limitations
+Approved agreement and selected failed report inspected.
+## Problems
+| Problem | C/J IDs | AC IDs | Evidence | Cause | Confidence | Classification |
+|---|---|---|---|---|---|---|
+| P1 | C1 | none | README.md:1 | Required behavior absent | high | implementation defect |
+## Repair guidance
+P1: implement the approved behavior.
+## Disposition
+**REPAIR**
+""")
+        self.git('add', '.'); self.git('commit', '-qm', 'integrated diagnosis'); self.git('push', '-q')
+        d.update(status='DIAGNOSING', operation=op)
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\nanswer:\n')
+        return report
+
+    def test_diagnosed_limit_requires_actual_explicit_raised_limit_answer(self):
+        self.diagnosis_fixture()
+        result = self.phase(1)
+        self.assertEqual(result['state']['status'], 'WAITING FOR INPUT', result)
+        self.assertEqual(result['state']['pending_kind'], 'limit')
+        self.assertEqual(self.phase(2)['state']['status'], 'WAITING FOR INPUT')
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'raise-limit 3'))
+        self.assertEqual(self.phase(2, True)['state']['round'], 1)
+        self.assert_ok(self.invoke('answer.sh', '--replace', '--no-kick', 'outer', 'raise-limit 2'))
+        result = self.phase(2, True)
+        self.assertEqual(result['state']['round'], 2)
+        self.assertEqual(result['state']['status'], 'WAITING FOR META-PLAN')
+        self.assertEqual(len(list((self.project / 'diagnoses').glob('*.md'))), 1)
+        self.assertEqual(len(list((self.project / 'meta-plans').glob('*.md'))), 1)
+        self.assertEqual(len(self.model_invocations()), 0)
+
+    def test_diagnosis_wrong_selected_report_never_repairs(self):
+        report = self.diagnosis_fixture()
+        report.write_text(report.read_text().replace('eval-reports/frozen-r1.md', 'eval-reports/another-r1.md'))
+        self.git('add', '.'); self.git('commit', '-qm', 'wrong report identity'); self.git('push', '-q')
+        result = self.phase(2)
+        self.assertEqual(result['state']['status'], 'WAITING FOR INPUT')
+        self.assertEqual(result['state']['round'], 1)
+
+    def test_absent_transient_reconciles_to_own_ready_phase(self):
+        self.evaluation_fixture()
+        original = state.read_state(self.outer)
+        for phase, ready in state.RECOVER_READY.items():
+            d = dict(original, status=phase, operation=dict(original['operation'], phase=phase, id='7'*32))
+            d['operation']['goal_folder'] = 'vault/goals/absent'
+            d['operation']['meta_plan'] = str((self.project / 'meta-plans/absent-r1.md').relative_to(self.repo))
+            if phase == 'META-PLANNING':
+                d['operation'].update(code_commit='', report='')
+            else:
+                d['operation']['report'] = str((self.project / ('diagnoses' if phase == 'DIAGNOSING' else 'eval-reports') / 'absent-r1.md').relative_to(self.repo))
+            self.outer.write_bytes(state._serialize_state(d))
+            result = self.phase(1)
+            self.assertEqual(result['receipt']['outcome'], 'ABSENT', result)
+            self.assertEqual(result['state']['status'], ready, result)
+            self.assertEqual(result['state']['operation']['id'], '7'*32)
+
+    def test_legacy_answer_retains_python_free_path(self):
+        self.write_outer()
+        self.running_inner.write_text(self.running_inner.read_text().replace('status: RUNNING', 'status: WAITING FOR INPUT') + '\n## Pending decision\nanswer:\n')
+        python = self.bin / 'python3'; python.write_text('#!/bin/sh\nexit 99\n'); python.chmod(0o755)
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'inner', 'retry'))
+        self.assertIn('answer: retry', self.running_inner.read_text())
+        self.assert_ok(self.invoke('stop.sh', '--slug', 'inner', '--dry-run'))
+        self.assert_ok(self.invoke('force-stop.sh', '--slug', 'inner'))
+
+    def test_new_reservation_reuses_identity_and_requires_resolved_context(self):
+        d = self.evaluation_fixture()
+        context = d['agreement_revision']
+        d.update(status='WAITING FOR META-PLAN', agreement_revision='PENDING', operation={k: '' for k in state.OPERATION_FIELDS})
+        self.outer.write_bytes(state._serialize_state(d))
+        op = dict(d['operation'], phase='META-PLANNING', round=1, agreement_revision=context,
+                  meta_plan=str((self.project / 'meta-plans/reserved-r1.md').relative_to(self.repo)), goal_folder='vault/goals/reserved',
+                  source_vault_commit=self.git('rev-parse', 'HEAD'))
+        opfile = self.root / 'reserve.json'; opfile.write_text(json.dumps(op))
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        self.assert_ok(self.helper('acquire-lock', lock, '--owner', os.getpid()))
+        args = (self.outer, '--repo', self.repo, '--vault', self.repo / 'vault', '--operation', opfile, '--max-rounds', 1, '--owner', os.getpid())
+        try:
+            result = self.helper('reserve', *args)
+            self.assert_ok(result)
+            reserved = json.loads(result.stdout)
+            self.assertEqual(reserved['status'], 'META-PLANNING')
+            operation_id = reserved['operation']['id']
+            self.assertRegex(operation_id, '^[a-f0-9]{32}$')
+            # Simulate interrupted absent worker: same durable reservation is reused.
+            result = self.helper('reserve', *args)
+            self.assert_ok(result)
+            self.assertEqual(json.loads(result.stdout)['operation']['id'], operation_id)
+            op['goal_folder'] += '-other'; opfile.write_text(json.dumps(op))
+            self.assertNotEqual(self.helper('reserve', *args).returncode, 0)
+            (self.repo / 'README.md').unlink()
+            self.assertNotEqual(self.helper('reserve', *args).returncode, 0)
+            self.assertEqual(state.read_state(self.outer)['operation']['id'], operation_id)
+        finally:
+            shutil.rmtree(lock)
+
+    def test_legacy_adoption_rejects_unintegrated_raw_locators(self):
+        d = self.evaluation_fixture()
+        fingerprint = d['agreement_revision']
+        d.update(status='WAITING FOR INPUT', prior_status='WAITING FOR META-PLAN', agreement_revision='PENDING',
+                 adoption_goal_folder='[[vault/goals/missing]]', adoption_verdict='PASS',
+                 operation={k: '' for k in state.OPERATION_FIELDS})
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\nanswer:\n')
+        self.assert_ok(self.invoke('answer.sh', '--no-kick', 'outer', 'adopt-agreement ' + fingerprint))
+        result = self.phase(2, True)
+        self.assertEqual(result['state']['status'], 'WAITING FOR INPUT')
+        self.assertEqual(result['state']['round'], 1)
+        self.assertEqual(result['state']['agreement_revision'], 'PENDING')
+
+    def test_changed_agreement_blocks_launcher_and_building_advancement(self):
+        d = self.verified_build('DONE')
+        prd = self.project / 'prd.md'; prd.write_text(prd.read_text().replace('Demo.', 'Changed obligation.'))
+        self.git('add', '.'); self.git('commit', '-qm', 'changed agreement'); self.git('push', '-q')
+        before = self.outer.read_bytes()
+        self.assert_ok(self.invoke_tick())
+        self.assertEqual(self.outer_status(), 'WAITING FOR INPUT')
+        d.update(status='META-PLANNING', inner_loop='', inner_slug='')
+        self.outer.write_bytes(state._serialize_state(d))
+        self.assert_ok(self.launch())
+        self.assertEqual(self.outer_status(), 'WAITING FOR INPUT')
+
+    def test_answer_refuses_concurrent_reclaimer_without_lock_directory(self):
+        import fcntl
+        d = self.write_outer(); d.update(status='WAITING FOR INPUT', prior_status='BUILDING')
+        self.outer.write_bytes(state._serialize_state(d) + b'\n## Pending decision\nanswer:\n')
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        guard = Path(str(lock) + '.reclaim')
+        before = self.outer.read_bytes()
+        with guard.open('a+b') as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            self.assertEqual(self.invoke('answer.sh', '--no-kick', 'outer', 'retry').returncode, 4)
+            self.assertEqual(before, self.outer.read_bytes())
+            self.assertFalse(lock.exists())
+        self.assertTrue(guard.exists())
+
+    def test_remote_capture_persists_and_missing_capture_fails_closed(self):
+        import hashlib
+        d = self.evaluation_fixture()
+        kb = self.project / 'knowledge-base.md'
+        kb.write_text(kb.read_text() + '\nBinding [policy](https://example.invalid/policy).\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'binding policy'); self.git('push', '-q')
+        capture = self.root / 'policy.txt'; capture.write_text('Required behavior remains approved.\n')
+        entry = dict(locator='https://example.invalid/policy', path=str(capture), source_revision='policy-v1', sha256=hashlib.sha256(capture.read_bytes()).hexdigest())
+        captures = self.root / 'captures.json'; captures.write_text(json.dumps([entry]))
+        context_args = ('--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project)
+        self.assertNotEqual(self.helper('context', *context_args).returncode, 0)
+        context = self.helper('context', *context_args, '--captures', captures); self.assert_ok(context)
+        d.update(status='WAITING FOR META-PLAN', agreement_revision='PENDING', operation={k: '' for k in state.OPERATION_FIELDS})
+        self.outer.write_bytes(state._serialize_state(d))
+        lock = self.outer.parent / ('.' + self.outer.name + '.lockd')
+        self.assert_ok(self.helper('acquire-lock', lock, '--owner', os.getpid()))
+        try:
+            result = self.helper('reconcile-phase', self.outer, '--repo', self.repo, '--vault', self.repo / 'vault', '--write', '--owner', os.getpid(), '--captures', captures)
+            self.assert_ok(result)
+            self.assertEqual(json.loads(result.stdout)['state']['status'], 'WAITING FOR META-PLAN')
+        finally:
+            shutil.rmtree(lock)
+        self.assertEqual(json.loads(state.read_state(self.outer)['binding_captures_json']), [entry])
+        self.assertEqual(self.phase()['state']['status'], 'WAITING FOR META-PLAN')
+        capture.unlink()
+        self.assertEqual(self.phase()['state']['status'], 'WAITING FOR INPUT')
+
+    def test_monitor_reports_disarmed_unfinished_child_as_stopped(self):
+        self.write_outer()
+        result = self.invoke('status.sh', '--json', 'outer', FAKE_JOB='stopped')
+        self.assert_ok(result)
+        self.assertEqual(json.loads(result.stdout)[0]['inner_status'], 'STOPPED')
+
+    def test_partial_meta_requires_worker_complete_before_build(self):
+        d = self.verified_build()
+        prd = self.project / 'prd.md'
+        prd.write_text('\n'.join(line for line in prd.read_text().splitlines() if not line.startswith('| 1 |')) + '\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'partial meta missing ledger'); self.git('push', '-q')
+        d.update(status='META-PLANNING')
+        self.outer.write_bytes(state._serialize_state(d))
+        result = self.phase()
+        self.assertEqual(result['receipt']['outcome'], 'INTEGRATED', result)
+        self.assertFalse(result['receipt']['worker_complete'])
+        self.assertEqual(result['state']['status'], 'WAITING FOR META-PLAN')
+        self.assertEqual(result['state']['operation']['id'], d['operation']['id'])
+        self.assertEqual(len(list((self.repo / 'vault/goals').iterdir())), 1)
+
+    def test_repair_below_limit_advances_one_round_and_reconciliation_is_idempotent(self):
+        self.diagnosis_fixture()
+        result = self.phase(2)
+        self.assertEqual(result['state']['status'], 'WAITING FOR META-PLAN')
+        self.assertEqual(result['state']['round'], 2)
+        self.assertEqual(self.phase(2)['state']['round'], 2)
+        self.assertEqual(len(list((self.project / 'diagnoses').glob('*.md'))), 1)
 
     def test_verified_building_stays_pending_without_auth(self):
         self.verified_build()

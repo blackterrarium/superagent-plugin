@@ -571,3 +571,61 @@ superagent_systemd_path() {
   value="${value//%/%%}"
   printf '%s\n' "$value"
 }
+
+# Resolve one registered lifecycle identity without evaluating registration data.
+# Plan-only consumers remain shell-only; project state validation uses its helper.
+# Outputs globals SLUG, LOOP_FILE, REPO, SUPERVISOR, TARGET_LOCATOR.
+superagent_control_target() {
+  local target="${1:-}" selected="${2:-}" conf="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
+  local envf lf rr kind locator physical wanted="" found="" candidate regslug requested_repo="${REPO:-}"
+  if [[ -n "$selected" && ! "$selected" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then echo 'invalid slug' >&2; return 2; fi
+  if [[ -n "$target" ]]; then
+    [[ -e "$target" ]] || { echo "target does not exist: $target" >&2; return 2; }
+    if [[ -d "$target" ]]; then wanted="$(cd "$target" && pwd -P)";
+    else wanted="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"; fi
+  fi
+  if [[ -n "$requested_repo" ]]; then
+    requested_repo="$(git -C "$requested_repo" rev-parse --path-format=absolute --git-common-dir)" || return 2
+    requested_repo="$(cd "$(dirname "$requested_repo")" && pwd -P)"
+  fi
+  for envf in "$conf"/*.env; do
+    [[ -f "$envf" ]] || continue
+    candidate="$(basename "$envf" .env)"
+    [[ -z "$selected" || "$selected" == "$candidate" ]] || continue
+    lf="$(superagent_registration_field "$envf" LOOP_FILE)" || return 2
+    rr="$(superagent_registration_field "$envf" REPO)" || return 2
+    [[ -f "$lf" && -d "$rr" ]] || { [[ -z "$selected" ]] && continue; echo 'registration state/repo missing' >&2; return 2; }
+    rr="$(cd "$rr" && pwd -P)"
+    kind="$(superagent_registration_field "$envf" SUPERAGENT_SUPERVISOR)" || return 2
+    kind="${kind:-superagent}"
+    locator="$(awk -v k="$([[ "$kind" == supercode ]] && echo project || echo master_plan)" 'NR==1{next} /^---$/{exit} index($0,k ":")==1 {sub(/^[^:]*:[ \t]*/, ""); print}' "$lf")"
+    [[ -n "$locator" ]] || { [[ -z "$selected" ]] && continue; echo 'registered target missing' >&2; return 2; }
+    case "$locator" in /*) physical="$locator" ;; *) physical="$rr/$locator" ;; esac
+    if [[ -d "$physical" ]]; then physical="$(cd "$physical" && pwd -P)";
+    elif [[ -f "$physical" ]]; then physical="$(cd "$(dirname "$physical")" && pwd -P)/$(basename "$physical")";
+    else [[ -z "$selected" ]] && continue; echo 'registered target does not exist' >&2; return 2; fi
+    [[ -z "$wanted" || "$physical" == "$wanted" ]] || { [[ -z "$selected" ]] && continue; echo 'target/slug identity mismatch' >&2; return 2; }
+    [[ -z "$requested_repo" || "$requested_repo" == "$rr" ]] || { [[ -z "$selected" ]] && continue; echo 'registered repo identity mismatch' >&2; return 2; }
+    superagent_supervisor "$lf" "$kind" >/dev/null || return 2
+    regslug="$(superagent_registration_field "$envf" SUPERAGENT_SLUG)" || return 2
+    [[ -z "$regslug" || "$regslug" == "$candidate" ]] || { echo 'registered slug identity mismatch' >&2; return 2; }
+    if [[ "$kind" == supercode ]]; then
+      python3 "$SCRIPT_DIR/_coding_loop_state.py" read "$lf" >/dev/null || return 2
+      [[ "$physical" == "$(cd "$(dirname "$lf")/.." && pwd -P)" ]] || { echo 'project/state location mismatch' >&2; return 2; }
+    fi
+    [[ -z "$found" ]] || { echo 'multiple registered target identities' >&2; return 2; }
+    found="$candidate"; SLUG="$candidate"; LOOP_FILE="$lf"; REPO="$rr"; SUPERVISOR="$kind"; TARGET_LOCATOR="$locator"
+  done
+  [[ -n "$found" ]] || { echo 'no registered loop matches target' >&2; return 2; }
+}
+
+superagent_remaining_child() {
+  [[ "${SUPERVISOR:-superagent}" == supercode ]] || return 0
+  local child child_file
+  child="$(sed -n 's/^inner_slug:[[:space:]]*//p' "$LOOP_FILE" | head -1)"
+  [[ "$child" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || return 0
+  child_file="${XDG_CONFIG_HOME:-$HOME/.config}/superagent/$child.env"
+  [[ -f "$child_file" ]] || { echo "  child: $child (registration missing; inspect recorded inner_loop)"; return 0; }
+  echo "  child registration remains: $child (outer action does not stop it)"
+  printf '  child stop command: REPO=%q %q --slug %q\n' "$REPO" "$SCRIPT_DIR/stop.sh" "$child"
+}

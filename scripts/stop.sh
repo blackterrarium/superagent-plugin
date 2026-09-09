@@ -18,53 +18,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
 
-usage() { echo "usage: stop.sh <PLAN.md> [--hard] [--purge] [--slug <goal-slug>] [--dry-run]" >&2; exit 2; }
+usage() { echo "usage: stop.sh (<PLAN.md> | <project-dir> | --slug <slug>) [--hard] [--purge] [--slug <goal-slug>] [--dry-run]" >&2; exit 2; }
 
-PLAN="${1:-}"
-[[ -z "$PLAN" || "$PLAN" == -* ]] && usage
-shift
-HARD=0; PURGE=0; DRY=0; SLUG=""
+PLAN=""; HARD=0; PURGE=0; DRY=0; SLUG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --hard)    HARD=1; shift ;;
-    --purge)   PURGE=1; shift ;;
+    --hard) HARD=1; shift ;;
+    --purge) PURGE=1; shift ;;
     --dry-run) DRY=1; shift ;;
-    --slug)    SLUG="${2:?--slug needs a value}"; shift 2 ;;
-    *) echo "unknown arg: $1" >&2; usage ;;
+    --slug) SLUG="${2:?--slug needs a value}"; shift 2 ;;
+    -*) usage ;;
+    *) [[ -z "$PLAN" ]] || usage; PLAN="$1"; shift ;;
   esac
 done
-
-[[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; exit 2; }
-PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
-case "$PLAN_ABS" in "$REPO"/*) PLAN_REL="${PLAN_ABS#"$REPO"/}" ;; *) PLAN_REL="$PLAN_ABS" ;; esac
-GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd -P)"
-
-# Prefer the registered loop whose LOOP_FILE records this master plan (robust to a
-# custom --slug used at launch). PLAN_REL is repo-relative, so it matches the loop
-# file's master_plan regardless of which checkout the env file points at.
-find_slug_by_plan() {
-  shopt -s nullglob
-  local envf lf mp
-  for envf in "$CONF_DIR"/*.env; do
-    lf="$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)"
-    [[ -n "$lf" && -f "$lf" ]] || continue
-    mp="$(sed -n 's/^master_plan:[[:space:]]*//p' "$lf" | head -1)"
-    if [[ "$mp" == "$PLAN_REL" ]]; then basename "$envf" .env; return 0; fi
-  done
-  return 1
-}
-
-if [[ -z "$SLUG" ]]; then
-  SLUG="$(find_slug_by_plan || true)"
-fi
-if [[ -z "$SLUG" ]]; then
-  SLUG="$(basename "$GOAL_FOLDER" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9]{2}-//')"
-fi
+[[ -n "$PLAN" || -n "$SLUG" ]] || usage
+superagent_control_target "$PLAN" "$SLUG"
+PLAN_REL="$TARGET_LOCATOR"
 
 have_env=0; [[ -f "$CONF_DIR/$SLUG.env" ]] && have_env=1
 SCHEDULER="$(superagent_scheduler)"
@@ -96,6 +69,7 @@ if [[ "$DRY" == 1 ]]; then
   echo "  tick now:    $tick_active"
   echo "  mode:        $([[ $HARD == 1 ]] && echo 'hard (would halt in-flight tick)' || echo 'graceful drain (running tick would finish)')"
   echo "  env file:    $([[ $PURGE == 1 ]] && echo 'would purge' || echo 'would keep')"
+  superagent_remaining_child
   echo "[dry-run] nothing changed."
   exit 0
 fi
@@ -127,3 +101,5 @@ echo "  plan:       $PLAN_REL"
 echo "  mode:       $([[ $HARD == 1 ]] && echo 'hard (in-flight tick halted)' || echo 'graceful drain (running tick finishes)')"
 echo "  env file:   $([[ $PURGE == 1 ]] && echo 'purged' || echo "kept ($CONF_DIR/$SLUG.env)")"
 echo "  loop file:  preserved — relaunch with: $SCRIPT_DIR/launch.sh $PLAN_REL"
+
+superagent_remaining_child

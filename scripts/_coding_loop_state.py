@@ -624,7 +624,12 @@ def gate_snapshot(path: Path, repo: Path, vault: Path, conf: Path, slug: str,
     try:
         identity = project_identity(repo, vault, repo / current['project'])
         repo = Path(identity['repo'])
+        context = acceptance_context(repo, Path(identity['vault']), Path(identity['project']),
+                                     json.loads(current.get('binding_captures_json', '[]')))
+        if context['agreement_revision'] != current['agreement_revision']:
+            raise StateError('Agreement changed; author adoption required before BUILDING advancement')
         operation = current['operation']
+        validate_operation_locations(operation, repo, Path(identity['vault']), Path(identity['project']))
         if operation.get('phase') != 'META-PLANNING' or current['agreement_revision'] == 'PENDING':
             raise StateError('BUILDING requires the recorded completed META operation and adopted agreement')
         receipt = reconcile_operation(repo, Path(identity['vault']), operation)
@@ -725,14 +730,20 @@ def prepare_project(repo: Path, vault: Path, project: Path, conf: Path, slug: st
         current = matches[0][1]
         if current['round'] < max(rounds, default=1):
             raise StateError('ledger is ahead of saved state; reconcile/adopt the current round before launch')
+        # Bootstrap is intentionally deferred to the native supervisor's first tick.
+        if current['agreement_revision'] == 'PENDING' and not current['operation'].get('phase'):
+            return dict(identity, loop_file=str(loop_file), slug=slug, existing=True)
         # Recover only durable operation identities; legacy ledger rows cannot
         # substitute for them. Do not adopt a changed agreement here.
-        if current['status'] in {'META-PLANNING', 'WAITING FOR META-PLAN'} and current['operation'].get('phase') == 'META-PLANNING':
-            from _coding_loop_evidence import reconcile_operation
-            receipt = reconcile_operation(repo, Path(identity['vault']), current['operation'])
-            if receipt.get('outcome') == 'INTEGRATED' and receipt.get('worker_complete') and write:
-                updated = dict(current, status='WAITING FOR BUILD', meta_plan=current['operation']['meta_plan'])
-                replace_state(loop_file, current, updated)
+        try:
+            context = acceptance_context(repo, Path(identity['vault']), project,
+                                         json.loads(current.get('binding_captures_json', '[]')))
+            updated, receipt = reconcile_phase(current, repo, Path(identity['vault']), context, int(max_rounds))
+        except (ValueError, OSError) as exc:
+            updated = _park(current, str(exc))
+        if write and updated != current:
+            pending = pending_with_answer(loop_file, updated['gate_reason']) if updated['status'] == 'WAITING FOR INPUT' else None
+            replace_state(loop_file, current, updated, pending_decision=pending)
         return dict(identity, loop_file=str(loop_file), slug=slug, existing=True)
     current = {key: '' for key in REQUIRED_FIELDS}
     current.update(supervisor='supercode', project=identity['stored_project'], status='WAITING FOR META-PLAN',
@@ -756,6 +767,360 @@ def prepare_project(repo: Path, vault: Path, project: Path, conf: Path, slug: st
         except FileExistsError:
             raise StateError('state appeared during launch; retry without overwriting it')
     return dict(identity, loop_file=str(loop_file), slug=slug, existing=False)
+
+
+def acceptance_context(repo: Path, vault: Path, project: Path, captures: list | None = None) -> dict:
+    """Discover binding references transitively; a supplied empty list is no exemption.
+
+    Local text comes from integrated Git blobs. Nonlocal sources require explicit
+    revision-labelled text captures. Conservative discovery includes all KB locators
+    and document links outside the mutable ledger; ambiguity/missing context refuses.
+    """
+    import hashlib
+    from _coding_loop_evidence import agreement_fingerprint, _without_iteration_ledger, _tables, _path_at_main
+    identity = project_identity(repo, vault, project)
+    repo, vault, project = (Path(identity[k]) for k in ('repo', 'vault', 'project'))
+    if captures is not None and not isinstance(captures, list):
+        raise StateError('binding captures must be an array')
+    supplied = {}
+    for entry in captures or []:
+        if not isinstance(entry, dict) or entry.get('locator') in supplied:
+            raise StateError('invalid or duplicate binding capture')
+        supplied[entry.get('locator')] = entry
+    manifest, seen = [], set()
+    roots = {project / n for n in ('prd.md', 'evaluation.md', 'knowledge-base.md')}
+    for path in roots:
+        header = '\n'.join(path.read_text().splitlines()[:3])
+        if not re.search(r'^\*\*Date:\*\* .*\*\*Status:\*\* READY(?:\s|$)', header, re.M):
+            raise StateError(path.name + ' is not READY')
+    queue = [(p, p.read_bytes(), True) for p in sorted(roots)]
+    for entry in supplied.values():
+        agreement_fingerprint(project, [entry])
+        capture = Path(entry.get('path', entry.get('resolved_path', '')))
+        queue.append((capture, capture.read_bytes(), False))
+    while queue:
+        source, data, root = queue.pop(0)
+        if source.name == 'prd.md' and source in roots:
+            data = _without_iteration_ledger(data)
+        try:
+            text = data.decode('utf-8')
+        except UnicodeError as exc:
+            raise StateError(f'binding text needs a readable capture: {source}') from exc
+        locators = re.findall(r'\[[^\]\n]*\]\(([^)\n]+)\)', text)
+        locators += [x.split('|', 1)[0] for x in re.findall(r'\[\[([^\]\n]+)\]\]', text)]
+        # Bare code-formatted file locators often name binding text without links.
+        locators += re.findall(r'`([^`\n]+\.(?:md|txt|pdf|docx))`', text)
+        if source.name == 'knowledge-base.md':
+            for header, rows in _tables(text):
+                if 'Locator' in header:
+                    index = header.index('Locator')
+                    for row in rows:
+                        if len(row) <= index: raise StateError('malformed knowledge-base locator row')
+                        locators.append(row[index].strip('` '))
+        for raw in locators:
+            locator = raw.strip().strip('<>')
+            if not locator or locator.startswith('#'): continue
+            locator = locator.split('#', 1)[0]
+            if locator in seen: continue
+            if re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*:', locator):
+                entry = supplied.get(locator)
+                if not entry: raise StateError(f'unresolved binding source: {locator}')
+                path = Path(entry.get('path', entry.get('resolved_path', '')))
+                if not path.is_absolute(): raise StateError('capture path must be absolute')
+                content = path.read_bytes()
+                # agreement_fingerprint validates digest and provenance fields.
+                agreement_fingerprint(project, [entry])
+                manifest.append(entry); seen.add(locator)
+                queue.append((path, content, False))
+                continue
+            candidates = []
+            for base in (repo, source.parent, vault):
+                path = (base / locator).resolve()
+                if not path.exists() and not path.suffix: path = path.with_suffix('.md')
+                if path.is_file() and path not in candidates: candidates.append(path)
+            if len(candidates) != 1:
+                raise StateError(f'missing or ambiguous binding source: {locator}')
+            path = candidates[0]
+            if path in roots: continue
+            if not _is_within(path, repo) and not _is_within(path, vault):
+                raise StateError(f'local binding is outside the configured repositories: {locator}')
+            canonical = str(path.relative_to(repo)) if _is_within(path, repo) else str(path)
+            if canonical in seen: continue
+            git_root = repo if _is_within(path, repo) else vault
+            commit, error = _path_at_main(git_root, path)
+            if error: raise StateError(f'binding {canonical}: {error}')
+            content = path.read_bytes()
+            # Blob identity avoids invalidating unchanged sources on ledger commits.
+            revision = _git_output(git_root, 'rev-parse', 'main:' + str(path.relative_to(git_root)))
+            entry = dict(locator=canonical, path=str(path), source_revision=revision,
+                         sha256=hashlib.sha256(content).hexdigest())
+            manifest.append(entry); seen.add(canonical); seen.add(locator)
+            queue.append((path, content, False))
+    # Explicit additional binding sources are also obligations, never silently dropped.
+    for locator, entry in supplied.items():
+        if locator not in seen:
+            # The native supervisor may resolve an additional binding named in prose.
+            # It supplements automatic discovery; it never exempts discovered sources.
+            manifest.append(entry)
+    return dict(identity, manifest=manifest, agreement_revision=agreement_fingerprint(project, manifest))
+
+
+def _park(document: dict, reason: str, kind: str = 'retry') -> dict:
+    prior = document['prior_status'] if document['status'] == 'WAITING FOR INPUT' else recover_ready(document['status'])
+    return dict(document, status='WAITING FOR INPUT', prior_status=prior, gate_reason=reason,
+                pending_decision_owner='outer', pending_kind=kind)
+
+
+def _next_round(document: dict) -> dict:
+    return dict(document, round=document['round'] + 1, status='WAITING FOR META-PLAN', prior_status='',
+                meta_plan='', inner_loop='', inner_slug='', operation={k: '' for k in OPERATION_FIELDS},
+                pending_decision_owner='', pending_kind='', gate_reason='')
+
+
+def validate_operation_locations(operation: dict, repo: Path, vault: Path, project: Path) -> None:
+    """Bind all output locators to this project and its physical configured vault."""
+    for field in ('meta_plan', 'goal_folder', 'report'):
+        value = operation.get(field)
+        if not value: continue
+        physical = Path(_locator(repo, value))
+        if not _is_within(physical, vault): raise StateError(field + ' is outside the configured vault')
+        canonical = str(physical.relative_to(repo)) if _is_within(physical, repo) else str(physical)
+        if value != canonical: raise StateError(field + ' must use its canonical stored locator')
+        if field == 'meta_plan' and not _is_within(physical, project / 'meta-plans'):
+            raise StateError('meta-plan belongs to a different project')
+        if field == 'report':
+            folder = 'diagnoses' if operation['phase'] == 'DIAGNOSING' else 'eval-reports'
+            if not _is_within(physical, project / folder): raise StateError('report belongs to a different project/phase')
+
+
+def reconcile_phase(document: dict, repo: Path, vault: Path, context: dict, maximum: int) -> tuple[dict, dict]:
+    """Validate/reconcile one persisted phase, without dispatching any worker."""
+    from _coding_loop_evidence import reconcile_operation, validate_evaluation, validate_diagnosis, _sync_error
+    if maximum < 1: raise StateError('SUPER_CODE_MAX_ITERATIONS must be positive')
+    project = Path(context['project'])
+    for root, remote in ((repo, True), (vault, False)):
+        error = _sync_error(root, remote_required=remote)
+        if error: return _park(document, error), {'outcome': 'CONFLICT', 'reason': error}
+        if root == repo and _is_within(vault, repo): break
+    from _coding_loop_evidence import _path_at_main
+    artifact_repo = vault if not _is_within(vault, repo) else repo
+    for name in ('prd.md', 'evaluation.md', 'knowledge-base.md'):
+        _, error = _path_at_main(artifact_repo, project / name)
+        if error: return _park(document, name + ': ' + error), {'outcome': 'CONFLICT', 'reason': error}
+    fingerprint = context['agreement_revision']
+    if document['agreement_revision'] == 'PENDING' and not document.get('adoption_goal_folder'):
+        document = dict(document, agreement_revision=fingerprint)
+    elif fingerprint != document['agreement_revision']:
+        result = _park(document, 'Agreement changed; author must record adopt-agreement ' + fingerprint, 'agreement')
+        result['proposed_agreement_revision'] = fingerprint
+        return result, {'outcome': 'CONFLICT', 'reason': result['gate_reason']}
+    operation = document['operation']
+    if document['status'] in {'DONE', 'WAITING FOR INPUT'}:
+        return document, {'outcome': 'PARKED'}
+    if document['round'] > maximum:
+        return dict(_park(document, 'Round exceeds configured limit; explicit raise-limit answer required', 'limit'), pending_limit_action='resume'), {'outcome': 'PARKED'}
+    if not operation.get('phase'):
+        return document, {'outcome': 'ABSENT'}
+    try:
+        validate_operation_locations(operation, repo, vault, project)
+    except StateError as exc:
+        return _park(document, str(exc)), {'outcome': 'CONFLICT', 'reason': str(exc)}
+    receipt = reconcile_operation(repo, vault, operation)
+    if receipt['outcome'] == 'CONFLICT':
+        return _park(document, receipt['reason']), receipt
+    if receipt['outcome'] == 'ABSENT' or not receipt.get('worker_complete'):
+        return dict(document, status=recover_ready(document['status'])), receipt
+    phase = operation['phase']
+    if phase == 'META-PLANNING':
+        if document['status'] in {'META-PLANNING', 'WAITING FOR META-PLAN'}:
+            document = dict(document, status='WAITING FOR BUILD', meta_plan=operation['meta_plan'])
+        return document, receipt
+    if phase == 'EVALUATING':
+        result = validate_evaluation(Path(receipt['report']), project / 'evaluation.md', operation)
+        if result['errors'] or (result['declared_verdict'] == 'PASS' and result['verdict'] != 'PASS'):
+            return _park(document, 'Evaluation evidence invalid: ' + '; '.join(result['errors'])), receipt
+        document = dict(document, last_eval=operation['report'], evaluated_commit=operation['code_commit'],
+                        last_verdict=result['verdict'], status='DONE' if result['verdict'] == 'PASS' else 'WAITING FOR DIAGNOSIS')
+        return document, receipt
+    if phase == 'DIAGNOSING':
+        # Keep the selected FAIL evaluation's independent operation/source identity.
+        eval_path = Path(_locator(repo, document['last_eval']))
+        expected = dict(round=document['round'], code_commit=operation['code_commit'],
+                        agreement_revision=document['agreement_revision'],
+                        operation_id=document.get('eval_operation_id', ''),
+                        source_vault_commit=document.get('eval_source_vault_commit', ''))
+        if not expected['operation_id'] or not expected['source_vault_commit']:
+            return _park(document, 'Selected FAIL evaluation operation/source receipt is missing'), receipt
+        eval_operation = dict(operation, phase='EVALUATING', id=expected['operation_id'],
+                              source_vault_commit=expected['source_vault_commit'], report=document['last_eval'])
+        eval_receipt = reconcile_operation(repo, vault, eval_operation)
+        if eval_receipt.get('outcome') != 'INTEGRATED' or not eval_receipt.get('worker_complete'):
+            return _park(document, 'Selected FAIL evaluation is no longer integrated'), receipt
+        evaluated = validate_evaluation(eval_path, project / 'evaluation.md', expected)
+        if evaluated['errors'] or evaluated['declared_verdict'] != 'FAIL':
+            return _park(document, 'Selected FAIL evaluation is invalid'), receipt
+        diagnosis = validate_diagnosis(Path(receipt['report']), dict(
+            round=document['round'], operation_id=operation['id'], eval_report=document['last_eval'],
+            evaluated_commit=operation['code_commit'], agreement_revision=document['agreement_revision'],
+            source_vault_commit=operation['source_vault_commit'], failing_ids=evaluated['failing_ids'], missing_ids=evaluated['missing_ids']))
+        document = dict(document, last_diagnosis=operation['report'])
+        if diagnosis.get('errors') or not diagnosis.get('may_start_next_round'):
+            return _park(document, 'Diagnosis requires author input: ' + '; '.join(diagnosis.get('errors', [])), 'author'), receipt
+        if document['round'] >= maximum:
+            return dict(_park(document, 'Repair diagnosed at round limit; record raise-limit N after raising configuration', 'limit'), pending_limit_action='next-round'), receipt
+        return _next_round(document), receipt
+    raise StateError('unknown operation phase')
+
+
+def validate_legacy_adoption(document: dict, repo: Path, vault: Path) -> dict:
+    """Resolve raw ledger cells as history only; never promote a legacy PASS."""
+    from _coding_loop_evidence import _path_at_main
+    artifact_repo = vault if not _is_within(vault, repo) else repo
+    adopted = {}
+    for field in ('meta_plan', 'adoption_goal_folder', 'last_eval'):
+        value = document.get(field, '').strip()
+        if value in {'', '-', '—', 'none'}:
+            if field == 'last_eval': continue
+            raise StateError('legacy adoption is missing ' + field)
+        if value.startswith('[[') and value.endswith(']]'): value = value[2:-2].split('|', 1)[0]
+        value = value.strip('`')
+        path = Path(_locator(repo, value))
+        if field == 'adoption_goal_folder':
+            roots = sorted((path / 'master-plans').glob('*.md'))
+            if len(roots) != 1: raise StateError('legacy goal must have exactly one integrated root plan')
+            path = roots[0]
+        elif not path.suffix: path = path.with_suffix('.md')
+        if not _is_within(path, vault): raise StateError('legacy artifact is outside the configured vault')
+        _, error = _path_at_main(artifact_repo, path)
+        if error: raise StateError('legacy ' + field + ': ' + error)
+        adopted['adopted_legacy_' + field] = str(path.relative_to(repo)) if _is_within(path, repo) else str(path)
+    return adopted
+
+
+def consume_answer(document: dict, answer: str, context: dict, maximum: int) -> dict:
+    """Only explicit recorded answers may adopt agreement or raise a parked limit."""
+    if document['status'] != 'WAITING FOR INPUT' or not answer.strip(): return document
+    answer = answer.strip()
+    kind = document.get('pending_kind', 'adoption' if document.get('adoption_goal_folder') else 'retry')
+    if kind in {'agreement', 'adoption'}:
+        fingerprint = context['agreement_revision']
+        if answer != 'adopt-agreement ' + fingerprint:
+            raise StateError('author adoption must name the exact newly resolved fingerprint')
+        if document['round'] >= maximum: raise StateError('adoption requires room for a new round; raise configured limit first')
+        document = _next_round(document)
+        document.update(agreement_revision=fingerprint, adopted_agreement_revision=fingerprint)
+    elif kind == 'limit':
+        match = re.fullmatch(r'raise-limit ([1-9][0-9]*)', answer)
+        if not match or int(match[1]) != maximum or maximum <= document['round']:
+            raise StateError('raise-limit answer must match a configured limit above the current round')
+        if document.get('pending_limit_action') == 'resume':
+            document = dict(document, status=recover_ready(document['prior_status']), prior_status='', pending_decision_owner='', pending_kind='', gate_reason='')
+        else:
+            document = _next_round(document)
+        document['adopted_max_rounds'] = str(maximum)
+    elif kind == 'author':
+        if answer != 'replan' or maximum <= document['round']:
+            raise StateError('author must explicitly record replan with room for a new round, or adopt changed agreement')
+        document = _next_round(document)
+    elif answer == 'retry':
+        document = dict(document, status=recover_ready(document['prior_status']), prior_status='', pending_decision_owner='', pending_kind='', gate_reason='')
+    else:
+        raise StateError('record retry for an operational retry; specification changes require author adoption')
+    return dict(document, last_operator_answer=answer)
+
+
+def pending_with_answer(path: Path, reason: str) -> str:
+    body = _frontmatter_parts(path)[1].decode()
+    block = re.search(r'(?ms)^## Pending decision[^\n]*\n(.*?)(?=^## |\Z)', body)
+    answers = re.findall(r'(?m)^answer:[^\n]*$', block[1]) if block else []
+    return 'owner: outer\nreason: ' + reason + '\n' + ('\n'.join(answers) if answers else 'answer:')
+
+
+def phase_snapshot(path: Path, repo: Path, vault: Path, captures: list, maximum: int,
+                   write: bool = False, owner: int = 0, answer: bool = False) -> dict:
+    """Atomic validation seam for the native supervisor; never launches a model."""
+    current = read_state(path)
+    identity = project_identity(repo, vault, repo / current['project'])
+    repo, vault = Path(identity['repo']), Path(identity['vault'])
+    if write:
+        lock = path.parent / ('.' + path.name + '.lockd')
+        if owner <= 0 or (lock / 'owner').read_text().strip() != str(owner):
+            raise StateError('write requires the caller-owned project L3 lock')
+        os.kill(owner, 0)
+    try:
+        captures = captures if captures is not None else json.loads(current.get('binding_captures_json', '[]'))
+        context = acceptance_context(repo, vault, Path(identity['project']), captures)
+        working = dict(current, binding_captures_json=json.dumps(captures, separators=(',', ':')))
+        if answer and current['status'] == 'WAITING FOR INPUT':
+            body = _frontmatter_parts(path)[1].decode()
+            block = re.search(r'(?ms)^## Pending decision[^\n]*\n(.*?)(?=^## |\Z)', body)
+            answers = re.findall(r'(?m)^answer:\s*(\S[^\n]*)$', block[1]) if block else []
+            if len(answers) > 1: raise StateError('multiple operator answers')
+            if answers:
+                # Detect changed agreement before interpreting an operational retry.
+                if context['agreement_revision'] != current['agreement_revision'] and current['agreement_revision'] != 'PENDING':
+                    working = dict(current, pending_kind='agreement')
+                history = {}
+                if current.get('adoption_goal_folder') and current['agreement_revision'] == 'PENDING':
+                    history = validate_legacy_adoption(current, repo, vault)
+                working = dict(consume_answer(working, answers[0], context, maximum), **history,
+                               binding_captures_json=json.dumps(captures, separators=(',', ':')))
+        updated, receipt = reconcile_phase(working, repo, vault, context, maximum)
+    except (ValueError, OSError) as exc:
+        updated, receipt = _park(current, str(exc)), {'outcome': 'CONFLICT', 'reason': str(exc)}
+        # Invalid answers retain the original restriction and pending answer.
+        updated['pending_kind'] = current.get('pending_kind', updated['pending_kind'])
+    if updated['operation'].get('phase') == 'EVALUATING' and updated.get('last_eval') == updated['operation']['report']:
+        updated = dict(updated, eval_operation_id=updated['operation']['id'], eval_source_vault_commit=updated['operation']['source_vault_commit'])
+    if write and updated != current:
+        pending = None
+        if updated['status'] == 'WAITING FOR INPUT':
+            # Preserve a rejected answer for correction with answer.sh --replace.
+            pending = pending_with_answer(path, updated['gate_reason'])
+        elif current['status'] == 'WAITING FOR INPUT': pending = ''
+        replace_state(path, current, updated, pending_decision=pending)
+    return dict(state=updated, receipt=receipt)
+
+
+def reserve_operation(path: Path, repo: Path, vault: Path, operation: dict,
+                      maximum: int, owner: int, captures: list) -> dict:
+    current = read_state(path)
+    if maximum < 1 or current['round'] > maximum:
+        raise StateError('round limit refuses operation reservation')
+    lock = path.parent / ('.' + path.name + '.lockd')
+    if owner <= 0 or (lock / 'owner').read_text().strip() != str(owner):
+        raise StateError('reservation requires caller-owned project L3 lock')
+    os.kill(owner, 0)
+    captures = captures if captures is not None else json.loads(current.get('binding_captures_json', '[]'))
+    context = acceptance_context(repo, vault, repo / current['project'], captures)
+    repo, vault = Path(context['repo']), Path(context['vault'])
+    prepared, receipt = reconcile_phase(current, repo, vault, context, maximum)
+    if prepared['status'] not in {'WAITING FOR META-PLAN', 'WAITING FOR EVAL', 'WAITING FOR DIAGNOSIS'}:
+        raise StateError('current phase is not ready for reservation: ' + prepared['status'])
+    phase = {'WAITING FOR META-PLAN': 'META-PLANNING', 'WAITING FOR EVAL': 'EVALUATING',
+             'WAITING FOR DIAGNOSIS': 'DIAGNOSING'}[prepared['status']]
+    if operation.get('phase') != phase: raise StateError('reserved phase does not match ready state')
+    if operation.get('agreement_revision') != context['agreement_revision']:
+        raise StateError('operation agreement is not the resolved current fingerprint')
+    previous = current['operation']
+    if previous.get('phase') == phase and any(previous.get(k) != operation.get(k) for k in OPERATION_FIELDS if k != 'id'):
+        raise StateError('retry must preserve all original operation identities and paths')
+    project = Path(context['project'])
+    validate_operation_locations(operation, repo, vault, project)
+    if phase != 'META-PLANNING' and (operation['meta_plan'] != current['meta_plan'] or
+                                   operation['goal_folder'] != previous['goal_folder']):
+        raise StateError('later phase must retain the selected META/goal identities')
+    artifact_repo = vault if not _is_within(vault, repo) else repo
+    if previous.get('phase') != phase:
+        if operation.get('source_vault_commit') != _git_output(artifact_repo, 'rev-parse', 'main'):
+            raise StateError('new operation must freeze the current vault main SHA')
+        if phase == 'EVALUATING' and operation.get('code_commit') != _git_output(repo, 'rev-parse', 'main'):
+            raise StateError('evaluation must freeze the current code main SHA')
+        if phase == 'DIAGNOSING' and operation.get('code_commit') != current['evaluated_commit']:
+            raise StateError('diagnosis must retain the failed evaluation code SHA')
+    updated = dict(prepared, status=phase, operation=operation, binding_captures_json=json.dumps(captures, separators=(',', ':')))
+    replace_state(path, current, updated)
+    return read_state(path)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -786,9 +1151,38 @@ def main(argv: list[str] | None = None) -> int:
     gate_parser.add_argument('--armed', choices=('true', 'false'), required=True)
     gate_parser.add_argument('--active', choices=('true', 'false'), required=True)
     gate_parser.add_argument('--write', action='store_true')
+    context_parser = subparsers.add_parser('context')
+    phase_parser = subparsers.add_parser('reconcile-phase')
+    reserve_parser = subparsers.add_parser('reserve')
+    reserve_parser.add_argument('state', type=Path)
+    reserve_parser.add_argument('--operation', type=Path, required=True)
+    reserve_parser.add_argument('--owner', type=int, default=0)
+    reserve_parser.add_argument('--max-rounds', type=int, default=10)
+    for item in (context_parser, phase_parser, reserve_parser):
+        item.add_argument('--repo', type=Path, required=True)
+        item.add_argument('--vault', type=Path, required=True)
+        item.add_argument('--captures', type=Path)
+    context_parser.add_argument('--project', type=Path, required=True)
+    phase_parser.add_argument('state', type=Path)
+    phase_parser.add_argument('--max-rounds', type=int, default=10)
+    phase_parser.add_argument('--consume-answer', action='store_true')
+    phase_parser.add_argument('--write', action='store_true')
+    phase_parser.add_argument('--owner', type=int, default=0)
     args = parser.parse_args(argv)
 
     try:
+        if args.command in {'context', 'reconcile-phase', 'reserve'}:
+            captures = json.loads(args.captures.read_text()) if args.captures else None
+            if captures is not None and not isinstance(captures, list): raise StateError('captures must be an array')
+            if args.command == 'context':
+                result = acceptance_context(args.repo, args.vault, args.project, captures)
+            elif args.command == 'reserve':
+                result = reserve_operation(args.state, args.repo, args.vault, _load_json(args.operation), args.max_rounds, args.owner, captures)
+            else:
+                result = phase_snapshot(args.state, args.repo, args.vault, captures, args.max_rounds,
+                                        args.write, args.owner, args.consume_answer)
+            print(json.dumps(result, sort_keys=True))
+            return 0
         if args.command == 'acquire-lock':
             return 0 if acquire_gate_lock(args.lock_dir, args.owner, args.steal_min) else 1
         if args.command == "read":

@@ -23,7 +23,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
@@ -44,32 +43,8 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -z "$PLAN" && -z "$SLUG" ]] && usage
 
-# Resolve the slug: prefer an explicit --slug; else match the plan against the
-# registered env files (like stop.sh — robust to a custom --slug used at launch).
-find_slug_by_plan() {
-  local plan_abs plan_rel envf lf mp
-  [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; return 2; }
-  plan_abs="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
-  case "$plan_abs" in "$REPO"/*) plan_rel="${plan_abs#"$REPO"/}" ;; *) plan_rel="$plan_abs" ;; esac
-  shopt -s nullglob
-  for envf in "$CONF_DIR"/*.env; do
-    lf="$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)"
-    [[ -n "$lf" && -f "$lf" ]] || continue
-    mp="$(sed -n 's/^master_plan:[[:space:]]*//p' "$lf" | head -1)"
-    if [[ "$mp" == "$plan_rel" ]]; then basename "$envf" .env; return 0; fi
-  done
-  return 1
-}
-
-if [[ -z "$SLUG" ]]; then
-  SLUG="$(find_slug_by_plan || true)"
-  [[ -z "$SLUG" ]] && { echo "no registered superagent loop matches plan: $PLAN" >&2; exit 1; }
-fi
-
+superagent_control_target "$PLAN" "$SLUG"
 ENVF="$CONF_DIR/$SLUG.env"
-[[ -f "$ENVF" ]] || { echo "no such loop: $SLUG (looked in $ENVF)" >&2; exit 1; }
-LOOP_FILE="$(sed -n 's/^LOOP_FILE=//p' "$ENVF" | head -1)"
-[[ -n "$LOOP_FILE" ]] || { echo "env file $ENVF has no LOOP_FILE" >&2; exit 1; }
 
 # Observe current state.
 status=""; iteration=""
@@ -156,12 +131,28 @@ else
   echo "No active tick service (already exited / orphaned lock case)."
 fi
 
-# 2) Remove the stale overlap lock so the next tick acquires immediately (no 90-min wait).
-if [[ -d "$LOCK_DIR" ]]; then
+# Project reapers share the persistent advisory guard and refuse a live owner.
+if [[ "$SUPERVISOR" == supercode ]]; then
+  if ! superagent_acquire_gate_lock "$LOCK_DIR"; then
+    echo "Recovery refused: project lock still has a live owner or a concurrent reclaimer" >&2
+    exit 4
+  fi
+  [[ "$(cat "$LOCK_DIR/owner")" == "${SUPERAGENT_TICK_PID:-$$}" ]] || exit 4
+  rm -rf "$LOCK_DIR"
+elif [[ -d "$LOCK_DIR" ]]; then
   echo "Removing stale overlap lock: $LOCK_DIR"
   rm -rf "$LOCK_DIR"
 else
   echo "No overlap lock to remove."
+fi
+recovery_ready="WAITING FOR RUN"
+if [[ "$SUPERVISOR" == supercode ]]; then
+  case "$status" in
+    META-PLANNING) recovery_ready="WAITING FOR META-PLAN" ;;
+    EVALUATING) recovery_ready="WAITING FOR EVAL" ;;
+    DIAGNOSING) recovery_ready="WAITING FOR DIAGNOSIS" ;;
+    *) recovery_ready="$status" ;;
+  esac
 fi
 
 # 3) Timer disposition.
@@ -169,7 +160,7 @@ if [[ "$DRAIN" == 1 ]]; then
   echo "Draining: disabling the timer (loop stopped; relaunch with launch.sh)…"
   "$SCRIPT_DIR/uninstall-timer.sh" "$SLUG"
 elif [[ "$KICK" == 1 ]]; then
-  echo "Kicking a fresh recovery tick (crash-recovery resets ${status:-RUNNING} → WAITING FOR RUN)…"
+  echo "Kicking a fresh recovery tick (crash-recovery resets ${status:-RUNNING} → $recovery_ready after artifact reconciliation)…"
   if [[ "$SCHEDULER" == launchd ]]; then
     launchctl kickstart "$(superagent_launchd_domain)/$(superagent_launchd_label "$SLUG")" 2>/dev/null || true
   else
@@ -187,3 +178,5 @@ echo "  loop file:  preserved (not edited)"
 if [[ -n "$orphan_wts" ]]; then
   echo "  note:       review the worktrees listed above; superrun recreates/reconciles its own on re-dispatch."
 fi
+
+superagent_remaining_child
