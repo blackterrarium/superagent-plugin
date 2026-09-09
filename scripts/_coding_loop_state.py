@@ -809,15 +809,15 @@ def acceptance_context(repo: Path, vault: Path, project: Path, captures: list | 
         header = '\n'.join(path.read_text().splitlines()[:3])
         if not re.search(r'^\*\*Date:\*\* .*\*\*Status:\*\* READY(?:\s|$)', header, re.M):
             raise StateError(path.name + ' is not READY')
-        queue.append((path, path.read_bytes(), str(path)))
+        queue.append((path, path.read_bytes(), str(path), 'local'))
 
     def add_capture(locator):
         entry = supplied.get(locator)
         if not entry: raise StateError(f'unresolved binding source: {locator}')
-        if locator in seen: return
+        if ('capture', locator) in seen: return
         path = Path(entry.get('path', entry.get('resolved_path', '')))
-        manifest.append(entry); seen.add(locator)
-        queue.append((path, path.read_bytes(), locator))
+        manifest.append(entry); seen.add(('capture', locator))
+        queue.append((path, path.read_bytes(), locator, 'capture'))
 
     def add_local(path):
         path = path.resolve()
@@ -828,7 +828,9 @@ def acceptance_context(repo: Path, vault: Path, project: Path, captures: list | 
         canonical = str(path.relative_to(repo)) if _is_within(path, repo) else str(path)
         # Only fully resolved identities are deduplicated. Raw requirements.md is
         # not an identity: every referring directory must resolve its own target.
-        if canonical in seen: return
+        if ('capture', canonical) in seen:
+            raise StateError(f'capture locator conflicts with local binding source: {canonical}')
+        if ('local', canonical) in seen: return
         git_root = repo if _is_within(path, repo) else vault
         _, error = _path_at_main(git_root, path)
         if error: raise StateError(f'binding {canonical}: {error}')
@@ -836,15 +838,18 @@ def acceptance_context(repo: Path, vault: Path, project: Path, captures: list | 
         revision = _git_output(git_root, 'rev-parse', 'main:' + str(path.relative_to(git_root)))
         manifest.append(dict(locator=canonical, path=str(path), source_revision=revision,
                              sha256=hashlib.sha256(content).hexdigest()))
-        seen.add(canonical)
-        queue.append((path, content, str(path)))
+        seen.add(('local', canonical))
+        queue.append((path, content, str(path), 'local'))
 
     # Explicit prose-discovered captures supplement, never exempt, discovered sources.
     for locator in supplied: add_capture(locator)
     while queue:
-        source, data, origin = queue.pop(0)
-        if origin in scanned: continue
-        scanned.add(origin)
+        source, data, origin, source_kind = queue.pop(0)
+        # A capture's claimed locator must never suppress traversal of actual
+        # local bytes, including an absolute locator equal to the local path.
+        scan_identity = (source_kind, origin)
+        if scan_identity in scanned: continue
+        scanned.add(scan_identity)
         if source.name == 'prd.md' and source in roots:
             data = _without_iteration_ledger(data)
         try:

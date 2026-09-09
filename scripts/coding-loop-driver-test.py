@@ -754,6 +754,47 @@ P1: implement the approved behavior.
         result = self.worker_meta_entry(opfile); self.assert_ok(result)
         self.assertEqual(json.loads(result.stdout)['entry'], 'AUTONOMOUS_REPAIR')
 
+    def test_stale_capture_collision_cannot_mask_local_changed_or_missing_obligations(self):
+        import hashlib
+        self.verified_build()
+        capture = self.root / 'stale-readme.txt'; capture.write_bytes((self.repo / 'README.md').read_bytes())
+        entry = dict(locator='README.md', path=str(capture), source_revision='stale-v1', sha256=hashlib.sha256(capture.read_bytes()).hexdigest())
+        captures = self.root / 'collision.json'; captures.write_text(json.dumps([entry]))
+        args = ('--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project)
+        for stage in ('original', 'changed-local', 'missing-transitive'):
+            with self.subTest(stage=stage):
+                if stage == 'changed-local':
+                    (self.repo / 'README.md').write_text('[binding](requirements.md)\n')
+                    (self.repo / 'requirements.md').write_text('A new required assertion.\n')
+                elif stage == 'missing-transitive':
+                    (self.repo / 'requirements.md').unlink()
+                if stage != 'original':
+                    self.git('add', '.'); self.git('commit', '-qm', stage); self.git('push', '-q')
+                result = self.helper('context', *args, '--captures', captures)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertNotEqual(self.helper('context', *args).returncode, 0)
+
+    def test_absolute_capture_origin_cannot_suppress_local_transitive_scan(self):
+        import hashlib
+        self.verified_build()
+        capture = self.root / 'stale-origin.txt'; capture.write_text('Old content without obligations.\n')
+        entry = dict(locator=str(self.repo / 'README.md'), path=str(capture), source_revision='old-v1', sha256=hashlib.sha256(capture.read_bytes()).hexdigest())
+        captures = self.root / 'origin-collision.json'; captures.write_text(json.dumps([entry]))
+        args = ('--repo', self.repo, '--vault', self.repo / 'vault', '--project', self.project, '--captures', captures)
+        (self.repo / 'README.md').write_text('[binding](requirements.md)\n')
+        (self.repo / 'requirements.md').write_text('First required behavior.\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'actual local requirements'); self.git('push', '-q')
+        result = self.helper('context', *args); self.assert_ok(result)
+        original = json.loads(result.stdout)
+        self.assertIn('requirements.md', {m['locator'] for m in original['manifest']})
+        (self.repo / 'requirements.md').write_text('Changed required behavior.\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'changed transitive only'); self.git('push', '-q')
+        changed = self.helper('context', *args); self.assert_ok(changed)
+        self.assertNotEqual(original['agreement_revision'], json.loads(changed.stdout)['agreement_revision'])
+        (self.repo / 'requirements.md').unlink()
+        self.git('add', '.'); self.git('commit', '-qm', 'missing transitive'); self.git('push', '-q')
+        self.assertNotEqual(self.helper('context', *args).returncode, 0)
+
     def test_verified_building_stays_pending_without_auth(self):
         self.verified_build()
         self.assert_ok(self.invoke_tick())
