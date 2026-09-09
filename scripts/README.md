@@ -746,3 +746,158 @@ native executables and disposable Git remotes. `coding-loop-fake-worker.py` is i
 test fixture, never shipped or imported by production. These deterministic transport tests establish no
 live model obedience or scheduler acceptance. Release 0.9.0 remains gated on independent live
 Claude, Codex and Pi runs; Cursor requires generated compatibility only.
+
+### Bounded Stage 3 live acceptance driver
+
+```sh
+python3 scripts/coding-loop-stage3-live.py prepare --manifest FILE
+python3 scripts/coding-loop-stage3-live.py run --manifest FILE --harness claude
+python3 scripts/coding-loop-stage3-live.py collect --manifest FILE --harness claude
+python3 scripts/coding-loop-stage3-live.py cleanup --manifest FILE --harness claude
+python3 scripts/coding-loop-stage3-live-test.py -v
+```
+
+Use `codex` and `pi` independently for the other required runs. `prepare` creates a new,
+review-only evidence attempt and prints the exact manifest SHA256. It never creates approval,
+fixture Git state, a verdict, an inner DONE or a scheduler registration. `run` requires a
+concrete author-approved first-failure protocol and exact manifest bytes. Task 9 owns that
+protocol; this driver does not implement hidden baseline adoption. No Stage 3 live acceptance
+is established by the offline tests or by installing these helpers.
+
+The JSON result distinguishes `PASS` (exit 0), `FAIL` (1), `INVALID` (2) and `INCOMPLETE` (3).
+Only `acceptance_passed: true` establishes a live harness result. Preparation, successful
+cleanup and offline collector PASS results do not set that flag. An unexpected first PASS,
+wrong SHA or changed agreement is INVALID; an evaluated failing final allowed round is FAIL;
+authentication, missing native receipts, time/dispatch exhaustion or cleanup failure is
+INCOMPLETE. Failed attempts and denied dispatch events are retained, never overwritten.
+A malformed manifest cannot authorize writing an evidence directory; its error is returned on stdout.
+
+Manifest schema version 1 is strict: unknown fields and credential-like values are rejected.
+Paths are absolute physical paths, without symlink aliases. Git remotes include exact fetch
+and push URLs, including local bare remotes where the approved protocol permits them.
+The manifest must describe all three isolated harness fixtures.
+
+| Field | Required content |
+|---|---|
+| `protocol_version` | Integer `1` |
+| `protocol` | `{path, sha256}` of the reviewed first-failure protocol |
+| `approval` | `{receipt_path, author_ref}`; detached receipt described below |
+| `baseline_sha` | Exact 40-character selected failing code SHA, shared across harnesses |
+| `first_failure` | `{mechanism, required_ids}`; nonempty mechanism and failing C/J ID list |
+| `limits` | Positive integers `max_rounds`, `max_dispatches`, `dispatch_seconds`, `total_seconds`; nonnegative `retries`. At least two rounds; dispatch seconds cannot exceed total seconds |
+| `evidence_dir` | Dedicated directory outside every fixture code/vault root |
+| `harnesses` | Exactly `claude`, `codex`, `pi`, each with the fields below |
+
+Each harness entry contains:
+
+| Field | Required content |
+|---|---|
+| `code_root`, `vault_root`, `project` | Physical paths; project is within its vault; harnesses do not share roots |
+| `remotes` | `{code: {remote_name: URL}, vault: {remote_name: URL}}`; internal vault uses an empty vault map |
+| `agreement_revision` | Production acceptance-context SHA256 fingerprint |
+| `agreement` | Nonempty array of `{path, sha256, mode}` including prd.md, evaluation.md and knowledge-base.md and immutable bindings. Mode is `bytes`, or `prd-without-ledger` exclusively for the project's PRD |
+| `binding_captures` | Production acceptance-context capture array (empty when none) |
+| `slug_prefixes` | `{outer, inner}`; lowercase slug prefixes ending in `-` |
+| `roles` | Per-role `{model, effort}` with native `harness:model` pins and explicit effort. Required roles: SUPERVISOR, META_PLANNER, PLANNER, EVALUATOR, DIAGNOSER, IMPLEMENTER, TASK_REVIEWER, BRANCH_REVIEWER, EXECUTOR. Include every additional role the approved workflow may use |
+| `packages` | Nonempty array of `{path, sha256, version}`. Include installed package JSON version metadata, native CLI, driver/native helper, and scheduler helpers. Pi also binds the extension. Runtime preflight compares bytes and package metadata versions |
+| `auth_refs` | Nonempty array of `env:VARIABLE` or `profile:/absolute/auth/file`. No secret values |
+| `cleanup` | `{owner, registrations}`; unique owner and exact `{slug, supervisor}` entries for every allowed outer/inner registration. Supervisor is `supercode` or `superagent`; slugs must match their respective prefix |
+| `runtime` | Required to run; may be omitted in review-only material. Fields below |
+
+`runtime` contains absolute `cli`, `scripts_root`, `config_root`, `launchd_dir`, `outer_loop`,
+exact `cli_version` (the complete trimmed `--version` stdout) and positive `interval_seconds`.
+A CLI with an `env node` shebang also requires a pinned absolute `node` interpreter; the wrapper
+uses it directly so the detached scheduler does not depend on an interactive Node PATH.
+`scripts_root` is this source checkout's scripts directory. Pin the native helper, this driver,
+the native CLI, launch.sh, stop.sh, install-timer.sh, uninstall-timer.sh, superagent-tick.sh,
+_common.sh and role-bridge.sh in `packages`. The independent config and LaunchAgents locations
+must be disposable identities from the approved protocol. The outer-loop path must match the
+real launcher's project state location. Declared inner slugs must be carried into normal planning
+and launch; an unlisted identity is not silently adopted.
+
+The author supplies a detached receipt, never the driver:
+
+```json
+{
+  "manifest_sha256": "SHA256 of the exact raw manifest bytes",
+  "author_ref": "the manifest's author reference",
+  "decision": "APPROVED",
+  "record": {"path": "/absolute/author-record", "sha256": "SHA256 of author-record bytes"}
+}
+```
+
+The actual author record must name that manifest digest. This detached binding avoids a circular
+manifest/receipt hash. Formatting changes invalidate approval. A synthetic fixture receipt is
+only an offline test input and cannot establish live provenance. No prior dispatch budget or
+Stage 1/2 synthetic approval is reused. `prepare` outputs pending review material, not consent.
+
+`_coding_loop_live_native.py` owns the native runtime transport. Preflight checks exact CLI/package
+identity, authentication references, GitHub auth status, GNU timeout/gtimeout, process ownership
+inspection and the real user scheduler before arming. Codex additionally needs the documented
+hook-trust CLI interface. Missing requirements fail INCOMPLETE. A sandbox's denial of `ps` is an
+execution-environment constraint; it is not evidence that the host lacks process inspection.
+
+The shared admission state uses one persistent fcntl lock across CLI bridges and native hooks.
+Every supported child start or follow-up reserves budget before dispatch. Codex covers spawn,
+follow-up, send-input and resume aliases; Claude covers Agent/Task; Pi counts every member of a
+parallel subagent call. Pi chains and unknown dispatch aliases are refused. Native starts must
+carry `STAGE3 role=ROLE operation=IDENTITY round=N`; the SessionStart instructions supply this
+contract and native pins. Phase workers must name their actual reserved outer-operation ID.
+Role bridges expose their requested role through `SUPERAGENT_ROLE`; the wrapper consumes and
+clears it for descendants. It remains a requested label, separate from actual runtime identity.
+
+The wrapper applies CLI model/effort pins, installs Codex/Claude hooks or the Pi extension,
+and bounds its owned process group. Codex children use isolated contexts; Claude receives
+explicit per-role agent definitions. Pi's child executable override keeps native subprocesses
+on the same wrapper. A native Pi child can consume both a pre-tool permit and a CLI permit;
+this deliberately conservative accounting must be included in the reviewed dispatch ceiling.
+Supervisor starts alone are never presented as the number of child roles.
+
+The independent watchdog survives a controller process exit and enforces total and per-dispatch
+deadlines without paid polling. It disarms only declared outer/inner registrations and kills
+only recorded matching owned process groups. Registration identity is rechecked before stop;
+active jobs with missing ownership proof leave cleanup INCOMPLETE. Cleanup preserves state,
+registrations and committed artifacts. It uses no global scheduler disable or process-name kill.
+
+Runtime events retain requested pins separately from observed models/effort. Codex supplies its
+active model in hooks; Claude child model data comes from runtime transcript metadata; Pi supplies
+its active model/thinking context. Missing actual model evidence cannot authorize acceptance.
+Effort and usage are recorded only when exposed. Hook archives omit prompts and full private
+transcripts; subprocess evidence is scrubbed for credentials. The driver observes ordinary native
+fixture work, not adversarial shell/network evasion or arbitrary alternate model APIs.
+
+The final native supervisor receives exact instructions to produce
+`PROJECT/loop-status/stage3-evidence.json` before exiting DONE or WAITING FOR INPUT. The driver waits for those owned
+processes to finish before cleanup. The index supplies:
+
+- `operations`: exact production reservation objects (including phase, round, code/vault SHA,
+  agreement fingerprint, report, meta-plan and goal locators).
+- `dispatches`: `id`, `role`, `round`, `source_commit`, and `operation_id` for phase workers.
+- `changes`: `action` (`implement`, `review`, `integrate`), `dispatch_id`, `round`, `code_commit`,
+  the exact repair `plan` meta-plan locator, and `artifact: {path, sha256}` for the normal integrated delivery/review report.
+
+The index's actor labels, parent labels and synthetic flag are not authority. Collection matches
+its IDs to completed native permits and actual model receipts, derives the parent from the owned
+scheduler identity, and uses observed Git command revisions for implementation/review/integration
+provenance. Workers are instructed to expose their exact final reviewed/integrated revision with
+`git rev-parse HEAD`; the hook records only revision tokens. A missing or ambiguous runtime-to-Git
+mapping leaves the run INCOMPLETE/INVALID, never an inferred PASS. Each implementing, branch-reviewing
+and integrating worker also ends its actual response with `STAGE3_RESULT` followed by one JSON
+object containing `action`, `round`, `code_commit`, `plan`, `artifact: {path, sha256}` and `verdict`.
+The SessionStart instructions specify this producer contract. Native Stop/SubagentStop callbacks
+capture that structured result; the collector compares it to the index and requires PASS. The
+full relevant worker/reviewer final response is retained as a scrubbed, hashed artifact; private
+transcript contents are not copied. Codex turn-context metadata supplies observed effort when
+available. Pi's native `bash` results and Codex/Claude shell results carry exact Git revision
+observations into the same collector. The normal report must be Git-integrated and name the
+exact revision and verdict. The index cannot
+replace normal inner review or integration evidence.
+
+The collector reuses production evaluation, diagnosis and Git/ledger reconciliation validators.
+It requires the real round-one FAIL on the selected baseline, every required failed C/J ID,
+revision-matched diagnosis and repair meta-plan, worker/reviewer/integrator receipts, an unchanged
+agreement and a final passing integrated report. A repair supplied by the controller, a wrong
+review SHA, a missing J result or work after PASS cannot earn acceptance. Current runtime hooks
+and transcript formats remain version-sensitive; offline transport tests do not establish native
+model obedience, real scheduler operation or S3-AC8–11. Claude, Codex and Pi must still pass their
+separately approved live protocols before Stage 3 can be declared complete.
