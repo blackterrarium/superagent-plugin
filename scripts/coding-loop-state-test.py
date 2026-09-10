@@ -1117,6 +1117,15 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual(1, len(list((repo / "vault").glob("*-sample-r1"))))
         self.assertEqual(1, len(list((project / "meta-plans").glob("*.md"))))
         self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
+        child = _master.with_name("sub-master.md")
+        child.write_text("# Child\nParent: [[" + str(_master.with_suffix("")) + "]]\n")
+        _master.write_text(_master.read_text() + "\n| Child | TODO | [[" + str(child.with_suffix("")) + "]] | - | - |\n")
+        run_git(repo, "add", "vault")
+        run_git(repo, "commit", "-qm", "normal plan tree descent")
+        run_git(repo, "push", "-q")
+        replay = evidence.reconcile_operation(repo, repo / "vault", operation)
+        self.assertTrue(replay["worker_complete"], replay)
+        self.assertEqual(str(_master), replay["root_plan"])
 
     def test_tracked_integrated_matching_result_is_reusable(self):
         repo, vault, _project, report, operation = self.make_reconcile_fixture()
@@ -1138,7 +1147,7 @@ class CodingLoopEvidenceTests(unittest.TestCase):
         self.assertEqual(1, self.count_ledger_rows(project / "prd.md"))
         self.assertEqual(0, len(list(vault.glob("*-sample-r1"))))
 
-    def test_synced_main_is_authority_from_a_clean_older_branch(self):
+    def test_clean_older_branch_with_different_report_bytes_is_refused(self):
         repo, vault, _project, _report, operation = self.make_reconcile_fixture()
         run_git(
             repo,
@@ -1149,7 +1158,35 @@ class CodingLoopEvidenceTests(unittest.TestCase):
             operation["source_vault_commit"],
         )
         result = evidence.reconcile_operation(repo, vault, operation)
-        self.assertEqual("INTEGRATED", result["outcome"])
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("differ from main", result["reason"])
+
+    def test_clean_external_vault_branch_cannot_replace_main_report_bytes(self):
+        repo, vault, report, operation = self.make_external_reconcile_fixture()
+        run_git(vault, "switch", "-q", "-c", "unmerged")
+        report.write_text(report.read_text().replace("**PASS**", "**FAIL**"))
+        run_git(vault, "add", ".")
+        run_git(vault, "commit", "-qm", "unmerged verdict")
+        result = evidence.reconcile_operation(repo, vault, operation)
+        self.assertEqual("CONFLICT", result["outcome"])
+        self.assertIn("differ from main", result["reason"])
+
+    def test_linked_submaster_preserves_recorded_operation_root(self):
+        repo, project, operation = self.make_meta_worker_fixture()
+        goal, master = self.write_integrated_goal(repo, operation)
+        child = master.with_name("child.md")
+        child.write_text("# Sub-master\n**Parent:** [[" + str(master.relative_to(repo.resolve()).with_suffix("")) + "]]\n")
+        master.write_text(master.read_text() + "\n| Step | Status | Plan | PR | Comments |\n|---|---|---|---|---|\n| Child | TODO | [[" + str(child.relative_to(repo.resolve()).with_suffix("")) + "]] | - | - |\n")
+        run_git(repo, "add", ".")
+        run_git(repo, "commit", "-qm", "normal linked sub-master")
+        run_git(repo, "push", "-q")
+        result = evidence.reconcile_operation(repo, repo / "vault", operation)
+        self.assertTrue(result["goal_complete"], result)
+        child.write_text(master.read_text())
+        run_git(repo, "add", ".")
+        run_git(repo, "commit", "-qm", "duplicate operation root")
+        run_git(repo, "push", "-q")
+        self.assertEqual("CONFLICT", evidence.reconcile_operation(repo, repo / "vault", operation)["outcome"])
 
     def test_report_committed_on_unmerged_branch_is_not_integrated(self):
         repo, vault, project, report, operation = self.make_reconcile_fixture()

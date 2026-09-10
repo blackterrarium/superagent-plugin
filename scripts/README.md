@@ -799,13 +799,26 @@ Each harness entry contains:
 | `binding_captures` | Production acceptance-context capture array (empty when none) |
 | `slug_prefixes` | `{outer, inner}`; lowercase slug prefixes ending in `-` |
 | `roles` | Per-role `{model, effort}` with native `harness:model` pins and explicit effort. Required roles: SUPERVISOR, META_PLANNER, PLANNER, EVALUATOR, DIAGNOSER, IMPLEMENTER, TASK_REVIEWER, BRANCH_REVIEWER, EXECUTOR. Include every additional role the approved workflow may use |
-| `packages` | Nonempty array of `{path, sha256, version}`. Include installed package JSON version metadata, native CLI, driver/native helper, and scheduler helpers. Pi also binds the extension. Runtime preflight compares bytes and package metadata versions |
+| `packages` | Nonempty array of `{path, sha256, version}`. Include installed package JSON version metadata, native CLI, driver/native helper, and scheduler helpers. Pi also binds the extension. Runtime preflight compares bytes and the package actually selected by the native runtime |
 | `auth_refs` | Nonempty array of `env:VARIABLE` or `profile:/absolute/auth/file`. No secret values |
 | `cleanup` | `{owner, registrations}`; unique owner and exact `{slug, supervisor}` entries for every allowed outer/inner registration. Supervisor is `supercode` or `superagent`; slugs must match their respective prefix |
 | `runtime` | Required to run; may be omitted in review-only material. Fields below |
 
 `runtime` contains absolute `cli`, `scripts_root`, `config_root`, `launchd_dir`, `outer_loop`,
-exact `cli_version` (the complete trimmed `--version` stdout) and positive `interval_seconds`.
+exact `cli_version` (the complete trimmed `--version` stdout), positive `interval_seconds`,
+and `package_selection: {root: "/absolute/reviewed/package"}`. Codex additionally requires
+`package_selection.plugin_id` (the installed marketplace-qualified ID). Pin the selected
+package manifest plus every file under its skills, scripts, templates, hooks and agents
+(excluding Python bytecode). Missing, ambiguous, disabled or mismatched selection fails before arming.
+Claude must support `--plugin-dir` and `--settings`: the wrapper disables the single installed
+superagent copy for this invocation and explicitly loads `root`; multiple enabled copies refuse.
+Codex has no plugin-dir loading flag. Its supported `plugin list --json` and read-only app-server
+`skills/list` must identify the enabled installed plugin/version and each exact selected skill
+path/plugin ID in the invocation's working-directory scope. The wrapper repeats selection checks
+before starting a CLI context and rejects caller profile/config loading overrides.
+Pi must support `--no-skills` plus explicit `--skill`; the wrapper loads only the selected skills
+and normalizes the scheduler's existing Pi skill argument to that approved directory.
+These checks do not install packages or edit installed caches.
 A CLI with an `env node` shebang also requires a pinned absolute `node` interpreter; the wrapper
 uses it directly so the detached scheduler does not depend on an interactive Node PATH.
 `scripts_root` is this source checkout's scripts directory. Pin the native helper, this driver,
@@ -908,3 +921,19 @@ review SHA, a missing J result or work after PASS cannot earn acceptance. Curren
 and transcript formats remain version-sensitive; offline transport tests do not establish native
 model obedience, real scheduler operation or S3-AC8–11. Claude, Codex and Pi must still pass their
 separately approved live protocols before Stage 3 can be declared complete.
+
+The live collector retains each worker's actual `source_commit` and `code_commit`. Implementation
+and review name the reviewed branch head. Integration additionally supplies `reviewed_commit`,
+`merge_commit` and `pr_url` in both its normal `STAGE3_RESULT` and the evidence index. Its completion
+head may include subsequent vault bookkeeping. The native collector queries the approved remote's
+merged PR for head/base/merge provenance; offline collectors never confer live authority. Git must
+support `merge-tree --write-tree`: the squash tree must equal Git's merge of the reviewed head onto
+its actual main parent, and no code outside an internal vault may change from merge through the
+evaluated main revision. Do not rewrite old worker receipts to the evaluated SHA.
+
+Reconciliation refuses local agreement, report, diagnosis or binding bytes that differ from main,
+even on a clean feature branch. Synchronize the selected checkout before retrying. Initial launch
+may expose `PENDING` only in `WAITING FOR META-PLAN` with an empty operation: immutable manifest
+inputs and the original deadlines remain enforced, and every worker requires the complete approved
+agreement fingerprint before admission. Descendant master plans may share `master-plans/`; exactly
+one root must match the retained META operation identity.
