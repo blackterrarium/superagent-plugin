@@ -22,3 +22,7 @@
 Scenario answers demonstrate interpretation of skill contracts. Fake CLI tests verify concrete
 loader/bridge argument behavior. Only completed real dispatches with matching artifacts and
 integration evidence establish live lifecycle acceptance. No overall PASS is claimed yet.
+
+## Shared contract verification
+
+Task 1 spec and quality review passed. Validator self-tests passed 9/9; a fresh interpreter passed all nine scenarios, including the temporary rollout gate. The original final probe chose correct behavior but used an ambiguous mode label and failed strict validation; both [original](evidence/2026-09-16-upfront-plan-tree/task1-final.json) and [fresh corrected-vocabulary results](evidence/2026-09-16-upfront-plan-tree/task1-final-corrected.json) are retained. The prompt now supplies global output vocabulary without case-specific answers.

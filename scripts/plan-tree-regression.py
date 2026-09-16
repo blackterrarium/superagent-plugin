@@ -77,6 +77,10 @@ def render_prompt(skills, cases):
         'Return one JSON object keyed by scenario id. Every result must be a JSON object with a '
         'nonempty string reason citing the governing rule/evidence, plus every requested field. '
         'Use JSON booleans where a field asks for a boolean and contract spellings for strings.',
+        'Global output vocabulary (not per-case answers): mode is incremental, upfront-v1, or '
+        'unsupported; outcome is BLOCKED, continue, or done; operation is refine, replan, or none; '
+        'role is PLAN_REFINER, REPLANNER, or none; upfront_valid, executable, and done are JSON '
+        'booleans.',
     ]
     for name, facts, expected in cases:
         lines.extend(('', name + ': ' + facts,
@@ -189,6 +193,13 @@ class ValidatorTests(unittest.TestCase):
 
     def test_prompt_has_facts_and_fields_without_expected_values(self):
         prompt = render_prompt(Path('skills'), select_cases(['legacy_default', 'bounded_unknown']))
+        vocabulary = ('Global output vocabulary (not per-case answers): mode is incremental, '
+                      'upfront-v1, or unsupported; outcome is BLOCKED, continue, or done; operation '
+                      'is refine, replan, or none; role is PLAN_REFINER, REPLANNER, or none; '
+                      'upfront_valid, executable, and done are JSON booleans.')
+        self.assertIn(vocabulary, prompt)
+        self.assertEqual(prompt.count(vocabulary), 1)
+        self.assertLess(prompt.index(vocabulary), prompt.index('legacy_default:'))
         self.assertIn('legacy_default:', prompt)
         self.assertIn('Return fields: reason, mode', prompt)
         self.assertIn('Return fields: reason, upfront_valid, executable', prompt)

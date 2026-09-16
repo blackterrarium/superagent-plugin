@@ -45,10 +45,11 @@ context:
   link. In active context that record is tracked; in candidate context it resolves through the scratch
   map. `Tree review` resolves to the review for the generation under validation (subject to the
   candidate review-production rule above).
-- `**Planning mode:** incremental` selects the existing incremental contract. The upfront-only root
-  and stage fields are not required.
+- `**Planning mode:** incremental` selects the existing incremental contract and resolves the mode
+  value as exactly `incremental`. The upfront-only root and stage fields are not required.
 - A root with no Planning mode field is **legacy incremental**, regardless of the current value of
-  `SUPER_PLANNING_MODE`. Do not rewrite or auto-convert it.
+  `SUPER_PLANNING_MODE`; its resolved mode value is exactly `incremental`. Do not rewrite or
+  auto-convert it.
 - Any other marker, duplicate marker, malformed upfront field, missing referenced review, or missing
   or malformed active-replan record is **BLOCKED**. An active replan is a durable execution barrier.
 
