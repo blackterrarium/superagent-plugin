@@ -106,13 +106,32 @@ invoked to produce the plan document itself** by any superauthor-driven caller; 
 the produced plan's own verification steps follow that skill's local-test TDD cycle or specify CI
 pushes instead is governed by `SUPER_TEST_EVIDENCE` (see the **Verification-steps mode** bullet below).
 
-Write for a skilled engineer with **zero context for this codebase**: name the exact files each task
-touches, show the actual code, and state how the work is verified. DRY. YAGNI.
+Write for a skilled engineer with **zero context for this codebase**. First classify the artifact's
+planning maturity; the required detail follows that observable state:
 
-- **File structure first.** Before defining tasks, map which files will be created or modified and
-  what each is responsible for — this locks in the decomposition. Prefer small, focused files with
-  one clear responsibility and a well-defined interface; in existing code, follow the established
-  patterns rather than restructuring beyond the task's scope.
+- An **upfront stage contract** (`upfront-v1`, not yet prepared) follows superstage S2. It commits to
+  goal and scope, acceptance ownership, a chosen architecture/approach, dependency ownership,
+  versioned cross-stage behavior, distinguishing verification scenarios, and a concrete task outline.
+  Include known paths, mandated signatures/algorithms, and observed predecessor facts. Bounded
+  predecessor-dependent filenames, helper names, exact future line numbers, and complete test bodies
+  may remain unresolved only with evidence, bounds, a resolution method, and invalidation triggers.
+  Do not fabricate code or paths merely to make a future stage look executable.
+- A **prepared stage** must add actionable task, file, code/signature where useful, and test detail
+  grounded in the current repository and predecessor evidence. It must be executable without another
+  architecture or requirements decision and must satisfy the preparation receipt in superstage S5.
+- An **incremental or unmarked legacy implementation plan** keeps the established full-detail
+  standard: name the exact files each task touches, show the actual code, and state how the work is
+  verified. Existing full-detail plans need no rewrite.
+
+All maturities are DRY and YAGNI. Bounded implementation uncertainty is allowed only in an upfront
+stage contract; vague or missing scope, architecture, acceptance, contracts, or verification remains
+a plan failure at every maturity.
+
+- **File structure first.** For prepared and legacy plans, map the exact files that will be created or
+  modified and what each owns before defining tasks. For an upfront stage contract, map relevant
+  components and every currently known path, then identify each bounded path/detail that preparation
+  must resolve. Prefer small, focused responsibilities and established repository patterns rather
+  than restructuring beyond the task's scope.
 - **Task right-sizing.** A task is the smallest unit that carries its own verification and is worth
   a fresh reviewer's gate. Fold setup, configuration, scaffolding, and documentation steps into the
   task whose deliverable needs them; split only where a reviewer could meaningfully reject one task
@@ -136,12 +155,13 @@ touches, show the actual code, and state how the work is verified. DRY. YAGNI.
   copied verbatim, one line each. Every task's requirements implicitly include this section.]
   ```
 
-- **Task structure.** Each task carries: a **Files** block with exact paths
-  (`Create:` / `Modify: path:lines` / `Test:`); an **Interfaces** block — *Consumes:* what this
-  task uses from earlier tasks (exact signatures), *Produces:* the names, parameter and return
-  types later tasks rely on (a task's implementer sees only their own task; this block is how
-  neighboring tasks stay consistent); and checkbox (`- [ ]`) steps whose code steps contain real
-  code blocks.
+- **Task structure.** In prepared and legacy plans, each task carries a **Files** block with exact
+  paths (`Create:` / `Modify: path:lines` / `Test:`); an **Interfaces** block — *Consumes:* what this
+  task uses from earlier tasks (exact signatures), *Produces:* the names, parameter and return types
+  later tasks rely on; and checkbox (`- [ ]`) steps whose code steps contain real code blocks. In an
+  upfront stage contract, use superstage's stable `Consumes` / `Produces` contract IDs and behavioral
+  revisions, list known files/components, and give a task outline plus verification scenarios.
+  Preparation converts that outline into the executable task shape once the missing evidence exists.
 - **Verification-steps mode is keyed by `SUPER_TEST_EVIDENCE`.** If `SUPER_TEST_EVIDENCE=ci`: authored
   plan steps specify CI pushes as the test evidence — the commit flag (if any), the lane it routes to,
   and the run id + conclusion as the pass criterion — following the CI-scheduling rules the caller
@@ -195,10 +215,19 @@ them:
 
 - "TBD", "TODO", "implement later", "fill in details"
 - "Add appropriate error handling" / "add validation" / "handle edge cases"
-- "Write tests for the above" (without actual test code)
+- "Write tests for the above" without actual test code in a prepared/legacy plan, or without
+  distinguishing inputs, expected observations, and evidence method in an upfront stage contract
 - "Similar to Task N" (repeat the code — the engineer may read tasks out of order)
-- Steps that describe what to do without showing how (code steps require code blocks)
-- References to types, functions, or methods not defined in any task
+- Prepared/legacy code steps that describe what to do without showing how (code steps require code blocks)
+- References to types, functions, or methods that the plan relies on but neither defines nor records
+  as a bounded predecessor-dependent detail
+
+For an upfront stage contract, a dedicated bounded-unknown entry is not a placeholder when it names
+the current evidence, the finite detail still unknown, why predecessor delivery controls it, the
+method and evidence that will resolve it during preparation, and its invalidation trigger. It still
+must preserve the stage's chosen approach and behavioral commitments. "Choose the architecture later,"
+"determine requirements during implementation," or an unbounded design task fails A3. Prepared and
+legacy plans retain the full prohibitions above, including actual test/code detail where applicable.
 
 ## A4 — Generic self-review
 
@@ -212,8 +241,11 @@ plan directly (A2), so nothing has pre-checked it — run the full checklist wit
    can resolve it. Check task coverage against that agreement; do not re-author the test inventory.
    Conflicting or ambiguous acceptance inputs are findings for the author, not new conditions
    for the implementer. This does not restrict implementation choices or ordinary code review.
-2. **Placeholder scan** — search the plan for the A3 patterns. Fix every hit.
-3. **Type/term consistency** — do the types, signatures, and names used in later tasks match what
+2. **Maturity and placeholder scan** — identify upfront-contract versus prepared/legacy maturity,
+   apply its A2/A3 detail standard, and fix every prohibited placeholder. For an upfront stage, apply
+   superstage S2: bounded details may remain, but missing scope, architecture, acceptance, contract,
+   scenario, or resolution commitments fail review. For a prepared stage, validate its S5 identity.
+3. **Type/term consistency** — do the types, signatures, contract IDs/revisions, and names used in later tasks match what
    earlier tasks defined? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in
    Task 7 is a bug.
 
