@@ -215,6 +215,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
 ' | sed \
   -e 's/^SUPER_MODEL_SUPERVISOR=claude:[^[:space:]]*/SUPER_MODEL_SUPERVISOR=inherit/' \
   -e 's/^SUPER_MODEL_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_PLAN_REFINER=claude:[^[:space:]]*/SUPER_MODEL_PLAN_REFINER=inherit/' \
+  -e 's/^SUPER_MODEL_REPLANNER=claude:[^[:space:]]*/SUPER_MODEL_REPLANNER=inherit/' \
   -e 's/^SUPER_MODEL_EXECUTOR=claude:[^[:space:]]*/SUPER_MODEL_EXECUTOR=inherit/' \
   -e 's/^SUPER_MODEL_PANEL=claude:[^[:space:]]*/SUPER_MODEL_PANEL=inherit/' \
   -e 's/^SUPER_MODEL_IMPLEMENTER=claude:[^[:space:]]*/SUPER_MODEL_IMPLEMENTER=inherit/' \
@@ -230,6 +232,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=cursor\1# this is the Cursor build — the external driver fires the Cursor CLI (`agent`)/' \
   -e 's/^SUPER_EFFORT_SUPERVISOR=medium/SUPER_EFFORT_SUPERVISOR=inherit/' \
   -e 's/^SUPER_EFFORT_PLANNER=high/SUPER_EFFORT_PLANNER=inherit/' \
+  -e 's/^SUPER_EFFORT_PLAN_REFINER=medium/SUPER_EFFORT_PLAN_REFINER=inherit/' \
+  -e 's/^SUPER_EFFORT_REPLANNER=high/SUPER_EFFORT_REPLANNER=inherit/' \
   -e 's/^SUPER_EFFORT_EXECUTOR=medium/SUPER_EFFORT_EXECUTOR=inherit/' \
   -e 's/^SUPER_EFFORT_PANEL=xhigh/SUPER_EFFORT_PANEL=inherit/' \
   -e 's/^SUPER_EFFORT_IMPLEMENTER=medium/SUPER_EFFORT_IMPLEMENTER=inherit/' \

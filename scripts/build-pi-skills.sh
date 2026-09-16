@@ -179,6 +179,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
 ' | sed \
   -e 's/^SUPER_MODEL_SUPERVISOR=claude:[^[:space:]]*/SUPER_MODEL_SUPERVISOR=pi:openai-codex\/gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_PLANNER=pi:openai-codex\/gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PLAN_REFINER=claude:[^[:space:]]*/SUPER_MODEL_PLAN_REFINER=pi:openai-codex\/gpt-5.6-terra/' \
+  -e 's/^SUPER_MODEL_REPLANNER=claude:[^[:space:]]*/SUPER_MODEL_REPLANNER=pi:openai-codex\/gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_EXECUTOR=claude:[^[:space:]]*/SUPER_MODEL_EXECUTOR=pi:openai-codex\/gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_PANEL=claude:[^[:space:]]*/SUPER_MODEL_PANEL=pi:openai-codex\/gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_IMPLEMENTER=claude:[^[:space:]]*/SUPER_MODEL_IMPLEMENTER=pi:openai-codex\/gpt-5.6-terra/' \

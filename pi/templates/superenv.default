@@ -51,6 +51,16 @@ SUPER_EFFORT_META_PLANNER=high          # supermeta
 SUPER_EFFORT_EVALUATOR=high             # supereval judged objectives
 SUPER_EFFORT_DIAGNOSER=xhigh            # superdiagnose RCA (Stage 3)
 
+# ── Upfront planning roles (reserved — dispatch not implemented yet) ──
+# PLANNER remains the initial plan author. Refinement preserves a stage's scope,
+# acceptance criteria and shared contracts; invalidated contracts go to REPLANNER.
+# Replanning covers the affected stage and affected dependents, not every later stage.
+# These keys do not change current superplan/superrun routing or generate role agents yet.
+SUPER_MODEL_PLAN_REFINER=pi:openai-codex/gpt-5.6-terra
+SUPER_EFFORT_PLAN_REFINER=medium
+SUPER_MODEL_REPLANNER=pi:openai-codex/gpt-5.6-sol
+SUPER_EFFORT_REPLANNER=high
+
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=pi                    # this is the Pi build — the external driver fires the Pi CLI (pi -p)
 SUPER_CODEX_SANDBOX=danger-full-access  # codex harness only: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write

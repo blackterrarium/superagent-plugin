@@ -249,6 +249,22 @@ the tick itself; nine loop roles are dispatched by it, and four **coding-loop ro
 
 Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
 
+The proposed upfront-planning lifecycle reserves two additional roles in `.superenv`:
+
+| Reserved role | Intended responsibility | Default model / effort |
+|---|---|---|
+| `PLAN_REFINER` | Prepare a stage against the actual code, preserving its scope, acceptance criteria and shared contracts. | `claude:sonnet` / `medium` |
+| `REPLANNER` | Rework an invalidated stage and affected dependents; leave unaffected plans intact. | `claude:claude-opus-4-8` / `high` |
+
+Both have independent `SUPER_MODEL_<ROLE>` and `SUPER_EFFORT_<ROLE>` keys. `PLANNER`
+remains the initial plan author; `FIX_PLANNER` remains the SDD code-fix role. A refiner
+must hand off contract-breaking changes to replanning instead of expanding its own remit.
+The Codex defaults use `gpt-5.6-terra` / `medium` for refinement and `gpt-5.6-sol` /
+`high` for replanning; Pi uses those models through `openai-codex`. Cursor keeps both
+model and effort settings at `inherit`, so distinct models must be configured explicitly.
+These settings are **reserved**: dispatch and init agent generation do not consume them
+yet. Current planning and execution behavior is unchanged.
+
 The full picture of how these roles are dispatched, and how that differs per harness, is in
 [`docs/superagent-structure.html`](docs/superagent-structure.html), the structural reference with
 diagrams for the architecture, the state machine, the SDD loop, and each harness's dispatch path.
