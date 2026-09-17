@@ -97,6 +97,50 @@ CASES = (
      'Verified evidence shows a required shared output behavior cannot be preserved. Downstream '
      'consumers rely on that semantic contract.',
      {'operation': 'replan', 'role': 'REPLANNER'}),
+    ('preparation_noop',
+     'A dependency-eligible, unstarted stage has a complete upfront contract. Current source, code, '
+     'predecessor delivery, contracts, and findings resolve no additional task, file, or test detail. '
+     'Its initial Stage revision is 1. The refiner attaches its first PREPARED receipt without '
+     'changing the plan body.',
+     {'outcome': 'PREPARED', 'stage_revision': 1, 'commitments_preserved': True,
+      'amendment_kind': 'none'}),
+    ('predecessor_detail_preparation',
+     'A dependency-eligible, unstarted stage receives verified predecessor delivery evidence that '
+     'resolves its bounded file placement, helper name, and distinguishing test setup. Its scope, '
+     'acceptance, chosen approach, dependencies, and contract behavior remain unchanged. Its initial '
+     'Stage revision is 1.',
+     {'outcome': 'PREPARED', 'stage_revision': 2, 'commitments_preserved': True,
+      'amendment_kind': 'content-amendment'}),
+    ('scope_expansion_during_preparation',
+     'Preparation evidence shows the stage must add a user-visible export that is outside its approved '
+     'scope boundary. The stage is unstarted.',
+     {'outcome': 'REPLAN-REQUIRED', 'commitments_preserved': False,
+      'in_place_overwrite': False}),
+    ('source_revision_changed',
+     'The authoritative source agreement revision now changes an acceptance condition assigned to an '
+     'unstarted prepared stage. Its old receipt still names the prior source revision.',
+     {'outcome': 'REPLAN-REQUIRED', 'executable': False,
+      'in_place_overwrite': False}),
+    ('unrelated_head_advance',
+     'An unstarted prepared stage has a valid receipt. Repository HEAD advanced only through the '
+     'docs-only publication of another goal; a focused comparison finds no source, stage, predecessor, '
+     'contract, finding, or relevant code change. Its current Stage revision is 1.',
+     {'outcome': 'PREPARED', 'stage_revision': 1, 'commitments_preserved': True,
+      'amendment_kind': 'compatible-baseline-revalidation'}),
+    ('relevant_contract_advance',
+     'An unstarted prepared consumer still names C-INGEST@1, but verified provider evidence now '
+     'changes C-INGEST behavior and advances it to semantic revision 2.',
+     {'outcome': 'REPLAN-REQUIRED', 'executable': False,
+      'in_place_overwrite': False}),
+    ('missing_preparation_receipt',
+     'This fixture uses the dormant post-Task-5 C6 selection handler; its temporary transition gate '
+     'does not apply. The highest DFS-priority upfront stage has satisfied dependencies and is '
+     'unstarted, but its Preparation field is none. superrun is invoked directly on the root.',
+     {'outcome': 'NEEDS-REFINEMENT', 'executable': False}),
+    ('partially_executed_stage',
+     'A stage has an execution closeout or open code PR showing that implementation already began, '
+     'while its remaining work is unresolved. A caller asks the refiner to prepare it in place.',
+     {'outcome': 'BLOCKED', 'in_place_overwrite': False}),
 )
 
 
@@ -116,7 +160,7 @@ def render_prompt(skills, cases):
     """Build a probe prompt containing facts and field names, never answer values."""
     lines = [
         'Read the supplied canonical skill contracts at ' + str(skills.resolve()) +
-        '/{superstage,superauthor,supertraverse,supergoal,superplan,supermeta,init}/SKILL.md. '
+        '/{superstage,superauthor,supertraverse,superrefine,superrun,supergoal,superplan,supermeta,init}/SKILL.md. '
         'Apply their rules to each independent '
         'fixture below. This is a read-only interpretation: do not dispatch, mutate files, call '
         'Git/network services, read implementation reports, or invent absent rules.',
@@ -124,13 +168,16 @@ def render_prompt(skills, cases):
         'nonempty string reason citing the governing rule/evidence, plus every requested field. '
         'Use JSON booleans where a field asks for a boolean and contract spellings for strings.',
         'Global output vocabulary (not per-case answers): mode is incremental, upfront-v1, or '
-        'unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, continue, or done; operation is refine, '
+        'unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, NEEDS-REFINEMENT, PREPARED, '
+        'REPLAN-REQUIRED, continue, or done; operation is refine, '
         'replan, or none; role is PLAN_REFINER, REPLANNER, or none; publication is none, scratch, '
         'or vault; draft_action describes scratch artifact handling only: resume, revise, or none; '
         'confirmation remains separately governed by the current gate; root_mode_marker is '
         'incremental, upfront-v1, or absent; upfront_valid, executable, '
-        'done, code_execution, duplicate_stage_ids, duplicate_goal_folder, and ledger_appended are '
-        'JSON booleans; stages is a JSON integer.',
+        'done, code_execution, duplicate_stage_ids, duplicate_goal_folder, commitments_preserved, '
+        'and in_place_overwrite are JSON booleans; stages and stage_revision are JSON '
+        'integers; amendment_kind is none, content-amendment, or '
+        'compatible-baseline-revalidation.',
     ]
     for name, facts, expected in cases:
         lines.extend(('', name + ': ' + facts,
@@ -192,6 +239,14 @@ class ValidatorTests(unittest.TestCase):
     def test_accepts_all_exact_cases_and_required_values(self):
         self.assertEqual(validate_answers(self.valid_answers(), CASES), [])
 
+    def test_refinement_case_rejects_wrong_outcome(self):
+        cases = select_cases(['scope_expansion_during_preparation'])
+        answers = self.valid_answers(cases)
+        answers['scope_expansion_during_preparation']['outcome'] = 'PREPARED'
+        errors = validate_answers(answers, cases)
+        self.assertTrue(any(error.startswith(
+            'scope_expansion_during_preparation.outcome:') for error in errors))
+
     def test_selected_cases_require_exact_selected_membership(self):
         cases = select_cases(['contract_break', 'legacy_default'])
         self.assertEqual([case[0] for case in cases], ['legacy_default', 'contract_break'])
@@ -244,14 +299,17 @@ class ValidatorTests(unittest.TestCase):
     def test_prompt_has_facts_and_fields_without_expected_values(self):
         prompt = render_prompt(Path('skills'), select_cases(['legacy_default', 'bounded_unknown']))
         vocabulary = ('Global output vocabulary (not per-case answers): mode is incremental, '
-                      'upfront-v1, or unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, continue, '
-                      'or done; operation is refine, replan, or none; role is PLAN_REFINER, '
+                      'upfront-v1, or unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, '
+                      'NEEDS-REFINEMENT, PREPARED, REPLAN-REQUIRED, continue, or done; operation is '
+                      'refine, replan, or none; role is PLAN_REFINER, '
                       'REPLANNER, or none; publication is none, scratch, or vault; draft_action '
                       'describes scratch artifact handling only: resume, revise, or none; '
                       'confirmation remains separately governed by the current gate; root_mode_marker '
                       'is incremental, upfront-v1, or absent; upfront_valid, executable, done, '
-                      'code_execution, duplicate_stage_ids, duplicate_goal_folder, and '
-                      'ledger_appended are JSON booleans; stages is a JSON integer.')
+                      'code_execution, duplicate_stage_ids, duplicate_goal_folder, '
+                      'commitments_preserved, and in_place_overwrite are JSON booleans; '
+                      'stages and stage_revision are JSON integers; amendment_kind is none, '
+                      'content-amendment, or compatible-baseline-revalidation.')
         self.assertIn(vocabulary, prompt)
         self.assertEqual(prompt.count(vocabulary), 1)
         self.assertLess(prompt.index(vocabulary), prompt.index('legacy_default:'))

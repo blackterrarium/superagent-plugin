@@ -238,6 +238,21 @@ A preparation report is durable, tracked evidence and records at least:
 - relevant findings and their revisions;
 - preparation amendments (or explicit `none`).
 
+Its amendment metadata distinguishes three evidence states; do not collapse them into a generic
+"updated" note:
+
+- `none` — initial preparation attached a receipt but made no plan-body amendment. The Stage revision
+  is unchanged.
+- `content-amendment` — preparation changed bounded executable detail in the stage body while S4's
+  commitments survived. List the evidence-grounded details and increment Stage revision.
+- `compatible-baseline-revalidation` — a focused comparison after an unrelated baseline/HEAD advance
+  found the stage, source, code, predecessors, contracts, and findings compatible. Link the prior
+  receipt and the new validation receipt; preserve Stage revision. It is not a silent reuse of old
+  evidence.
+
+This metadata is part of the receipt evidence. A report that cannot tell a content amendment from a
+compatible baseline revalidation is incomplete and therefore not a current PREPARED receipt.
+
 Compute the digest over the exact UTF-8 bytes of the whole stage plan after omitting the one complete
 `**Preparation:** ...` metadata line, including that line's newline when present. Do not normalize
 other bytes or omit any other field. Excluding only the pointer prevents a circular digest; the digest

@@ -222,14 +222,25 @@ parent-seed references.
   planning target, or an execution leaf to the unchanged `superplan` / `superrun` consumers. Task 3
   and Task 5 replace this gate only when receipt preparation and every caller's result routing are
   implemented.
-- **Future selection recipe (dormant while the transition gate above exists):** on each upfront leaf
-  in DFS order, apply S3. A completed stage is skipped only with verified C9
-  evidence. A stage with unsatisfied dependencies is not eligible; continue DFS so an independent
-  eligible stage may be selected. The first dependency-eligible stage without a valid preparation
-  receipt returns **`NEEDS-REFINEMENT`** with its stage ID/path and failed evidence, and neither
-  `superplan` nor `superrun` edits or executes it under the wrong role. The first eligible prepared
-  stage is an execution target in execution mode; planning mode skips it. This recipe is normative
-  for those later consumers but cannot authorize selection in the current build.
+- **Future selection recipe (dormant while the transition gate above exists):** after S1/S2 validate
+  the active graph and no replan barrier exists, walk active leaves in priority DFS order. Skip a
+  closed stage only with S3/C9 verified integration or authorized terminal-disposition evidence;
+  never trust a row label or closeout alone. Require S3 delivery evidence for every prerequisite.
+  An unsatisfied dependency makes that leaf ineligible, but does not stop the walk: continue to a
+  later independent eligible stage.
+
+  For each dependency-eligible unstarted leaf, apply S5 directly. A missing receipt returns
+  **`NEEDS-REFINEMENT`** with root, stage ID/path, and the missing evidence; neither `superplan` nor
+  `superrun` edits or executes it under the wrong role. A receipt whose only possible change is an
+  unrelated code baseline/HEAD advance returns **`NEEDS-REFINEMENT`** marked *bounded
+  revalidation*, so PLAN_REFINER records a fresh compatible validation receipt. A source, stage,
+  predecessor, contract, or finding mismatch is **`REPLAN-REQUIRED`** with its evidence and affected
+  stage; it must enter the decision/replanning path rather than being repaired during selection.
+  Missing or contradictory evidence is **BLOCKED**. The first valid prepared eligible leaf is an
+  execution target in execution mode; planning mode skips it. If no executable target exists while
+  active work still has unsatisfied dependencies, return **BLOCKED** with the incomplete dependency
+  evidence, never `none`/DONE. This recipe is normative for the post-Task-5 handlers but cannot
+  authorize selection in the current build.
 
 After that gate, descent is one
 pre-order DFS whose *target predicate* is selected by mode (symmetric with C7's `planning` /
@@ -249,10 +260,11 @@ leaf/internal + completed-row tests, and `not-traversable` root handling — is 
 
 In the current build, every upfront selection returns **BLOCKED**: either the specific S2/replan fault
 or the Task 1 transition gate. After Tasks 3 and 5 replace that gate, both modes may return **`none`**
-when no node yields a target, **`NEEDS-REFINEMENT`** for the first dependency-eligible unprepared
-upfront stage, or an eligible prepared execution target. Incremental traversal continues to return
-**BLOCKED** for invalid repair state, **`none`** when no target exists, and **`not-traversable`** when
-the root is not a progress-report tree.
+only when all active obligations are resolved, **`NEEDS-REFINEMENT`** for the first
+dependency-eligible unprepared/stale stage, **`REPLAN-REQUIRED`** for a relevant broken assumption,
+**BLOCKED** for incomplete dependency evidence, or an eligible prepared execution target.
+Incremental traversal continues to return **BLOCKED** for invalid repair state, **`none`** when no
+target exists, and **`not-traversable`** when the root is not a progress-report tree.
 
 Pre-order DFS, honoring priority order (top-to-bottom = highest rank first):
 
@@ -307,7 +319,8 @@ the root, not the root itself. (Execution mode returns only the target leaf path
 path.)
 
 **Return-and-continue.** Once descent has produced its result — a target (+ descent path in planning
-mode, or leaf path in execution mode), `NEEDS-REFINEMENT`, BLOCKED, `none`, or `not-traversable` — return that result to the calling
+mode, or leaf path in execution mode), `NEEDS-REFINEMENT`, `REPLAN-REQUIRED`, BLOCKED, `none`, or
+`not-traversable` — return that result to the calling
 skill (`superplan` for planning mode, `superrun` for execution mode) and immediately continue
 executing the caller's next section. Do NOT end your turn after the descent. Do NOT print a
 "descent complete" summary as if it were a final answer; the caller's Final Report is the user's only

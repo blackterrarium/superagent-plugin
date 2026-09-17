@@ -34,3 +34,7 @@ The first actual upfront-authoring CLI dispatch did not start: automatic approva
 ## Upfront authoring and draft recovery
 
 Task 2 spec/quality review passed after correcting invalid-mode handling and explicit incremental markers. Fresh full scenario suite: [18/18 PASS](evidence/2026-09-16-upfront-plan-tree/task2-final.json). Validator self-tests: 9/9. PRD lint and copied coding-loop package suites: zero failures. Generated variants updated. These remain offline/interpretation results; external authoring acceptance is blocked as recorded above.
+
+## Bounded stage preparation
+
+Task 3 spec/quality review passed. Fresh [upfront26](evidence/2026-09-16-upfront-plan-tree/task3-green.json) and [legacy16](evidence/2026-09-16-upfront-plan-tree/task3-legacy.json) interpretations passed; validator self-tests10 passed. Generated packages include superrefine. The temporary C6 upfront execution gate remains until routing is installed; the pre-SDD handler scenario explicitly tests the post-gate contract, not current live execution.

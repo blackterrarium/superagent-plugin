@@ -72,12 +72,30 @@ Invoke the `superagent:supertraverse` skill (Skill tool) and run its **DESCENT i
 - **`not-traversable`** — the root is not maintained as a progress-report tree (only orchestration
   tables / no step-tracking list). Report this and exit; there is nothing to execute.
 - **BLOCKED** — report the row and reason; exit without execution.
+- **`NEEDS-REFINEMENT`** — this is an upfront-v1 leaf with its exact root, stage ID/path, and
+  receipt/revalidation evidence. Report `NEEDS-REFINEMENT` with those exact values and exit. Do not
+  invoke superrefine, superplan, SDD, or a child process under EXECUTOR; the controller must schedule
+  PLAN_REFINER as a separate planning operation. Incremental and unmarked roots do not use this
+  outcome and retain their existing manual execution behavior.
+- **`REPLAN-REQUIRED`** — report the root, stage ID/path, and broken source/stage/predecessor/
+  contract/finding assumption. Exit without execution so the existing decision and REPLANNER path can
+  adopt or reject the structural change. Never turn that evidence into an in-place execution ruling.
 - **`none`** — no execution target exists; invoke **supertraverse C9 completion audit** before
   reporting. **complete**: report none with integration/disposition evidence. **incomplete**:
   report none with the planning/repair gap. **BLOCKED**: return a BLOCKED report naming the
   unresolved leaf/PR/evidence, even though traversal returned none. An open-PR closeout is not
   completion. Do not run superfinish on a fabricated target.
 - **a target leaf plan file path** — the highest-priority written-but-unexecuted leaf. Proceed.
+
+For an upfront-v1 target, immediately before Step 2 re-read synchronized source, code, predecessor
+delivery, contract, finding, root-generation, and stage evidence and apply superstage S1/S2/S5. This
+is a fresh execution-entry check, not a recursive traversal call. A current valid PREPARED receipt
+and S3-satisfied prerequisites permit Step 2. A missing receipt or an unrelated-baseline advance that
+needs focused compatible revalidation returns `NEEDS-REFINEMENT` with the exact root/stage ID; leave
+the leaf untouched. A relevant changed assumption returns `REPLAN-REQUIRED`; missing or contradictory
+evidence is BLOCKED. Do not prepare a stage while running as EXECUTOR. The current C6 transition gate
+continues to return BLOCKED until Task 5 installs all caller routing; this entry check governs the
+post-gate handler only.
 
 ## Repair successor context
 
