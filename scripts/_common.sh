@@ -35,6 +35,7 @@ _superagent_load_gh_token() {
 # Returns non-zero when gh cannot authenticate — callers should abort the tick so
 # a misconfigured host fails LOUDLY rather than silently breaking every PR/CI step.
 ensure_gh_auth() {
+  if ! superagent_uses_git; then return 0; fi
   _superagent_load_gh_token
   if ! command -v gh >/dev/null 2>&1; then
     echo "superagent: gh CLI not found on PATH. superrun's CI/PR steps require it; aborting." >&2
@@ -202,6 +203,7 @@ ensure_cli_bin() {
 # Non-fatal report: echoes "ok:<account>" (or "ok" if the account can't be parsed)
 # when gh is authenticated, else "unauth". Used by status.sh.
 gh_auth_state() {
+  if ! superagent_uses_git; then echo "disabled"; return 0; fi
   _superagent_load_gh_token
   command -v gh >/dev/null 2>&1 || { echo "no-gh"; return 0; }
   if gh auth status >/dev/null 2>&1; then
@@ -286,6 +288,109 @@ load_superenv() {
   . "$snapshot"
   set +a
   rm -f "$snapshot"
+}
+
+# Validate the effective workflow integration mode. Missing means the shipped,
+# backward-compatible GitHub workflow; an explicitly empty value is invalid.
+superagent_validate_git_mode() {
+  if [[ -z "${SUPER_GIT_MODE+x}" ]]; then
+    SUPER_GIT_MODE=github
+    export SUPER_GIT_MODE
+  fi
+  case "$SUPER_GIT_MODE" in
+    github|none) ;;
+    *) echo 'superagent: SUPER_GIT_MODE must be github|none' >&2; return 2 ;;
+  esac
+  if [[ "$SUPER_GIT_MODE" == none && "${SUPER_TEST_EVIDENCE:-local}" == ci ]]; then
+    echo 'superagent: SUPER_GIT_MODE=none requires local test evidence' >&2
+    return 2
+  fi
+  return 0
+}
+
+# Predicate only: callers must load and validate configuration first.
+superagent_uses_git() { [[ "${SUPER_GIT_MODE-}" == github ]]; }
+
+_superagent_physical_dir() {
+  local dir="${1:-}"
+  [[ -n "$dir" && -d "$dir" ]] || {
+    echo "superagent: project directory does not exist: ${dir:-<empty>}" >&2
+    return 2
+  }
+  (cd "$dir" && pwd -P)
+}
+
+_superagent_clear_loaded_config() {
+  local name
+  while IFS= read -r name; do unset "$name"; done < <(compgen -A variable | grep -E '^(SUPER_|TICK_)' || true)
+}
+
+# Resolve the physical project root and configuration before any caller performs
+# git, GitHub, credential, or CI work. Explicit REPO wins. Otherwise an ancestor
+# .superenv can select local mode; only the GitHub branch may fall back to git.
+# Usage: superagent_load_context START_DIR run|init
+superagent_load_context() {
+  local start="${1:-}" purpose="${2:-}" explicit_repo="${REPO-}"
+  local caller_snapshot candidate="" cursor primary common name rc
+  case "$purpose" in run|init) ;; *) echo 'superagent: context purpose must be run|init' >&2; return 2 ;; esac
+  start="$(_superagent_physical_dir "$start")" || return $?
+
+  caller_snapshot="$(mktemp)"
+  { compgen -A variable | grep -E '^(SUPER_|TICK_)' | while IFS= read -r name; do
+      printf '%s=%q\n' "$name" "${!name}"
+    done; } >"$caller_snapshot" || true
+
+  if [[ -n "$explicit_repo" ]]; then
+    REPO="$(_superagent_physical_dir "$explicit_repo")" || { rm -f "$caller_snapshot"; return 2; }
+    export REPO
+    load_superenv "$REPO"
+    superagent_validate_git_mode
+    rc=$?
+    rm -f "$caller_snapshot"
+    return "$rc"
+  fi
+
+  cursor="$start"
+  while :; do
+    if [[ -f "$cursor/.superenv" ]]; then candidate="$cursor"; break; fi
+    [[ "$cursor" == / ]] && break
+    cursor="${cursor%/*}"; [[ -n "$cursor" ]] || cursor=/
+  done
+
+  if [[ -n "$candidate" ]]; then load_superenv "$candidate"; else load_superenv "$start"; fi
+  superagent_validate_git_mode || { rc=$?; rm -f "$caller_snapshot"; return "$rc"; }
+
+  if [[ "$SUPER_GIT_MODE" == none ]]; then
+    if [[ -n "$candidate" ]]; then REPO="$candidate"
+    elif [[ "$purpose" == init ]]; then REPO="$start"
+    else
+      echo 'superagent: SUPER_GIT_MODE=none requires explicit REPO or an ancestor .superenv' >&2
+      rm -f "$caller_snapshot"
+      return 2
+    fi
+    export REPO
+    rm -f "$caller_snapshot"
+    return 0
+  fi
+
+  # GitHub mode preserves primary-checkout configuration for linked worktrees.
+  common="$(git -C "$start" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || {
+    echo 'superagent: GitHub mode requires a git repository; set REPO or initialize with SUPER_GIT_MODE=none' >&2
+    rm -f "$caller_snapshot"
+    return 2
+  }
+  primary="$(_superagent_physical_dir "$(dirname "$common")")" || { rm -f "$caller_snapshot"; return 2; }
+
+  # Discovery-loaded values must not shadow the primary checkout. Restore only
+  # the true caller overrides before loading the authoritative configuration.
+  _superagent_clear_loaded_config
+  # shellcheck disable=SC1090
+  . "$caller_snapshot"
+  rm -f "$caller_snapshot"
+  REPO="$primary"
+  export REPO
+  load_superenv "$REPO"
+  superagent_validate_git_mode
 }
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,10 @@
 # .claude/agents/ — re-run superagent:init after setting one.
 # (SUPER_MODEL_SUPERVISOR must be native to SUPER_HARNESS; the tick refuses a foreign one.)
 
+# Workflow integration. GitHub remains the default; `none` keeps the full local
+# lifecycle while disabling every Superagent-managed git/GitHub operation.
+SUPER_GIT_MODE=github                    # github | none
+
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=claude:claude-opus-4-8       # the superagent tick itself
 SUPER_MODEL_PLANNER=claude:claude-opus-4-8          # superplan / supergoal dispatch subagent
@@ -58,6 +62,16 @@ SUPER_EFFORT_PRD_REVIEWER=high          # superprd zero-context reviewer
 SUPER_EFFORT_META_PLANNER=high          # supermeta
 SUPER_EFFORT_EVALUATOR=high             # supereval judged objectives
 SUPER_EFFORT_DIAGNOSER=xhigh            # superdiagnose RCA (Stage 3)
+
+# ── Upfront planning roles (reserved — dispatch not implemented yet) ──
+# PLANNER remains the initial plan author. Refinement preserves a stage's scope,
+# acceptance criteria and shared contracts; invalidated contracts go to REPLANNER.
+# Replanning covers the affected stage and affected dependents, not every later stage.
+# These keys do not change current superplan/superrun routing or generate role agents yet.
+SUPER_MODEL_PLAN_REFINER=claude:sonnet
+SUPER_EFFORT_PLAN_REFINER=medium
+SUPER_MODEL_REPLANNER=claude:claude-opus-4-8
+SUPER_EFFORT_REPLANNER=high
 
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=claude                    # claude | cursor | codex | pi — which agent CLI the external driver fires per tick
