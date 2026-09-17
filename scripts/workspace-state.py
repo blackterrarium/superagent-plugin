@@ -254,6 +254,8 @@ def run_owned(roots, command):
 
 def _excluded_reason(relative, internal_vault):
     parts = relative.parts
+    if relative.name == SNAPSHOT_MARKER:
+        return SNAPSHOT_MARKER
     if any(part == ".git" for part in parts):
         return ".git"
     if any(part == ".superagent-runtime" for part in parts):
@@ -285,7 +287,7 @@ def _manifest_for(root, vault):
     if _is_within(vault, root):
         internal_vault = vault.relative_to(root)
     entries = []
-    excluded = {".git", ".env", ".env.*", ".superagent-runtime"}
+    excluded = {".git", ".env", ".env.*", ".superagent-runtime", SNAPSHOT_MARKER}
     if internal_vault is not None and str(internal_vault) != ".":
         excluded.add(internal_vault.as_posix())
 

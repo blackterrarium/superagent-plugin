@@ -1,6 +1,6 @@
 ---
 name: supereval
-description: Evaluate a coding-loop round — run the project's evaluation.md command checks against the latest main commit in a detached worktree (via scripts/supereval.sh), grade the judged objectives with a read-only evaluator subagent, and write eval-reports/<STAMP>-r<N>.md with one PASS/FAIL verdict. Fills the iteration-ledger row supermeta opened and commits per superauthor A7. Stage 2 of the coding loop; runs unattended.
+description: Evaluate a coding-loop round from a frozen commit or local filesystem snapshot, grade judged objectives with a read-only evaluator, and write one PASS/FAIL report plus ledger evidence.
 argument-hint: "<project-dir> [--commit <sha>] [--round <N>]"
 license: MIT
 related skills: superauthor, supermeta, superprd, superloop
@@ -10,7 +10,7 @@ related skills: superauthor, supermeta, superprd, superloop
 
 The **evaluator** of the coding loop. Given a READY project folder whose round `supermeta` has already
 opened (and whose inner `superagent` loop has built the goal), supereval runs the project's
-`evaluation.md` **command checks** against the latest `main` commit in a detached worktree, grades any
+`evaluation.md` **command checks** against a frozen source workspace, grades any
 **judged objectives** with a read-only evaluator subagent, and writes the round's **eval report** —
 one PASS/FAIL verdict — then fills the round's iteration-ledger row.
 
@@ -20,12 +20,12 @@ dispatches at most **one** read-only EVALUATOR-role subagent. Its only writes ar
 folder (the eval report and the ledger cells).
 
 **Input:** `<project-dir>` — an existing coding-loop project folder. **Required.**
-Optional: `--commit <sha>` (evaluate this commit instead of the synced `main` tip); `--round <N>`
+Optional: `--commit <sha>` (GitHub mode only; evaluate this commit instead of the synced `main` tip); `--round <N>`
 (evaluate ledger round `N` instead of the latest).
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -78,10 +78,13 @@ Resolve `<primary_root>` (the code checkout: the physical `REPO` exported by `su
 
 ### 3. Sync
 
-Apply superloop **L5**: run `sync_main()` on `<primary_root>` and, for an external vault (see **Vault
-root**), `sync_vault()`. If the sync gate STOPs (a divergent or dirty tree), do not evaluate —
-surface the git state exactly as L5 requires and stop. After the sync, `<sha>` (the commit to
-evaluate) defaults to `git -C "<primary_root>" rev-parse main`; `--commit <sha>` overrides it.
+Apply superloop **L5** using the mode-selected branch. In `github`, run `sync_main()` and, for an
+external vault, `sync_vault()`; `<source>` is `commit:<sha>`, where `<sha>` defaults to the synced
+`main` tip and `--commit` overrides it. In `none`, reject `--commit` before any git/auth action,
+validate inherited workspace ownership, and let the runner capture `<source>` as
+`snapshot:<digest>`. Freeze `prd.md`, `evaluation.md`, approved acceptance text, and required
+evidence locators before running setup or checks. The same frozen inputs govern command and judged
+evaluation. A sync/snapshot consistency failure stops evaluation without a verdict claim.
 
 ### 4. Inner-loop link
 
@@ -94,16 +97,25 @@ purpose). If no `<SUPER_LOOP_STATUS_DIRNAME>/*.md` exists, the inner-loop link i
 
 ### 5. Command checks
 
-Run the shipped runner (per-check timeouts are inside the script; keep its exit code):
+Run the shipped runner (per-check timeouts are inside the script; keep its exit code).
+
+`github`:
 
 ```
 "${CLAUDE_PLUGIN_ROOT}/scripts/supereval.sh" "<project-dir>" --repo "<primary_root>" --commit <sha> --out "$TMPDIR/supereval-<project-slug>-r<N>/results.md" --keep-worktree
 ```
 
-Invoke it through the Bash tool with `timeout: 600000`. `--keep-worktree` leaves the detached
-worktree in place so the evaluator (step 6) can inspect it; **read the kept worktree's path from the
-`worktree:` field of the results file's `## Environment` line**. Keep the runner's exit code — the
-verdict (step 7) keys on it (`0` = every command check PASS).
+`none`:
+
+```
+"${CLAUDE_PLUGIN_ROOT}/scripts/supereval.sh" "<project-dir>" --repo "<primary_root>" --out "$TMPDIR/supereval-<project-slug>-r<N>/results.md" --keep-workspace
+```
+
+Invoke through the Bash tool with `timeout: 600000`. Read the kept workspace, source identity,
+input/result manifest paths, cleanup token, changes file, and setup result from `## Environment`.
+The local runner snapshots outside source/vault roots, executes only in the copy, verifies the
+original source remained unchanged, and records test writes/deletions separately. Keep the runner's
+exit code: `0` means every command check passed and source isolation remained valid.
 
 ### 6. Judged objectives
 
@@ -133,14 +145,15 @@ The evaluator gets no `.pi/agents/` definition; dispatch it exactly as `superage
 pi-only:end -->
 Give that one evaluator a single evidence packet containing:
 
-- The kept worktree path and evaluated commit from step 5.
+- The kept evaluation workspace and mode-neutral source identity from step 5 (`commit:<sha>` or
+  `snapshot:<digest>`), plus the input/result manifests and change evidence in local mode.
 - The full `evaluation.md` verbatim, including J rows, the approved acceptance checklist,
   approval record, and binding contract notes; identify its source revision separately from
-  the evaluated code commit. Include `prd.md` requirements/constraints/decisions verbatim,
+  the evaluated source identity. Include `prd.md` requirements/constraints/decisions verbatim,
   excluding its iteration ledger and prior verdicts.
 - Any explicitly referenced binding acceptance text verbatim, with its source path/revision.
   Resolve references before dispatch; do not silently summarize away cases or general rules.
-- Named evidence paths with their roots (code worktree versus project/vault), and step 5's
+- Named evidence paths with their roots (frozen source workspace versus project/vault), and step 5's
   command results. Implementer mappings may be supplied as claims to verify, never authority.
 
 Do not supply prior evaluator answers, operator answer keys, or unrelated history. If required
@@ -210,12 +223,17 @@ Write `<project-dir>/eval-reports/<STAMP>-r<N>.md` with **exactly** this layout:
 
 ### 8. Ledger
 
-Fill row `N`'s three trailing cells in `prd.md`'s `## Iteration ledger` table, preserving the
-*Round*, *Meta-plan*, and *Goal folder* cells `supermeta` wrote:
+Fill row `N`'s trailing cells in `prd.md`'s `## Iteration ledger` table, preserving the *Round*,
+*Meta-plan*, and *Goal folder* cells `supermeta` wrote:
 
 - *Inner loop* — the inner-loop file link from step 4 (if found), else leave `-`.
+- *Source* — the mode-neutral identity `commit:<sha>` or `snapshot:<digest>`.
 - *Eval report* — `[[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/eval-reports/<STAMP>-r<N>]]`.
 - *Verdict* — `PASS` or `FAIL`.
+
+New ledgers use the `Source` header. For a legacy `Commit` column in a GitHub project, write the SHA
+there and continue to accept it. For the older six-column ledger with no identity column, preserve
+its width and put the source identity in the eval report; do not corrupt prior rows.
 
 ### 9. Commit (A7)
 
@@ -230,19 +248,22 @@ Apply **A7** with:
 - **External vault:** A7's target is the vault repo — a direct commit, no PR (see A7 **Target
   repo**); its precondition applies (STOP and report if `<vault_root>` is not its own repository).
 
-Then remove the kept worktree: `git -C "<primary_root>" worktree remove --force "<worktree path>"`
-(the path read in step 5).
+Cleanup is mode-selected. In `github`, remove the kept worktree with git. In `none`, invoke
+`workspace-state.py cleanup --workspace <path> --token <token>`, then verify the helper-owned
+workspace is gone; never use a raw recursive delete. Apply A7's local branch to the report and ledger
+before cleanup, with no git/GitHub operation.
 
 ### 10. Final Report (A8)
 
 ```
 ## Supereval complete
 
-**Project:** <project-dir>   **Round:** <N>   **Commit evaluated:** <sha>
+**Project:** <project-dir>   **Round:** <N>   **Source:** <commit:sha | snapshot:digest>
 **Report:** <path>
 **Verdict:** PASS | FAIL (<failing ids>)
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)   (local mode instead)
 **Next:** PASS → the project is complete for this PRD · FAIL → superagent:superdiagnose <project-dir> (Stage 3; until then, read the report and start a new round with supermeta)
 ```
 

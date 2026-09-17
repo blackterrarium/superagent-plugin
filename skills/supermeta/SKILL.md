@@ -107,7 +107,8 @@ Round N>1: the objective restated plus the repair scope from the diagnosis.>
 <every SC row from prd.md verbatim, then every C/J row from evaluation.md verbatim, including the
 Environment setup/cwd lines, the full Acceptance checklist with its approval record, and all
 binding contract notes. Preserve source references and identify the source project revision
-(commit plus file paths). Carry optional suggestions separately as nonbinding context.
+(`commit:<sha>` in GitHub mode or the recorded local mode/root plus file paths before evaluation).
+Carry optional suggestions separately as nonbinding context.
 These are the approved conditions the plan must satisfy; do not derive a new coverage inventory.>
 
 ## Knowledge base
@@ -183,8 +184,12 @@ Append this row to `prd.md`'s `## Iteration ledger` table (the goal-folder path 
 `**Goal folder:**` from step 6 made relative to `<vault_root>`):
 
 ```
-| <N> | [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/meta-plans/<STAMP>-r<N>]] | [[<goal-folder-path-from-vault-root>]] | - | - | - |
+| <N> | [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/meta-plans/<STAMP>-r<N>]] | [[<goal-folder-path-from-vault-root>]] | - | - | - | - |
 ```
+
+This is the new `Source` ledger shape. When appending to a legacy ledger with a `Commit` identity
+column, preserve that header and use `-` in the identity cell. When appending to the older six-column
+shape with no identity column, omit one `-`; do not silently change existing row widths.
 
 Then apply **A7** with:
 

@@ -164,8 +164,8 @@ All three open with the header block:
 - <decision> — rejected: <alternative>, because <why>
 
 ## Iteration ledger
-| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |
-|---|---|---|---|---|---|
+| Round | Meta-plan | Goal folder | Inner loop | Source | Eval report | Verdict |
+|---|---|---|---|---|---|---|
 ```
 
 **`knowledge-base.md`** — one table, kinds `instructions`, `repo-file`, `repo-glob`,
@@ -182,7 +182,7 @@ All three open with the header block:
 
 ```
 ## Environment
-- setup: `<command run once in a fresh worktree; may be empty>`
+- setup: `<command run once in the frozen evaluation workspace; may be empty>`
 - cwd: `<repo-relative dir every check runs in unless its row overrides>`
 
 ## Command checks

@@ -151,17 +151,17 @@ fi
 if has_timeout; then
   cat >"$PROJ/evaluation.md" <<'EOF'
 ## Environment
-- setup: `true`
+- setup: ``
 - cwd: `.`
 
 ## Command checks
 | Id | Command | Cwd | Pass when | Timeout |
 |---|---|---|---|---|
-| C1 | `sleep 70` | `.` | `exit 0` | 1 |
+| C1 | `sleep 2` | `.` | `exit 0` | 1 |
 EOF
-  run_eval "$T/r3.md"   # ~60s: the 1-minute cap fires before sleep 70 returns
+  run_eval "$T/r3.md" --max-timeout-min 0
   if [[ "$CRC" -eq 1 && "$(result_of "$T/r3.md" C1)" == "TIMEOUT" ]]; then
-    ok "case 3 sleep 70 / timeout 1 -> exit 1, C1 TIMEOUT"
+    ok "case 3 timeout ceiling 0 -> exit 1, C1 TIMEOUT"
   else
     fail "case 3 (rc=$CRC C1=$(result_of "$T/r3.md" C1))"
   fi
@@ -266,6 +266,160 @@ else
   fail "case 8 (rc=$CRC exists=$([ -d "$WT8" ] && echo y || echo n) C1=$(result_of "$T/r8.md" C1))"
 fi
 git -C "$FX" worktree remove --force "$WT8" >/dev/null 2>&1 || true
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Local snapshot runner cases. These use an ordinary directory and a git sentinel.
+# ════════════════════════════════════════════════════════════════════════════════
+LOCAL="$T/local source"; mkdir -p "$LOCAL/src" "$LOCAL/vault/private"
+printf 'SUPER_GIT_MODE=none\nSUPER_GOAL_ROOT=vault\n' >"$LOCAL/.superenv"
+printf 'original\n' >"$LOCAL/src/app.txt"
+printf 'excluded\n' >"$LOCAL/vault/private/secret.txt"
+ORIGINAL_HASH="$(shasum -a 256 "$LOCAL/src/app.txt" | awk '{print $1}')"
+SENTINEL="$T/sentinel"; mkdir -p "$SENTINEL"
+GIT_LOG="$T/git-calls"
+cat >"$SENTINEL/git" <<EOF
+#!/usr/bin/env bash
+echo git-called >>"$GIT_LOG"
+exit 99
+EOF
+chmod +x "$SENTINEL/git"
+
+run_local() { # $1=out-file; extra runner args after; sets CRC
+  local out="$1"; shift
+  PATH="$SENTINEL:$PATH" "$SUPEREVAL" "$PROJ" --repo "$LOCAL" --out "$out" "$@" >/dev/null 2>&1
+  CRC=$?
+}
+
+# ── case 9: no --commit, isolated writes, durable input/output evidence ──────────────
+cat >"$PROJ/evaluation.md" <<'EOF'
+## Environment
+- setup: `true`
+- cwd: `.`
+
+## Command checks
+| Id | Command | Cwd | Pass when | Timeout |
+|---|---|---|---|---|
+| C1 | `printf changed > src/app.txt; printf made > generated.txt` | `.` | `exit 0` | 5 |
+EOF
+run_local "$T/local9.md"
+INPUT_MANIFEST="$T/local9.md.input-manifest.json"
+RESULT_MANIFEST="$T/local9.md.result-manifest.json"
+CHANGES="$T/local9.md.changes.json"
+AFTER_HASH="$(shasum -a 256 "$LOCAL/src/app.txt" | awk '{print $1}')"
+if [[ "$CRC" -eq 0 && "$AFTER_HASH" == "$ORIGINAL_HASH" && -f "$INPUT_MANIFEST" && -f "$RESULT_MANIFEST" && -f "$CHANGES" ]] \
+  && grep -q 'source: `snapshot:' "$T/local9.md" \
+  && grep -q '"generated.txt"' "$CHANGES" && grep -q '"src/app.txt"' "$CHANGES"; then
+  ok "case 9 local snapshot runs without --commit, preserves source, and records manifests/diff"
+else
+  fail "case 9 (rc=$CRC source_same=$([[ "$AFTER_HASH" == "$ORIGINAL_HASH" ]] && echo y || echo n) evidence=$([ -f "$RESULT_MANIFEST" ] && echo y || echo n))"
+fi
+
+# ── case 10: GitHub-only flags are rejected before any git access ──────────────────
+run_local "$T/local10.md" --commit deadbeef
+rc_commit=$CRC
+run_local "$T/local10b.md" --worktree "$T/nope"
+rc_worktree=$CRC
+if [[ "$rc_commit" -eq 2 && "$rc_worktree" -eq 2 ]]; then
+  ok "case 10 local mode rejects --commit and --worktree"
+else
+  fail "case 10 (--commit rc=$rc_commit --worktree rc=$rc_worktree)"
+fi
+
+# ── case 11: local setup failure and timeout remain failing runner evidence ───────────
+cat >"$PROJ/evaluation.md" <<'EOF'
+## Environment
+- setup: `false`
+- cwd: `.`
+## Command checks
+| Id | Command | Cwd | Pass when | Timeout |
+|---|---|---|---|---|
+| C1 | `true` | `.` | `exit 0` | 5 |
+EOF
+run_local "$T/local11.md"
+rc_setup=$CRC
+if has_timeout; then
+  cat >"$PROJ/evaluation.md" <<'EOF'
+## Environment
+- setup: ``
+- cwd: `.`
+## Command checks
+| Id | Command | Cwd | Pass when | Timeout |
+|---|---|---|---|---|
+| C1 | `sleep 2` | `.` | `exit 0` | 0 |
+EOF
+  run_local "$T/local11b.md" --max-timeout-min 0
+  rc_timeout=$CRC
+  timeout_result="$(result_of "$T/local11b.md" C1)"
+else
+  rc_timeout=1; timeout_result=TIMEOUT
+fi
+if [[ "$rc_setup" -eq 1 && "$(result_of "$T/local11.md" C1)" == "ERROR setup failed" && "$rc_timeout" -eq 1 && "$timeout_result" == TIMEOUT ]]; then
+  ok "case 11 local setup failure and timeout are preserved"
+else
+  fail "case 11 (setup=$rc_setup timeout=$rc_timeout/$timeout_result)"
+fi
+
+# ── case 12: judged-only local workspace can be retained and token-cleaned ─────────────
+cat >"$PROJ/evaluation.md" <<'EOF'
+## Environment
+- setup: `true`
+- cwd: `.`
+## Judged objectives
+| Id | Objective | Criteria | Evidence to inspect |
+|---|---|---|---|
+| J1 | Source is readable | contains original | `src/app.txt` |
+EOF
+run_local "$T/local12.md" --keep-workspace
+KEPT_WORKSPACE="$(sed -n 's/^- source: .* · workspace: `\([^`]*\)`.*/\1/p' "$T/local12.md")"
+KEPT_TOKEN="$(sed -n 's/^- cleanup-token: `\([^`]*\)`.*/\1/p' "$T/local12.md")"
+if [[ "$CRC" -eq 0 && -d "$KEPT_WORKSPACE" && -n "$KEPT_TOKEN" ]]; then
+  ok "case 12 judged-only local workspace is retained with cleanup token"
+else
+  fail "case 12 (rc=$CRC workspace=$KEPT_WORKSPACE token=$([ -n "$KEPT_TOKEN" ] && echo y || echo n))"
+fi
+python3 "$ROOT/scripts/workspace-state.py" cleanup --workspace "$KEPT_WORKSPACE" --token "$KEPT_TOKEN" >/dev/null 2>&1 || fail "case 12 token cleanup"
+
+# ── case 13: deletions are explicit and snapshot internals never recurse ────────────────
+cat >"$PROJ/evaluation.md" <<'EOF'
+## Environment
+- setup: `true`
+- cwd: `.`
+## Command checks
+| Id | Command | Cwd | Pass when | Timeout |
+|---|---|---|---|---|
+| C1 | `rm src/app.txt` | `.` | `exit 0` | 5 |
+EOF
+run_local "$T/local13.md"
+if [[ "$CRC" -eq 0 ]] \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); raise SystemExit(0 if d["deleted"] == ["src/app.txt"] else 1)' "$T/local13.md.changes.json" \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); raise SystemExit(0 if not any(e["path"] == ".superagent-snapshot.json" for e in d["entries"]) else 1)' "$T/local13.md.result-manifest.json"; then
+  ok "case 13 local comparison records deletion without recursive snapshot metadata"
+else
+  fail "case 13 (rc=$CRC)"
+fi
+
+# ── case 14: internal vault input is absent from the frozen source ────────────────
+cat >"$PROJ/evaluation.md" <<'EOF'
+## Environment
+- setup: `true`
+- cwd: `.`
+## Command checks
+| Id | Command | Cwd | Pass when | Timeout |
+|---|---|---|---|---|
+| C1 | `test -f vault/private/secret.txt` | `.` | `exit 0` | 5 |
+EOF
+run_local "$T/local14.md"
+if [[ "$CRC" -eq 1 && "$(result_of "$T/local14.md" C1)" == FAIL ]]; then
+  ok "case 14 excluded vault input fails explicitly"
+else
+  fail "case 14 (rc=$CRC C1=$(result_of "$T/local14.md" C1))"
+fi
+
+if [[ ! -s "$GIT_LOG" ]]; then
+  ok "local runner cases made zero git calls"
+else
+  fail "local runner invoked git ($(wc -l <"$GIT_LOG" | tr -d ' '))"
+fi
 
 echo "supereval-test: $FAILS failure(s)"
 [[ $FAILS -eq 0 ]]
