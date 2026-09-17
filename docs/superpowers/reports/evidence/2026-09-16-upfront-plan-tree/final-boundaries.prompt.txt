@@ -1,0 +1,11 @@
+Read the five supplied skill snapshots only. Describe explicit stated behavior, not a repaired or inferred ideal. For each case return JSON with case, stated_route, explicit_transition (boolean), and concise authority. Do not use external tools/modelCLI/children or modify source.
+1 legacy implementation result: WAITING FOR PLAN ordinary superplan returns implementation; what exact status and plan_exhausted?
+2 legacy sub-master result: returns seed/master; exact status/flag?
+3 legacy none result: no available task to plan; exact status/flag?
+4 upfront exhausted: WAITING FOR PLAN all active stages integrated, no pending batch/refinement/prepared target; what exact transition/audit?
+5 upfront blocked: all remaining stages dependency-blocked; does none imply DONE?
+6 stale at executor entry: selected prepared previous tick, compatible code advance; superrun returns NEEDS-REFINEMENT without execution/closeout; is report routed before closeout be-sure? nextstatus/heavycount?
+7 upfront initial open docsPR: files written candidate but not authoritative integrated; does supergoal require active validation before or after A7?
+8 upfront initial external vault committed: after A7 success where is active validation?
+9 direct superplan unmarked sub-master under known upfront root with missingchild: which root/mode gate applies, can ordinarygapfillrun?
+10 direct superplan unmarked sub-master under true unmarked legacy root: retain incremental or reject?

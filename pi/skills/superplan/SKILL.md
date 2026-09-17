@@ -66,13 +66,22 @@ superplan makes — never source code, never execution output.
 Gates, in order:
 
 1. If `<PLAN.md>` is not provided → respond with exactly `I need to know the plan file` and **exit**.
-2. Read `<PLAN.md>`'s planning-mode marker before descent. A root explicitly marked
+2. Resolve the **containing root** before classifying planning mode. Starting from the supplied
+   `<PLAN.md>`, follow its parent-seed references and verify the corresponding parent Plan links/tree
+   identity until reaching the unique plan with no parent in this goal tree. A direct sub-master
+   invocation therefore inherits its containing root's mode even when the sub-master itself has no
+   marker. Missing, conflicting, or ambiguous root identity is `BLOCKED`; do not treat a known nested
+   node as an independent legacy root. Keep the caller's supplied `<PLAN.md>` and optional `<TOPIC>` as
+   the selection scope after resolving the root.
+3. Read the **resolved root's** planning-mode marker before descent. A root explicitly marked
    `upfront-v1` is governed by superstage S1/S2: invoke `superagent:superstage` and validate its active
-   graph. A missing active Plan link, duplicate/unresolved stage path, or other structural fault returns
-   `BLOCKED`; do not author a replacement through incremental descent. Only an adopted structural repair
-   may alter that tree. Incremental roots and roots without a marker keep the existing flow unchanged.
-3. If `<PLAN.md>` is provided but `<TOPIC>` is not → **invoke the `superagent:supertraverse` skill** (Skill
-   tool) and run its **DESCENT** from `<PLAN.md>`. Descent walks the plan tree down the progress-report
+   graph with root authority, while retaining the caller's subtree/topic as selection scope. A missing
+   active Plan link, duplicate/unresolved stage path, or other structural fault returns `BLOCKED`; do
+   not author a replacement through incremental descent. Only an adopted structural repair may alter
+   that tree. A true containing root marked `incremental`, or with no marker, keeps the existing flow
+   unchanged permanently; process environment preferences do not reclassify it.
+4. If `<PLAN.md>` is provided but `<TOPIC>` is not → **invoke the `superagent:supertraverse` skill** (Skill
+   tool) and run its **DESCENT** from the caller's `<PLAN.md>` selection scope. Descent walks the plan tree down the progress-report
    tables' `Plan` links (multi-layer, not just `<PLAN.md>`'s own rows), skipping completed steps and
    already-planned leaves, and returns:
    - the **target** — the deepest highest-ranked step that is not yet completed **and** has no plan

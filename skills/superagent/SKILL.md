@@ -587,9 +587,17 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
    `superreplan <root> <record>` / REPLANNER; the first dependency-eligible stage whose S5 result is
    NEEDS-REFINEMENT selects `superrefine <root> <stage-id>` / PLAN_REFINER; a valid prepared target
    sets `status: WAITING FOR RUN`, clears planning hints, records the target, and ends this branch
-   with **zero** heavy dispatches. REPLAN-REQUIRED and BLOCKED take the decision ladder before any
-   generic `none`/success handling. A broken/missing upfront tree is BLOCKED, never incremental gap
-   filling.
+   with **zero** heavy dispatches. If the upfront selector finds none of those three targets, run
+   **supertraverse C9 now** against the synchronized authoritative tree; do not dispatch PLANNER just
+   to manufacture an exhaustion result. C9 **complete** sets `plan_exhausted: true` and `status:
+   DONE`, records the audited integration/disposition evidence, and ends the branch with zero heavy
+   dispatches. C9 **incomplete** must name the still-active planning or execution obligation: clear
+   `plan_exhausted`, remain in `WAITING FOR PLAN`, and reselect that concrete refinement, repair, or
+   prepared execution target under this same selection contract. C9 **BLOCKED**, including the case
+   where every remaining obligation is dependency-blocked, enters the existing decision ladder and
+   never sets DONE or polls an empty loop. REPLAN-REQUIRED and BLOCKED take the decision ladder before
+   any generic `none`/success handling. A broken/missing upfront tree is BLOCKED, never incremental
+   gap filling.
 3. **Selected-role-only preflight.** Before writing `PLANNING`, resolve only the selected role's
    harness, model, effort, and dispatch form. Check the prerequisite required by that harness's rule
    in **Model resolution**: the native Claude definition selected by its predicate, the native Cursor
@@ -609,8 +617,14 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
    parent rows, and any A7 artifacts, then relay the complete Final Report. PREPARED moves to
    `WAITING FOR RUN`; a published/finished replan or a legacy repaired successor moves to
    `WAITING FOR PLAN`; REPLAN-REQUIRED, BLOCKED, contradictory evidence, and bridge failure use the
-   existing decision ladder. Ordinary superplan retains its existing implementation/sub-master/none
-   result parsing. Append the iteration log and go to **Step 2**.
+   existing decision ladder. For ordinary legacy superplan, parse and persist every successful result
+   explicitly: a published **implementation plan** sets `status: WAITING FOR RUN` and
+   `plan_exhausted: false`; a published **seed/master or sub-master plan** sets `status: WAITING FOR
+   PLAN` and `plan_exhausted: false`; `No available task to plan — every step is completed or already
+   has a plan` sets `status: WAITING FOR RUN` and `plan_exhausted: true`, so the executor's `none`
+   result reaches the C9 guard below. A `not-traversable` result or missing required plan input is a
+   hard error: record it, stop/tear down the driver per Step 2, and never invent a next target.
+   Append the iteration log and go to **Step 2**.
 
 ### `WAITING FOR RUN`
 1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superrun`'s traversal reads a fresh tree. If it STOPs,
@@ -625,41 +639,48 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
    (step 5's park case; a fresh process resumes it). superagent never invokes `superrun` inline in its
    own context, and never as a subagent (issue #25).
-4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
-   skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
-   `sync_main()` (then `sync_vault()` in external vault mode), then verify `superrun`'s reported merges landed:
-   the leaf's closeout record exists and is tracked (on local `main` for an internal vault;
-   in the vault repo for an external one — L5's two-kind rule) and matches the execution snapshot.
-   For partial execution, verify its open PR/head/CI identity and explicit non-delivered/non-consumable
-   result. For complete delivery, verify delivered contract revisions and (if the code PR merged) its
-   squash commit is in `origin/main` history. A merged code PR but stale local `main` is the exact bug
-   this gate exists for — reconcile (ff-pull) or escalate. Do not advance on an unverified merge, and
-   surface the failure in this tick's `Findings & issues` line.
-5. **Retain `superrun`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
-   Report — per tick**) and **note any issue it surfaces** — a CRITICAL / ⚠️ finding, an implementation
-   inconsistency, a BLOCKED task, a CI-red code PR — for the `Findings & issues` line, independent of
-   whether it triggers escalation. **A BLOCKED/inconsistent repair report takes precedence over
-   any `none` phrase**: run the decision ladder, not the exhaustion branch. Otherwise parse:
+4. **Classify before delivery-specific be-sure.** Retain `superrun`'s verbatim report for relay (it is
+   reproduced in this tick's **Final Report — per tick**) and note every issue it surfaces. A
+   **CI-PENDING report** takes the Parking flow immediately; nothing merged, so the post-sync/be-sure
+   runs on the resume tick instead. For every other report, run `sync_main()` (then `sync_vault()` in
+   external vault mode), classify the report, and reconcile any artifacts it actually names. Before
+   applying any delivery-specific be-sure requirement, route no-execution outcomes:
 
-   - **CI-PENDING report** (not a Final Report — `superrun` queued long CI and yielded) → **park**:
-     run the **Parking** flow (CI wait — monitor-parked): write `ci_wait:`, `status: WAITING FOR CI`,
-     arm the resume signal per driver, and end the tick there (skip step 4's be-sure — nothing merged
-     yet; the sync gate + be-sure run on the resume tick instead). Not a failure, not BLOCKED.
-   - **REPLAN-REQUIRED, BLOCKED, unresolved code PR, CI-red, or contradictory report evidence** takes precedence
-     over `none` or a claimed completed leaf. Run the **Decision-escalation ladder** below.
-     Apply adopted re-plan through **supertraverse C8**, not just a loop-status edit. If the panel
-     cannot converge, use `WAITING FOR INPUT`. Never silently spin on an invisible blocked leaf.
+   - **NEEDS-REFINEMENT at execution entry** means superrun stopped before implementation because the
+     prepared receipt is missing or needs compatible-baseline revalidation. It legitimately has no
+     closeout or delivery evidence. Set `status: WAITING FOR PLAN`, `plan_exhausted: false`, and persist
+     `planning_operation: refine`, the reported root generation, and the reported stage as
+     `planning_target`; end result handling without requiring a closeout and without dispatching a
+     second heavy skill in this tick. The next tick selects PLAN_REFINER through the normal
+     `WAITING FOR PLAN` branch.
+   - **REPLAN-REQUIRED, BLOCKED, unresolved code PR, CI-red, contradictory evidence, or another
+     non-success report** follows its existing decision/recovery path after reconciling only artifacts
+     it actually reports. None may be rejected merely because a closeout that the outcome does not
+     claim is absent.
+   - **`none`** (no execution target, with no higher-priority blocker) claims no delivery and requires
+     no closeout. If `plan_exhausted` is false, set `status: WAITING FOR PLAN`. If true, invoke
+     **supertraverse C9** on the synchronized tree: **complete** sets `status: DONE` and records the
+     audited integration/disposition evidence; **incomplete** clears `plan_exhausted` and sets
+     `status: WAITING FOR PLAN`; **BLOCKED** enters the decision ladder with its concrete blockers.
+     An empty queue pair is only a reason to audit, never sufficient to set DONE.
+   - Only a report that claims complete delivery, partial execution, or evidence-only discovery
+     completion proceeds to the delivery be-sure gate in step 5.
+
+5. **Delivery be-sure, then successful-result routing.** For a delivery/partial-execution claim,
+   verify `superrun`'s reported artifacts landed: the leaf's closeout record exists and is tracked (on
+   local `main` for an internal vault; in the vault repo for an external one — L5's two-kind rule) and
+   matches the execution snapshot. For partial execution, verify its open PR/head/CI identity and
+   explicit non-delivered/non-consumable result. For complete delivery, verify delivered contract
+   revisions and (if the code PR merged) its squash commit is in `origin/main` history. A merged code
+   PR but stale local `main` is the exact bug this gate exists for — reconcile (ff-pull) or escalate.
+   Do not advance on an unverified merge, and surface the failure in this tick's `Findings & issues`
+   line. **A BLOCKED/inconsistent repair report takes precedence over any `none` phrase**: run the
+   decision ladder, not the exhaustion branch. Otherwise parse the successful result:
+
    - **Executed a leaf** (identity-bound complete delivery receipt or partial closeout verified; for
      evidence-only discovery, required evidence/decision A7 publication verified without requiring a
      code PR) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
-   - **`none`** (no execution target, with no higher-priority blocker):
-     - If `plan_exhausted` is false → `status: WAITING FOR PLAN`.
-     - If true → invoke **supertraverse C9 completion audit** on the synchronized tree.
-       **complete** → `status: DONE`, record audited integration/disposition evidence in this
-       iteration log. **incomplete** → clear `plan_exhausted`, `status: WAITING FOR PLAN`.
-       **BLOCKED** → decision ladder with the audit's concrete blockers. An empty queue pair
-       is only a reason to audit; it is never sufficient to set DONE.
 6. Append an iteration-log entry (skill, result, code PR + closeout PR URLs). Go to **Step 2**.
 
 ---

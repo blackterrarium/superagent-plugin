@@ -361,8 +361,11 @@ Create the goal folder and the **six subfolders** — `master-plans/`, `plans/`,
 folders are tracked — matches existing goal folders that keep `handoff/.gitkeep` and `todo/.gitkeep`).
 
 For upfront mode, write every indexed root/sub-master/stage/directive/review artifact as one complete
-set, validate the published tree again in active S1/S2 context, and include every artifact explicitly
-in the one A7 publication. Never publish a root, a subset of stages, or a review separately.
+set and verify that complete write-out in **candidate** S1/S2 context through the explicit
+intended-vault-path map. The files are still uncommitted (or an internal docs PR is still open), so
+they are not an active authoritative tree and candidate validation cannot authorize execution. Include
+every artifact explicitly in the one A7 publication. Never publish a root, a subset of stages, or a
+review separately.
 
 ### 9. Commit & merge via PR (superauthor A7)
 
@@ -379,6 +382,13 @@ Apply A7 with these caller parameters:
   `<vault_root>`, committed directly there; no branch, no PR (see A7 **Target repo**). A7's
   **precondition** applies: if `<vault_root>` is not its own repository, STOP and report — never
   improvise a `git init`.
+
+After A7 succeeds, synchronize the authoritative code/vault branch, then validate the integrated
+upfront tree in **active** S1/S2 context before step 10 reports success. This is the first point at
+which active validation is valid: every indexed artifact must be readable and tracked at the
+authoritative revision, and the active graph must match the candidate that passed step 8. A failed
+post-publication active validation is BLOCKED and must be reported; it never falls back to the earlier
+candidate result. Initial stages still require their normal preparation receipts before execution.
 
 ### 10. Final Report (superauthor A8)
 

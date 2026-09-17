@@ -9,7 +9,7 @@
   },
   {
     "path": "claude/scripts/README.md",
-    "sha256": "b08955824afa00c52fc43be83733e64d356c4b362f170e978dfc7f0956ad98c0"
+    "sha256": "9d747f11c469cdb38901484fcd25d9861f2a9bb9d281ae337ecd4ee4b0b63421"
   },
   {
     "path": "claude/scripts/_common.sh",
@@ -113,7 +113,7 @@
   },
   {
     "path": "claude/scripts/plan-tree-regression.py",
-    "sha256": "9f9d494a7218865f2c3b58b54e9a202ed4b07aad32fbf62dcca1f9453f31fc74"
+    "sha256": "73a80fa8998ca3f26a0675385101a4b790c2c251d5715b791ba7da9a9304607d"
   },
   {
     "path": "claude/scripts/prd-lint-test.sh",
@@ -169,7 +169,7 @@
   },
   {
     "path": "claude/skills/superagent/SKILL.md",
-    "sha256": "51a82fa15ee6a8415d26b7c6dd3ea980805950c95ea9c15def0890cabf1ef53c"
+    "sha256": "53379e46f0f53937fb4ba6d21196a0a7876cf3d54a45a12f1eb864da64f7dd89"
   },
   {
     "path": "claude/skills/superagent-external/SKILL.md",
@@ -205,7 +205,7 @@
   },
   {
     "path": "claude/skills/supergoal/SKILL.md",
-    "sha256": "12aee0009848a20344cad89454511d4c02518987a9aa382a8651f6d88c97d860"
+    "sha256": "af7bba048fb1e3373fafe6965b46ecf630ccfb435a25d14dc332663aa1b661fe"
   },
   {
     "path": "claude/skills/superloop/SKILL.md",
@@ -217,7 +217,7 @@
   },
   {
     "path": "claude/skills/superplan/SKILL.md",
-    "sha256": "26886232fa0ab30179c6e72ae32c0e01f1b09768e30ffe7f96641f3c4abd6d8a"
+    "sha256": "982348429eca1b3de5bbe8b61edc84fe5c6eeb58e9c8b281e70414b5209c6193"
   },
   {
     "path": "claude/skills/superprd/SKILL.md",
@@ -305,7 +305,7 @@
   },
   {
     "path": "codex/skills/superagent/SKILL.md",
-    "sha256": "f01d9c75203a525e37c6994421369c76664d102774be0391d3eed0660a21d31d"
+    "sha256": "0814d23123e47795dde5e209d7ab313f8956c56992bc5b9ff045c69abab49409"
   },
   {
     "path": "codex/skills/superagent-external/SKILL.md",
@@ -341,7 +341,7 @@
   },
   {
     "path": "codex/skills/supergoal/SKILL.md",
-    "sha256": "6478602d321230abf78632f3d3eba53910823e450f2d5f6947c4642f37dfab30"
+    "sha256": "4d3b1958ec5257295b46f65abedc64055eeb140320639008f9a64bc2e4b5b820"
   },
   {
     "path": "codex/skills/superloop/SKILL.md",
@@ -353,7 +353,7 @@
   },
   {
     "path": "codex/skills/superplan/SKILL.md",
-    "sha256": "95e47964769a4ffcbc0b2d217c004e76a35ddc4035826762ee27f7785d5866a3"
+    "sha256": "788b3d25ea9c485d472cb6a2fbe5c523434932ddc0fc5c22e2d53f60213245e0"
   },
   {
     "path": "codex/skills/superprd/SKILL.md",
@@ -421,7 +421,7 @@
   },
   {
     "path": "cursor/skills/superagent/SKILL.md",
-    "sha256": "eb4652dd4477e97595b7c4b39b81a875a72fa896058b414925d536d52ac906d8"
+    "sha256": "272fd79401b08bed7c031e2c1fe1155308fe2fad08f7feb3d8570433722589cc"
   },
   {
     "path": "cursor/skills/superagent-external/SKILL.md",
@@ -457,7 +457,7 @@
   },
   {
     "path": "cursor/skills/supergoal/SKILL.md",
-    "sha256": "462e364ce6449ee115976adf4056a17cb87c81a7d3bf40fbc4123480490c6bfd"
+    "sha256": "b92f11beca1fdcef7b8bbc52555090f174b0a09bac4fccdcb6e6b9dd8cdc4a98"
   },
   {
     "path": "cursor/skills/superloop/SKILL.md",
@@ -469,7 +469,7 @@
   },
   {
     "path": "cursor/skills/superplan/SKILL.md",
-    "sha256": "3e13ddd03ed840962251dcbfe1cfabbf81fe102bf5e36af0884d5666895fe5c2"
+    "sha256": "4baf072abb0e4bf8e14a3e8010e6cf71227d3a1a52c5823df8fc7bb6edc78d7b"
   },
   {
     "path": "cursor/skills/superprd/SKILL.md",
@@ -557,7 +557,7 @@
   },
   {
     "path": "pi/skills/superagent/SKILL.md",
-    "sha256": "344cf7be50a017ff818f2621ec04f39cb89de480523a79689f114c6eb6ebc5bc"
+    "sha256": "a6f5179ebf8e6235e793f0f7ce5c1e7520e2e7fb8f499f8734f7cc802590e11b"
   },
   {
     "path": "pi/skills/superagent-external/SKILL.md",
@@ -593,7 +593,7 @@
   },
   {
     "path": "pi/skills/supergoal/SKILL.md",
-    "sha256": "b3b5d07d9afc847ef1e439c997e978e7d0af44849c2a4f33c427e88db13fac8a"
+    "sha256": "ea3317b5be2d97e7853163d597cb3e989fe91a83804349a76670b032ec68f291"
   },
   {
     "path": "pi/skills/superloop/SKILL.md",
@@ -605,7 +605,7 @@
   },
   {
     "path": "pi/skills/superplan/SKILL.md",
-    "sha256": "7912841b22e17ded9c04caf004c9067c0fbb0a264881c2d89443ebd50145195e"
+    "sha256": "c0cb94cd84ac22962e5bfd587c1a9958c8766e9fd89ce5fb1785a7a912f632a3"
   },
   {
     "path": "pi/skills/superprd/SKILL.md",

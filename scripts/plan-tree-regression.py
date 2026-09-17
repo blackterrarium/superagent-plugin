@@ -476,6 +476,71 @@ CASES = (
      'authorized dispatch target; the S02 finding origin is not a dispatch target while input waits.',
      {'selected_role': 'none', 'operation': 'none', 'model_source': 'none', 'effort_source': 'none',
       'target': 'none', 'next_state': 'WAITING FOR INPUT', 'heavy_dispatches': 0}),
+    ('supervisor_legacy_implementation_result',
+     'A WAITING FOR PLAN tick dispatched ordinary legacy superplan. Its verified Final Report names '
+     'a newly published implementation plan. There is no blocker or repair request. The question '
+     'asks for the post-result controller state.',
+     {'operation': 'run', 'next_state': 'WAITING FOR RUN', 'plan_exhausted': False,
+      'heavy_dispatches': 1}),
+    ('supervisor_legacy_submaster_result',
+     'A WAITING FOR PLAN tick dispatched ordinary legacy superplan. Its verified Final Report names '
+     'a newly published seed/sub-master plan. There is no blocker or repair request. The question '
+     'asks for the post-result controller state.',
+     {'operation': 'plan', 'next_state': 'WAITING FOR PLAN', 'plan_exhausted': False,
+      'heavy_dispatches': 1}),
+    ('supervisor_legacy_planning_exhausted',
+     'A WAITING FOR PLAN tick dispatched ordinary legacy superplan. Its verified result is exactly '
+     '`No available task to plan — every step is completed or already has a plan`; no higher-priority '
+     'blocker or repair evidence exists. The question asks for the post-result controller state.',
+     {'operation': 'run', 'next_state': 'WAITING FOR RUN', 'plan_exhausted': True,
+      'heavy_dispatches': 1}),
+    ('supervisor_upfront_all_integrated',
+     'Tick entry state is WAITING FOR PLAN on a synchronized authoritative upfront-v1 root. There is '
+     'no pending batch, refinement target, or prepared execution target. C9 verifies every active '
+     'obligation integrated or authoritatively disposed and no unresolved blocker. The question asks '
+     'for the controller action; no extra PLANNER dispatch is permitted merely to discover completion.',
+     {'selected_role': 'none', 'operation': 'none', 'outcome': 'done', 'target': 'none',
+      'next_state': 'DONE', 'plan_exhausted': True, 'heavy_dispatches': 0}),
+    ('supervisor_upfront_dependency_blocked',
+     'Tick entry state is WAITING FOR PLAN on a synchronized authoritative upfront-v1 root. There is '
+     'no pending batch, refinement target, or prepared execution target because every remaining '
+     'active obligation is dependency-blocked. C9 reports the concrete blockers and the existing '
+     'decision ladder cannot converge without user authority. The question asks for the controller '
+     'action; no PLANNER fallback or empty-loop polling is permitted.',
+     {'selected_role': 'none', 'operation': 'none', 'outcome': 'BLOCKED', 'target': 'none',
+      'next_state': 'WAITING FOR INPUT', 'plan_exhausted': False, 'heavy_dispatches': 0}),
+    ('supervisor_executor_entry_needs_refinement',
+     'A WAITING FOR RUN tick dispatched superrun for prepared upfront stage S01. At its mandatory '
+     'fresh execution-entry check, unrelated code advancement requires compatible-baseline '
+     'revalidation. Superrun returns NEEDS-REFINEMENT before implementation and therefore has no '
+     'leaf closeout or delivery evidence. The question asks for the post-result controller state in '
+     'this same tick.',
+     {'selected_role': 'PLAN_REFINER', 'operation': 'refine', 'outcome': 'NEEDS-REFINEMENT',
+      'target': 'S01', 'next_state': 'WAITING FOR PLAN', 'closeout_required': False,
+      'heavy_dispatches': 1}),
+    ('supergoal_candidate_before_publication',
+     'An upfront supergoal passed confirmation and wrote the complete initial artifact set. The files '
+     'are still uncommitted, or the internal docs PR is open and unmerged. Classify the required S1/S2 '
+     'validation context and whether this observation may authorize execution before A7 publication.',
+     {'validation_context': 'candidate', 'publication': 'none', 'upfront_valid': True,
+      'executable': False}),
+    ('supergoal_active_after_publication',
+     'The same complete initial upfront artifact set has now passed the single A7 publication, is '
+     'committed and integrated on the authoritative branch, and the local tree has synchronized. '
+     'Classify the required S1/S2 validation context before supergoal reports success. Initial stages '
+     'still have Preparation: none.',
+     {'validation_context': 'active', 'publication': 'vault', 'upfront_valid': True,
+      'executable': False}),
+    ('direct_nested_upfront_superplan',
+     'superplan is invoked directly with an unmarked sub-master path inside an upfront-v1 goal. Its '
+     'containing root is unambiguous and has one active child row in this subtree with a missing Plan '
+     'link. Classify mode and action while retaining the supplied sub-master as selection scope.',
+     {'mode': 'upfront-v1', 'outcome': 'BLOCKED', 'operation': 'none'}),
+    ('direct_nested_legacy_superplan',
+     'superplan is invoked directly with an unmarked sub-master path inside an unmarked legacy root. '
+     'The containing root is unambiguous, and the supplied subtree has one ordinary available task P2. '
+     'Classify mode and planning action while retaining that subtree as selection scope.',
+     {'mode': 'incremental', 'operation': 'plan', 'target': 'P2'}),
     ('supervisor_legacy_incremental_planning',
      'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The root has no '
      'Planning mode marker even though the process environment requests upfront. It has an ordinary '
@@ -555,19 +620,21 @@ def render_prompt(skills, cases):
         'REPLAN-REQUIRED, continue, or done; operation is plan, refine, run, replan, or none; role '
         'is PLANNER, PLAN_REFINER, REPLANNER, EXECUTOR, or none; model_source and effort_source are '
         'process-env, repo-superenv, harness-default, or none; next_state is WAITING FOR PLAN, '
-        'PLANNING, WAITING FOR RUN, or WAITING FOR INPUT; dispatch_form is named-definition, '
+        'PLANNING, WAITING FOR RUN, WAITING FOR INPUT, or DONE; dispatch_form is named-definition, '
         'generic-child, bridge-relay, bridge-process, codex-spawn, or none; target is a stage ID, legacy leaf ID, '
         'decision ID, or none; heavy_dispatches is the scheduled/authorized count in this case, '
         'integer 0 or 1; publication is none, scratch, '
         'or vault; draft_action describes scratch artifact handling only: resume, revise, or none; '
-        'confirmation remains separately governed by the current gate; root_mode_marker is '
+        'confirmation remains separately governed by the current gate; validation_context is '
+        'candidate or active; root_mode_marker is '
         'incremental, upfront-v1, or absent; upfront_valid, executable, '
         'done, code_execution, code_pr_required, discovery_evidence_verified, merge_allowed, '
         'worktree_required, sdd_required, partial_closeout_allowed, delivered, consumable, '
         'checkpoint_preserved, old_ci_authoritative, successor_snapshot_required, '
         'execution_snapshot_required, historical_snapshot_required, delivery_receipt_reused, '
         'pr_evidence_preserved, replan_required, affected_preparation_valid, duplicate_stage_ids, '
-        'duplicate_goal_folder, commitments_preserved, request_publication_required, and '
+        'duplicate_goal_folder, commitments_preserved, request_publication_required, '
+        'plan_exhausted, closeout_required, and '
         'in_place_overwrite are JSON booleans; '
         'digest_basis is execution-snapshot or current-annotated-plan; execution_path is '
         'discovery-evidence or code-delivery; evidence_publication is authoritative-vault or none; '
@@ -685,6 +752,33 @@ class ValidatorTests(unittest.TestCase):
         answers['supervisor_cursor_native_refinement']['dispatch_form'] = 'generic-child'
         self.assertTrue(any(error.startswith('supervisor_cursor_native_refinement.dispatch_form:')
                             for error in validate_answers(answers, cases)))
+
+    def test_final_review_boundary_cases_enforce_routing_results(self):
+        cases = select_cases(['supervisor_legacy_implementation_result',
+                              'supervisor_legacy_submaster_result',
+                              'supervisor_legacy_planning_exhausted',
+                              'supervisor_upfront_all_integrated',
+                              'supervisor_upfront_dependency_blocked',
+                              'supervisor_executor_entry_needs_refinement',
+                              'supergoal_candidate_before_publication',
+                              'supergoal_active_after_publication',
+                              'direct_nested_upfront_superplan',
+                              'direct_nested_legacy_superplan'])
+        answers = self.valid_answers(cases)
+        self.assertEqual(validate_answers(answers, cases), [])
+        mutations = (
+            ('supervisor_legacy_implementation_result', 'plan_exhausted', True),
+            ('supervisor_upfront_all_integrated', 'next_state', 'WAITING FOR PLAN'),
+            ('supervisor_executor_entry_needs_refinement', 'closeout_required', True),
+            ('supergoal_candidate_before_publication', 'validation_context', 'active'),
+            ('direct_nested_upfront_superplan', 'mode', 'incremental'),
+        )
+        for name, field, wrong_value in mutations:
+            with self.subTest(case=name, field=field):
+                answers = self.valid_answers(cases)
+                answers[name][field] = wrong_value
+                self.assertTrue(any(error.startswith(name + '.' + field + ':')
+                                    for error in validate_answers(answers, cases)))
 
     def test_closeout_and_recovery_cases_require_delivery_identity_results(self):
         cases = select_cases(['manual_superrun_pending_batch',

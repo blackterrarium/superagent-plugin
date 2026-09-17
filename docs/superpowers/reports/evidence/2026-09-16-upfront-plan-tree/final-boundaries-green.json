@@ -1,0 +1,62 @@
+[
+  {
+    "case": "1 legacy implementation result",
+    "stated_route": "Ordinary legacy superplan's published implementation plan sets status to WAITING FOR RUN and plan_exhausted to false.",
+    "explicit_transition": true,
+    "authority": "superagent WAITING FOR PLAN, post-dispatch step 5"
+  },
+  {
+    "case": "2 legacy sub-master result",
+    "stated_route": "A published seed/master or sub-master plan sets status to WAITING FOR PLAN and plan_exhausted to false.",
+    "explicit_transition": true,
+    "authority": "superagent WAITING FOR PLAN, post-dispatch step 5"
+  },
+  {
+    "case": "3 legacy none result",
+    "stated_route": "The exact 'No available task to plan' result sets status to WAITING FOR RUN and plan_exhausted to true, so executor none reaches C9.",
+    "explicit_transition": true,
+    "authority": "superagent WAITING FOR PLAN, post-dispatch step 5"
+  },
+  {
+    "case": "4 upfront exhausted",
+    "stated_route": "When the upfront selector has no pending batch, refinement, or prepared target, run C9. C9 complete sets plan_exhausted true and status DONE, records audited integration/disposition evidence, and performs zero heavy dispatches.",
+    "explicit_transition": true,
+    "authority": "superagent WAITING FOR PLAN, selection step 2"
+  },
+  {
+    "case": "5 upfront blocked",
+    "stated_route": "C9 BLOCKED, including every remaining obligation being dependency-blocked, enters the decision ladder; it never sets DONE or polls an empty loop.",
+    "explicit_transition": false,
+    "authority": "superagent WAITING FOR PLAN, selection step 2"
+  },
+  {
+    "case": "6 stale at executor entry",
+    "stated_route": "Classify NEEDS-REFINEMENT before delivery be-sure: it has no closeout requirement. Set WAITING FOR PLAN, plan_exhausted false, and persist planning_operation refine, reported generation, and stage target; dispatch no second heavy skill this tick. The next tick selects PLAN_REFINER. The dispatched superrun remains this tick's one heavy invocation.",
+    "explicit_transition": true,
+    "authority": "superagent WAITING FOR RUN, classify-before-delivery-be-sure step 4; Step 2 heavy-skill accounting"
+  },
+  {
+    "case": "7 upfront initial open docsPR",
+    "stated_route": "Candidate validation occurs during complete candidate write-out and cannot authorize execution. Active S1/S2 validation is required only after A7 succeeds and the authoritative branch is synchronized.",
+    "explicit_transition": true,
+    "authority": "supergoal write-out step 8 and A7 step 9"
+  },
+  {
+    "case": "8 upfront initial external vault committed",
+    "stated_route": "After A7 succeeds, synchronize the authoritative code/vault branch, then validate the integrated upfront tree in active S1/S2 context before reporting success.",
+    "explicit_transition": true,
+    "authority": "supergoal A7 step 9"
+  },
+  {
+    "case": "9 direct superplan unmarked sub-master under known upfront root with missingchild",
+    "stated_route": "Resolve the containing root first; the direct sub-master inherits its known upfront-v1 root. Validate the active graph under S1/S2; the missing active Plan link is BLOCKED, and ordinary incremental gap filling must not author a replacement.",
+    "explicit_transition": false,
+    "authority": "superplan Input gates 2-3"
+  },
+  {
+    "case": "10 direct superplan unmarked sub-master under true unmarked legacy root",
+    "stated_route": "A true containing root with no marker permanently retains the existing incremental flow; ordinary descent/planning remains the stated route.",
+    "explicit_transition": true,
+    "authority": "superplan Input gate 3"
+  }
+]

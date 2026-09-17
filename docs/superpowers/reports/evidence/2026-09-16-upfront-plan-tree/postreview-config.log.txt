@@ -1,0 +1,22 @@
+ok   - native Claude tier plus effort requires named definition
+ok   - native Claude tier plus inherit may use general-purpose
+ok   - bridged planning role is not mistaken for native definition
+ok   - process: refiner resolves its own model and effort
+ok   - process: replanner resolves its own model and effort
+ok   - process: actual bridge calls distinct foreign CLIs
+ok   - repo: role pins remain independent
+ok   - repo: actual bridge records both roles
+ok   - repo: equal pins dispatch both named roles
+ok   - harness defaults: Claude refiner
+ok   - harness defaults: Claude replanner
+ok   - harness defaults: Codex refiner
+ok   - harness defaults: Codex replanner
+ok   - harness defaults: Cursor refiner inherits
+ok   - harness defaults: Cursor replanner inherits
+ok   - harness defaults: Pi refiner pin reaches bridge
+ok   - harness defaults: Pi replanner pin reaches bridge
+ok   - cursor: bridged refiner preserves foreign effort
+ok   - cursor: native effort has no CLI transport
+ok   - unavailable bridge CLI fails
+ok   - unavailable bridge CLI names configured harness
+plan-tree-config-test: 0 failure(s)

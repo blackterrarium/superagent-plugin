@@ -132,3 +132,11 @@ live PT-01–PT-11 evidence, a validator report with no missing or inconsistent 
 
 Refinement time, replanning time, amendments, retained/revised IDs, and token usage are unknown because
 no live run occurred. This report does not invent them.
+
+## Final whole-branch review correction
+
+The final review identified four runtime control-flow gaps: legacy/exhausted supervisor transitions, execution-entry refinement routing, initial publication validation order, and containing-root detection for direct sub-master calls. One grouped fix addressed all four; [scoped re-review](evidence/2026-09-16-upfront-plan-tree/whole-branch-rereview.md) passed with no new Important/Critical findings.
+
+The earlier 69-case and legacy16 outputs remain historical evidence for their recorded Task6 source hashes. The changed three skills received a fresh [ten-case interpretation](evidence/2026-09-16-upfront-plan-tree/final-boundaries-green.json), assessed against the [pre-fix baseline](evidence/2026-09-16-upfront-plan-tree/final-boundaries-baseline.json); all ten stated routes match the required boundaries. See the [assessment and limits](evidence/2026-09-16-upfront-plan-tree/final-boundaries-assessment.md) and [current hashes](evidence/2026-09-16-upfront-plan-tree/final-boundaries-source-hashes.json). Regression self-tests now pass 15/15; all three regenerated package checks and configuration tests pass. Live acceptance remains INCOMPLETE.
+
+The final rebuilt copied-package suite also exited 0; [full output](evidence/2026-09-16-upfront-plan-tree/postreview-package.log.txt) includes all four package variants. Offline implementation and review are complete. The isolated live test, default switch, and integration remain pending.
