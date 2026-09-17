@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Refresh shipped model defaults: Anthropic roles previously pinned to Opus 4.8 now use
+  `claude-opus-5`; the Claude `PLANNER` uses `claude-fable-5-1`; and the Codex and Pi planners use
+  `gpt-6-astra` (through Pi's `openai-codex` provider). Existing repository `.superenv` files remain
+  explicit operator configuration and are not overwritten automatically.
+
 ## 0.8.1 — 2026-09-07
 
 - Package the Stage 1/2 validator, evaluator, and their dependencies with Codex and Pi.

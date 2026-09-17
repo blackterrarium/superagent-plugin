@@ -1,0 +1,7 @@
+FAIL: legacy_default.mode: expected "incremental", got "unsupported"
+FAIL: bounded_unknown.upfront_valid: expected true, got false
+FAIL: dependency_cycle.outcome: expected "BLOCKED", got "unsupported"
+FAIL: local_detail.operation: expected "refine", got "unsupported"
+FAIL: local_detail.role: expected "PLAN_REFINER", got "unsupported"
+FAIL: contract_break.operation: expected "replan", got "unsupported"
+FAIL: contract_break.role: expected "REPLANNER", got "unsupported"

@@ -1,0 +1,506 @@
+{
+  "legacy_default": {
+    "reason": "Superstage S1 says an unmarked root is legacy incremental regardless of SUPER_PLANNING_MODE and must not be rewritten.",
+    "mode": "incremental"
+  },
+  "invalid_trailing_planning_mode": {
+    "reason": "Supergoal step 1 rejects any trailing planning-mode value other than upfront or incremental before any scratch or vault write, while superauthor A1 forbids code execution.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "code_execution": false
+  },
+  "incremental_mode_persisted": {
+    "reason": "Supergoal step 4 requires every newly authored incremental root to persist the exact Planning mode marker incremental.",
+    "mode": "incremental",
+    "root_mode_marker": "incremental"
+  },
+  "bounded_unknown": {
+    "reason": "Superstage S2 permits bounded predecessor-dependent filenames with a stated preparation method, but S3 requires a current PREPARED receipt before execution.",
+    "upfront_valid": true,
+    "executable": false
+  },
+  "missing_architecture": {
+    "reason": "Superstage S2 forbids deferring architecture or other foundational choices without a bounded discovery contract and classifies unbounded foundational uncertainty as invalid.",
+    "upfront_valid": false
+  },
+  "open_provider": {
+    "reason": "Superstage S3 requires the provider PR merged into authoritative main plus tracked delivery evidence, so an open PR neither satisfies S02 nor permits C9 completion.",
+    "executable": false,
+    "done": false
+  },
+  "declined_provider": {
+    "reason": "Superstage S3 and supertraverse C9 say a provider disposition closes only its own obligation and cannot satisfy a live consumer until an adopted replan removes or replaces the contract.",
+    "executable": false,
+    "done": false
+  },
+  "dependency_cycle": {
+    "reason": "Superstage S2 classifies a dependency cycle in the active upfront graph as BLOCKED before selection.",
+    "outcome": "BLOCKED"
+  },
+  "unlinked_active_row": {
+    "reason": "Superstage S2 requires every active scope row to have a readable Plan link and supertraverse C6 forbids filling an upfront publication gap through incremental authoring.",
+    "upfront_valid": false,
+    "outcome": "BLOCKED"
+  },
+  "multi_level_complete_tree": {
+    "reason": "Superstage S1/S2 allow the mapped scratch tree to pass candidate validation with three unique leaves, but candidate state and Preparation none cannot authorize execution under S1/S3.",
+    "upfront_valid": true,
+    "stages": 3,
+    "executable": false
+  },
+  "draft_interrupted_before_confirmation": {
+    "reason": "Supergoal steps 6-7 preserve an interrupted reviewed upfront tree in its scratch index as DRAFT-INCOMPLETE until confirmation, with no vault publication or execution.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "resume_identical_source": {
+    "reason": "Supergoal's resume contract reuses the matching scratch set, destination, and stable IDs without allocating duplicates, but re-applies the still-unsatisfied confirmation gate.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "resume",
+    "duplicate_stage_ids": false,
+    "duplicate_goal_folder": false
+  },
+  "resume_changed_source": {
+    "reason": "Supergoal's resume contract requires an explicitly revised scratch draft when the source digest changes and otherwise preserves the old draft as DRAFT-INCOMPLETE without execution.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "revise",
+    "code_execution": false
+  },
+  "confirmation_refused": {
+    "reason": "Supergoal step 7 says a declined human gate preserves the scratch index, reports DRAFT-INCOMPLETE, and performs no vault write or code execution.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "supermeta_draft_incomplete": {
+    "reason": "Supermeta step 6 preserves and reports an explicit DRAFT-INCOMPLETE index, writes nothing to the iteration ledger, and exits absent verified complete publication evidence.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "ledger_appended": false
+  },
+  "local_detail": {
+    "reason": "Superstage S4 assigns bounded file, helper, and test-detail changes that preserve every commitment to refine under PLAN_REFINER.",
+    "operation": "refine",
+    "role": "PLAN_REFINER"
+  },
+  "contract_break": {
+    "reason": "Superstage S4 assigns an unavoidable shared-contract behavior change affecting consumers to structural replan under REPLANNER.",
+    "operation": "replan",
+    "role": "REPLANNER"
+  },
+  "preparation_noop": {
+    "reason": "Superstage S5 classifies first receipt attachment with no plan-body change as amendment none and keeps the Stage revision unchanged.",
+    "outcome": "PREPARED",
+    "stage_revision": 1,
+    "commitments_preserved": true,
+    "amendment_kind": "none"
+  },
+  "predecessor_detail_preparation": {
+    "reason": "Superstage S4/S5 permits evidence-grounded bounded executable detail changes as a content amendment, preserving commitments while incrementing the Stage revision.",
+    "outcome": "PREPARED",
+    "stage_revision": 2,
+    "commitments_preserved": true,
+    "amendment_kind": "content-amendment"
+  },
+  "scope_expansion_during_preparation": {
+    "reason": "Superrefine and superstage S4 require REPLAN-REQUIRED when evidence expands approved scope, preserving the approved leaf rather than overwriting it in place.",
+    "outcome": "REPLAN-REQUIRED",
+    "commitments_preserved": false,
+    "in_place_overwrite": false
+  },
+  "source_revision_changed": {
+    "reason": "Superstage S4/S5 treats a changed authoritative acceptance condition and source-revision mismatch as REPLAN-REQUIRED, invalidating executability without an in-place rewrite.",
+    "outcome": "REPLAN-REQUIRED",
+    "executable": false,
+    "in_place_overwrite": false
+  },
+  "unrelated_head_advance": {
+    "reason": "Superstage S5 requires a focused compatible-baseline revalidation receipt for an unrelated HEAD advance while preserving both commitments and Stage revision.",
+    "outcome": "PREPARED",
+    "stage_revision": 1,
+    "commitments_preserved": true,
+    "amendment_kind": "compatible-baseline-revalidation"
+  },
+  "relevant_contract_advance": {
+    "reason": "Superstage S4/S5 classifies a consumed contract's behavioral semantic-revision change as REPLAN-REQUIRED, so the old consumer is non-executable and cannot be overwritten in place.",
+    "outcome": "REPLAN-REQUIRED",
+    "executable": false,
+    "in_place_overwrite": false
+  },
+  "missing_preparation_receipt": {
+    "reason": "Supertraverse C6 and superrun step 1 return NEEDS-REFINEMENT for the first eligible upfront leaf missing a preparation receipt and prohibit EXECUTOR from running code.",
+    "outcome": "NEEDS-REFINEMENT",
+    "executable": false,
+    "code_execution": false
+  },
+  "partially_executed_stage": {
+    "reason": "Superstage S3 and superrefine's entry gate route an already-started stage through execution or CI recovery and forbid in-place preparation over its task history.",
+    "outcome": "BLOCKED",
+    "in_place_overwrite": false
+  },
+  "manual_superrun_pending_batch": {
+    "reason": "Superstage S1 makes Active replan a durable execution barrier, so superrun must return BLOCKED before implementation or merge despite the older preparation.",
+    "outcome": "BLOCKED",
+    "executable": false,
+    "code_execution": false,
+    "merge_allowed": false
+  },
+  "execution_snapshot_historical_digest": {
+    "reason": "Superfinish Gate 3 and supertraverse C7 require the execution-entry snapshot and verify H2 against the historical V4 prepared-plan blob rather than the closeout-annotated current file.",
+    "execution_snapshot_required": true,
+    "historical_snapshot_required": true,
+    "digest_basis": "execution-snapshot"
+  },
+  "merged_lost_closeout_response": {
+    "reason": "Superfinish Gate 3 reuses one authoritative matching delivery receipt and linked tree history after a lost response, avoiding duplicate publication or code execution.",
+    "outcome": "continue",
+    "duplicate_publication": false,
+    "delivery_receipt_reused": true,
+    "code_execution": false
+  },
+  "ci_pending_replan_request": {
+    "reason": "Superagent's CI resume reconciliation and superloop L6 require the committed pending batch to pause the whole goal, preserve PR evidence, and return to WAITING FOR PLAN without merging green CI.",
+    "merge_allowed": false,
+    "execution_paused": true,
+    "pr_evidence_preserved": true,
+    "next_state": "WAITING FOR PLAN"
+  },
+  "impact_local_s02_detail": {
+    "reason": "Superstage S4 keeps a purely internal S02 detail change under PLAN_REFINER and says such a change creates no structural batch or whole-goal barrier.",
+    "operation": "refine",
+    "role": "PLAN_REFINER",
+    "batch_created": false,
+    "execution_paused": false
+  },
+  "impact_absorbed_at_s03": {
+    "reason": "Superstage S4 revises S02 and S03, stops propagation at S03's preserved C-S03@2 output, retains unaffected unfinished S04 and S05, and preserves delivered S01 as completed history.",
+    "revised_stages": [
+      "S02",
+      "S03"
+    ],
+    "retained_stages": [
+      "S04",
+      "S05"
+    ],
+    "completed_stages": [
+      "S01"
+    ],
+    "completed_disposition": "completed-history",
+    "propagation_stop": "S03"
+  },
+  "impact_foundational_change": {
+    "reason": "Superstage S4 expands beyond the initial dependent closure when shared foundational evidence invalidates S04 too, revises every unfinished stage, and keeps delivered S01 as completed history with no preserved boundary.",
+    "revised_stages": [
+      "S02",
+      "S03",
+      "S04",
+      "S05"
+    ],
+    "retained_stages": [],
+    "completed_stages": [
+      "S01"
+    ],
+    "completed_disposition": "completed-history",
+    "propagation_stop": "none"
+  },
+  "replan_before_request_commit": {
+    "reason": "Supertraverse C8 requires the tracked decision record and root Active replan pointer to be committed together before REPLANNER dispatch, while a loop-log-only adoption keeps execution paused.",
+    "request_publication_required": true,
+    "publication": "none",
+    "dispatch": "none",
+    "execution_paused": true
+  },
+  "replan_after_request_commit": {
+    "reason": "Supertraverse C8 says an authoritative pending request with no unique draft continues by dispatching superreplan while its whole-goal execution barrier remains active.",
+    "outcome": "continue",
+    "resolution": "pending",
+    "dispatch": "superreplan",
+    "execution_paused": true
+  },
+  "replan_drafting_interrupted": {
+    "reason": "Supertraverse C8 resumes one unique Decision-ID-bound scratch batch as a draft while the pending Active replan barrier keeps execution paused and no vault publication exists.",
+    "publication": "scratch",
+    "replay_action": "resume-draft",
+    "execution_paused": true
+  },
+  "replan_published_before_loop_update": {
+    "reason": "Supertraverse C8 says a uniquely verified published generation overrides stale PLANNING and old-generation hints and must be resumed without republishing.",
+    "outcome": "continue",
+    "resolution": "published",
+    "replay_action": "resume-published",
+    "duplicate_publication": false,
+    "execution_paused": false
+  },
+  "late_predecessor_closeout": {
+    "reason": "Supertraverse C8 treats a late predecessor closeout as historical evidence and forbids changing the active successor row or closing the successor by inference.",
+    "outcome": "continue",
+    "late_closeout_action": "preserve-history",
+    "active_link_changed": false,
+    "successor_closed": false
+  },
+  "replan_stale_baseline": {
+    "reason": "Superreplan reconciliation requires relevant source and vault-path drift to be reassessed and recorded before publication while the active replan barrier remains in force.",
+    "publication": "scratch",
+    "replay_action": "reassess",
+    "execution_paused": true
+  },
+  "replan_duplicate_decision": {
+    "reason": "Superreplan and supertraverse C8 classify duplicate live records claiming one Decision ID with divergent candidate closures as BLOCKED rather than as a publication.",
+    "outcome": "BLOCKED",
+    "dispatch": "none",
+    "duplicate_publication": false
+  },
+  "replan_missing_record": {
+    "reason": "Superstage S1 and superreplan require the Active replan record to be readable and tracked, so the missing referenced record blocks dispatch and leaves the barrier active.",
+    "outcome": "BLOCKED",
+    "dispatch": "none",
+    "execution_paused": true
+  },
+  "replan_divergent_successors": {
+    "reason": "Supertraverse C8 makes multiple unretired divergent successor sets BLOCKED, gives them no resumable publication form, and keeps execution paused behind the pending record.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "replay_action": "block",
+    "execution_paused": true
+  },
+  "replan_partial_pr_reuse": {
+    "reason": "Superstage S4 permits verified resume-existing reuse only with preserved predecessor evidence, remaining tasks, and repeated review and tests, while replanning never closes the old PR and the revised successor still needs refinement.",
+    "pr_disposition": "resume-existing",
+    "predecessor_evidence_preserved": true,
+    "old_pr_closed": false,
+    "successor_needs_refinement": true
+  },
+  "replan_split_merge_mapping": {
+    "reason": "Superstage S2 and S4 allow a total split or merge mapping to fresh IDs with all consumers rewired, but an unpublished candidate without current preparation receipts is not executable.",
+    "topology_allowed": true,
+    "executable": false,
+    "retired_stages": [
+      "S02",
+      "S03"
+    ],
+    "replacement_stages": [
+      "S06",
+      "S07",
+      "S08"
+    ]
+  },
+  "replan_retained_preparation": {
+    "reason": "Superstage S4 and S5 preserve retained-stage readiness across a generation only through a focused new-generation revalidation proving the stage and all relevant evidence unchanged.",
+    "preparation_valid": true,
+    "successor_needs_refinement": false
+  },
+  "replan_revised_preparation": {
+    "reason": "Superstage S4 and S5 require every revised stage to receive a new preparation receipt for the published generation because an old-generation receipt is only history.",
+    "preparation_valid": false,
+    "successor_needs_refinement": true
+  },
+  "replan_atomicity_violation": {
+    "reason": "Superreplan requires one complete atomic publication and says dirty active-link edits are neither authoritative nor executable while the committed pending barrier remains active.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false,
+    "authoritative_view_executable": false
+  },
+  "replan_internal_pr_not_merged": {
+    "reason": "Supertraverse C8 says an open unmerged internal docs PR is only a candidate with publication none, while authoritative main retains the pending non-executable generation.",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false,
+    "authoritative_view_executable": false
+  },
+  "legacy_single_leaf_repair": {
+    "reason": "Superreplan's incremental wrapper and supertraverse C8 route an adopted legacy repair to REPLANNER while preserving the single-leaf shape and creating no upfront batch.",
+    "operation": "replan",
+    "role": "REPLANNER",
+    "repair_shape": "single-leaf",
+    "batch_created": false
+  },
+  "discovery_completion_without_code_pr": {
+    "reason": "Supertraverse C9 accepts no-code discovery completion when the required evidence, decision, and delivered discovery contract are verified on the authoritative vault branch.",
+    "done": true,
+    "code_pr_required": false,
+    "discovery_evidence_verified": true,
+    "pr_cell": "none"
+  },
+  "discovery_execution_entry_without_code_changes": {
+    "reason": "Superrun's evidence-only discovery branch skips the code worktree, SDD, and code PR path and requires authoritative A7 publication of the reviewed evidence and decision.",
+    "operation": "run",
+    "execution_path": "discovery-evidence",
+    "worktree_required": false,
+    "sdd_required": false,
+    "code_pr_required": false,
+    "evidence_publication": "authoritative-vault"
+  },
+  "partial_closeout_open_pr": {
+    "reason": "Superfinish Gate 3 allows an identity-bound partial closeout for a verified open PR but marks it undelivered, non-consumable, and executed with the PR still open.",
+    "partial_closeout_allowed": true,
+    "delivered": false,
+    "consumable": false,
+    "row_status": "executed \u2014 PR open"
+  },
+  "discovery_barrier_after_experiment": {
+    "reason": "Superrun's discovery authority gate preserves reviewed scratch evidence as a checkpoint and returns to C8 with execution paused when a pending Active replan appears before A7 publication.",
+    "evidence_publication": "none",
+    "execution_paused": true,
+    "checkpoint_preserved": true,
+    "next_state": "WAITING FOR PLAN"
+  },
+  "mapped_successor_ci_redirect": {
+    "reason": "Superagent's CI reconciliation redirects a mapped resume-existing successor through normal prepared-stage execution with a new successor snapshot and fresh tasks, reviews, and tests, so the old green packet cannot authorize merge.",
+    "merge_allowed": false,
+    "resume_action": "normal-successor-execution",
+    "old_ci_authoritative": false,
+    "successor_snapshot_required": true
+  },
+  "partial_closeout_upgrade_after_merge": {
+    "reason": "Superfinish's stable execution-attempt key requires later verified head, CI, and merge observations for the same PR to upgrade the existing report in place without duplicate publication.",
+    "report_action": "upgrade-in-place",
+    "duplicate_publication": false,
+    "delivered": true,
+    "consumable": true,
+    "produced_contract_status": "delivered"
+  },
+  "routine_closeout_finding": {
+    "reason": "Superfinish finding classification says a verified local implementation fact that preserves commitments and downstream evidence creates no replan and leaves current preparation valid.",
+    "replan_required": false,
+    "affected_preparation_valid": true
+  },
+  "contract_contradiction_finding": {
+    "reason": "Superfinish and superstage S4 say a verified shared-contract contradiction requires the decision and replan path, invalidates affected unfinished preparation, and prevents execution.",
+    "replan_required": true,
+    "affected_preparation_valid": false,
+    "executable": false
+  },
+  "stale_completed_ancestor_unsatisfied_dependency": {
+    "reason": "Supertraverse C9 descends through stale closed ancestors and returns BLOCKED when a live consumer depends on a declined provider whose contract was never delivered or rewired.",
+    "outcome": "BLOCKED",
+    "done": false,
+    "executable": false
+  },
+  "supervisor_native_refinement": {
+    "reason": "Superagent WAITING FOR PLAN selects PLAN_REFINER for the first eligible upfront stage needing preparation, resolves each pin by process environment then repo then default, and enters PLANNING for one dispatch.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "process-env",
+    "effort_source": "repo-superenv",
+    "target": "S02",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_cursor_native_refinement": {
+    "reason": "Superagent's Cursor rule uses the generated named definition for a native non-inherit model, treats unsupported native effort as inherit for definition selection, and dispatches the selected refinement once from PLANNING.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "dispatch_form": "named-definition",
+    "target": "S03",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_bridged_refinement": {
+    "reason": "Superagent selects PLAN_REFINER for the first eligible unprepared stage and, with the configured Pi bridge route available, resolves both pins from repo .superenv and authorizes one PLANNING dispatch.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "S04",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_prepared_target": {
+    "reason": "Superagent WAITING FOR PLAN moves a valid prepared upfront target directly to WAITING FOR RUN with EXECUTOR pins and zero planning dispatches, without checking an unused refiner definition.",
+    "selected_role": "EXECUTOR",
+    "operation": "run",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "S02",
+    "next_state": "WAITING FOR RUN",
+    "heavy_dispatches": 0
+  },
+  "supervisor_adopted_legacy_repair": {
+    "reason": "Superagent gives a reconciled adopted legacy C8 repair priority over ordinary descent and selects superreplan under the independently pinned REPLANNER role.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "P0",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_adopted_batch_repair": {
+    "reason": "Superagent selects REPLANNER for a committed pending upfront batch, resolves the model from repo .superenv and effort from the process environment, and enters PLANNING for one dispatch.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "process-env",
+    "target": "D-301",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_stale_hints": {
+    "reason": "Superagent crash recovery resets persisted PLANNING, lets authoritative C8 artifacts override stale refinement hints, and selects the committed batch for one REPLANNER dispatch.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "D-302",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_post_leaf_refinement": {
+    "reason": "Superagent re-enters WAITING FOR PLAN after a verified leaf result and selects PLAN_REFINER for the next eligible stage lacking preparation, using harness-default pins for one dispatch.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "S02",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_execution_replan_required": {
+    "reason": "Superagent gives REPLAN-REQUIRED result evidence priority and, after the decision ladder cannot adopt authority, parks in WAITING FOR INPUT with no authorized role, target, or additional heavy dispatch.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_legacy_incremental_planning": {
+    "reason": "Superstage S1 resolves an unmarked root as legacy incremental regardless of the environment, so superagent selects ordinary superplan under PLANNER for P1.",
+    "selected_role": "PLANNER",
+    "operation": "plan",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "P1",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_missing_native_definition": {
+    "reason": "Superagent's selected-role-only preflight requires the native Claude definition for a fully pinned PLAN_REFINER and on absence keeps WAITING FOR PLAN with zero dispatches before the decision ladder.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "S02",
+    "next_state": "WAITING FOR PLAN",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  },
+  "supervisor_missing_bridge_cli": {
+    "reason": "Superagent's selected-role-only preflight requires the configured foreign CLI for bridged REPLANNER and on absence keeps WAITING FOR PLAN with zero dispatches before the decision ladder.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "D-303",
+    "next_state": "WAITING FOR PLAN",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  }
+}

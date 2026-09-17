@@ -1,0 +1,52 @@
+{
+  "replan_split_merge_mapping": {
+    "reason": "superstage S4 and superreplan require a total old-ID-to-fresh-ID mapping, no reused retired IDs, and no live dependency on a retired ID; the candidate satisfies those topology rules. superstage S1/S3 also says candidate validity never authorizes execution, and revised replacement stages with no preparation receipts are not executable.",
+    "topology_allowed": true,
+    "executable": false,
+    "retired_stages": [
+      "S02",
+      "S03"
+    ],
+    "replacement_stages": [
+      "S06",
+      "S07",
+      "S08"
+    ]
+  },
+  "discovery_completion_without_code_pr": {
+    "reason": "superrun's evidence-only discovery branch forbids a code branch or PR and uses the verified A7 evidence/decision publication as delivery identity; superfinish and supertraverse C7/C9 accept no-code discovery completion when the specified evidence, decision, and delivered discovery contract are tracked and verified, with the PR cell blank or explicit none.",
+    "done": true,
+    "code_pr_required": false,
+    "discovery_evidence_verified": true,
+    "pr_cell": "none"
+  },
+  "partial_closeout_open_pr": {
+    "reason": "superfinish Gate 3 permits an identity-bound partial closeout for a verified execution snapshot, open PR, exact head, and failing CI evidence, but explicitly marks it not delivered and non-consumable; supertraverse C7 assigns the leaf row executed — PR open.",
+    "partial_closeout_allowed": true,
+    "delivered": false,
+    "consumable": false,
+    "row_status": "executed — PR open"
+  },
+  "discovery_barrier_after_experiment": {
+    "reason": "superstage S1 and supertraverse C8 make a committed pending Active replan a whole-goal execution barrier. superrun's evidence-only discovery authority gate therefore preserves the reviewed experiment as a scratch checkpoint, forbids authoritative evidence publication, and returns to the C8 planning path; superagent routes the pending batch to WAITING FOR PLAN.",
+    "evidence_publication": "none",
+    "execution_paused": true,
+    "checkpoint_preserved": true,
+    "next_state": "WAITING FOR PLAN"
+  },
+  "mapped_successor_ci_redirect": {
+    "reason": "superrun's integration-authority gate and post-CI resume entry say a mapped resume-existing successor is a different identity: old CI is only historical redirect evidence and cannot authorize merge. The active prepared successor must re-enter normal execution on the reused branch/worktree, capture its own execution snapshot, and run its corrective tasks, reviews, and tests.",
+    "merge_allowed": false,
+    "resume_action": "normal-successor-execution",
+    "old_ci_authoritative": false,
+    "successor_snapshot_required": true
+  },
+  "partial_closeout_upgrade_after_merge": {
+    "reason": "superfinish Gate 3 keys recovery by the immutable execution snapshot plus PR number. When the same PR advances from a partial observation to verified merge, it requires appending the new observations and upgrading the same report path in place, with no duplicate publication; the upgraded receipt is delivered and consumable and its produced contract becomes delivered.",
+    "report_action": "upgrade-in-place",
+    "duplicate_publication": false,
+    "delivered": true,
+    "consumable": true,
+    "produced_contract_status": "delivered"
+  }
+}

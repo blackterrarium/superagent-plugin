@@ -1,0 +1,17 @@
+{
+  "impact_foundational_change": {
+    "reason": "superstage S4 requires revising every unfinished stage whose acceptance, approach, contracts, or required outcome is invalidated; the verified shared foundational change expands the S02→S03→S05 closure to independently invalidated S04, while delivered S01 remains completed history.",
+    "revised_stages": ["S02", "S03", "S04", "S05"],
+    "retained_stages": [],
+    "completed_stages": ["S01"],
+    "completed_disposition": "completed-history",
+    "propagation_stop": "none"
+  },
+  "replan_after_request_commit": {
+    "reason": "superreplan reconciliation keeps a pending authoritative request with no unique scratch batch in the durable pending state and proceeds to its structural authoring; superstage S1 makes the active replan a durable execution barrier.",
+    "outcome": "continue",
+    "resolution": "pending",
+    "dispatch": "superreplan",
+    "execution_paused": true
+  }
+}

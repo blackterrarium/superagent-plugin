@@ -1,0 +1,82 @@
+{
+  "adopted_replan": {
+    "reason": "C8 requires an adopted re-plan to be made durable as a repair request before routing it to planning; an executed-open predecessor is not integrated.",
+    "planning": "repair",
+    "done": false,
+    "durable_repair": true
+  },
+  "mixed_none_blocked": {
+    "reason": "The superagent WAITING FOR RUN branch gives an unresolved code PR precedence over none; C9 also treats an open PR as BLOCKED.",
+    "outcome": "escalate",
+    "done": false
+  },
+  "closeout_repair": {
+    "reason": "C6 targets a valid repair requested row only for planning and skips its predecessor for execution until C8 publishes the successor.",
+    "planning": "repair",
+    "execution": "none",
+    "done": false
+  },
+  "merged": {
+    "reason": "C9 accepts a closed leaf only with verified merged PR, merge commit on main, and tracked closeout.",
+    "done": true
+  },
+  "declined": {
+    "reason": "C9 accepts an authorized declined disposition with its recorded reason and PR disposition as a terminal obligation.",
+    "done": true
+  },
+  "fresh_tick": {
+    "reason": "C8 replay reconciliation converts the adopted log decision with no tree edit into the durable repair request before dispatch.",
+    "planning": "repair",
+    "durable_repair": true,
+    "done": false
+  },
+  "successor": {
+    "reason": "After C8 publication, the active successor is an ordinary ready leaf for execution; predecessor history remains subject to later disposition verification.",
+    "execution": "successor",
+    "done": false
+  },
+  "stale_ancestor": {
+    "reason": "C9 must visit active child links despite a closed ancestor; the hidden executed-open leaf is a BLOCKED obligation, which routes to the decision ladder.",
+    "done": false,
+    "outcome": "escalate"
+  },
+  "missing_evidence": {
+    "reason": "C9 requires verified integration evidence; an unqueryable PR and unverifiable main integration are BLOCKED, never optimistic completion.",
+    "done": false,
+    "outcome": "escalate"
+  },
+  "late_closeout": {
+    "reason": "C7's active-plan guard says a predecessor closeout must not advance a row whose active Plan points to a successor.",
+    "overwrite_successor": false
+  },
+  "replay": {
+    "reason": "C8 replay reuses a named successor when the active link agrees; it must neither reset the row nor create another successor.",
+    "duplicate_successor": false,
+    "reset_repair": false
+  },
+  "hidden_ready": {
+    "reason": "C9 treats ordinary ready work hidden below a closed ancestor as BLOCKED until authorized reconciliation restores reachability.",
+    "done": false,
+    "outcome": "escalate"
+  },
+  "second_repair": {
+    "reason": "C8 treats the verified P0 to P1 to P2 chain as historical succession; only the latest unresolved request matters, and P2 is the active execution leaf.",
+    "outcome": "continue",
+    "execution": "successor",
+    "duplicate_successor": false
+  },
+  "declined_repair": {
+    "reason": "C8 says an authorized declined repair with matching evidence is settled and must not reopen even if its old successor field was pending.",
+    "reset_repair": false,
+    "done": true
+  },
+  "direct_merge": {
+    "reason": "C9 accepts direct/no-PR work when its recorded integration commit is verified on local main and its closeout is tracked.",
+    "done": true
+  },
+  "closed_pr": {
+    "reason": "C9 classifies a closed-but-unmerged PR with no authorized disposition or successor as BLOCKED, then the supervisor uses the decision ladder.",
+    "done": false,
+    "outcome": "escalate"
+  }
+}

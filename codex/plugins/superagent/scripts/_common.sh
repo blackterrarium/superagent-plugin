@@ -153,6 +153,19 @@ superagent_effort_valid() {
   return 1
 }
 
+# superagent_native_claude_definition_required <supervisor-harness> <model> <effort>
+# A native Claude Agent-tool role needs its named generated definition when it has a full
+# claude-* model ID OR any non-inherit effort. Tier + inherit can use general-purpose directly.
+superagent_native_claude_definition_required() {
+  local supervisor="${1:-}" model="${2:-inherit}" effort="${3:-inherit}" role_harness bare
+  role_harness="$(superagent_role_harness "$model")"
+  [ "$role_harness" = inherit ] && role_harness="$supervisor"
+  [ "$supervisor" = claude ] && [ "$role_harness" = claude ] || return 1
+  bare="$(superagent_role_model "$model")"
+  case "$bare" in claude-*) return 0 ;; esac
+  [ "$effort" != inherit ]
+}
+
 # Fatal check: ensure the Cursor CLI binary is findable; exports
 # SUPERAGENT_CURSOR_BIN with the resolved name (`agent`, or legacy `cursor-agent`).
 ensure_cursor_bin() {
@@ -279,7 +292,7 @@ load_superenv() {
   [[ -f "$plugin_root/templates/superenv.default" ]] && . "$plugin_root/templates/superenv.default"
   # The harness build's own template layers over the Claude default, so a repo whose .superenv
   # says only SUPER_HARNESS=pi gets that harness's defaults (SUPER_MODEL_SUPERVISOR=pi:openai-codex/gpt-5.6-sol, …)
-  # instead of claude:claude-opus-4-8 — which the pi tick refuses with exit 11. When the tick already runs
+  # instead of claude:claude-opus-5 — which the pi tick refuses with exit 11. When the tick already runs
   # from a harness build (plugin_root IS pi/), the nested path does not exist and this is a no-op.
   [[ -n "$harness_dir" && -f "$plugin_root/$harness_dir/templates/superenv.default" ]] && . "$plugin_root/$harness_dir/templates/superenv.default"
   [[ -f "$repo/.superenv" ]] && . "$repo/.superenv"

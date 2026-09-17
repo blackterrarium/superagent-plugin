@@ -1,0 +1,78 @@
+[
+  {
+    "case": 1,
+    "stated_route": "No exact state or flag mapping is stated. The supervisor says only that ordinary superplan retains existing implementation/sub-master/none result parsing.",
+    "explicit_transition": false,
+    "authority": "superagent WAITING FOR PLAN step 5 names the three legacy result classes but supplies no implementation-result transition."
+  },
+  {
+    "case": 2,
+    "stated_route": "No exact state or flag mapping is stated. The only instruction is to retain existing ordinary-superplan sub-master parsing.",
+    "explicit_transition": false,
+    "authority": "superagent WAITING FOR PLAN step 5 does not define a sub-master-result status or plan_exhausted value."
+  },
+  {
+    "case": 3,
+    "stated_route": "superplan itself exits with the exact no-available-task message; superagent provides no exact resulting loop status or plan_exhausted mapping for the ordinary-superplan none result.",
+    "explicit_transition": false,
+    "authority": "superplan descent none clause; superagent WAITING FOR PLAN step 5 only says legacy none parsing is retained."
+  },
+  {
+    "case": 4,
+    "stated_route": "Upfront traversal may return none only when all active obligations are resolved, but WAITING FOR PLAN gives no none/exhaustion branch, no plan_exhausted write, and no C9-audit instruction for that result.",
+    "explicit_transition": false,
+    "authority": "supertraverse C6 upfront none rule; superagent WAITING FOR PLAN selection lists batch, NEEDS-REFINEMENT, prepared, REPLAN-REQUIRED, and BLOCKED only."
+  },
+  {
+    "case": 5,
+    "stated_route": "Return BLOCKED with incomplete dependency evidence and take the decision-escalation ladder; do not treat it as none or DONE.",
+    "explicit_transition": true,
+    "authority": "supertraverse C6 upfront selection recipe says unsatisfied remaining dependencies return BLOCKED, never none/DONE; superagent routes BLOCKED to the ladder."
+  },
+  {
+    "case": 6,
+    "stated_route": "The stated order runs WAITING FOR RUN post-sync/be-sure before report parsing, except CI-PENDING. NEEDS-REFINEMENT has no listed parser outcome, so next status is unspecified. Because superrun was invoked, session_skill_count increments once.",
+    "explicit_transition": false,
+    "authority": "superagent WAITING FOR RUN steps 4-5 omit NEEDS-REFINEMENT; Step 2 increments for every invoked superrun."
+  },
+  {
+    "case": 7,
+    "stated_route": "For upfront write-out, validate the published tree again in active S1/S2 context before Step 9 A7 publication; no after-A7 active revalidation is stated.",
+    "explicit_transition": true,
+    "authority": "supergoal step 8 places active validation before step 9; superstage S1 defines active context as tracked authoritative-branch artifacts, so an open docs PR exposes an unresolved fit but no alternate route."
+  },
+  {
+    "case": 8,
+    "stated_route": "After the external-vault A7 direct commit succeeds, no separate active S1/S2 validation step is stated. The only stated active validation is Step 8 before A7.",
+    "explicit_transition": false,
+    "authority": "supergoal steps 8-9; superstage S1/S2 requires active artifacts be tracked, but neither snapshot adds a post-A7 validation path."
+  },
+  {
+    "case": 9,
+    "stated_route": "The direct superplan gate reads the supplied PLAN.md marker. An unmarked supplied sub-master follows unchanged incremental flow, so ordinary descent/gap filling can run; no instruction ascends to detect the known upfront root.",
+    "explicit_transition": true,
+    "authority": "superplan gates 2-3; superstage S1 defines a root with no marker as legacy incremental and does not specify inherited-root lookup for a directly supplied sub-master."
+  },
+  {
+    "case": 10,
+    "stated_route": "Retain incremental traversal and ordinary gap filling for the directly supplied unmarked sub-master under an unmarked legacy root.",
+    "explicit_transition": true,
+    "authority": "superplan gate 2 says roots without a marker keep existing flow; superstage S1 says an unmarked root is legacy incremental."
+  },
+  {
+    "selfcheck": {
+      "format": "JSON array",
+      "case_count": 10,
+      "case_numbers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      "sources_used": [
+        "final-boundaries.prompt.txt",
+        "final-review-baseline/superagent.md",
+        "final-review-baseline/supergoal.md",
+        "final-review-baseline/superplan.md",
+        "final-review-baseline/superstage.md",
+        "final-review-baseline/supertraverse.md"
+      ],
+      "external_or_live_acceptance_used": false
+    }
+  }
+]

@@ -59,6 +59,9 @@ check "claude: operator bg-wait ceiling respected" [ "$(cat "$T/claude.env")" = 
 check "claude: --tools executor allowlist" [ "$(argv claude)" = "-p --model opus --effort medium --allowedTools Read,Edit,Write,Bash,Grep,Glob,Task,Skill " ]
 "$BRIDGE" --harness claude --model opus --effort high --tools planner --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role planner >/dev/null 2>&1
 check "claude: --tools planner allowlist" [ "$(argv claude)" = "-p --model opus --effort high --allowedTools Read,Edit,Write,Bash,Grep,Glob,Task,Skill " ]
+"$BRIDGE" --harness claude --model sonnet --effort medium --tools planner --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role plan-refiner >/dev/null 2>"$T/refiner.err"
+check "claude: plan-refiner uses planning allowlist" [ "$(argv claude)" = "-p --model sonnet --effort medium --allowedTools Read,Edit,Write,Bash,Grep,Glob,Task,Skill " ]
+check "claude: plan-refiner role is in bridge evidence" bash -c "grep -q 'role=plan-refiner ' \"\$(sed -n 's/^role-bridge: log=//p' '$T/refiner.err')\""
 "$BRIDGE" --harness claude --model inherit --effort inherit --tools "Read,Bash" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
 check "claude: --tools explicit list" [ "$(argv claude)" = "-p --allowedTools Read,Bash " ]
 "$BRIDGE" --harness claude --model inherit --effort inherit --tools role --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
@@ -97,6 +100,9 @@ check "pi: prompt on stdin" cmp -s "$T/pi.stdin" "$T/prompt.txt"
 check "pi: no suffix when effort inherit" [ "$(argv pi)" = "-p --approve --no-session --model openai/gpt-5 --tools read,edit,write,bash,grep,find,ls " ]
 "$BRIDGE" --harness pi --model inherit --effort inherit --tools planner --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
 check "pi: --tools planner = role set" [ "$(argv pi)" = "-p --approve --no-session --tools read,edit,write,bash,grep,find,ls " ]
+"$BRIDGE" --harness pi --model openai/gpt-5 --effort high --tools planner --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role replanner >/dev/null 2>"$T/replanner.err"
+check "pi: replanner preserves its independent effort" [ "$(argv pi)" = "-p --approve --no-session --model openai/gpt-5:high --tools read,edit,write,bash,grep,find,ls " ]
+check "pi: replanner role is in bridge evidence" bash -c "grep -q 'role=replanner ' \"\$(sed -n 's/^role-bridge: log=//p' '$T/replanner.err')\""
 "$BRIDGE" --harness pi --model inherit --effort inherit --tools executor --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
 check "pi: --tools executor = no --tools flag" [ "$(argv pi)" = "-p --approve --no-session " ]
 "$BRIDGE" --harness pi --model inherit --effort inherit --tools "read,bash" --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1
@@ -266,10 +272,10 @@ check "launch: plan under a symlinked repo path accepted (--dry-run)" bash -c "c
 
 # --- load_superenv: the harness build's own template layers over the Claude default. A Pi-harness repo
 # whose .superenv sets only SUPER_HARNESS=pi must get the Pi template's supervisor model (pi:openai-codex/gpt-5.6-sol), not
-# the Claude template's claude:claude-opus-4-8 — which the pi tick refuses with exit 11 (found by pi-e2e.sh run 4).
+# the Claude template's claude:claude-opus-5 — which the pi tick refuses with exit 11 (found by pi-e2e.sh run 4).
 mkdir -p "$T/se-pi" "$T/se-none"; printf 'SUPER_HARNESS=pi\n' >"$T/se-pi/.superenv"
 check "superenv: harness=pi in .superenv → Pi template defaults" bash -c ". '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ] && [ \"\$SUPER_HARNESS\" = pi ]"
-check "superenv: no .superenv → Claude template defaults"       bash -c "unset SUPER_HARNESS; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = claude:claude-opus-4-8 ]"
+check "superenv: no .superenv → Claude template defaults"       bash -c "unset SUPER_HARNESS; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = claude:claude-opus-5 ]"
 check "superenv: process env SUPER_HARNESS=pi wins and layers"  bash -c "export SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ]"
 check "superenv: repo .superenv still overrides the harness template" bash -c "printf 'SUPER_HARNESS=pi\nSUPER_MODEL_SUPERVISOR=pi:openai-codex/gpt-5.6-sol\n' >'$T/se-pi/.superenv'; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ]"
 

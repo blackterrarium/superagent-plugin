@@ -189,7 +189,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   /^# Model values:/ { inhdr=1
     print "# Model values: \"inherit\", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi"
     print "# and <model> is that harness'"'"'s native model string — cursor: `agent --list-models`; claude: a"
-    print "# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); codex: a Codex model (gpt-5.6-sol);"
+    print "# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5-1); codex: a Codex model (gpt-6-astra);"
     print "# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the"
     print "# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a \"/\" → pi)."
     print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"
@@ -218,6 +218,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
 ' | sed \
   -e 's/^SUPER_MODEL_SUPERVISOR=claude:[^[:space:]]*/SUPER_MODEL_SUPERVISOR=inherit/' \
   -e 's/^SUPER_MODEL_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_PLANNER=inherit/' \
+  -e 's/^SUPER_MODEL_PLAN_REFINER=claude:[^[:space:]]*/SUPER_MODEL_PLAN_REFINER=inherit/' \
+  -e 's/^SUPER_MODEL_REPLANNER=claude:[^[:space:]]*/SUPER_MODEL_REPLANNER=inherit/' \
   -e 's/^SUPER_MODEL_EXECUTOR=claude:[^[:space:]]*/SUPER_MODEL_EXECUTOR=inherit/' \
   -e 's/^SUPER_MODEL_PANEL=claude:[^[:space:]]*/SUPER_MODEL_PANEL=inherit/' \
   -e 's/^SUPER_MODEL_IMPLEMENTER=claude:[^[:space:]]*/SUPER_MODEL_IMPLEMENTER=inherit/' \
@@ -233,6 +235,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=cursor\1# this is the Cursor build — the external driver fires the Cursor CLI (`agent`)/' \
   -e 's/^SUPER_EFFORT_SUPERVISOR=medium/SUPER_EFFORT_SUPERVISOR=inherit/' \
   -e 's/^SUPER_EFFORT_PLANNER=high/SUPER_EFFORT_PLANNER=inherit/' \
+  -e 's/^SUPER_EFFORT_PLAN_REFINER=medium/SUPER_EFFORT_PLAN_REFINER=inherit/' \
+  -e 's/^SUPER_EFFORT_REPLANNER=high/SUPER_EFFORT_REPLANNER=inherit/' \
   -e 's/^SUPER_EFFORT_EXECUTOR=medium/SUPER_EFFORT_EXECUTOR=inherit/' \
   -e 's/^SUPER_EFFORT_PANEL=xhigh/SUPER_EFFORT_PANEL=inherit/' \
   -e 's/^SUPER_EFFORT_IMPLEMENTER=medium/SUPER_EFFORT_IMPLEMENTER=inherit/' \

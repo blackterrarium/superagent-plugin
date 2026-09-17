@@ -1,0 +1,86 @@
+{
+  "legacy_default": {
+    "reason": "superstage S1: a root without a Planning mode field is legacy incremental regardless of SUPER_PLANNING_MODE and must not be rewritten.",
+    "mode": "incremental"
+  },
+  "bounded_unknown": {
+    "reason": "superstage S2 permits bounded predecessor-dependent internal filenames when their resolution method is stated, but S3 requires a verified current PREPARED receipt for execution.",
+    "upfront_valid": true,
+    "executable": false
+  },
+  "missing_architecture": {
+    "reason": "superstage S2 prohibits deferring architecture or the chosen approach; unbounded foundational uncertainty invalidates the upfront graph.",
+    "upfront_valid": false
+  },
+  "open_provider": {
+    "reason": "superstage S3 says an open code PR is unsatisfied: the provider must be merged with its merge commit in authoritative main and tracked delivery evidence; supertraverse C9 therefore cannot complete the goal.",
+    "executable": false,
+    "done": false
+  },
+  "declined_provider": {
+    "reason": "superstage S3 says an authorized provider decline closes only that provider obligation, never proves delivery to a live consumer; the consumer remains blocked until an adopted replan removes or replaces the dependency.",
+    "executable": false,
+    "done": false
+  },
+  "dependency_cycle": {
+    "reason": "superstage S2 classifies cycles among active stage dependencies as BLOCKED.",
+    "outcome": "BLOCKED"
+  },
+  "temporary_upfront_gate": {
+    "reason": "supertraverse C6's current Task 1 transition gate returns BLOCKED for every upfront planning or execution selection until Tasks 3 and 5 install preparation and operation-routing consumers.",
+    "outcome": "BLOCKED"
+  },
+  "unlinked_active_row": {
+    "reason": "superstage S2 requires complete active-scope coverage and no blank active Plan cells; it says not to repair a published upfront graph by incremental gap filling, and supertraverse C6 treats the blank cell as a broken publication.",
+    "upfront_valid": false,
+    "outcome": "BLOCKED"
+  },
+  "multi_level_complete_tree": {
+    "reason": "superstage S1/S2 accepts a complete candidate through its explicit intended-vault-to-scratch map and passing review; S3 still makes initial leaves with Preparation: none contract-valid but needs refinement, not executable.",
+    "upfront_valid": true,
+    "stages": 3,
+    "executable": false
+  },
+  "draft_interrupted_before_confirmation": {
+    "reason": "supergoal steps 6-7 require an interrupted scratch run to report DRAFT-INCOMPLETE; confirmation precedes every vault write, and superauthor A1/supergoal prohibit execution during authoring.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "resume_identical_source": {
+    "reason": "supergoal's resumable scratch contract reuses matching draft paths, folder, and stable IDs, but requires the current confirmation gate again because draft existence is never confirmation.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "confirm",
+    "duplicate_stage_ids": false,
+    "duplicate_goal_folder": false
+  },
+  "resume_changed_source": {
+    "reason": "supergoal's resumable scratch contract requires an explicitly revised draft when the source digest changes, preserving the old draft and reporting DRAFT-INCOMPLETE with Draft action revise; authoring never executes code.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "revise",
+    "code_execution": false
+  },
+  "confirmation_refused": {
+    "reason": "supergoal step 7 says a declined human gate writes nothing and opens no PR; only --autoconfirm together with SUPER_GOAL_AUTOCONFIRM=true can skip that gate, and supergoal never executes planned work.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "supermeta_draft_incomplete": {
+    "reason": "supermeta step 6 says that a DRAFT-INCOMPLETE report with a Draft index causes no ledger write and preserves/reports the index.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "ledger_appended": false
+  },
+  "local_detail": {
+    "reason": "superstage S4 assigns PLAN_REFINER/refine where acceptance, scope, chosen approach, dependency edges, and shared contract semantics remain intact; filenames, helpers, and test setup are expressly refinable detail.",
+    "operation": "refine",
+    "role": "PLAN_REFINER"
+  },
+  "contract_break": {
+    "reason": "superstage S4 requires structural replanning when verified evidence changes shared contract behavior or semantic revision, beginning with the stage and affected dependent closure.",
+    "operation": "replan",
+    "role": "REPLANNER"
+  }
+}

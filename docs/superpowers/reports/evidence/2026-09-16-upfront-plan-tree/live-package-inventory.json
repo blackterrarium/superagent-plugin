@@ -1,0 +1,650 @@
+[
+  {
+    "path": "claude/.claude-plugin/marketplace.json",
+    "sha256": "ad93533eefada9a71802a1f4ab105faa19342091d4d3755b2762fde227ff57fb"
+  },
+  {
+    "path": "claude/.claude-plugin/plugin.json",
+    "sha256": "1a8e0fd7735e7f782a10047b217db7c7a9d9a2ca838151f371ff10c27575fa18"
+  },
+  {
+    "path": "claude/scripts/README.md",
+    "sha256": "9d747f11c469cdb38901484fcd25d9861f2a9bb9d281ae337ecd4ee4b0b63421"
+  },
+  {
+    "path": "claude/scripts/_common.sh",
+    "sha256": "1c39891202e49bbdd507dbf1bf33b5684f331c4c4b87f0370a69f10da1ef915a"
+  },
+  {
+    "path": "claude/scripts/_evalspec.sh",
+    "sha256": "cdd233c32ccf41aa1321ce8f7957e6ff4b464e1554891a15398fe925ea2ed628"
+  },
+  {
+    "path": "claude/scripts/answer.sh",
+    "sha256": "9996c32f71bffdc3b9b8738ab53d35cb0acfe74f872d394d7170633090f06e5d"
+  },
+  {
+    "path": "claude/scripts/bootstrap.sh",
+    "sha256": "e522d6747d0a19646921cf11ca6917af1a573e695b2f68f1786ae2d66e8d81e3"
+  },
+  {
+    "path": "claude/scripts/bridge-fanout.sh",
+    "sha256": "ca4be5029f43fd9cfd1566355304308ad5256218355f358c038cfe2d4984fa66"
+  },
+  {
+    "path": "claude/scripts/bridge-smoke.sh",
+    "sha256": "7359ab694388c0a2d930bb3b158ac924091509a2d24f22f18f831f90f1704852"
+  },
+  {
+    "path": "claude/scripts/bridge-test.sh",
+    "sha256": "12d06c6f194c07c2e8e913afe1f5830d5b5b6d53072bb1634ead14e0ff3d95f7"
+  },
+  {
+    "path": "claude/scripts/build-codex-skills.sh",
+    "sha256": "19535cdc602b3972b4e47409d30ddbdac632801fce2b387348fbdab5a00334fa"
+  },
+  {
+    "path": "claude/scripts/build-cursor-skills.sh",
+    "sha256": "43d1318983335b34343e4a5214571f056920a0e866e32b9dbf0fe3bd7c1beca5"
+  },
+  {
+    "path": "claude/scripts/build-pi-skills.sh",
+    "sha256": "2efb93bb37ca8692b114acc355d218708a41e3221dc759c5d415f50f3a141ade"
+  },
+  {
+    "path": "claude/scripts/codex-smoke.sh",
+    "sha256": "9738a3f90a4b1c70ad3200a408181682d831292af585075de6ada35c6f04eb1d"
+  },
+  {
+    "path": "claude/scripts/coding-loop-harness-smoke.py",
+    "sha256": "6f881036ceacb34ecddf7e0f99c1e8ae6aa6f7b12af51076fca8bcab0f653fae"
+  },
+  {
+    "path": "claude/scripts/coding-loop-package-test.sh",
+    "sha256": "3f445d8fd7efbd20d38b00acfb7f5128b78f04c76d39a8b7b08048d4b24d15c9"
+  },
+  {
+    "path": "claude/scripts/console-watch.sh",
+    "sha256": "4a1b2dafb718b2eb92d26a880c2608da747068e19d78a4e0a68d8a936563edf6"
+  },
+  {
+    "path": "claude/scripts/cursor-smoke.sh",
+    "sha256": "8d88fc85f76d132be7237ddcd8119042ef196aeb630d995797b709f2575c472c"
+  },
+  {
+    "path": "claude/scripts/force-stop.sh",
+    "sha256": "1d052b8bce23c5acfd2498ec9bbed522aee282664ab4a424c3ab6f41d6c261f9"
+  },
+  {
+    "path": "claude/scripts/install-timer.sh",
+    "sha256": "05c8af7af5901420c224d2ee9a7bac88322149121dac3fa7dfe7180b5eeaf54d"
+  },
+  {
+    "path": "claude/scripts/launch.sh",
+    "sha256": "db55558928461800a3a54dd9374c5982a75d118bf38790a5f2b0380a3acc4755"
+  },
+  {
+    "path": "claude/scripts/launchd/com.superagent.tick.plist.template",
+    "sha256": "82145584b8f78fa334e8d41ac9cf5f8c9b1c08331e0fa1039298d763dd6a8a36"
+  },
+  {
+    "path": "claude/scripts/lifecycle-regression.py",
+    "sha256": "1201a905d56e41dcc5a69d589d89eb0e18afe4bf8cf0b2bc853cd46f158006bc"
+  },
+  {
+    "path": "claude/scripts/mix-e2e.sh",
+    "sha256": "711aaac485281c7ff0d4d3edc30dd5184eba2d63413d650e6de75ff925aa2240"
+  },
+  {
+    "path": "claude/scripts/pi-e2e.sh",
+    "sha256": "2d11b807d09ecee8156165e2807ff1a21399472533e0de4c8dc66bc58b5b4bc0"
+  },
+  {
+    "path": "claude/scripts/pi-smoke.sh",
+    "sha256": "73c547c2031eb5110012c4634a576309c8c8805380985b49b9c2294ae094b6e2"
+  },
+  {
+    "path": "claude/scripts/plan-tree-config-test.sh",
+    "sha256": "b70b5be5dfe7c4bd4b5b9851914123e992826152813cf7776fb17e8af56a6c81"
+  },
+  {
+    "path": "claude/scripts/plan-tree-e2e.py",
+    "sha256": "762a531e4918aa8ab2cd5765c221e808e0ae87250bec91ba5dc61ad8c4b212d8"
+  },
+  {
+    "path": "claude/scripts/plan-tree-regression.py",
+    "sha256": "73a80fa8998ca3f26a0675385101a4b790c2c251d5715b791ba7da9a9304607d"
+  },
+  {
+    "path": "claude/scripts/prd-lint-test.sh",
+    "sha256": "a25633fdf4e0bd56660084a269d2f3665aa40e24eb4563ff7242c7149b300df1"
+  },
+  {
+    "path": "claude/scripts/prd-lint.sh",
+    "sha256": "7c1c986c6f42b88bf7e70dd14f1819dcba8091725a8900662f307f8d46531852"
+  },
+  {
+    "path": "claude/scripts/role-bridge.sh",
+    "sha256": "d5a068b5a7fa566926c0050d646e131e788511c11ed9302528cf2026fb48a54f"
+  },
+  {
+    "path": "claude/scripts/status.sh",
+    "sha256": "8c444a46fdd7419ed9083cad4dda2b4795494cbee841896fe6e2f60c62c52e7c"
+  },
+  {
+    "path": "claude/scripts/stop.sh",
+    "sha256": "276ea61845dc3b30e7e5e821a033ca1467dedf0a7a7f163262b2abf8596dbe0c"
+  },
+  {
+    "path": "claude/scripts/superagent-tick.sh",
+    "sha256": "e3bd9c3483531f2d1d8ae7bd99b147cc2688e2e7224411ba51bfe2621f854ffe"
+  },
+  {
+    "path": "claude/scripts/supereval-test.sh",
+    "sha256": "a0a8e68f8fd84d0df696afe37fe3149f4b108a4871c0d0e1db7a4b0536a8c9c3"
+  },
+  {
+    "path": "claude/scripts/supereval.sh",
+    "sha256": "91a2599d4cbf28ab307dbfbf3241704c5a22062ab4fb6c9c81ada39ff86eda90"
+  },
+  {
+    "path": "claude/scripts/systemd/superagent-tick@.service",
+    "sha256": "6998a5490d11b7a87e628ff175e74b77d181fe22214bd3921357f53463cf27a6"
+  },
+  {
+    "path": "claude/scripts/systemd/superagent-tick@.timer",
+    "sha256": "a9f73d876450c502ac5d9649263193561a36f7f6763b5fe3130412d2ffedd67e"
+  },
+  {
+    "path": "claude/scripts/uninstall-timer.sh",
+    "sha256": "ca10260a71aa0a99cc1b2f7a124829cdb5085d1285144b1c4dfb2ff21420ceac"
+  },
+  {
+    "path": "claude/scripts/vault-external-test.sh",
+    "sha256": "900514760550d837f3769fe9e8d0308b63ce01004cb1a81682eb51790e73a36f"
+  },
+  {
+    "path": "claude/skills/init/SKILL.md",
+    "sha256": "8b5a0d371770da5f04f4f3ac2719723373f81c506b55c39e3f79df28257bb05a"
+  },
+  {
+    "path": "claude/skills/superagent/SKILL.md",
+    "sha256": "53379e46f0f53937fb4ba6d21196a0a7876cf3d54a45a12f1eb864da64f7dd89"
+  },
+  {
+    "path": "claude/skills/superagent-external/SKILL.md",
+    "sha256": "c6a6d15b99d60808a2c4250add3c1a3b999e2b6af09e8ed2c3330552916d24d4"
+  },
+  {
+    "path": "claude/skills/superagent-force-stop/SKILL.md",
+    "sha256": "e8d2bebfccedd22a3627e693d2b4c9e63f83ac0be16df864013318a2a0fa80fc"
+  },
+  {
+    "path": "claude/skills/superagent-monitor/SKILL.md",
+    "sha256": "a320a007088ad63d9c18a9a282273c7ecd5fe423153ef37ae7b7298be0a18604"
+  },
+  {
+    "path": "claude/skills/superagent-stop/SKILL.md",
+    "sha256": "9d6a378e0f58eea2e246116074cd2b09f996057cbad9faa50caad1675972ce83"
+  },
+  {
+    "path": "claude/skills/superauthor/SKILL.md",
+    "sha256": "079e1222f994e9ae9113057aeec83ee2876f05a17f7003563220bbc032258f63"
+  },
+  {
+    "path": "claude/skills/supercoverage/SKILL.md",
+    "sha256": "c17d36d7b8c62874607772d75258bd9500c2b3528d6904d83f5d44107ff51188"
+  },
+  {
+    "path": "claude/skills/supereval/SKILL.md",
+    "sha256": "a84155fe5afc2e2adc534992a425683da85205ff6836b1f3d081229bdb123bba"
+  },
+  {
+    "path": "claude/skills/superfinish/SKILL.md",
+    "sha256": "046afeb6278fb2a8956a9c80dd807e2387edba3bb1052b01a5e23065fcafd09f"
+  },
+  {
+    "path": "claude/skills/supergoal/SKILL.md",
+    "sha256": "af7bba048fb1e3373fafe6965b46ecf630ccfb435a25d14dc332663aa1b661fe"
+  },
+  {
+    "path": "claude/skills/superloop/SKILL.md",
+    "sha256": "1fcc0c4eb140cf667375b5c13c764d626789ee90f44bd3c82526acfa5bf58cfc"
+  },
+  {
+    "path": "claude/skills/supermeta/SKILL.md",
+    "sha256": "bf58ea3a2ccc65c6d7768b96f379bd9437a6efedbbec5c2c8803e68c5a5621ee"
+  },
+  {
+    "path": "claude/skills/superplan/SKILL.md",
+    "sha256": "982348429eca1b3de5bbe8b61edc84fe5c6eeb58e9c8b281e70414b5209c6193"
+  },
+  {
+    "path": "claude/skills/superprd/SKILL.md",
+    "sha256": "3ae0a7854dea5738d1298704f920a6008bd8e6d2e0079e2e4b37eec6095db897"
+  },
+  {
+    "path": "claude/skills/superrefine/SKILL.md",
+    "sha256": "500a995bb1751418da0732631480a1e1a18db3279fa6549093d7b1cdfb1ef86c"
+  },
+  {
+    "path": "claude/skills/superreplan/SKILL.md",
+    "sha256": "33d1aeddfa259706815694196a0e5f9bad589cd19668dbe6aee2134111853f05"
+  },
+  {
+    "path": "claude/skills/superrun/SKILL.md",
+    "sha256": "96f7063b2b064b374fc825058cf57984368ebcf6693f046e149b1678db8c1b42"
+  },
+  {
+    "path": "claude/skills/superstage/SKILL.md",
+    "sha256": "353dcf4c6e280a2feaf650fa9f2f67b4c23d2e31771eb1e23b6c20d563c2d3cc"
+  },
+  {
+    "path": "claude/skills/supertraverse/SKILL.md",
+    "sha256": "c841d8e4a67233a273e82346b44e922555685fefd1f574f33181818be1ef28b0"
+  },
+  {
+    "path": "claude/templates/relay-preamble.md",
+    "sha256": "b80ade2af8201c1883266027e9b8f02e8b862d7a10f94689f301077102172b4a"
+  },
+  {
+    "path": "claude/templates/super-role-agent.md",
+    "sha256": "2163570d8688c2d24606a4b7882af74987685ae35cf59f12d99d393bc11e8e12"
+  },
+  {
+    "path": "claude/templates/super-role-bridge-agent.md",
+    "sha256": "84f260ba353302cd4de899fc62a9c509d34054cdfa6cd26df83d87b78d66b3ba"
+  },
+  {
+    "path": "claude/templates/super-role-pi-agent.md",
+    "sha256": "5e3df35156851c28f07cdc9eab355b6f6884f849d2bed10d7612cb5ba46255fc"
+  },
+  {
+    "path": "claude/templates/super-role-pi-bridge-agent.md",
+    "sha256": "77b5583e155e0e4078654f5d998583c09705fbb4a85a6ff78420b0cae0d54f3c"
+  },
+  {
+    "path": "claude/templates/superenv.default",
+    "sha256": "faea7e77b8f22a310ae4abcb3d29c53d6f4f3326b2af7af3e3720791e7e7249a"
+  },
+  {
+    "path": "claude/templates/vault-root.md",
+    "sha256": "a1d960a6ed0315de69e53d3f6d0f9501d268999cbe8eeb20bfd855b8e5d0aacd"
+  },
+  {
+    "path": "codex/.codex-plugin/plugin.json",
+    "sha256": "ad991120949f5c9450359b566512a08ee7d621cd0234033eb6fe63aef72bc93a"
+  },
+  {
+    "path": "codex/scripts/_common.sh",
+    "sha256": "1c39891202e49bbdd507dbf1bf33b5684f331c4c4b87f0370a69f10da1ef915a"
+  },
+  {
+    "path": "codex/scripts/_evalspec.sh",
+    "sha256": "cdd233c32ccf41aa1321ce8f7957e6ff4b464e1554891a15398fe925ea2ed628"
+  },
+  {
+    "path": "codex/scripts/prd-lint.sh",
+    "sha256": "7c1c986c6f42b88bf7e70dd14f1819dcba8091725a8900662f307f8d46531852"
+  },
+  {
+    "path": "codex/scripts/role-bridge.sh",
+    "sha256": "d5a068b5a7fa566926c0050d646e131e788511c11ed9302528cf2026fb48a54f"
+  },
+  {
+    "path": "codex/scripts/supereval.sh",
+    "sha256": "91a2599d4cbf28ab307dbfbf3241704c5a22062ab4fb6c9c81ada39ff86eda90"
+  },
+  {
+    "path": "codex/skills/codex-smoke-probe/SKILL.md",
+    "sha256": "85fdd13e5db80021a48290ca8779c4b61cbb3be2a53445ff4a0ba0d9750bfb39"
+  },
+  {
+    "path": "codex/skills/init/SKILL.md",
+    "sha256": "b7d886ef0ac2fa69a9c095847b554e37ff97a70ae7d6e91b3ad64dd1c926431a"
+  },
+  {
+    "path": "codex/skills/superagent/SKILL.md",
+    "sha256": "0814d23123e47795dde5e209d7ab313f8956c56992bc5b9ff045c69abab49409"
+  },
+  {
+    "path": "codex/skills/superagent-external/SKILL.md",
+    "sha256": "8451995bf90fce74f2e9a2fac6a36e8385828744330c8700059e546c55b50ae7"
+  },
+  {
+    "path": "codex/skills/superagent-force-stop/SKILL.md",
+    "sha256": "046706bdd43c93290bfd1a13c2ad1986f9a9163d049a3a3484bec9d129f68e17"
+  },
+  {
+    "path": "codex/skills/superagent-monitor/SKILL.md",
+    "sha256": "c0f48d08ae73860731e838276b730688eb6b3f4ed65f4c9f8a5e5c5f794ac119"
+  },
+  {
+    "path": "codex/skills/superagent-stop/SKILL.md",
+    "sha256": "aa0f60e434408d25e332c8397154c5875093bb7ab69ff94653dcf6af68b42bb2"
+  },
+  {
+    "path": "codex/skills/superauthor/SKILL.md",
+    "sha256": "6564309341ef4fe4a7aa5eae8b72ce8a50f51ac27afcdddbb971886d60ecb63e"
+  },
+  {
+    "path": "codex/skills/supercoverage/SKILL.md",
+    "sha256": "33d2239832586a02fe4934233182edf6cf22ac3d8849fc2343ed69c0a76c877d"
+  },
+  {
+    "path": "codex/skills/supereval/SKILL.md",
+    "sha256": "b8912d919ba44066dd4d03546d1570504c931e3cdd8d5171a7253fe0728365ad"
+  },
+  {
+    "path": "codex/skills/superfinish/SKILL.md",
+    "sha256": "9ad3b9ba21d231b6661dffd6310ba83731664733d0805a3dc225d4976ec4295d"
+  },
+  {
+    "path": "codex/skills/supergoal/SKILL.md",
+    "sha256": "4d3b1958ec5257295b46f65abedc64055eeb140320639008f9a64bc2e4b5b820"
+  },
+  {
+    "path": "codex/skills/superloop/SKILL.md",
+    "sha256": "b42f9b6077a20b02e4cf9a810bc9c281c48965ff2d92cf732cbc665183c9b3fb"
+  },
+  {
+    "path": "codex/skills/supermeta/SKILL.md",
+    "sha256": "382b3695cd06c34b256c445d2b85e231c3983215da30770ff1caf89685ce9bd3"
+  },
+  {
+    "path": "codex/skills/superplan/SKILL.md",
+    "sha256": "788b3d25ea9c485d472cb6a2fbe5c523434932ddc0fc5c22e2d53f60213245e0"
+  },
+  {
+    "path": "codex/skills/superprd/SKILL.md",
+    "sha256": "2f6cddcb0986899e2720df65205c046a67c54d3e6728d9d2d5e7b111d6c232dc"
+  },
+  {
+    "path": "codex/skills/superrefine/SKILL.md",
+    "sha256": "1508cc3b9774b1f9e41a5fb3795d9723ca9277bccc61e31e3070813a74fc209c"
+  },
+  {
+    "path": "codex/skills/superreplan/SKILL.md",
+    "sha256": "ad4108983fb89efbc9d8f8dbaef85af020eca80dfd90faeec425dfa471321ea5"
+  },
+  {
+    "path": "codex/skills/superrun/SKILL.md",
+    "sha256": "2de1b0a8d0a8c484cc84981fe78f3dae693ad4dd698edcaeb56466400fc57e3a"
+  },
+  {
+    "path": "codex/skills/superstage/SKILL.md",
+    "sha256": "09353579fc7e280d5506e6ce5c6ce423b08b5d9ff1b4638e629c1b26285fff50"
+  },
+  {
+    "path": "codex/skills/supertraverse/SKILL.md",
+    "sha256": "7411c5c0663c2735635a398cc21be72543a4ebb955cfcb196a17d62c67eb0b89"
+  },
+  {
+    "path": "codex/templates/relay-preamble.md",
+    "sha256": "b80ade2af8201c1883266027e9b8f02e8b862d7a10f94689f301077102172b4a"
+  },
+  {
+    "path": "codex/templates/super-role-agent.md",
+    "sha256": "2163570d8688c2d24606a4b7882af74987685ae35cf59f12d99d393bc11e8e12"
+  },
+  {
+    "path": "codex/templates/super-role-bridge-agent.md",
+    "sha256": "84f260ba353302cd4de899fc62a9c509d34054cdfa6cd26df83d87b78d66b3ba"
+  },
+  {
+    "path": "codex/templates/superenv.default",
+    "sha256": "9be6d8dd9ee8ccc062e036fc033347fc5fb8892a78793a247ebb2d967b98144d"
+  },
+  {
+    "path": "codex/templates/vault-root.md",
+    "sha256": "a1d960a6ed0315de69e53d3f6d0f9501d268999cbe8eeb20bfd855b8e5d0aacd"
+  },
+  {
+    "path": "cursor/.cursor-plugin/plugin.json",
+    "sha256": "d1939d259b5398e8231958d300be16904bd8e4d6b86315472b5ff0c44208f599"
+  },
+  {
+    "path": "cursor/README.md",
+    "sha256": "f6e7f9a75dc49f96a323d47640f836380d19f22589c3c359ff2f057395440ac2"
+  },
+  {
+    "path": "cursor/scripts/role-bridge.sh",
+    "sha256": "d5a068b5a7fa566926c0050d646e131e788511c11ed9302528cf2026fb48a54f"
+  },
+  {
+    "path": "cursor/skills/cursor-smoke-probe/SKILL.md",
+    "sha256": "f082237f0756ddc13f9df158c8f0f40fb78b0c5fff2365daf44fc3f2ef61b3bf"
+  },
+  {
+    "path": "cursor/skills/init/SKILL.md",
+    "sha256": "4a49361f146648c0719457ef68c2c653a26d22f3678f5d16e4d5b36a853e455c"
+  },
+  {
+    "path": "cursor/skills/superagent/SKILL.md",
+    "sha256": "272fd79401b08bed7c031e2c1fe1155308fe2fad08f7feb3d8570433722589cc"
+  },
+  {
+    "path": "cursor/skills/superagent-external/SKILL.md",
+    "sha256": "e2b83ea411c92c27e5a3f215c51e9de6fcf0cd10a5ae6f7a09f9a7440df5899d"
+  },
+  {
+    "path": "cursor/skills/superagent-force-stop/SKILL.md",
+    "sha256": "2daf84480db2396bd33e2b336613cda9de5d68aa92bac58884a3b12065e8d3b9"
+  },
+  {
+    "path": "cursor/skills/superagent-monitor/SKILL.md",
+    "sha256": "ba8a199adc27939fa1907a5a84e2d4b2e81720912be250b77d9e437bb07a4a2a"
+  },
+  {
+    "path": "cursor/skills/superagent-stop/SKILL.md",
+    "sha256": "7f9f9d0762b202bdc3a0108a9c485796a4dc1f95a08ae231c4b61dae725f58fd"
+  },
+  {
+    "path": "cursor/skills/superauthor/SKILL.md",
+    "sha256": "d2ce60caa33c11ebd431696ead262538d61e42473cd33ea8a82805bb6e527862"
+  },
+  {
+    "path": "cursor/skills/supercoverage/SKILL.md",
+    "sha256": "63e92597d934ff1a4af910a7686654ce3fe47ff88f05dec52cbfdca19cecf958"
+  },
+  {
+    "path": "cursor/skills/supereval/SKILL.md",
+    "sha256": "ccc4599281b524069161b171ec2a767fc53678d5eb03da22b4828f1ce4f8fa08"
+  },
+  {
+    "path": "cursor/skills/superfinish/SKILL.md",
+    "sha256": "809fc030a6c6f0c5e8b5de824143392a665eba916318ecc55728ef5e4ec4a59d"
+  },
+  {
+    "path": "cursor/skills/supergoal/SKILL.md",
+    "sha256": "b92f11beca1fdcef7b8bbc52555090f174b0a09bac4fccdcb6e6b9dd8cdc4a98"
+  },
+  {
+    "path": "cursor/skills/superloop/SKILL.md",
+    "sha256": "22a50b89748b501b5c2e1e65407b23588aef7475794c14c59cd02a22240e4433"
+  },
+  {
+    "path": "cursor/skills/supermeta/SKILL.md",
+    "sha256": "4a58936b20a31c8fee6c2c0cd7db75cd3edf2b412326b5df4450974719c1222f"
+  },
+  {
+    "path": "cursor/skills/superplan/SKILL.md",
+    "sha256": "4baf072abb0e4bf8e14a3e8010e6cf71227d3a1a52c5823df8fc7bb6edc78d7b"
+  },
+  {
+    "path": "cursor/skills/superprd/SKILL.md",
+    "sha256": "6811794e647201b9321798c881df972bc00bc0f6af783a307fa7a4ccde19fc42"
+  },
+  {
+    "path": "cursor/skills/superrefine/SKILL.md",
+    "sha256": "f0a1e6fb6ce727c28fb380f6bc94100fa7ca03a233a14a077d47fc5e5b1337e1"
+  },
+  {
+    "path": "cursor/skills/superreplan/SKILL.md",
+    "sha256": "b09392cd24aa8d609aea4ed6dce7dc98355af38ffaf19ce71ef788b0f798648d"
+  },
+  {
+    "path": "cursor/skills/superrun/SKILL.md",
+    "sha256": "79b24c4b08379fd59b4f2e878dcd11821e98d5c665c96c63f4185d7b03db7f1f"
+  },
+  {
+    "path": "cursor/skills/superstage/SKILL.md",
+    "sha256": "a45bc4479c650e3e577dcd264ac2c9cdbfd1d0debde0a947d71b964600f0425e"
+  },
+  {
+    "path": "cursor/skills/supertraverse/SKILL.md",
+    "sha256": "33fab0c402cfee58842046e751b635d10709601f0c5d6ef73fc84a32c7bffa69"
+  },
+  {
+    "path": "cursor/templates/relay-preamble.md",
+    "sha256": "b80ade2af8201c1883266027e9b8f02e8b862d7a10f94689f301077102172b4a"
+  },
+  {
+    "path": "cursor/templates/super-role-agent.md",
+    "sha256": "2163570d8688c2d24606a4b7882af74987685ae35cf59f12d99d393bc11e8e12"
+  },
+  {
+    "path": "cursor/templates/super-role-bridge-agent.md",
+    "sha256": "84f260ba353302cd4de899fc62a9c509d34054cdfa6cd26df83d87b78d66b3ba"
+  },
+  {
+    "path": "cursor/templates/superenv.default",
+    "sha256": "69e60149e1923554d438bdae7ee8f2a39ab4b13b151a4a4ebf117d4c05988cbe"
+  },
+  {
+    "path": "cursor/templates/vault-root.md",
+    "sha256": "a1d960a6ed0315de69e53d3f6d0f9501d268999cbe8eeb20bfd855b8e5d0aacd"
+  },
+  {
+    "path": "pi/README.md",
+    "sha256": "782f876a909585011863ffff9ed8753a609fa10303345d055e44e0cf38c334fb"
+  },
+  {
+    "path": "pi/package.json",
+    "sha256": "8b0296b366ec4f65b429296b758737bcee9a5e9c6d064823569bb0f5b79e4026"
+  },
+  {
+    "path": "pi/scripts/_common.sh",
+    "sha256": "1c39891202e49bbdd507dbf1bf33b5684f331c4c4b87f0370a69f10da1ef915a"
+  },
+  {
+    "path": "pi/scripts/_evalspec.sh",
+    "sha256": "cdd233c32ccf41aa1321ce8f7957e6ff4b464e1554891a15398fe925ea2ed628"
+  },
+  {
+    "path": "pi/scripts/bridge-fanout.sh",
+    "sha256": "ca4be5029f43fd9cfd1566355304308ad5256218355f358c038cfe2d4984fa66"
+  },
+  {
+    "path": "pi/scripts/prd-lint.sh",
+    "sha256": "7c1c986c6f42b88bf7e70dd14f1819dcba8091725a8900662f307f8d46531852"
+  },
+  {
+    "path": "pi/scripts/role-bridge.sh",
+    "sha256": "d5a068b5a7fa566926c0050d646e131e788511c11ed9302528cf2026fb48a54f"
+  },
+  {
+    "path": "pi/scripts/supereval.sh",
+    "sha256": "91a2599d4cbf28ab307dbfbf3241704c5a22062ab4fb6c9c81ada39ff86eda90"
+  },
+  {
+    "path": "pi/skills/init/SKILL.md",
+    "sha256": "cad8f066a2edfee39c170810f6cbf27fbf92fcfcb70f2e42b3d042b68a1e4168"
+  },
+  {
+    "path": "pi/skills/pi-smoke-probe/SKILL.md",
+    "sha256": "a8f76f9e38cc0b414e70ed1854e29c1dc267ad8841bb888462e64f6dbc1fcfd4"
+  },
+  {
+    "path": "pi/skills/superagent/SKILL.md",
+    "sha256": "a6f5179ebf8e6235e793f0f7ce5c1e7520e2e7fb8f499f8734f7cc802590e11b"
+  },
+  {
+    "path": "pi/skills/superagent-external/SKILL.md",
+    "sha256": "d24b70d42912d3611a4640d748989a3275c5c85971e10958354085ab71a5411a"
+  },
+  {
+    "path": "pi/skills/superagent-force-stop/SKILL.md",
+    "sha256": "ef7318259820fa170ffa33b7c08501c9d9ba76e869bf4b83d4e078303f1a7535"
+  },
+  {
+    "path": "pi/skills/superagent-monitor/SKILL.md",
+    "sha256": "c8391e57aec5e9df9279901863c10226d86a91a13dd7e0124600ba8d06ceec89"
+  },
+  {
+    "path": "pi/skills/superagent-stop/SKILL.md",
+    "sha256": "8115701496fe1d742a08f92b8c0e138bb215d23b4e82d0eaf46994731b315747"
+  },
+  {
+    "path": "pi/skills/superauthor/SKILL.md",
+    "sha256": "f9336cfd427b0860ebb8a3768d87fdcfb0ac4f027aabbc3cf95dbe101850b8b2"
+  },
+  {
+    "path": "pi/skills/supercoverage/SKILL.md",
+    "sha256": "aae122d6daa50f79635a74e9ca08aec1f8aec469cd62f4300cdbf7e3293e4ed3"
+  },
+  {
+    "path": "pi/skills/supereval/SKILL.md",
+    "sha256": "3a4ac0e5dd0bd851aa0da34f3fc16417c0470049ecf6ce590f10068bf81fd7b5"
+  },
+  {
+    "path": "pi/skills/superfinish/SKILL.md",
+    "sha256": "1a27c6ef1f08e2f07f604b2e9c6a1da9ff03b38db883ca24cae5d2b365b0e669"
+  },
+  {
+    "path": "pi/skills/supergoal/SKILL.md",
+    "sha256": "ea3317b5be2d97e7853163d597cb3e989fe91a83804349a76670b032ec68f291"
+  },
+  {
+    "path": "pi/skills/superloop/SKILL.md",
+    "sha256": "5c61ed0f65e1cfdf915acca2f2aedb2af6e13bb68d26409b0d7d0553a690a3c6"
+  },
+  {
+    "path": "pi/skills/supermeta/SKILL.md",
+    "sha256": "ed27e25d0f6d6c39e0d89b6e056607ed64588b4cf94b9d3f9c40e40a90658522"
+  },
+  {
+    "path": "pi/skills/superplan/SKILL.md",
+    "sha256": "c0cb94cd84ac22962e5bfd587c1a9958c8766e9fd89ce5fb1785a7a912f632a3"
+  },
+  {
+    "path": "pi/skills/superprd/SKILL.md",
+    "sha256": "7fab8e6f9d9c957ac067235f6c3ace4d13b1902571a569298acb5801d711b99d"
+  },
+  {
+    "path": "pi/skills/superrefine/SKILL.md",
+    "sha256": "1b8ff3910d3595b8bc88cdfd923c3ef5ba5017ee3be9780a105dc96859748708"
+  },
+  {
+    "path": "pi/skills/superreplan/SKILL.md",
+    "sha256": "31d455ee0f893dfd17e0c3ccc5091f24b0839e510cd47c7beb7eb58ac34f3ad6"
+  },
+  {
+    "path": "pi/skills/superrun/SKILL.md",
+    "sha256": "153d41336fef8bccfa3a43932997f3184cc8670c05f2ea3f6ff338fad9696e1f"
+  },
+  {
+    "path": "pi/skills/superstage/SKILL.md",
+    "sha256": "cbf7bde5cf3cfe79a62a2e1cdd28fc7cade53646eddf16cb00bb74f8e0040d32"
+  },
+  {
+    "path": "pi/skills/supertraverse/SKILL.md",
+    "sha256": "91e49863b2c9a30139a569fdfe7ea1eee2020a44090710bc72fdd81c9b908fa6"
+  },
+  {
+    "path": "pi/templates/super-role-pi-agent.md",
+    "sha256": "5e3df35156851c28f07cdc9eab355b6f6884f849d2bed10d7612cb5ba46255fc"
+  },
+  {
+    "path": "pi/templates/super-role-pi-bridge-agent.md",
+    "sha256": "77b5583e155e0e4078654f5d998583c09705fbb4a85a6ff78420b0cae0d54f3c"
+  },
+  {
+    "path": "pi/templates/superenv.default",
+    "sha256": "22a4bbad9b07c02458f89511abe1eda973bda2e51e22c1917fba0c6101974e31"
+  },
+  {
+    "path": "pi/templates/vault-root.md",
+    "sha256": "a1d960a6ed0315de69e53d3f6d0f9501d268999cbe8eeb20bfd855b8e5d0aacd"
+  }
+]

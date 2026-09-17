@@ -1,0 +1,1215 @@
+{
+  "facts": {
+    "fixture_kind": "live",
+    "initial_publication_commit": "dd8fb3d855f755e5285c001b8d6743a39299d288",
+    "replan": {
+      "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+      "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault"
+    },
+    "roles": {
+      "PLAN_REFINER": {
+        "cwd": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code",
+        "effort": "medium",
+        "end": "20260917T040912Z",
+        "exit": "0",
+        "harness": "codex",
+        "model": "gpt-5.6-terra",
+        "result_bytes": "1174",
+        "role": "PLAN_REFINER",
+        "secs": "278",
+        "start": "20260917T040434Z",
+        "tools": "planner"
+      },
+      "REPLANNER": {
+        "cwd": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-code",
+        "effort": "high",
+        "end": "20260917T042349Z",
+        "exit": "0",
+        "harness": "claude",
+        "model": "opus",
+        "result_bytes": "4483",
+        "role": "REPLANNER",
+        "secs": "517",
+        "start": "20260917T041512Z",
+        "tools": "planner"
+      }
+    },
+    "stages": {
+      "S01": {
+        "depends_on": [],
+        "prepared_code_commit": "dd8fb3d855f755e5285c001b8d6743a39299d288",
+        "prepared_digest": "ea02242d9cbb1936183a3c2c304f17a2e49f11fd26cb8a1f4fec8239ef491110",
+        "prepared_vault_commit": "b2b3dbd4dbba5e0ace4e526dd578b9033cb2add8"
+      },
+      "S02": {
+        "depends_on": [
+          "S01"
+        ],
+        "prepared_code_commit": "3da92f977d9dea8bba110d5dc4c63e2c79b48ae9",
+        "prepared_digest": "4d4c3cce698a7e2dac6abaec6765485905c724764880827e29b3c86fac91c51f",
+        "prepared_vault_commit": "4f1d4892ef05556203b750ddaa6e7ddc61e1160e"
+      },
+      "S03": {
+        "depends_on": [
+          "S02"
+        ],
+        "prepared_code_commit": "c68731d50821e4242dc257ef702d824fae10baca",
+        "prepared_digest": "2d668b24afe2ba19c202bca121d1da87d3649a5a41a00cd4010b02a3d4aa259d",
+        "prepared_vault_commit": "16f7690083ff49cdc5e3c26a79dc4fdf0a0c15be"
+      },
+      "S04": {
+        "depends_on": [],
+        "prepared_code_commit": "1ab456368ed7b29845c0968266c89e7d1dca393a",
+        "prepared_digest": "f6dce94cec0a847fcf71f84ebeb200180c62671906ce217911aa3ded88046b0d",
+        "prepared_vault_commit": "822f0b5a133258c142986e4e1f8d5b7cd768f3bc"
+      },
+      "S05": {
+        "depends_on": [
+          "S03",
+          "S04"
+        ],
+        "prepared_code_commit": "ffdea07e6415b9100d476802df84eecdc28423c7",
+        "prepared_digest": "b353f3dfe61fa6971980fc9c2f860e172c50d7948e2179727baa4018dadb82df",
+        "prepared_vault_commit": "60e8abdaaa242b546ca12365a712fb66926c13fc"
+      }
+    },
+    "traces": {
+      "batch_resume": {
+        "context": {
+          "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-code",
+          "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+          "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault"
+        },
+        "dispatches": [
+          {
+            "attempt": 1,
+            "decision_id": "UPT-BREAK-20260917-001",
+            "interruption_receipt": "2026-09-17-03_52-break-external/reports/2026-09-17-12_56-replan-interruption.md",
+            "operation": "replan",
+            "outcome": "interrupted",
+            "role": "REPLANNER",
+            "run_id": "batch-resume-20260917",
+            "sequence": 1,
+            "type": "dispatch",
+            "vault_commit_before": "47a4530e3c03446097edd153f7ecfaa1cbd8bc4c"
+          },
+          {
+            "attempt": 2,
+            "decision_id": "UPT-BREAK-20260917-001",
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/REPLANNER-20260917T041512Z-9024.log",
+            "operation": "replan",
+            "outcome": "published",
+            "role": "REPLANNER",
+            "run_id": "batch-resume-20260917",
+            "sequence": 2,
+            "type": "dispatch",
+            "vault_commit_before": "47a4530e3c03446097edd153f7ecfaa1cbd8bc4c"
+          }
+        ],
+        "header": {
+          "initial_publication_commit": "4b3a41da3c312b7f1ad635efe6e33c88cf0d2f8d",
+          "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+          "run_id": "batch-resume-20260917",
+          "scenario": "batch-resume",
+          "type": "trace-header"
+        },
+        "trailer": {
+          "dispatch_count": 2,
+          "final_vault_commit": "d9549791e317b09552a01652d07bf06f3d25947b",
+          "outcome": "published",
+          "run_id": "batch-resume-20260917",
+          "type": "trace-trailer"
+        }
+      },
+      "contract_break": {
+        "context": {
+          "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-code",
+          "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+          "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault"
+        },
+        "dispatches": [
+          {
+            "decision_id": "UPT-BREAK-20260917-001",
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/REPLANNER-20260917T041512Z-9024.log",
+            "operation": "replan",
+            "role": "REPLANNER",
+            "run_id": "contract-break-20260917",
+            "sequence": 1,
+            "type": "dispatch",
+            "vault_commit_before": "47a4530e3c03446097edd153f7ecfaa1cbd8bc4c"
+          }
+        ],
+        "header": {
+          "initial_publication_commit": "4b3a41da3c312b7f1ad635efe6e33c88cf0d2f8d",
+          "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+          "run_id": "contract-break-20260917",
+          "scenario": "contract-break",
+          "type": "trace-header"
+        },
+        "trailer": {
+          "dispatch_count": 1,
+          "final_vault_commit": "d9549791e317b09552a01652d07bf06f3d25947b",
+          "outcome": "published",
+          "run_id": "contract-break-20260917",
+          "type": "trace-trailer"
+        }
+      },
+      "legacy": {
+        "context": {
+          "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code",
+          "root": "goal/master-plans/legacy-root.md",
+          "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/legacy-vault"
+        },
+        "dispatches": [
+          {
+            "operation": "plan",
+            "role": "PLANNER",
+            "run_id": "legacy-20260917",
+            "sequence": 1,
+            "stage_id": "S01",
+            "type": "dispatch",
+            "vault_commit_before": "7a587e5b61906fd51c2a11f8858ada4182b088c6"
+          }
+        ],
+        "header": {
+          "initial_publication_commit": "7a587e5b61906fd51c2a11f8858ada4182b088c6",
+          "root": "goal/master-plans/legacy-root.md",
+          "run_id": "legacy-20260917",
+          "scenario": "legacy",
+          "type": "trace-header"
+        },
+        "trailer": {
+          "dispatch_count": 1,
+          "final_vault_commit": "29246402db8aa623a8e0329d4ffcb460205ef931",
+          "outcome": "planned",
+          "run_id": "legacy-20260917",
+          "type": "trace-trailer"
+        }
+      },
+      "normal": {
+        "context": {
+          "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code",
+          "root": "vault/2026-09-17-03_51-normal-internal/master-plans/2026-09-17-03_51-normal-internal.md",
+          "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code"
+        },
+        "dispatches": [
+          {
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T040434Z-70498.log",
+            "operation": "refine",
+            "role": "PLAN_REFINER",
+            "run_id": "normal-20260917",
+            "sequence": 1,
+            "stage_id": "S01",
+            "type": "dispatch",
+            "vault_commit_before": "dd8fb3d855f755e5285c001b8d6743a39299d288"
+          },
+          {
+            "operation": "run",
+            "role": "EXECUTOR",
+            "run_id": "normal-20260917",
+            "sequence": 2,
+            "stage_id": "S01",
+            "type": "dispatch",
+            "vault_commit_before": "b2b3dbd4dbba5e0ace4e526dd578b9033cb2add8"
+          },
+          {
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T043716Z-82565.log",
+            "operation": "refine",
+            "role": "PLAN_REFINER",
+            "run_id": "normal-20260917",
+            "sequence": 3,
+            "stage_id": "S02",
+            "type": "dispatch",
+            "vault_commit_before": "3da92f977d9dea8bba110d5dc4c63e2c79b48ae9"
+          },
+          {
+            "operation": "run",
+            "role": "EXECUTOR",
+            "run_id": "normal-20260917",
+            "sequence": 4,
+            "stage_id": "S02",
+            "type": "dispatch",
+            "vault_commit_before": "4f1d4892ef05556203b750ddaa6e7ddc61e1160e"
+          },
+          {
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T104459Z-83672.log",
+            "operation": "refine",
+            "role": "PLAN_REFINER",
+            "run_id": "normal-20260917",
+            "sequence": 5,
+            "stage_id": "S03",
+            "type": "dispatch",
+            "vault_commit_before": "c68731d50821e4242dc257ef702d824fae10baca"
+          },
+          {
+            "operation": "run",
+            "role": "EXECUTOR",
+            "run_id": "normal-20260917",
+            "sequence": 6,
+            "stage_id": "S03",
+            "type": "dispatch",
+            "vault_commit_before": "16f7690083ff49cdc5e3c26a79dc4fdf0a0c15be"
+          },
+          {
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T112041Z-3431.log",
+            "operation": "refine",
+            "role": "PLAN_REFINER",
+            "run_id": "normal-20260917",
+            "sequence": 7,
+            "stage_id": "S04",
+            "type": "dispatch",
+            "vault_commit_before": "1ab456368ed7b29845c0968266c89e7d1dca393a"
+          },
+          {
+            "operation": "run",
+            "role": "EXECUTOR",
+            "run_id": "normal-20260917",
+            "sequence": 8,
+            "stage_id": "S04",
+            "type": "dispatch",
+            "vault_commit_before": "822f0b5a133258c142986e4e1f8d5b7cd768f3bc"
+          },
+          {
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T115855Z-31783.log",
+            "operation": "refine",
+            "role": "PLAN_REFINER",
+            "run_id": "normal-20260917",
+            "sequence": 9,
+            "stage_id": "S05",
+            "type": "dispatch",
+            "vault_commit_before": "83c05a70e3087b1fb18ec0875034b4adfcd72d26"
+          },
+          {
+            "log": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T120534Z-53983.log",
+            "operation": "refine",
+            "role": "PLAN_REFINER",
+            "run_id": "normal-20260917",
+            "sequence": 10,
+            "stage_id": "S05",
+            "type": "dispatch",
+            "vault_commit_before": "5855bf1"
+          },
+          {
+            "operation": "run",
+            "role": "EXECUTOR",
+            "run_id": "normal-20260917",
+            "sequence": 11,
+            "stage_id": "S05",
+            "type": "dispatch",
+            "vault_commit_before": "60e8abdaaa242b546ca12365a712fb66926c13fc"
+          }
+        ],
+        "header": {
+          "initial_publication_commit": "dd8fb3d855f755e5285c001b8d6743a39299d288",
+          "root": "vault/2026-09-17-03_51-normal-internal/master-plans/2026-09-17-03_51-normal-internal.md",
+          "run_id": "normal-20260917",
+          "scenario": "normal",
+          "type": "trace-header"
+        },
+        "trailer": {
+          "dispatch_count": 11,
+          "final_vault_commit": "155ad0f9a8d7d9372e0e256f3f1e24cd44da2796",
+          "outcome": "complete",
+          "run_id": "normal-20260917",
+          "type": "trace-trailer"
+        }
+      }
+    }
+  },
+  "fixture_kind": "live",
+  "requirements": {
+    "PT-01": {
+      "evidence": [
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/goal-directives.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/master-plans/2026-09-17-03_51-normal-internal.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s01-parse-ndjson.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s02-atomic-persistence.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s03-ingest-service.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s04-version-status.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s05-cli.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-03_51-whole-tree-review.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "published root mode and generation match",
+          "status": "PASS"
+        },
+        {
+          "message": "active Plan links resolve the published stage graph",
+          "status": "PASS"
+        },
+        {
+          "message": "published active Plan links match expected stage identities",
+          "status": "PASS"
+        },
+        {
+          "message": "whole-tree review passes for the expected generation",
+          "status": "PASS"
+        },
+        {
+          "message": "confirmation evidence is coherent",
+          "status": "PASS"
+        },
+        {
+          "message": "standalone publication is evidenced by the atomic initial commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "stage dependency graph is acyclic",
+          "status": "PASS"
+        },
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-02": {
+      "evidence": [
+        {
+          "message": "active Plan links resolve the published stage graph",
+          "status": "PASS"
+        },
+        {
+          "message": "published active Plan links match expected stage identities",
+          "status": "PASS"
+        },
+        {
+          "message": "whole-tree review passes for the expected generation",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 has the required upfront contract fields",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 has the required upfront contract fields",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 has the required upfront contract fields",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 has the required upfront contract fields",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 has the required upfront contract fields",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 actual dependencies match the manifest",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-03": {
+      "evidence": [
+        {
+          "message": "S01 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 refinement precedes execution",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-04": {
+      "evidence": [
+        {
+          "message": "S01 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 stage resolves the checked preparation receipt",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 preparation authority and identity match historical context",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 preparation Code commit exists",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 preparation digest matches historical exact bytes",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 actual dependencies match the manifest",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "stage dependency graph is acyclic",
+          "status": "PASS"
+        },
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 provider S03 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 provider S04 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 provider S02 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 provider S01 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 refinement precedes execution",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-05": {
+      "evidence": [
+        {
+          "message": "bounded-detail/no-replan assessment passes",
+          "status": "PASS"
+        },
+        {
+          "message": "role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "contract-break trace has exactly one replanning dispatch",
+          "status": "PASS"
+        },
+        {
+          "message": "replan publication identities and dispositions match",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-06": {
+      "evidence": [
+        {
+          "message": "role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "contract-break trace has exactly one replanning dispatch",
+          "status": "PASS"
+        },
+        {
+          "message": "replan publication identities and dispositions match",
+          "status": "PASS"
+        },
+        {
+          "message": "semantic impact assessment matches publication",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-07": {
+      "evidence": [
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "batch interruption receipt matches resumed decision",
+          "status": "PASS"
+        },
+        {
+          "message": "replan publication identities and dispositions match",
+          "status": "PASS"
+        },
+        {
+          "message": "batch recovery and publication decision identities match",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-08": {
+      "evidence": [
+        {
+          "message": "role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "canonical package contains copied superstage",
+          "status": "PASS"
+        },
+        {
+          "message": "canonical package contains copied superrefine",
+          "status": "PASS"
+        },
+        {
+          "message": "canonical package contains copied superreplan",
+          "status": "PASS"
+        },
+        {
+          "message": "codex package contains copied superstage",
+          "status": "PASS"
+        },
+        {
+          "message": "codex package contains copied superrefine",
+          "status": "PASS"
+        },
+        {
+          "message": "codex package contains copied superreplan",
+          "status": "PASS"
+        },
+        {
+          "message": "cursor package contains copied superstage",
+          "status": "PASS"
+        },
+        {
+          "message": "cursor package contains copied superrefine",
+          "status": "PASS"
+        },
+        {
+          "message": "cursor package contains copied superreplan",
+          "status": "PASS"
+        },
+        {
+          "message": "pi package contains copied superstage",
+          "status": "PASS"
+        },
+        {
+          "message": "pi package contains copied superrefine",
+          "status": "PASS"
+        },
+        {
+          "message": "pi package contains copied superreplan",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-09": {
+      "evidence": [
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "legacy trace uses incremental planning",
+          "status": "PASS"
+        },
+        {
+          "message": "legacy root remains unmarked",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-10": {
+      "evidence": [
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/goal-directives.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/master-plans/2026-09-17-03_51-normal-internal.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s01-parse-ndjson.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s02-atomic-persistence.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s03-ingest-service.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s04-version-status.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s05-cli.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "publication artifact vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-03_51-whole-tree-review.md exists in the publication commit",
+          "status": "PASS"
+        },
+        {
+          "message": "published root mode and generation match",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 delivery receipt is tracked in its vault commit",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 delivery identity matches",
+          "status": "PASS"
+        },
+        {
+          "message": "external publication commit contains every named artifact",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "PT-11": {
+      "evidence": [
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 provider S03 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S05 provider S04 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S04 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S03 provider S02 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S02 provider S01 was delivered before execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 has attributable refinement and execution",
+          "status": "PASS"
+        },
+        {
+          "message": "S01 refinement precedes execution",
+          "status": "PASS"
+        },
+        {
+          "message": "operation trace has complete attributable boundaries",
+          "status": "PASS"
+        },
+        {
+          "message": "trace role log: role log has a matching successful header and trailer",
+          "status": "PASS"
+        },
+        {
+          "message": "contract-break trace has exactly one replanning dispatch",
+          "status": "PASS"
+        }
+      ],
+      "verdict": "PASS"
+    }
+  },
+  "schema_version": 1,
+  "summary": {
+    "FAIL": 0,
+    "INCOMPLETE": 0,
+    "PASS": 11
+  }
+}

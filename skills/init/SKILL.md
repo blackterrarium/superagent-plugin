@@ -171,6 +171,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
    `SUPER_HARNESS` ∈ claude|cursor|codex|pi; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
+   `SUPER_PLANNING_MODE` ∈ upfront|incremental;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
    `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈ required.
@@ -260,7 +261,7 @@ pi-only:end -->
 ## Step 3 — Role agents (model/effort pins)
 
 <!-- cc-only:start -->
-Thirteen `SUPER_MODEL_*` role keys dispatch through the Agent tool — all but
+Fifteen `SUPER_MODEL_*` role keys dispatch through the Agent tool — all but
 `SUPER_MODEL_SUPERVISOR`, which the tick passes straight to `claude --model`. The
 Agent tool's `model:` parameter accepts only tier names, so a role whose resolved
 value is a **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) is pinned
@@ -268,7 +269,7 @@ via a generated per-role agent definition instead — the definition's `model:`
 frontmatter accepts full IDs.
 <!-- cc-only:end -->
 <!-- cursor-only:start
-Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
+Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `agent --model`.
 On Cursor, a **native** model value is a Cursor model name (see `agent --list-models`)
 or `inherit`; any native value other than `inherit` is pinned via a generated per-role
@@ -279,7 +280,7 @@ foreign to this build, so such a role is **bridged** and gets a relay definition
 instead of being treated as a typo.
 cursor-only:end -->
 <!-- codex-only:start
-Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
+Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `codex exec -m`.
 On Codex there are **no generated agent-definition files at all**: role pins dispatch
 at runtime as `spawn_agent` parameters — `SUPER_MODEL_<ROLE>` → `model`,
@@ -289,9 +290,9 @@ model/effort per role and REPORTS them, so a misconfigured pin surfaces here ins
 of at spawn time.
 codex-only:end -->
 <!-- pi-only:start
-Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
+Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
 which the external tick passes straight to `pi --model`. On Pi the supervisor's OWN dispatches
-(planner, executor, panel) are bridge processes that take the pins as CLI flags and need no
+(planner, plan-refiner, replanner, executor, panel) are bridge processes that take the pins as CLI flags and need no
 definition; only superrun's SDD roles (implementer, fix-applier, task-reviewer, re-reviewer,
 branch-reviewer, fix-planner) dispatch through the `pi-subagents` `subagent` tool, and THOSE ride
 generated `.pi/agents/super-<role>.md` definitions. Step 1 must have verified
@@ -300,7 +301,8 @@ this step runs. Missing prerequisites abort init; there is no sequential fallbac
 The four coding-loop roles (prd-reviewer, meta-planner, evaluator, diagnoser) get no `.pi/agents/`
 file. Coding-loop dispatches use fresh blocking bridge processes with model/effort CLI pins:
 `superprd` runs its reviewer through `role-bridge.sh --tools evaluator`, `supereval` uses the
-same read-only bridge profile, and `supermeta` dispatches its PLANNER through `--tools planner`.
+same read-only bridge profile, `supermeta` dispatches PLANNER through `--tools planner`, and
+superagent dispatches PLAN_REFINER / REPLANNER through `--tools planner --role plan-refiner|replanner`.
 The diagnoser's dispatch belongs to Stage 3.
 pi-only:end -->
 
@@ -309,6 +311,8 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | Model key | Effort key | Generated definition |
 |---|---|---|
 | SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_PLAN_REFINER | SUPER_EFFORT_PLAN_REFINER | `.claude/agents/super-plan-refiner.md` |
+| SUPER_MODEL_REPLANNER | SUPER_EFFORT_REPLANNER | `.claude/agents/super-replanner.md` |
 | SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.claude/agents/super-executor.md` |
 | SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.claude/agents/super-panel.md` |
 | SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.claude/agents/super-implementer.md` |
@@ -330,7 +334,7 @@ They follow the harness-specific generate/skip/conflict rules below.
 
 <!-- pi-only:start
 On Pi the listed path is `.pi/agents/super-<role>.md` only for the six SDD roles, including
-roles whose pins both inherit. Planner/executor/panel and the four coding-loop roles never
+roles whose pins both inherit. Planner/plan-refiner/replanner/executor/panel and the four coding-loop roles never
 get a file. This Pi rule overrides the table's generated paths.
 pi-only:end -->
 

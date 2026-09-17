@@ -13,7 +13,8 @@ license: MIT
 >   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
 >   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
->   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
+>   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
@@ -65,13 +66,27 @@ superplan makes — never source code, never execution output.
 Gates, in order:
 
 1. If `<PLAN.md>` is not provided → respond with exactly `I need to know the plan file` and **exit**.
-2. If `<PLAN.md>` is provided but `<TOPIC>` is not → **invoke the `superagent:supertraverse` skill** (Skill
-   tool) and run its **DESCENT** from `<PLAN.md>`. Descent walks the plan tree down the progress-report
+2. Resolve the **containing root** before classifying planning mode. Starting from the supplied
+   `<PLAN.md>`, follow its parent-seed references and verify the corresponding parent Plan links/tree
+   identity until reaching the unique plan with no parent in this goal tree. A direct sub-master
+   invocation therefore inherits its containing root's mode even when the sub-master itself has no
+   marker. Missing, conflicting, or ambiguous root identity is `BLOCKED`; do not treat a known nested
+   node as an independent legacy root. Keep the caller's supplied `<PLAN.md>` and optional `<TOPIC>` as
+   the selection scope after resolving the root.
+3. Read the **resolved root's** planning-mode marker before descent. A root explicitly marked
+   `upfront-v1` is governed by superstage S1/S2: invoke `superagent:superstage` and validate its active
+   graph with root authority, while retaining the caller's subtree/topic as selection scope. A missing
+   active Plan link, duplicate/unresolved stage path, or other structural fault returns `BLOCKED`; do
+   not author a replacement through incremental descent. Only an adopted structural repair may alter
+   that tree. A true containing root marked `incremental`, or with no marker, keeps the existing flow
+   unchanged permanently; process environment preferences do not reclassify it.
+4. If `<PLAN.md>` is provided but `<TOPIC>` is not → **invoke the `superagent:supertraverse` skill** (Skill
+   tool) and run its **DESCENT** from the caller's `<PLAN.md>` selection scope. Descent walks the plan tree down the progress-report
    tables' `Plan` links (multi-layer, not just `<PLAN.md>`'s own rows), skipping completed steps and
    already-planned leaves, and returns:
    - the **target** — the deepest highest-ranked step that is not yet completed **and** has no plan
-     yet (the *available task to plan*), or an explicitly authorized `repair requested` row
-     selected by **supertraverse C8** even though its predecessor has a Plan/Closeout, and
+     yet (the *available task to plan*), or an explicitly authorized `repair requested` row selected
+     by **supertraverse C8** even though its predecessor has a Plan/Closeout, and
    - the **descent path** — the chain of `(plan-file, row)` from `<PLAN.md>` down to the target's
      **immediate parent** (the deepest plan that directly contains the target row). The immediate
      parent may be a *descendant* of `<PLAN.md>`, not `<PLAN.md>` itself; the ascent step below uses
@@ -315,15 +330,15 @@ An implementation plan is a **leaf** of the plan tree and **MUST NOT contain a p
 *internal node* that traversal descends into, so a leaf has none. Track an implementation plan's own
 work with task checkboxes / a verification matrix instead.
 
-## Repair target — publish a successor (C8)
+## Repair target — return the C8 handoff
 
-When descent selected `repair requested`, follow **supertraverse C8 Publish** as part of
-Planning → Self-Review → Routing → Immediate-Parent Update. Read its durable decision and
-predecessor evidence before drafting; the authorized corrections govern the successor's scope.
-C8's successor publication replaces the ordinary row update below (including its usual
-leave-PR-unchanged rule). Include the repair record and predecessor PR disposition in self-review
-and the Final Report. A successor stays an implementation leaf; larger unresolved scope returns
-BLOCKED for another decision rather than silently replacing it with a different tree shape.
+When descent encounters a reconciled incremental/unmarked `repair requested` row, stop before
+Planning, Self-Review, Routing, or an Immediate-Parent update. Return `operation: replan`, the
+durable C8 record, and the selected legacy leaf to the supervisor.
+
+The supervisor dispatches `superreplan` under REPLANNER; superplan must not draft, publish, or update
+the successor under PLANNER. For an upfront root, only a pending generation-scoped C8 batch may
+change active links, contracts, topology, or generation.
 
 ## Update the Immediate Parent's Progress-Report Table (MUST)
 

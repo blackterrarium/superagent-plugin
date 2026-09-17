@@ -1,0 +1,6 @@
+FAIL: replan_before_request_commit.outcome: expected "continue", got "BLOCKED"
+FAIL: replan_before_request_commit.execution_paused: expected true, got false
+FAIL: replan_drafting_interrupted.outcome: expected "continue", got "DRAFT-INCOMPLETE"
+FAIL: late_predecessor_closeout.active_link_changed: expected false, got true
+FAIL: replan_stale_baseline.outcome: expected "continue", got "REPLAN-REQUIRED"
+FAIL: replan_internal_pr_not_merged.outcome: expected "continue", got "BLOCKED"

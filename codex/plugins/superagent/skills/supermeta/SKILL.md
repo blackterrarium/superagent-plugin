@@ -1,7 +1,7 @@
 ---
 name: supermeta
 description: Turn a READY coding-loop project folder into the next round's meta-plan and drive supergoal (auto-confirmed) to scaffold the goal folder the inner loop will build. Writes meta-plans/<STAMP>-r<N>.md, dispatches one PLANNER subagent that runs supergoal, appends the iteration-ledger row, and commits per superauthor A7. Stage 2 of the coding loop; runs unattended.
-argument-hint: "<project-dir> [--operation <path>] [--supervisor-state <path>]"
+argument-hint: "<project-dir> [--resume-draft <draft-index.md>] [--operation <path>] [--supervisor-state <path>]"
 license: MIT
 related skills: superauthor, supergoal, superprd, supereval
 ---
@@ -55,10 +55,25 @@ supermeta **never plans the work itself and never touches source code** (superau
 structural docs (a meta-plan and a ledger row) and dispatches exactly **one** PLANNER-role subagent
 that invokes `superagent:supergoal`.
 
-**Input:** `<project-dir>` — an existing coding-loop project folder. **Required.** Optional:
-`--operation <path>` uses a supervisor-persisted operation identity. Supercode dispatches also pass
-`--supervisor-state <path>`: the real registered project state, required for author-approved META
-entry. That flag requires --operation. With no operation, all manual defaults remain unchanged.
+**Input:** `<project-dir>` — an existing coding-loop project folder. **Required.**
+`--resume-draft <draft-index.md>` is the explicit recovery form for an incomplete supergoal draft.
+Optional: `--operation <path>` uses a supervisor-persisted operation identity. Supercode dispatches
+also pass `--supervisor-state <path>`: the real registered project state, required for
+author-approved META entry. That flag requires `--operation`. With no operation, all manual defaults
+remain unchanged.
+
+## Incomplete-draft recovery
+
+Before deriving a new round, recognize `--resume-draft` and read the index through supergoal's recovery
+contract. It must name this project, its original meta-plan/source snapshot and digest, intended goal
+destination, stable draft identity, and original round. Reuse those values exactly; do not allocate a
+new round or write another meta-plan. First reconcile a lost response against the intended destination:
+a complete tracked root, all indexed artifacts, and matching review is publication evidence and can flow
+to the normal labelled-report parse only when its A7 PR/commit is verified in authoritative internal
+main or the external vault branch. Reconstruct the result from those actual artifacts and history, not
+from a success-looking child message. Absent publication resumes the same index; partial, conflicting, or
+multiple publication is `BLOCKED`. The saved draft itself is never approval: the resumed child still
+receives the current two-factor confirmation invocation.
 
 ## Repo configuration (.superenv)
 
@@ -131,11 +146,12 @@ uses this result for recovery; the human Final Report is not phase-completion ev
 
 ### 3. Derive identifiers
 
-- `<STAMP>` — `date -u +%Y-%m-%d-%H_%M`, taken once per run.
+- `<STAMP>` — `date -u +%Y-%m-%d-%H_%M`, taken once per new round. A resume takes the saved stamp.
 - `<project-slug>` — the project folder's basename with its leading `YYYY-MM-DD-hh_mm-` stamp
   stripped (e.g. `csv-summariser`).
-- `N` (round) — `1 +` the number of data rows in `prd.md`'s `## Iteration ledger` table (so the
-  first round is `1`).
+- `N` (round) — for a new run, `1 +` the number of data rows in `prd.md`'s `## Iteration ledger`
+  table (so the first round is `1`); for `--resume-draft`, the index's original round. Never append a
+  ledger row merely because a scratch draft exists.
 - **Repair guidance** — if `<project-dir>/diagnoses/<…>-r<N-1>.md` exists (never in Stage 2; the
   file layout is fixed so Stage 3 needs no change here), read it and quote its per-problem guidance;
   otherwise repair guidance is `none — first round`.
@@ -287,7 +303,8 @@ prefix that invocation with `SUPER_GOAL_AUTOCONFIRM=true`; for a native subagent
 On Pi also set `SUPERAGENT_PI_SKILLS="${SUPER_PLUGIN_ROOT}/skills"` on the bridge invocation,
 so an attended call delivers `supergoal` to the child just as a scheduler tick does.
 
-The subagent's prompt instructs it to invoke the `superagent:supergoal` skill via the Skill tool with
+For a new run, the subagent's prompt instructs it to invoke the `superagent:supergoal` skill via the
+Skill tool with
 
 ```
 <GOAL> = <absolute path of meta-plans/<STAMP>-r<N>.md>   --autoconfirm   --slug <project-slug>-r<N>
@@ -295,7 +312,11 @@ The subagent's prompt instructs it to invoke the `superagent:supergoal` skill vi
 
 and to **return supergoal's complete Final Report verbatim** as its final message.
 
-In operation mode append `--operation <the same absolute operation JSON path>`. Before dispatch,
+For `--resume-draft`, pass `supergoal --resume-draft <draft-index.md> --autoconfirm` under the
+same dispatch-scoped `SUPER_GOAL_AUTOCONFIRM=true`. This re-applies confirmation to the completed
+current draft; it does not treat the saved index as confirmation. It remains the same one PLANNER
+child, with no planner children beneath it. In operation mode append `--operation <the same absolute
+operation JSON path>` to either the new-run or resume invocation. Before dispatch,
 run `_coding_loop_evidence.py reconcile <primary_root> <vault_root> --operation <path>`. An
 `INTEGRATED` result supplies the exact `goal_folder` and `root_plan`. If `worker_complete` is true,
 return the existing completed operation. If `goal_complete` is true, reuse the scaffold and skip the
@@ -307,14 +328,25 @@ finish its normal integration, and reconcile again. An identity mismatch or
 unrelated partial output is a hard conflict. Never infer success from child text, a folder
 collision, working-tree bytes, or an unmerged commit.
 
-Parse `**Goal folder:**` and `**Root plan:**` from the returned report. **If** the report is missing
-either line, **or** supergoal reports a refusal — the key is not `true`
+Parse labelled `**Goal folder:**` and `**Root plan:**` from a complete returned report; an upfront
+complete report must also carry labelled `**Planning mode:** upfront-v1`, `**Stages:**`, and
+`**Tree review:**`, plus the merged internal `**PR:**` or external-vault `**Commit:**` publication
+evidence. Synchronize and verify that one A7 unit contains every reported artifact before appending the
+ledger. **If** the report contains `DRAFT-INCOMPLETE` and `**Draft index:**`, supermeta writes nothing
+to the ledger, preserves/reports that index and its original meta-plan/source/round, and exits so the
+explicit resume form can reuse it. **If** the report is missing a required complete field, or supergoal
+reports a refusal — the key is not `true`
 (`--autoconfirm ignored: SUPER_GOAL_AUTOCONFIRM is not true`), the goal folder already exists (the
 never-overwrite collision report), or `I need a goal description` — then supermeta writes **nothing**
 to the ledger, **moves the meta-plan back** out of `meta-plans/` into scratch, and reports the
 failure **verbatim** with the scratch path, then exits.
 
 ### 7. Ledger and commit (A7)
+
+Before appending, reconcile `prd.md` and authoritative history for this project/round/meta-plan/goal
+identity. A matching integrated ledger row means a prior supermeta publication succeeded after its
+response was lost: reuse it and report the existing PR/commit without appending or publishing again. A
+single partial A7 unit resumes with the same row and branch; conflicting rows/publications are BLOCKED.
 
 Append this row to `prd.md`'s `## Iteration ledger` table (the goal-folder path is
 `**Goal folder:**` from step 6 made relative to `<vault_root>`):

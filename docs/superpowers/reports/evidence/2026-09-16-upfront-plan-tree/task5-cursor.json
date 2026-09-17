@@ -1,0 +1,13 @@
+{
+  "supervisor_cursor_native_refinement": {
+    "reason": "The Cursor superagent WAITING FOR PLAN rule selects superrefine / PLAN_REFINER for the first dependency-eligible upfront stage whose S5 result is NEEDS-REFINEMENT. The native Cursor dispatch rule uses the matching named definition for a non-inherit model, while warning on the native effort pin and treating it as inherit; both pins resolve from repo .superenv.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "dispatch_form": "named-definition",
+    "target": "S03",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  }
+}

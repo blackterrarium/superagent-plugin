@@ -1,0 +1,39 @@
+{
+  "legacy_default": {
+    "reason": "Unsupported: the supplied primary checkout has no skills/superstage/SKILL.md, and supertraverse C6 defines only an invocation mode of planning (default) or execution; it defines neither a root Planning mode marker nor an upfront mode/environment override.",
+    "mode": "unsupported"
+  },
+  "bounded_unknown": {
+    "reason": "Superauthor A2 requires exact file paths, exact interfaces, and actual implementation content, while A3 rejects steps that defer details; neither available contract defines bounded unknown filenames or a preparation receipt that can make such an upfront stage valid or executable.",
+    "upfront_valid": false,
+    "executable": false
+  },
+  "missing_architecture": {
+    "reason": "Superauthor A2 requires every implementation plan to state its Architecture in 2-3 sentences and A3 forbids implement-later placeholders; no available contract defines bounded alternatives, decision criteria, an evidence method, or a discovery-stage exception.",
+    "upfront_valid": false
+  },
+  "open_provider": {
+    "reason": "Supertraverse C4 says executed — PR open is not merged-on-main, and C9 classifies a closed-but-unmerged PR or missing merge commit as BLOCKED and forbids completion; the available contracts define no consumes-edge rule that independently authorizes the consumer stage.",
+    "executable": false,
+    "done": false
+  },
+  "declined_provider": {
+    "reason": "Supertraverse C4/C9 treats an authorized declined disposition as closed and non-blocking for that provider, but every active obligation must still pass for completion; the available contracts define no shared-contract rule allowing an active consumer of the declined provider to execute without an adopted replacement.",
+    "executable": false,
+    "done": false
+  },
+  "dependency_cycle": {
+    "reason": "Unsupported as a stage-dependency graph: supertraverse C9 blocks cycles among recursively visited active plan links, but the available contracts do not define Depends on edges, upfront-graph validation, or stage selection semantics.",
+    "outcome": "unsupported"
+  },
+  "local_detail": {
+    "reason": "Unsupported: superauthor requires exact local details and supertraverse C8 defines an authorized repair/successor workflow, but neither available contract classifies predecessor evidence into an operation and role for preparation versus replanning.",
+    "operation": "unsupported",
+    "role": "unsupported"
+  },
+  "contract_break": {
+    "reason": "Unsupported: supertraverse C8 can publish an authorized repair successor with explicit corrections, but neither available contract defines the requested shared-contract-break operation or assigns the requested role classification.",
+    "operation": "unsupported",
+    "role": "unsupported"
+  }
+}

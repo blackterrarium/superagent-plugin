@@ -1,0 +1,2 @@
+Validator snapshot: 42c59fb:scripts/plan-tree-regression.py
+FAIL: replan_split_merge_mapping.outcome: expected "continue", got "PREPARED"

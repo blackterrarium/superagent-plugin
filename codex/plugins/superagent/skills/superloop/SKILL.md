@@ -164,6 +164,10 @@ Format — YAML frontmatter is the machine state; the body is an append-only hum
 master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # ROOT seed: repo-relative (internal vault) or ABSOLUTE (external vault)
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
 plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's queue-exhaustion hint; other consumers add their own work-model fields here
+planning_operation: none          # optional recovery hint: refine | replan | none; tracked tree/records override it
+planning_target:                  # optional stage ID, legacy repair leaf, or decision record hint
+planning_generation:              # optional upfront root generation hint
+planning_record:                  # optional C8 record path/Decision ID hint
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
 driver: external                  # the only driver in this build (external scheduler — fresh context per tick)
 cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty
@@ -314,9 +318,14 @@ synchronously, then sets the next status — all in one turn. Ticks never overla
 fire between turns; in `external` mode the **lock (L3)** serializes them. So a **persisted** transient
 state means a crashed prior tick (which also left a stale lock that `acquire_lock()` steals
 immediately when its recorded owner PID is dead, else after
-`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note, **map the persisted transient state back to its matching
-ready state** (the caller supplies the transient→ready mapping for its own status values — superagent:
-`PLANNING → WAITING FOR PLAN`, `RUNNING → WAITING FOR RUN`), and fall through to that branch this tick.
+`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note and reconcile the
+caller-owned authoritative artifacts before retrying. A published docs operation, merged code delivery,
+open/CI-pending PR, or integrated closeout may have succeeded after the response was lost; actual
+tracked commits/PRs and identity-bound partial-closeout/delivery records override the stale transient hint. Then **map the
+persisted transient state back to its matching ready state** (the caller supplies the
+transient→ready mapping for its own status values — superagent: `PLANNING → WAITING FOR PLAN`,
+`RUNNING → WAITING FOR RUN`) and fall through to that branch. Recovery reuses the existing identity;
+it never duplicates publication or reruns delivered work merely because loop state lagged.
 
 ### Tick teardown invariant — never exit on a transient status, never end a tick with a question
 
@@ -462,7 +471,7 @@ per-tick body. (`session_skill_count` is never consulted.)
 
 ## L5 — Sync gate — local `main` must equal `origin/main` (REQUIRED around every skill dispatch)
 
-The caller's sub-steps (`superplan`/`superrun`, or a consumer's own fix-PR flow) merge their PRs to
+The caller's sub-steps (a selected planning operation / `superrun`, or a consumer's own fix-PR flow) merge their PRs to
 `origin/main` and then try `git checkout main && git pull --ff-only`. **That local pull can silently
 fail or be skipped** — most commonly when a `git checkout main` runs *inside a worktree* (where `main`
 is already checked out in the primary tree and the checkout errors **after** the remote `--admin` merge
@@ -526,6 +535,12 @@ is present and tracked:
   are checked on the code repo as before;
 - (optional) the merge is in history — `git log --oneline origin/main | grep <pr-number>`.
 
+For an identity-bearing operation, verify the report against its actual authoritative publication:
+the recorded stage/generation/revision or Decision ID, source/preparation/delivery identity, and the
+one integrated A7 transition. A filename, loop hint, unmerged docs PR, or child success message alone
+does not pass Be-sure. On a lost response, one matching integrated unit is success to reuse; competing
+or partial units require reconciliation before another write.
+
 If a reported artifact is **missing** after a clean `sync_main()`, the merge did not propagate as
 claimed: `git fetch` once more and re-check; if still missing → **STOP and escalate** with the
 discrepancy. **Do not advance the state machine on an unverified merge** — that is how the loop drifts
@@ -551,9 +566,11 @@ skeleton lives in `superauthor` clause A7** (merge per `SUPER_MERGE_METHOD`, def
 a repo whose branch protection doesn't require it trips the harness security classifier). Do not
 duplicate that skeleton — apply A7's.
 
-1. **CI-green gate before merge.** A code PR is merged only once its gating CI lane is green (the caller
-   names the lane). If CI is **red**, do **not** merge — route to the escalation ladder (L7) with the
-   failure as the decision packet.
+1. **CI-green and current-authority gate before merge.** A code PR is merged only once its gating CI
+   lane is green (the caller names the lane) **and** the caller revalidates the current authoritative
+   work identity/barrier/disposition. A queued-before-request packet is not merge authority. If CI is
+   red, an adopted barrier is pending, the active identity changed, or disposition is unresolved, do
+   **not** merge — preserve the PR evidence and route to the caller's reconciliation/escalation path.
 2. **Merge via A7.** Apply `superauthor` A7's merge — per `SUPER_MERGE_METHOD` (default `squash`), never
    `--admin` unless `SUPER_ADMIN_MERGE=true` permits it. If `SUPER_PROTECTED_MAIN=true` (the shipped
    default), the default branch is protected; never direct-push. If `SUPER_PROTECTED_MAIN=false`, a
@@ -563,9 +580,9 @@ duplicate that skeleton — apply A7's.
    vault mode) and the Be-sure verification so the primary checkout reflects the merge before the
    next tick reads the tree.
 
-**superagent's subset.** superagent does **not** itself open/merge work PRs — `superplan`/`superrun`
+**superagent's subset.** superagent does **not** itself open/merge work PRs — selected planning operations / `superrun`
 do that inside their own flows. superagent therefore applies only **L6.1's CI-red → L7 escalation
-trigger** and **L6.3's post-merge sync+be-sure** (around each `superplan`/`superrun` dispatch). A
+trigger** and **L6.3's post-merge sync+be-sure** (around each selected planning operation / `superrun` dispatch). A
 consumer whose per-tick body opens its own PRs applies the full clause.
 
 ---

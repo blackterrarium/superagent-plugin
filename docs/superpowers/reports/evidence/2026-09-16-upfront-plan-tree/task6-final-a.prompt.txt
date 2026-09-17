@@ -1,0 +1,110 @@
+Read the supplied canonical skill contracts at /Users/eugene/src/superagent-plugin/.claude/worktrees/upfront-plan-tree/skills/{superagent,superloop,superstage,superauthor,superreplan,supertraverse,superrefine,superrun,superfinish,supergoal,superplan,supermeta,init}/SKILL.md. Apply their rules to each independent fixture below. This is a read-only interpretation: do not dispatch, mutate files, call Git/network services, read implementation reports, or invent absent rules.
+Supervisor scenarios apply the CURRENT superagent/superloop consumer rules, including any active transition gate. Do not answer from a future or dormant recipe unless the current consumer explicitly makes it active.
+Return one JSON object keyed by scenario id. Every result must be a JSON object with a nonempty string reason citing the governing rule/evidence, plus every requested field. Use JSON booleans where a field asks for a boolean and contract spellings for strings.
+For the artifact/replay cases, outcome classifies the current artifact/replay handler, not C6 stage selection. dispatch names the next heavy skill authorized after durable request reconciliation, not a claim that the current supervisor already routes it. publication names the furthest coherent artifact form safe to resume: scratch for one unique draft/checkpoint even when it needs reassessment, vault only for a complete authoritative committed/integrated generation, and none when neither exists. A dirty active-tree edit or unmerged internal docs PR is none. execution_paused says whether this adopted decision/batch imposes its own whole-goal execution barrier, independent of ordinary preparation or dependency readiness. replay_action names artifact reconciliation, not the later controller status. The state/action fields describe only the current handler action at the stated observation point; historical transitions named in the facts do not set those fields. The propagation_stop value for no preserved stage boundary is the JSON string "none", never JSON null.
+Global output vocabulary (not per-case answers): mode is incremental, upfront-v1, or unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, NEEDS-REFINEMENT, PREPARED, REPLAN-REQUIRED, continue, or done; operation is plan, refine, run, replan, or none; role is PLANNER, PLAN_REFINER, REPLANNER, EXECUTOR, or none; model_source and effort_source are process-env, repo-superenv, harness-default, or none; next_state is WAITING FOR PLAN, PLANNING, WAITING FOR RUN, or WAITING FOR INPUT; dispatch_form is named-definition, generic-child, bridge-relay, bridge-process, codex-spawn, or none; target is a stage ID, legacy leaf ID, decision ID, or none; heavy_dispatches is the scheduled/authorized count in this case, integer 0 or 1; publication is none, scratch, or vault; draft_action describes scratch artifact handling only: resume, revise, or none; confirmation remains separately governed by the current gate; root_mode_marker is incremental, upfront-v1, or absent; upfront_valid, executable, done, code_execution, code_pr_required, discovery_evidence_verified, merge_allowed, worktree_required, sdd_required, partial_closeout_allowed, delivered, consumable, checkpoint_preserved, old_ci_authoritative, successor_snapshot_required, execution_snapshot_required, historical_snapshot_required, delivery_receipt_reused, pr_evidence_preserved, replan_required, affected_preparation_valid, duplicate_stage_ids, duplicate_goal_folder, commitments_preserved, request_publication_required, and in_place_overwrite are JSON booleans; digest_basis is execution-snapshot or current-annotated-plan; execution_path is discovery-evidence or code-delivery; evidence_publication is authoritative-vault or none; row_status is executed — PR open or completed-and-merged; stages and stage_revision are JSON integers; amendment_kind is none, content-amendment, or compatible-baseline-revalidation; batch_created, execution_paused, duplicate_publication, active_link_changed, successor_closed, predecessor_evidence_preserved, old_pr_closed, successor_needs_refinement, topology_allowed, preparation_valid, partial_tree_executable, and authoritative_view_executable are JSON booleans; dispatch is none or superreplan; resolution is pending, published, superseded, or declined; replay_action is resume-draft, resume-published, reassess, or block; propagation_stop is a stage ID or the string none; late_closeout_action is preserve-history or reconcile-delivery; pr_disposition is resume-existing, replace, or none; repair_shape is single-leaf or batch; resume_action is normal-successor-execution or direct-post-ci; report_action is upgrade-in-place or reuse; produced_contract_status is pending-nonconsumable or delivered; pr_cell is none or a PR number; completed_disposition is completed-history or none; revised_stages, retained_stages, completed_stages, retired_stages, and replacement_stages are JSON arrays of stage IDs. Scenario operation describes the selected action. The persisted planning_operation recovery hint remains refine, replan, or none: legacy plan and run selections persist none.
+
+legacy_default: The root has no Planning mode marker. The current environment requests upfront mode. Resolve the mode without rewriting the root.
+Return fields: reason, mode
+
+invalid_trailing_planning_mode: A new supergoal invocation ends with `--planning-mode speculative`. It has no prior scratch or vault artifacts. Classify parsing and side effects.
+Return fields: reason, outcome, publication, code_execution
+
+incremental_mode_persisted: A new supergoal resolves planning mode to incremental and completes root authoring. Classify the persisted root marker; this is not an unmarked legacy root.
+Return fields: reason, mode, root_mode_marker
+
+bounded_unknown: An upfront implementation stage fixes scope, architecture, acceptance, contracts, and verification scenarios. Internal filenames depend on predecessor evidence; the stage bounds those names, says how preparation will resolve them, and has no preparation receipt.
+Return fields: reason, upfront_valid, executable
+
+missing_architecture: An upfront stage says its persistence architecture will be chosen later. It gives no bounded alternatives, decision criteria, evidence method, or discovery-stage contract.
+Return fields: reason, upfront_valid
+
+open_provider: S02 consumes C-INGEST@1 from S01. S01 has a closeout, but its code PR remains open and the merge commit is absent from main. Classify S02 and whole-goal completion.
+Return fields: reason, executable, done
+
+declined_provider: S01 was declined with an approved disposition. Active S02 still consumes C-INGEST@1 from S01, and no adopted replan removes or replaces that contract. Classify S02 and completion.
+Return fields: reason, executable, done
+
+dependency_cycle: The active upfront graph has S01 Depends on S02 and S02 Depends on S01. All files and stage IDs otherwise exist. Classify validation/selection.
+Return fields: reason, outcome
+
+unlinked_active_row: An upfront root has an active, incomplete progress-table row whose Plan cell is blank. Its other rows link to valid stages. No authorized disposition removes the blank row. Classify the candidate graph and whether authoring may fill it incrementally.
+Return fields: reason, upfront_valid, outcome
+
+multi_level_complete_tree: A scratch upfront root links to two sub-masters. Together their linked leaves have unique stable IDs S01, S02, and S03, complete S2 contracts, compatible dependencies, and a passing scratch tree review resolved through the intended-vault path map. Every initial leaf has Preparation: none and its parent row says PLAN WRITTEN — needs refinement.
+Return fields: reason, upfront_valid, stages, executable
+
+draft_interrupted_before_confirmation: An upfront supergoal has captured a prose-source snapshot and digest, intended vault paths, drafted root/sub-master/stage/review artifacts, stable IDs, completed review items, and remaining confirmation work in a scratch draft index. It is interrupted before confirmation.
+Return fields: reason, outcome, publication, code_execution
+
+resume_identical_source: supergoal --resume-draft receives an interrupted scratch index whose saved source digest, current source, intended destination, and repository assumptions all still match. The index already names its root/sub-master/stage/review artifacts and stable IDs. Confirmation has not been granted.
+Return fields: reason, outcome, publication, draft_action, duplicate_stage_ids, duplicate_goal_folder
+
+resume_changed_source: supergoal --resume-draft receives an interrupted index for a file-backed goal, but the current source file digest differs from the digest saved in that index. No revised draft has been explicitly made.
+Return fields: reason, outcome, publication, draft_action, code_execution
+
+confirmation_refused: An upfront draft passed S2 and A4 review, but the human declines the whole-artifact confirmation gate. The two-factor auto-confirm condition is absent.
+Return fields: reason, outcome, publication, code_execution
+
+supermeta_draft_incomplete: supermeta receives a PLANNER result containing DRAFT-INCOMPLETE and an explicit draft-index path. It has no complete Goal folder/Root plan publication evidence.
+Return fields: reason, outcome, ledger_appended
+
+local_detail: New predecessor evidence changes only file placement, helper names, and test setup. Scope, acceptance, dependency edges, shared contract behavior, and all other commitments survive.
+Return fields: reason, operation, role
+
+contract_break: Verified evidence shows a required shared output behavior cannot be preserved. Downstream consumers rely on that semantic contract.
+Return fields: reason, operation, role
+
+preparation_noop: A dependency-eligible, unstarted stage has a complete upfront contract. Current source, code, predecessor delivery, contracts, and findings resolve no additional task, file, or test detail. Its initial Stage revision is 1. The refiner attaches its first PREPARED receipt without changing the plan body.
+Return fields: reason, outcome, stage_revision, commitments_preserved, amendment_kind
+
+predecessor_detail_preparation: A dependency-eligible, unstarted stage receives verified predecessor delivery evidence that resolves its bounded file placement, helper name, and distinguishing test setup. Its scope, acceptance, chosen approach, dependencies, and contract behavior remain unchanged. Its initial Stage revision is 1.
+Return fields: reason, outcome, stage_revision, commitments_preserved, amendment_kind
+
+scope_expansion_during_preparation: Preparation evidence shows the stage must add a user-visible export that is outside its approved scope boundary. The stage is unstarted.
+Return fields: reason, outcome, commitments_preserved, in_place_overwrite
+
+source_revision_changed: The authoritative source agreement revision now changes an acceptance condition assigned to an unstarted prepared stage. Its old receipt still names the prior source revision.
+Return fields: reason, outcome, executable, in_place_overwrite
+
+unrelated_head_advance: An unstarted prepared stage has a valid receipt. Repository HEAD advanced only through the docs-only publication of another goal; a focused comparison finds no source, stage, predecessor, contract, finding, or relevant code change. Its current Stage revision is 1.
+Return fields: reason, outcome, stage_revision, commitments_preserved, amendment_kind
+
+relevant_contract_advance: An unstarted prepared consumer still names C-INGEST@1, but verified provider evidence now changes C-INGEST behavior and advances it to semantic revision 2.
+Return fields: reason, outcome, executable, in_place_overwrite
+
+missing_preparation_receipt: A valid upfront-v1 root has no Active replan and a complete active graph. S02 is the first DFS-eligible unstarted leaf with satisfied prerequisites, but its Preparation field is none. superrun is invoked directly on the root under the current consumer rules.
+Return fields: reason, outcome, executable, code_execution
+
+partially_executed_stage: A stage has an execution closeout or open code PR showing that implementation already began, while its remaining work is unresolved. A caller asks the refiner to prepare it in place.
+Return fields: reason, outcome, in_place_overwrite
+
+manual_superrun_pending_batch: A direct manual superrun invocation reads an upfront-v1 root whose Active replan points to a committed pending batch. S02 was prepared before the request, but its disposition is unresolved. No implementation or merge has begun in this invocation.
+Return fields: reason, outcome, executable, code_execution, merge_allowed
+
+execution_snapshot_historical_digest: S02 enters execution at Plan generation 4, Stage revision 2, with preparation receipt R2 and prepared-plan digest H2. Its execution-entry vault revision V4 and reviewed code revision C4 are known. After code integration, superfinish inserts its closeout note into the current stage file, so the current bytes no longer hash to H2. Classify the required closeout identity check.
+Return fields: reason, execution_snapshot_required, historical_snapshot_required, digest_basis
+
+merged_lost_closeout_response: S01 code PR 71 and its tracked closeout delivery receipt were already integrated. The receipt binds generation 4, S01 revision 2, preparation R1/digest H1, PR 71 and its merge commit, and the active parent row links that same report. The caller lost superfinish's response and retries from a fresh context. Here outcome classifies the closeout recovery handler (reuse and continue), not whether the whole goal is done.
+Return fields: reason, outcome, duplicate_publication, delivery_receipt_reused, code_execution
+
+ci_pending_replan_request: S02 entered execution from generation 4 and queued CI on PR 72. Before CI completed, adopted batch B-72 was committed and root Active replan points to it; B-72 records PR 72, branch, worktree, run ids, and an unresolved S02 disposition. CI is now green and the supervisor has the old CI resume packet.
+Return fields: reason, merge_allowed, execution_paused, pr_evidence_preserved, next_state
+
+impact_local_s02_detail: An upfront-v1 root is at Plan generation 7 with no Active replan. S01 revision 3 is delivered. The unfinished stages are S02 revision 2 depending on S01, S03 revision 4 depending on S02, S04 revision 1 with Depends on none, and S05 revision 2 depending on S03. Verified evidence changes only S02 internal file placement and test setup; S02 acceptance, scope, chosen approach, dependencies, required outcome, and C-S02@1 behavior all remain fulfillable. No structural decision has been adopted.
+Return fields: reason, operation, role, batch_created, execution_paused
+
+impact_absorbed_at_s03: An upfront-v1 root is at Plan generation 7. S01 revision 3 is delivered. The unfinished stages are S02 revision 2 depending on S01 and producing C-S02@1, S03 revision 4 depending on S02 and producing C-S03@2, S04 revision 1 with Depends on none, and S05 revision 2 depending on S03 and consuming C-S03@2. An adopted decision authorizes C-S02 to advance to revision 2. Verified evidence shows S03 must change to consume C-S02@2 but can still produce exactly C-S03@2; S04 does not consume either contract. The tracked request names origin S02 and candidate closure [S02, S03, S05].
+Return fields: reason, revised_stages, retained_stages, completed_stages, completed_disposition, propagation_stop
+
+impact_foundational_change: An upfront-v1 root is at Plan generation 7. S01 revision 3 is delivered. The unfinished stages are S02 revision 2 depending on S01, S03 revision 4 depending on S02, S04 revision 1 with Depends on none, and S05 revision 2 depending on S03. An adopted source-author decision changes the shared storage architecture named by the acceptance and chosen approach of every unfinished stage. Verified evidence says none of S02, S03, S04, or S05 can retain its current required outcome or shared contracts; no evidence changes delivered S01. The tracked request started with origin S02 and graph-derived candidate closure [S02, S03, S05]; S04 is outside that initial closure.
+Return fields: reason, revised_stages, retained_stages, completed_stages, completed_disposition, propagation_stop
+
+replan_before_request_commit: An upfront-v1 root is at Plan generation 7 with Active replan none. S01 revision 3 is delivered; S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. A panel adopted valid, verified, unambiguous decision D-204, but neither a tracked decision record nor a tracked root Active replan pointer exists. The loop log alone names D-204. Observe the controller pre-dispatch reconciliation before request publication finishes; classify whether authoritative request publication is required before any replan dispatch.
+Return fields: reason, request_publication_required, publication, dispatch, execution_paused
+
+replan_after_request_commit: An upfront-v1 root is at Plan generation 7. S01 revision 3 is delivered; S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. One authoritative tracked change created decision record D-205 with Resolution pending and set Active replan to that record. The record captures source revision 11, code baseline c7, vault baseline v7, active paths/revisions, candidate closure, and PR/worktree dispositions. Its final semantic affected set, expansion reasons, and per-stage dispositions are present as pending; it has no draft paths yet.
+Return fields: reason, outcome, resolution, dispatch, execution_paused
+
+replan_drafting_interrupted: An upfront-v1 root is at Plan generation 7 with Active replan pointing to tracked record D-206. S01 revision 3 is delivered; S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. D-206 has Resolution pending, matches source revision 11/code c7/vault v7, and lists unique scratch drafts and intended vault paths for S02 and S03 plus a generation-8 review. No draft path is an active Plan link and no publication marker exists. The authoring session ended after self-review began.
+Return fields: reason, publication, replay_action, execution_paused
