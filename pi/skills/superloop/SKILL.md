@@ -294,7 +294,7 @@ immediately when its recorded owner PID is dead, else after
 `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note and reconcile the
 caller-owned authoritative artifacts before retrying. A published docs operation, merged code delivery,
 open/CI-pending PR, or integrated closeout may have succeeded after the response was lost; actual
-tracked commits/PRs and identity-bound receipts override the stale transient hint. Then **map the
+tracked commits/PRs and identity-bound partial-closeout/delivery records override the stale transient hint. Then **map the
 persisted transient state back to its matching ready state** (the caller supplies the
 transient→ready mapping for its own status values — superagent: `PLANNING → WAITING FOR PLAN`,
 `RUNNING → WAITING FOR RUN`) and fall through to that branch. Recovery reuses the existing identity;

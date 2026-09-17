@@ -1,0 +1,43 @@
+{
+  "merged_lost_closeout_response": {
+    "reason": "superfinish Gate 3 says exactly one complete integrated receipt with the same stage/generation/revision, execution snapshot, delivery identity, plan note, and active-row history is reused with no duplicate write or A7 publication; superrun recovery does not implement again.",
+    "outcome": "continue",
+    "duplicate_publication": false,
+    "delivery_receipt_reused": true,
+    "code_execution": false
+  },
+  "replan_atomicity_violation": {
+    "reason": "superreplan requires one complete authoritative publication transition before activation; dirty or unmerged edits exposing a successor are ignored, the committed pending Active replan barrier remains in force, and mixed or partial publication is BLOCKED.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false,
+    "authoritative_view_executable": false
+  },
+  "discovery_execution_entry_without_code_changes": {
+    "reason": "superrun's evidence-only discovery branch applies to an approved no-tracked-code discovery experiment: it skips the code worktree, SDD, and code-PR steps, then publishes the evidence and decision through an authoritative A7 vault unit.",
+    "operation": "run",
+    "execution_path": "discovery-evidence",
+    "worktree_required": false,
+    "sdd_required": false,
+    "code_pr_required": false,
+    "evidence_publication": "authoritative-vault"
+  },
+  "partial_closeout_open_pr": {
+    "reason": "superfinish Gate 3 permits a partial closeout when the execution snapshot, open PR, exact head, and CI blocker are verified, but makes it non-delivered and non-consumable; C7 records an open code PR as executed — PR open.",
+    "partial_closeout_allowed": true,
+    "delivered": false,
+    "consumable": false,
+    "row_status": "executed — PR open"
+  },
+  "supervisor_execution_replan_required": {
+    "reason": "superagent gives REPLAN-REQUIRED priority over ready work and sends it through the decision ladder; without an adopted decision and durable C8 request, and after a non-convergent panel, it parks at WAITING FOR INPUT with no planning role, target, or heavy dispatch.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  }
+}

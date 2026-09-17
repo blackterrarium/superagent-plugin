@@ -153,7 +153,8 @@ CASES = (
      'S01 code PR 71 and its tracked closeout delivery receipt were already integrated. The receipt '
      'binds generation 4, S01 revision 2, preparation R1/digest H1, PR 71 and its merge commit, and the '
      'active parent row links that same report. The caller lost superfinish\'s response and retries from '
-     'a fresh context.',
+     'a fresh context. Here outcome classifies the closeout recovery handler (reuse and continue), '
+     'not whether the whole goal is done.',
      {'outcome': 'continue', 'duplicate_publication': False,
       'delivery_receipt_reused': True, 'code_execution': False}),
     ('ci_pending_replan_request',
@@ -304,7 +305,9 @@ CASES = (
      'is delivered; S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. '
      'A working-tree edit exposes one S03 successor through an active Plan link, but the other '
      'authorized replacements, dependency rewrites, review, record publication fields, generation '
-     'increment, and barrier clearing are absent and uncommitted.',
+     'increment, and barrier clearing are absent and uncommitted. For this fixture, outcome classifies '
+     'whether that exposed partial candidate itself is a valid publication/execution artifact; do not '
+     'instead classify the later ability to resume authoring from the still-valid committed request.',
      {'outcome': 'BLOCKED', 'publication': 'none', 'execution_paused': True,
       'partial_tree_executable': False, 'authoritative_view_executable': False}),
     ('replan_internal_pr_not_merged',
@@ -330,6 +333,21 @@ CASES = (
      'identify delivered discovery contract C-DISCOVERY@1, and invalidate no live assumption. There '
      'was deliberately no code branch or PR. All other active obligations are verified complete.',
      {'done': True, 'code_pr_required': False, 'discovery_evidence_verified': True}),
+    ('discovery_execution_entry_without_code_changes',
+     'Direct superrun selects a prepared upfront discovery stage whose specified experiment reads '
+     'existing data, writes only vault evidence and a decision, and makes no code changes. The stage '
+     'requires independent review of the experiment result and produces C-DISCOVERY@1. Classify the '
+     'execution path before the ordinary code worktree/SDD/PR steps.',
+     {'operation': 'run', 'execution_path': 'discovery-evidence',
+      'worktree_required': False, 'sdd_required': False, 'code_pr_required': False,
+      'evidence_publication': 'authoritative-vault'}),
+    ('partial_closeout_open_pr',
+     'Upfront implementation stage S02 ran from a valid execution snapshot. Its code PR 73 remains '
+     'open after CI failed. The actual PR, head commit and failing CI run are verified, but there is no '
+     'merge/direct-integration identity and its produced contract is not delivered. superrun invokes '
+     'superfinish to record the partial outcome.',
+     {'partial_closeout_allowed': True, 'delivered': False, 'consumable': False,
+      'row_status': 'executed — PR open'}),
     ('routine_closeout_finding',
      'A verified S01 closeout finding records an internal helper rename and links the affected '
      'assumption ID. It changes no acceptance, scope, dependency, consumed or produced contract, or '
@@ -426,7 +444,8 @@ CASES = (
      'but no decision has been adopted and no durable C8 record exists. The existing autonomous '
      'decision-ladder panel rungs ran and could not resolve authority, so this case is now awaiting '
      'the user decision rather than skipping those rungs. The question asks for the post-result state. '
-     'S04 is independently prepared, but the execution finding has priority.',
+     'S04 is independently prepared, but the execution finding has priority. Target means the next '
+     'authorized dispatch target; the S02 finding origin is not a dispatch target while input waits.',
      {'selected_role': 'none', 'operation': 'none', 'model_source': 'none', 'effort_source': 'none',
       'target': 'none', 'next_state': 'WAITING FOR INPUT', 'heavy_dispatches': 0}),
     ('supervisor_legacy_incremental_planning',
@@ -514,10 +533,13 @@ def render_prompt(skills, cases):
         'confirmation remains separately governed by the current gate; root_mode_marker is '
         'incremental, upfront-v1, or absent; upfront_valid, executable, '
         'done, code_execution, code_pr_required, discovery_evidence_verified, merge_allowed, '
+        'worktree_required, sdd_required, partial_closeout_allowed, delivered, consumable, '
         'execution_snapshot_required, historical_snapshot_required, delivery_receipt_reused, '
         'pr_evidence_preserved, replan_required, affected_preparation_valid, duplicate_stage_ids, '
         'duplicate_goal_folder, commitments_preserved, and in_place_overwrite are JSON booleans; '
-        'digest_basis is execution-snapshot or current-annotated-plan; stages and stage_revision are JSON '
+        'digest_basis is execution-snapshot or current-annotated-plan; execution_path is '
+        'discovery-evidence or code-delivery; evidence_publication is authoritative-vault or none; '
+        'row_status is executed — PR open or completed-and-merged; stages and stage_revision are JSON '
         'integers; amendment_kind is none, content-amendment, or '
         'compatible-baseline-revalidation; batch_created, execution_paused, duplicate_publication, '
         'active_link_changed, successor_closed, predecessor_evidence_preserved, old_pr_closed, '
@@ -637,6 +659,8 @@ class ValidatorTests(unittest.TestCase):
                               'replan_retained_preparation',
                               'replan_revised_preparation',
                               'discovery_completion_without_code_pr',
+                              'discovery_execution_entry_without_code_changes',
+                              'partial_closeout_open_pr',
                               'routine_closeout_finding',
                               'contract_contradiction_finding',
                               'stale_completed_ancestor_unsatisfied_dependency'])
@@ -654,6 +678,15 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(any(error.startswith(
             'discovery_completion_without_code_pr.code_pr_required:')
             for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['discovery_execution_entry_without_code_changes']['worktree_required'] = True
+        self.assertTrue(any(error.startswith(
+            'discovery_execution_entry_without_code_changes.worktree_required:')
+            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['partial_closeout_open_pr']['delivered'] = True
+        self.assertTrue(any(error.startswith('partial_closeout_open_pr.delivered:')
+                            for error in validate_answers(answers, cases)))
 
     def test_selected_cases_require_exact_selected_membership(self):
         cases = select_cases(['contract_break', 'legacy_default'])

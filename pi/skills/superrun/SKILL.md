@@ -49,18 +49,21 @@ repo-root `.superenv` file, (3) the plugin default
 
 ## Prerequisite — superpowers
 
-This skill executes plans via `superpowers:subagent-driven-development`. If that skill is
+This skill executes implementation and code-changing discovery plans via
+`superpowers:subagent-driven-development`. If the selected stage needs that path and the skill is
 not resolvable in this session, ABORT with: "superrun requires the superpowers plugin —
 install it (e.g. `/plugin marketplace add obra/superpowers-marketplace`, then
-`/plugin install superpowers`) and retry." Never degrade to inline execution.
+`/plugin install superpowers`) and retry." Never degrade code work to inline execution. A verified
+evidence-only discovery takes its explicit earlier branch and does not require SDD.
 
 **One leaf plan per invocation.** superrun finds the single highest-priority incomplete leaf,
 executes it, closes it out, reports, and exits. To run the next plan, invoke superrun again on the
 same root.
 
 Unlike superplan/superfinish (which are docs-only), superrun **does** change source code — but
-**only via the delegated skills**. It never finds the target, executes the work, or writes the
-closeout by hand: each phase is owned by an existing skill, and superrun must invoke it.
+**only via the delegated skills**. Code implementation is owned by SDD and closeout by superfinish.
+The explicit evidence-only discovery branch below runs the stage's specified experiment and publishes
+its evidence/decision docs through A7 without changing source; it is the sole non-SDD execution path.
 
 | Thought | Reality |
 |---------|---------|
@@ -131,6 +134,32 @@ creating another report. An open/CI-pending attempt resumes its recorded branch/
 active successor replaced this identity, preserve the old attempt as history and follow C8; never
 execute or close the successor by inference.
 
+## Evidence-only discovery branch — before Steps 2–3
+
+Read `Stage kind` before entering the code-worktree path. If the selected upfront stage is
+`discovery` and its approved task outline requires no tracked code change, execute this branch and
+**skip Steps 2, 3 and 3a**:
+
+1. Run the stage's specified experiment exactly as approved, using its distinguishing inputs and
+   evidence method. Temporary experiment output stays outside tracked source unless the stage names a
+   vault evidence artifact. Do not create a code branch, code worktree, code PR, or SDD task loop.
+2. Review the observed result in a separate pass against the stage's evidence requirements, decision
+   criteria, acceptance IDs, assumptions it may invalidate, and produced discovery contracts. Missing,
+   ambiguous or contradictory evidence is BLOCKED; do not invent a decision.
+3. Draft the evidence artifact and documented decision outside the vault, including the execution-entry
+   snapshot, source/code revisions examined, contract/assumption IDs, result, decision criteria and
+   delivered discovery-contract revisions. Publish them as one authoritative docs unit using
+   superauthor A7: protected internal vault → merged docs PR; direct internal mode → configured direct
+   commit; external vault → vault commit. Verify the actual A7 PR/commit and tracked artifacts. This is
+   the discovery delivery identity; an ignored loop file or scratch result is insufficient.
+4. Invoke superfinish with the stage, execution snapshot, and verified evidence/decision publication.
+   Its closeout is a separate idempotent bookkeeping A7 unit. Then report and exit; Step 5 has no code
+   worktree to remove.
+
+If a discovery stage's approved experiment actually requires tracked code changes, use the ordinary
+Steps 2–3a code path and its PR/direct-integration rules. Discovery is not a blanket exemption from
+code review or integration when code changed.
+
 ## Repair successor context
 
 For a C8 successor, read its Repair record and integration disposition before Step 2. If it
@@ -151,8 +180,9 @@ preserves the same isolation in substance.
 
 ## Step 3 — Execute the plan (invoke `superpowers:subagent-driven-development`)
 
-**You MUST use `superpowers:subagent-driven-development` to execute the target leaf plan. Do not
-execute it any other way.** Invoke it via the Skill tool and follow it exactly, **subject to the
+**For an implementation stage or code-changing discovery, you MUST use
+`superpowers:subagent-driven-development` to execute the target leaf plan. Do not execute code work any
+other way.** Invoke it via the Skill tool and follow it exactly, **subject to the
 repo profile below**.
 
 > **You must be the top-level agent of your process.** SDD's task loop dispatches subagents and
@@ -376,9 +406,10 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
      while its stage disposition is unresolved;
    - when a batch published after execution began, never merge from the queued packet alone. Continue
      only through the published record's explicit, verified `resume-existing` disposition and active
-     successor instructions after their required review/test gates. `replace`, retirement, a changed
-     active link/identity, unresolved disposition, missing record, or contradictory publication blocks
-     this merge and preserves the old integration history for reconciliation.
+     successor instructions after their required review/test gates. That explicit old-to-successor
+     mapping authorizes the named identity change. `replace`, retirement, any other changed or
+     unmapped active link/identity, unresolved disposition, missing record, or contradictory publication
+     blocks this merge and preserves the old integration history for reconciliation.
 
    This gate applies identically to ordinary completion and post-CI resume. A barrier/identity failure
    returns BLOCKED or REPLAN-REQUIRED with the root, Decision ID, stage, PR and snapshot; it never closes
@@ -447,10 +478,10 @@ skill"). It captures findings, writes the closeout report, annotates the leaf pl
 `supertraverse` **completion-mode ascent** (C7) to advance the parent seed's progress-report table,
 and merges its docs-only **closeout PR**. Capture that PR URL too.
 
-An upfront discovery stage may reach Step 4 without a code PR only when its specified experiment
-evidence and documented decision are verified and tracked on the authoritative vault branch. Pass that
-evidence, decision, and delivered discovery-contract revisions to superfinish. Absence of source-code
-work is not a waiver of the stage's evidence contract.
+The evidence-only discovery branch reaches Step 4 through its earlier A7 publication without a code
+PR. A discovery stage that changed tracked code reaches Step 4 through the ordinary integration path.
+In both cases pass the evidence, documented decision, and delivered discovery-contract revisions to
+superfinish. Absence of source-code work is not a waiver of the stage's evidence contract.
 
 ## Step 5 — Worktree lifecycle
 
@@ -474,6 +505,7 @@ you did not confirm landed), say so explicitly rather than reporting it done:
     **Worktree:** <path> (exited / left in place — code PR open)
 
     **Code PR:** <url> (merged)               ← or (open — BLOCKED: <reason>, CI run <url>)
+    **Discovery evidence:** <A7 PR url or external-vault commit> (verified)  ← evidence-only discovery; Code PR is N/A
     **Closeout PR:** <url> (merged)            ← from superfinish
 
     **Findings:** <summary>                    (or: none — superfinish recorded none)

@@ -109,19 +109,29 @@ plan may already contain a closeout note and is therefore not the prepared diges
 stage never has to satisfy the current *unstarted-stage* preparation predicate forever; closeout proves
 which valid historical preparation and execution snapshot produced the actual delivery.
 
-Verify actual delivery identity separately: code PR and merge commit on authoritative main, authorized
-direct-integration commit, or (for discovery) the specified tracked evidence and decision. Preserve any
-repair predecessor PR/branch/worktree and disposition history. Missing or contradictory snapshot or
-delivery evidence is BLOCKED. For incremental plans, keep the legacy evidence rules and record the
-resolvable plan/code identity available.
+Classify the actual outcome separately:
+
+- **Complete delivery:** verify the code PR and merge commit on authoritative main, an authorized
+  direct-integration commit, or (for evidence-only discovery) the specified evidence/decision A7
+  publication. This identity plus the execution snapshot can become a delivery receipt and satisfy
+  produced contracts.
+- **Partial execution:** verify the same execution snapshot plus the actual open PR, exact head commit,
+  branch/worktree when retained, and CI run/conclusion or blocker. This permits a partial closeout report
+  and `executed — PR open`; it is explicitly **not delivered**, satisfies no produced contract, and is
+  non-consumable by dependencies. A later invocation after verified integration revises this same
+  identity-bound report into the complete delivery receipt instead of creating another report.
+
+Preserve any repair predecessor PR/branch/worktree and disposition history. Missing or contradictory
+evidence for the claimed outcome is BLOCKED. For incremental plans, keep the legacy evidence rules and
+record the resolvable plan/code identity available.
 
 Before drafting a timestamped report, scan the synchronized authoritative vault and history for a
 delivery receipt with the same stage/generation/revision (or legacy plan), execution snapshot, and
 delivery identity:
 
-- exactly one complete integrated receipt plus matching plan note/active-row history means the prior
-  closeout succeeded. Reuse it, report its existing publication PR/commit, and perform no duplicate
-  write or A7 publication;
+- exactly one complete integrated receipt, or one verified partial report for the still-open matching
+  PR/head, plus matching plan note/active-row history means that outcome's prior closeout succeeded.
+  Reuse it, report its existing publication PR/commit, and perform no duplicate write or A7 publication;
 - one partial publication means resume and complete that same report/note/ascent/A7 unit, retaining its
   identity and filename. Do not allocate a second timestamped report;
 - multiple or conflicting receipts, or a claimed publication absent from authoritative history, is
@@ -180,8 +190,9 @@ named `reports/YYYY-MM-DD-hh_mm-<topic>.md` (today's date and the current UTC ho
 - **Execution identity** — the execution-entry snapshot from Gate 3, including its historical prepared
   plan commit/blob, receipt path/digest, root generation, Stage ID/revision, reviewed code revision,
   source revision, and consumed delivery receipts (or the available legacy identity).
-- **Delivery identity** — code PR/merge commit or authorized direct integration commit; for discovery,
-  the specified evidence artifact and documented decision instead of a fabricated code PR.
+- **Outcome identity** — for complete delivery, code PR/merge commit, authorized direct integration
+  commit, or the discovery evidence/decision publication; for partial execution, the verified open PR,
+  exact head, CI result/blocker and explicit `delivered: false`, `consumable: false`.
 - **Delivered contracts** — every produced contract ID and semantic revision, with concrete evidence
   that the delivered result satisfies it. An explicit `none` is allowed only when the stage produces
   no contract.
@@ -193,9 +204,12 @@ Open with the standard header block (`# Title`, `**Date:**`, `**Type:** Sub-PR c
 artifact dates postdate the commits. Close the loop both ways — the
 report links back to the plan/seed it grades.
 
-This report is the stage's durable **delivery receipt**. A discovery stage is complete without a code
-PR only when its plan's experiment evidence and decision criteria are satisfied, the evidence and
-documented decision are tracked, and every produced discovery contract is identified. If that decision
+For complete delivery this report is the stage's durable **delivery receipt**. For partial execution it
+is a durable **partial closeout**, not a delivery receipt; no consumer may use it as prerequisite
+evidence. A discovery stage is complete without a code PR only when its plan's experiment evidence and
+decision criteria are satisfied, the evidence and documented decision were published through the
+applicable internal A7 docs PR/direct commit or external-vault commit, and every produced discovery
+contract is identified. If that decision
 contradicts a live contract/assumption, publish the verified finding and return REPLAN-REQUIRED through
 the same adoption path used for implementation stages; do not mark affected consumers executable.
 
@@ -292,7 +306,7 @@ repository, STOP and report — never improvise a `git init`. The progress-table
 *executed* row still records the code PR number.
 
 Treat the report, plan note, findings and ancestor updates as one authoritative A7 publication unit.
-On retry, reconcile the exact delivery identity against integrated history before opening a branch or
+On retry, reconcile the exact execution/outcome identity against integrated history before opening a branch or
 committing: reuse a complete unit, resume the one unique partial unit, and block on competing units.
 An ignored loop-state hint or an unmerged internal docs branch is never authoritative publication.
 
@@ -345,7 +359,7 @@ appear here.**
 
     **Plan:** <full path to PLAN.md>
     **Goal folder:** <full path>
-    **Delivery receipt:** <reports/...> — <stage/generation/revision and delivery identity> (created / resumed / already integrated)
+    **Closeout record:** <reports/...> — <stage/generation/revision and outcome identity> (partial / delivered; created / resumed / already integrated)
 
     **Files created/modified:**
     - <reports/...> — closeout report (created)

@@ -533,9 +533,10 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
 4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
    skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
    `sync_main()` (then `sync_vault()` in external vault mode), then verify `superrun`'s reported merges landed:
-   the leaf's closeout delivery receipt exists and is tracked (on local `main` for an internal vault;
-   in the vault repo for an external one — L5's two-kind rule), matches the execution snapshot and
-   delivered contract revisions, and (if the code PR merged) its
+   the leaf's closeout record exists and is tracked (on local `main` for an internal vault;
+   in the vault repo for an external one — L5's two-kind rule) and matches the execution snapshot.
+   For partial execution, verify its open PR/head/CI identity and explicit non-delivered/non-consumable
+   result. For complete delivery, verify delivered contract revisions and (if the code PR merged) its
    squash commit is in `origin/main` history. A merged code PR but stale local `main` is the exact bug
    this gate exists for — reconcile (ff-pull) or escalate. Do not advance on an unverified merge, and
    surface the failure in this tick's `Findings & issues` line.
@@ -553,8 +554,9 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
      over `none` or a claimed completed leaf. Run the **Decision-escalation ladder** below.
      Apply adopted re-plan through **supertraverse C8**, not just a loop-status edit. If the panel
      cannot converge, use `WAITING FOR INPUT`. Never silently spin on an invisible blocked leaf.
-   - **Executed a leaf** (integration and identity-bound delivery receipt verified; for discovery,
-     required evidence/decision verified without requiring a code PR) → `status: WAITING FOR PLAN`,
+   - **Executed a leaf** (identity-bound complete delivery receipt or partial closeout verified; for
+     evidence-only discovery, required evidence/decision A7 publication verified without requiring a
+     code PR) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
    - **`none`** (no execution target, with no higher-priority blocker):
      - If `plan_exhausted` is false → `status: WAITING FOR PLAN`.

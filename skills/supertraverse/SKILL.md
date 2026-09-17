@@ -317,9 +317,11 @@ mode's update:
 - **Completion mode** (superfinish, after a leaf is executed): the leaf row itself and ancestors
   are updated separately because they answer different questions.
   - **Leaf-row update** (the row pointing at the executed implementation plan): set the row's
-    Status based on the leaf's authoritative delivery receipt at superfinish time. For upfront work,
+    Status based on the leaf's authoritative closeout record at superfinish time. For upfront work,
     first verify its execution snapshot (generation, Stage ID/revision, historical preparation
-    receipt/digest and reviewed revisions), delivered contract revisions, and actual integration. The
+    receipt/digest and reviewed revisions) and the claimed outcome. A partial record binds the verified
+    open PR/head/CI evidence but is non-delivered and non-consumable; a delivery receipt additionally
+    verifies delivered contract revisions and actual integration. The
     S5 digest is checked against the recorded pre-execution vault blob, not the closeout-annotated
     current plan. A completed stage is not reclassified by applying the unstarted-stage preparation
     predicate to its annotated bytes. Then —
@@ -329,8 +331,10 @@ mode's update:
     - For a discovery stage with no code PR, `completed-and-merged` / `done` only when its specified
       evidence and documented decision are tracked and verified and its delivered discovery contracts
       are identified.
-    In either case, write a one-line rollup + `Closeout: [[…]]` link in Comments, and record the
-    PR number (`#NNN`) in the PR column. A later superfinish invocation flips `executed — PR open`
+    In each case, write a one-line rollup + `Closeout: [[…]]` link in Comments. Record the code PR
+    number (`#NNN`) for code work. For evidence-only discovery, leave the PR cell blank (or explicit
+    `none`) and keep its A7 evidence/decision publication in the closeout Comments/report. A later
+    superfinish invocation flips `executed — PR open`
     to `completed-and-merged` once the PR merges (idempotent re-run).
   - **Ancestor-row update** (rows above the leaf, walked up via parent-seed references): read the
     child plan's progress-report table and apply the "all children merged-on-`main`" test (C4 —
