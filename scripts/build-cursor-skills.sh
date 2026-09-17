@@ -189,7 +189,7 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   /^# Model values:/ { inhdr=1
     print "# Model values: \"inherit\", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi"
     print "# and <model> is that harness'"'"'s native model string — cursor: `agent --list-models`; claude: a"
-    print "# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); codex: a Codex model (gpt-5.6-sol);"
+    print "# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5-1); codex: a Codex model (gpt-6-astra);"
     print "# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the"
     print "# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a \"/\" → pi)."
     print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"

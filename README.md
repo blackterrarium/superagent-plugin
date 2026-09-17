@@ -258,7 +258,7 @@ Upfront planning activates two independently configurable roles in `.superenv`:
 | Role | Responsibility | Default model / effort |
 |---|---|---|
 | `PLAN_REFINER` | Prepare a stage against the actual code, preserving its scope, acceptance criteria and shared contracts. | `claude:sonnet` / `medium` |
-| `REPLANNER` | Rework an invalidated stage and affected dependents; leave unaffected plans intact. | `claude:claude-opus-4-8` / `high` |
+| `REPLANNER` | Rework an invalidated stage and affected dependents; leave unaffected plans intact. | `claude:claude-opus-5` / `high` |
 
 Both have independent `SUPER_MODEL_<ROLE>` and `SUPER_EFFORT_<ROLE>` keys. `PLANNER`
 remains the initial plan author; `FIX_PLANNER` remains the SDD code-fix role. A refiner
@@ -266,15 +266,18 @@ must hand off contract-breaking changes to replanning instead of expanding its o
 
 | Build | `PLANNER` model / effort | `PLAN_REFINER` model / effort | `REPLANNER` model / effort |
 |---|---|---|---|
-| Claude | `claude:claude-opus-4-8` / `high` | `claude:sonnet` / `medium` | `claude:claude-opus-4-8` / `high` |
-| Codex | `codex:gpt-5.6-sol` / `high` | `codex:gpt-5.6-terra` / `medium` | `codex:gpt-5.6-sol` / `high` |
+| Claude | `claude:claude-fable-5-1` / `high` | `claude:sonnet` / `medium` | `claude:claude-opus-5` / `high` |
+| Codex | `codex:gpt-6-astra` / `high` | `codex:gpt-5.6-terra` / `medium` | `codex:gpt-5.6-sol` / `high` |
 | Cursor | `inherit` / `inherit` | `inherit` / `inherit` | `inherit` / `inherit` |
-| Pi | `pi:openai-codex/gpt-5.6-sol` / `high` | `pi:openai-codex/gpt-5.6-terra` / `medium` | `pi:openai-codex/gpt-5.6-sol` / `high` |
+| Pi | `pi:openai-codex/gpt-6-astra` / `high` | `pi:openai-codex/gpt-5.6-terra` / `medium` | `pi:openai-codex/gpt-5.6-sol` / `high` |
 
 These are independent selections. Changing the refiner does not change the replanner. Cursor has no
 effort control, so a distinct refiner or replanner model must be selected explicitly when desired.
 `superagent:init` generates `super-plan-refiner` and `super-replanner` definitions for Claude and
 Cursor when needed; Codex passes native pins on spawn and Pi uses planner-style bridge processes.
+Existing repositories keep the values already written in their `.superenv`; update those explicit
+pins and re-run `superagent:init` when adopting new Claude defaults that require regenerated agent
+definitions.
 The scheduler remains opt-in. Shipped `SUPER_PLANNING_MODE` is `upfront` for new goals.
 
 ### Planning modes, preparation, and recovery
@@ -318,12 +321,12 @@ diagrams for the architecture, the state machine, the SDD loop, and each harness
 ### Model values
 
 A model key accepts `inherit` (the session model; a headless tick has no session, so the supervisor
-falls back to `claude-opus-4-8` there) or `[<harness>:]<model>`:
+falls back to `claude-opus-5` there) or `[<harness>:]<model>`:
 
 | Harness | Native model string | Inferred when the prefix is omitted and the value... |
 |---|---|---|
-| `claude` | A tier (`sonnet`, `opus`, `haiku`, `fable`) or a full ID (`claude-<family>-<version>`, e.g. `claude-fable-5`, no date stamp needed) | is a tier name or starts with `claude-` |
-| `codex` | A Codex model name (e.g. `gpt-5.6-sol`) | starts with `gpt-`, `o<digit>`, or `codex` |
+| `claude` | A tier (`sonnet`, `opus`, `haiku`, `fable`) or a full ID (`claude-<family>-<version>`, e.g. `claude-fable-5-1`, no date stamp needed) | is a tier name or starts with `claude-` |
+| `codex` | A Codex model name (e.g. `gpt-6-astra`) | starts with `gpt-`, `o<digit>`, or `codex` |
 | `cursor` | A Cursor model name (`agent --list-models`) | never inferred; needs the prefix |
 | `pi` | `<provider>/<model>[:<thinking>]` (e.g. `openai/gpt-5`) | contains `/` |
 
@@ -435,22 +438,22 @@ coding-loop skills, never by the tick.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_MODEL_SUPERVISOR | `claude:claude-opus-4-8` | The superagent tick itself: reads the loop-status file, runs the sync and CI gates, picks the next skill to dispatch, merges PRs, and runs the L7 panel. Always native to `SUPER_HARNESS`; the tick passes it as `--model`. `inherit` resolves to `claude-opus-4-8` on a headless tick because there is no session to inherit from. |
-| SUPER_MODEL_PLANNER | `claude:claude-opus-4-8` | The subagent that runs `supergoal` and `superplan`: writes the root master plan, the sub-master plans, and the implementation plans. Plan quality has the most downstream leverage, so this stays on a strong model. |
+| SUPER_MODEL_SUPERVISOR | `claude:claude-opus-5` | The superagent tick itself: reads the loop-status file, runs the sync and CI gates, picks the next skill to dispatch, merges PRs, and runs the L7 panel. Always native to `SUPER_HARNESS`; the tick passes it as `--model`. `inherit` resolves to `claude-opus-5` on a headless tick because there is no session to inherit from. |
+| SUPER_MODEL_PLANNER | `claude:claude-fable-5-1` | The subagent that runs `supergoal` and `superplan`: writes the root master plan, the sub-master plans, and the implementation plans. It uses the planning-specialized Fable 5.1 model by default. |
 | SUPER_MODEL_PLAN_REFINER | `claude:sonnet` | The `superrefine` role that resolves bounded current-code and predecessor details without changing commitments. |
-| SUPER_MODEL_REPLANNER | `claude:claude-opus-4-8` | The `superreplan` role for adopted single-leaf repairs and generation-scoped structural batches. |
-| SUPER_MODEL_EXECUTOR | `claude:claude-opus-4-8` | `superrun`, the SDD controller that executes one implementation plan: dispatches the six SDD roles below, filters their review findings by confidence (`SUPER_REVIEW_CONFIDENCE_FILTER`), and opens and integrates the code PR. Runs as its own CLI process rather than a subagent. It applies the confidence filter itself, so it needs judgment. |
-| SUPER_MODEL_PANEL | `claude:claude-opus-4-8` | The three read-only agents of the L7 escalation panel (Rung 1), dispatched when a delegated skill reports BLOCKED, CI red, a critical finding, or a clarification instead of finishing. Each recommends a resolution; the supervisor adjudicates. |
+| SUPER_MODEL_REPLANNER | `claude:claude-opus-5` | The `superreplan` role for adopted single-leaf repairs and generation-scoped structural batches. |
+| SUPER_MODEL_EXECUTOR | `claude:claude-opus-5` | `superrun`, the SDD controller that executes one implementation plan: dispatches the six SDD roles below, filters their review findings by confidence (`SUPER_REVIEW_CONFIDENCE_FILTER`), and opens and integrates the code PR. Runs as its own CLI process rather than a subagent. It applies the confidence filter itself, so it needs judgment. |
+| SUPER_MODEL_PANEL | `claude:claude-opus-5` | The three read-only agents of the L7 escalation panel (Rung 1), dispatched when a delegated skill reports BLOCKED, CI red, a critical finding, or a clarification instead of finishing. Each recommends a resolution; the supervisor adjudicates. |
 | SUPER_MODEL_IMPLEMENTER | `claude:sonnet` | The SDD implementer: one fresh subagent per plan task that writes the code and tests, then is resumed for fix rounds 1–3 with the reviewer's open findings. It gets the full task text, so a mid tier is enough. |
 | SUPER_MODEL_FIX_APPLIER | `claude:sonnet` | The SDD fix-applier: a fresh subagent that applies the edit the fix-planner prescribed in fix rounds 4–5. Mechanical work, so it shares the implementer's tier. |
-| SUPER_MODEL_TASK_REVIEWER | `claude:claude-opus-4-8` | The SDD per-task reviewer, dispatched after each implementer finishes: checks the task's spec compliance against the plan and its code quality, and reports every finding with a severity and confidence label for the executor to filter. |
-| SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-4-8` | The SDD scoped re-reviewer, dispatched after each fix round: verifies only that the open findings were addressed and nothing regressed. One per fix round. |
-| SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-4-8` | The SDD final whole-branch reviewer, run once after all tasks: reviews the complete diff for cross-task issues before the code PR is opened. The last quality gate. |
-| SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-4-8` | The SDD fix-planner for fix rounds 4–5, reached when three rounds of implementer fixes did not clear a task's findings: a fresh subagent diagnoses the root cause and writes the exact edit, which a fix-applier then carries out. SDD calls for a more capable model here than the implementer. |
-| SUPER_MODEL_PRD_REVIEWER | `claude:claude-opus-4-8` | The read-only subagent `superprd` dispatches with nothing but the three drafted input files, to answer whether a fresh planner could plan from them alone. A strong model here catches the gaps the author is blind to. |
-| SUPER_MODEL_META_PLANNER | `claude:claude-opus-4-8` | The `supermeta` subagent: reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. Mirrors the planner. |
-| SUPER_MODEL_EVALUATOR | `claude:claude-opus-4-8` | The read-only grader `supereval` dispatches for judged objectives. Command checks run in bash and use no model. |
-| SUPER_MODEL_DIAGNOSER | `claude:claude-opus-4-8` | The `superdiagnose` subagent (Stage 3): root-cause analysis of a failed evaluation report. |
+| SUPER_MODEL_TASK_REVIEWER | `claude:claude-opus-5` | The SDD per-task reviewer, dispatched after each implementer finishes: checks the task's spec compliance against the plan and its code quality, and reports every finding with a severity and confidence label for the executor to filter. |
+| SUPER_MODEL_RE_REVIEWER | `claude:claude-opus-5` | The SDD scoped re-reviewer, dispatched after each fix round: verifies only that the open findings were addressed and nothing regressed. One per fix round. |
+| SUPER_MODEL_BRANCH_REVIEWER | `claude:claude-opus-5` | The SDD final whole-branch reviewer, run once after all tasks: reviews the complete diff for cross-task issues before the code PR is opened. The last quality gate. |
+| SUPER_MODEL_FIX_PLANNER | `claude:claude-opus-5` | The SDD fix-planner for fix rounds 4–5, reached when three rounds of implementer fixes did not clear a task's findings: a fresh subagent diagnoses the root cause and writes the exact edit, which a fix-applier then carries out. SDD calls for a more capable model here than the implementer. |
+| SUPER_MODEL_PRD_REVIEWER | `claude:claude-opus-5` | The read-only subagent `superprd` dispatches with nothing but the three drafted input files, to answer whether a fresh planner could plan from them alone. A strong model here catches the gaps the author is blind to. |
+| SUPER_MODEL_META_PLANNER | `claude:claude-opus-5` | The `supermeta` subagent: reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. It remains separate from the Fable-backed plan-tree author. |
+| SUPER_MODEL_EVALUATOR | `claude:claude-opus-5` | The read-only grader `supereval` dispatches for judged objectives. Command checks run in bash and use no model. |
+| SUPER_MODEL_DIAGNOSER | `claude:claude-opus-5` | The `superdiagnose` subagent (Stage 3): root-cause analysis of a failed evaluation report. |
 | SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by planning roles, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since planner, plan-refiner, replanner, and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
@@ -612,9 +615,9 @@ no per-invocation `--plugin-dir`. Bootstrap each target repo by asking a Codex s
 **Models and effort.** Native roles take Codex model names (e.g. `gpt-5.6-sol`) or `inherit`.
 Effort is `none | minimal | low | medium | high | xhigh | inherit`. A native pin rides
 `spawn_agent`'s `model` / `reasoning_effort` parameters; there is no agent-definition file. A
-bridged role spawns a relay agent from `templates/relay-preamble.md`. Defaults map the Claude
-`claude-opus-4-8` pins to `gpt-5.6-sol` and implementer/fix-applier to `gpt-5.6-terra`, with the
-same efforts.
+bridged role spawns a relay agent from `templates/relay-preamble.md`. The planner defaults to
+`gpt-6-astra`; other high-capability roles use `gpt-5.6-sol`, and implementer/fix-applier use
+`gpt-5.6-terra`, with the same efforts.
 
 **Status: smoke-validated 8/8** (2026-08-12, codex CLI 0.147.0 on macOS): headless `codex exec`,
 the marketplace install path, skill enumeration and model invocation from a neutral workspace,
@@ -657,8 +660,9 @@ headless run passes `--approve` (the operator armed the loop on this repo).
 **Models and effort.** Model keys are `pi:<provider>/<model>` or a bare `<provider>/<model>`.
 Effort is `off | minimal | low | medium | high | xhigh | max`; the tick passes `--thinking`, the
 bridge a `:<level>` model suffix. Defaults mirror the Codex build through the `openai-codex`
-provider: `pi:openai-codex/gpt-5.6-sol` for supervisor, planner, executor, panel, reviewers, and
-fix-planner; `pi:openai-codex/gpt-5.6-terra` for implementer and fix-applier.
+provider: `pi:openai-codex/gpt-6-astra` for the planner,
+`pi:openai-codex/gpt-5.6-sol` for supervisor, executor, panel, reviewers, and fix-planner, and
+`pi:openai-codex/gpt-5.6-terra` for implementer and fix-applier.
 
 **Dispatch is hybrid.** The supervisor never uses a subagent tool. `superplan`, `superrefine`,
 `superreplan`, and `superrun` are
@@ -733,7 +737,7 @@ must be enabled for headless sessions in the target repo.
 
 **Why the tick always passes `--model`.** A headless tick has no session to inherit from, so it
 pins the model explicitly and records it in the tick log. Defaults pin the full ID
-`claude-opus-4-8`, not the `opus` alias, because the alias floats with the CLI.
+`claude-opus-5`, not the `opus` alias, because the alias floats with the CLI.
 
 ## Migrating a repo with in-tree copies
 

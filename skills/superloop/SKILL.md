@@ -782,7 +782,7 @@ instead.
 Dispatch **3 independent subagents in parallel** (single message, multiple `Agent` calls — Explore or
 general-purpose, with `subagent_type: SUPER_PANEL_AGENT_TYPE` and, unless `SUPER_MODEL_PANEL=inherit`,
 `model: SUPER_MODEL_PANEL`; if `SUPER_MODEL_PANEL` is a **full model ID** (`^claude-`, e.g.
-`claude-fable-5`) **or `SUPER_EFFORT_PANEL` is non-`inherit`** (the Agent tool has no effort
+`claude-fable-5-1`) **or `SUPER_EFFORT_PANEL` is non-`inherit`** (the Agent tool has no effort
 parameter; the pin rides the definition) **or `SUPER_MODEL_PANEL` is bridged (names another
 harness)** — dispatch with
 `subagent_type: super-panel` instead (the definition `superagent:init` generates in `.claude/agents/`,

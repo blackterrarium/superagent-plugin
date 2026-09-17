@@ -15,10 +15,13 @@ copies were verified offline; no live claim is made for their model transports.
 | Cursor | Generated package, configuration resolution, role routing, and bridge contract checks | Shipped `PLAN_REFINER` and `REPLANNER` selections are `inherit` / `inherit` | Offline compatibility coverage; live model transport not exercised |
 | Pi | Generated package, configuration resolution, role routing, and bridge contract checks | Shipped `PLAN_REFINER=pi:openai-codex/gpt-5.6-terra` / `medium`; `REPLANNER=pi:openai-codex/gpt-5.6-sol` / `high` | Offline compatibility coverage; live model transport not exercised |
 
-The Claude build defaults those roles to `claude:sonnet` / `medium` and
-`claude:claude-opus-4-8` / `high`; the Codex build defaults them to
-`codex:gpt-5.6-terra` / `medium` and `codex:gpt-5.6-sol` / `high`. The live Claude replanner used
-the accepted `opus` tier alias rather than the full default model ID.
+The acceptance snapshot used `claude:sonnet` / `medium` and
+`claude:claude-opus-4-8` / `high` as the Claude defaults for those roles, while the Codex defaults
+were `codex:gpt-5.6-terra` / `medium` and `codex:gpt-5.6-sol` / `high`. The live Claude replanner
+used the accepted `opus` tier alias rather than the full default model ID. The current defaults have
+since moved every Anthropic Opus role to `claude-opus-5`, the Claude planner to
+`claude-fable-5-1`, and the Codex and Pi planners to `gpt-6-astra`; these newer selections were not
+the models exercised by this retained run.
 
 | Path | Result |
 |---|---|
