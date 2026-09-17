@@ -75,7 +75,8 @@ which is exactly the case Step 2 below fixes by creating one.
 
 ## Project-only prerequisite
 
-Stage 3 is under acceptance at 0.8.1. Before launching a coding-loop **project**, verify
+Stage 3 ships in 0.9.0 with full multi-harness live scheduler acceptance still pending. Before
+launching a coding-loop **project**, verify
 `python3 -c 'import sys; assert sys.version_info >= (3, 9)'`. Missing/older Python blocks project
 launch; it does not block legacy goal initialization, launch or controls. `SUPER_CODE_MAX_ITERATIONS`
 must be a positive integer and limits created project rounds, not ticks/retries. The supervisor must

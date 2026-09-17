@@ -847,7 +847,7 @@ These are interpreted-skill behavior probes; they do not execute a real schedule
 Saved answers document a particular probe run; validating them again is not a fresh agent test.
 See `docs/superpowers/reports/2026-09-07-lifecycle-verification.md` for baseline and repaired results.
 
-## Coding-loop Stage 3 (under acceptance, 0.8.1)
+## Coding-loop Stage 3 (shipped in 0.9.0; live acceptance pending)
 
 `launch.sh PROJECT --supervisor supercode` uses the shared external driver. Project-only preflight
 requires Python 3.9+, READY PRD inputs and a positive `SUPER_CODE_MAX_ITERATIONS`. This limit counts
@@ -870,8 +870,8 @@ unchanged agreement. The generated META worker independently validates the durab
 `coding-loop-driver-test.py` exercises real shell ticks/lifecycle and state/evidence APIs with fake
 native executables and disposable Git remotes. `coding-loop-fake-worker.py` is its explicit-action
 test fixture, never shipped or imported by production. These deterministic transport tests establish no
-live model obedience or scheduler acceptance. Release 0.9.0 remains gated on independent live
-Claude, Codex and Pi runs; Cursor requires generated compatibility only.
+live model obedience or scheduler acceptance. Independent live Claude, Codex, and Pi scheduler
+runs remain pending; Cursor requires generated compatibility only.
 
 ### Bounded Stage 3 live acceptance driver
 
