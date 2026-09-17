@@ -38,3 +38,7 @@ Task 2 spec/quality review passed after correcting invalid-mode handling and exp
 ## Bounded stage preparation
 
 Task 3 spec/quality review passed. Fresh [upfront26](evidence/2026-09-16-upfront-plan-tree/task3-green.json) and [legacy16](evidence/2026-09-16-upfront-plan-tree/task3-legacy.json) interpretations passed; validator self-tests10 passed. Generated packages include superrefine. The temporary C6 upfront execution gate remains until routing is installed; the pre-SDD handler scenario explicitly tests the post-gate contract, not current live execution.
+
+## Coordinated replanning
+
+Task 4 spec/quality review passed after two scoped fix rounds. The first44-case probe had41 matching answers and three protocol/handler mismatches; retained raw evidence is not labelled a passing run. Fresh [scoped3](evidence/2026-09-16-upfront-plan-tree/task4-scoped-final.json), [impact/barrier5](evidence/2026-09-16-upfront-plan-tree/task4-fix1.json), and [request/expanded-impact2](evidence/2026-09-16-upfront-plan-tree/task4-fix2.json) probes passed after their respective corrections. Self-tests10 passed. All3 packages regenerated. Completed-history classification, semantic closure expansion, non-executable pending view, and request-versus-replanner assessment ownership were reviewed explicitly. Full final suites remain scheduled after routing/closeout integration.

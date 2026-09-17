@@ -1,0 +1,41 @@
+{
+  "impact_local_s02_detail": {
+    "reason": "Superstage S4 classifies bounded internal file placement and test-setup changes that preserve acceptance, scope, approach, dependencies, required outcome, and contract semantics as refinement; no structural batch is created.",
+    "operation": "refine",
+    "role": "PLAN_REFINER",
+    "batch_created": false,
+    "execution_paused": false
+  },
+  "impact_absorbed_at_s03": {
+    "reason": "Superstage S4 requires revising unfinished stages whose contract commitment changes, but stops propagation at a preserved output contract. S02 advances C-S02 and S03 must consume it, while S03 still produces C-S03@2, so S05 remains fulfillable; S04 is independently unaffected and delivered S01 is completed history.",
+    "revised_stages": ["S02", "S03"],
+    "retained_stages": ["S04", "S05"],
+    "completed_stages": ["S01"],
+    "completed_disposition": "completed-history",
+    "propagation_stop": "S03"
+  },
+  "impact_foundational_change": {
+    "reason": "Superstage S4 expands the affected set beyond the originating dependency closure when verified shared foundational evidence independently invalidates another unfinished branch. The shared storage change invalidates every unfinished stage, while delivered S01 remains completed history.",
+    "revised_stages": ["S02", "S03", "S04", "S05"],
+    "retained_stages": [],
+    "completed_stages": ["S01"],
+    "completed_disposition": "completed-history",
+    "propagation_stop": "none"
+  },
+  "replan_atomicity_violation": {
+    "reason": "Supertraverse C8 and superreplan require one complete authoritative old-to-new publication transition. The dirty, uncommitted mixed tree is not publication; the committed pending Active replan barrier remains authoritative and blocks execution.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false,
+    "authoritative_view_executable": false
+  },
+  "replan_internal_pr_not_merged": {
+    "reason": "Supertraverse C8 states that one unique complete internal candidate in an open, unmerged A7 docs PR is continue/publication none; it may be resumed and reconciled, but authoritative main retains the pending barrier and no candidate is executable.",
+    "outcome": "continue",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false,
+    "authoritative_view_executable": false
+  }
+}

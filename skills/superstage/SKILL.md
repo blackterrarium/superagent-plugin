@@ -187,30 +187,35 @@ Classify the evidence before selecting a role:
 - Return **BLOCKED** when evidence needed to decide is absent or inconsistent. Do not guess under
   either role.
 
-For replanning, start with the originating stage and candidate transitive dependent closure. At every
-dependency boundary, compare the old and proposed contract: revise a consumer only when its commitment
-or evidence changes; retain it with recorded evidence when the consumed contract remains fulfillable.
-Stop propagation at a preserved contract. Independent later stages remain retained. A foundational
-change may affect all unfinished dependents when the evidence shows that reach. Completed work stays
-completed; corrections become explicit new work with consumer rewiring. Supersession never merges,
-closes, deletes, or forgives an old PR.
+For replanning, use the originating stage and graph-derived transitive dependent closure as the
+**initial assessment set**, not a cap. At every dependency boundary, compare the old and proposed
+contract: revise a consumer only when its commitment or evidence changes; retain it with recorded
+evidence when the consumed contract remains fulfillable. Stop propagation at a preserved contract.
+Expand the semantic affected set with any stage outside the initial closure whose verified shared
+foundational assumption, acceptance, approach, or contract is independently invalidated, and record
+why each expansion occurred. A foundational change may therefore affect an otherwise independent
+unfinished branch. Completed work stays completed; corrections become explicit new work with consumer
+rewiring. Supersession never merges, closes, deletes, or forgives an old PR.
 
 The impact assessment is a complete accounting, not just a list of files to rewrite. Record the root
-generation and each active stage path/revision at assessment time, then assign every originating or
-candidate-closure stage exactly one disposition:
+generation and each active stage path/revision at assessment time, then assign every stage exactly one
+disposition:
 
 - `revise` when its acceptance, scope, approach, dependency, required outcome, consumed evidence, or
-  produced contract must change;
-- `retain` when current evidence proves its approved boundary remains fulfillable; cite the preserved
-  consumed/produced contract and why propagation stops there; or
+  produced contract must change and the stage is unfinished;
+- `retain` when an unfinished stage lies outside the final semantic affected set and current evidence
+  proves its approved boundary remains fulfillable; cite the preserved consumed/produced contract and
+  why propagation stops there;
+- `completed-history` when verified delivery evidence proves the stage is completed; preserve its
+  plan, closeout, contracts and integration evidence, and record the effect on current consumers; or
 - an authorized terminal disposition with the adopting authority and its effect on every consumer.
 
-Also record active stages outside the candidate closure as retained, so the result accounts for the
-whole active graph. A local implementation detail that preserves all commitments stays refinement and
-does not create a structural batch. A semantic change to a provider is not automatically a rewrite of
-every descendant: propagate across each dependency edge only until an unchanged output contract makes
-the next consumer valid. Conversely, include every unfinished stage whose shared foundational decision
-is invalidated even if it is on an otherwise independent dependency branch.
+This accounts for the whole active graph without folding completed history into the retained unfinished
+set. A local implementation detail that preserves all commitments stays refinement and does not create
+a structural batch. A semantic change to a provider is not automatically a rewrite of every descendant:
+propagate across each dependency edge only until an unchanged output contract makes the next consumer
+valid. Classify as retained only stages outside the final semantic affected set, after all verified
+independent shared-assumption expansions.
 
 Do not revise delivered history in place. If completed work needs correction, keep its stage and
 delivery evidence completed, assign fresh stage IDs to explicit corrective work, and rewire affected

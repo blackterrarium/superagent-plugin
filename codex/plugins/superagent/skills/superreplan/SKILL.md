@@ -66,11 +66,13 @@ originating stages, candidate dependency closure, active paths/revisions, PR/bra
 draft/successor paths, ID mappings, resolution, and publication evidence.
 
 Return **BLOCKED** for absent or ambiguous authority; a missing/malformed referenced record;
-duplicate Decision IDs; divergent successors; a record for another root/generation; contradictory
-source, Git, PR, or worktree evidence; multiple active batches; or a dirty/partial state that cannot
-be reconciled uniquely. Never manufacture a request from an informal prompt. An authorized source or
-acceptance change remains bound to its adopting authority; replanning cannot silently weaken or
-reinterpret the approved agreement.
+duplicate live records claiming one Decision ID; divergent successors; a record for another
+root/generation; contradictory source, Git, PR, or worktree evidence; multiple active batches; or a
+dirty/partial state that cannot be reconciled uniquely. Repeated Decision-ID markers in the request,
+checkpoint, publication, and evidence-resolution history are expected and are not duplicate live
+records. Never manufacture a request from an informal prompt. An authorized source or acceptance
+change remains bound to its adopting authority; replanning cannot silently weaken or reinterpret the
+approved agreement.
 
 Reconcile before drafting:
 
@@ -93,20 +95,27 @@ generation to equal the record's from-generation. Read the complete S1 active ma
 committed current generation. The active barrier intentionally prevents execution; it does not waive
 graph validation or authorize incremental gap filling.
 
-Apply superstage S4 from every originating stage through the candidate transitive dependent closure.
-Compare old and proposed contract behavior at every edge. Give every active stage one disposition in
-the record:
+Apply superstage S4 from every originating stage through the graph-derived transitive dependent
+closure as the initial assessment set. Compare old and proposed contract behavior at every edge, then
+expand the final semantic affected set with any independently invalidated stage outside that closure
+and record the evidence/reason for each expansion. Replace the request record's pending final-set,
+expansion-reason, and per-stage disposition fields with this assessment before candidate review or
+publication. Give every stage one disposition in the record:
 
-- `revise` with the evidence and exact acceptance/scope/approach/edge/contract/outcome change;
-- `retain` with evidence that its boundary remains fulfillable, including the contract where impact
-  propagation stops; or
+- `revise` for unfinished affected work, with the evidence and exact
+  acceptance/scope/approach/edge/contract/outcome change;
+- `retain` for unfinished work outside the final semantic affected set, with evidence that its
+  boundary remains fulfillable, including the contract where impact propagation stops;
+- `completed-history` for delivered work, with verified delivery/integration evidence, preserved
+  plan/closeout/contracts, and its effect on current consumers; or
 - an authorized terminal disposition and its effect on every consumer.
 
-Account for active stages outside the candidate closure as retained. A local file/helper/test-detail
+Do not include completed-history stages in the retained unfinished set. A local file/helper/test-detail
 change that preserves commitments belongs to superrefine and creates no batch; report that mismatch
 instead of structurally rewriting it. A changed provider interface does not imply rewriting every
-descendant: stop at the first output contract whose behavior/revision remains valid. Include every
-unfinished branch when shared foundational evidence invalidates it.
+descendant: stop at the first output contract whose behavior/revision remains valid. Conversely,
+expand beyond the graph closure when shared foundational evidence invalidates an otherwise independent
+unfinished branch.
 
 Preserve delivered stages and their history. If delivered behavior needs correction, add fresh stage
 IDs for corrective work and rewire consumers; do not reopen or rewrite the completed stage. A split or
@@ -149,8 +158,10 @@ Self-review directly under superauthor A4; do not dispatch a reviewer. Re-run su
 **candidate** context against the complete proposed tree, including retained stages, through the
 explicit path map. Require all of the following before publication:
 
-1. Every S4 candidate-closure stage has one evidenced disposition; every other active stage is
-   accounted for, and each propagation stop cites a preserved contract.
+1. Every stage has exactly one evidenced `revise`, `retain`, `completed-history`, or authorized
+   terminal disposition; completed stages are reported separately from retained unfinished stages,
+   every expansion beyond the initial graph closure is justified, and each propagation stop cites a
+   preserved contract.
 2. The candidate preserves delivered work and acceptance/source authority. Corrective work,
    split/merge mappings, consumer rewiring, and partial-PR dispositions are complete.
 3. Every revised stage is contract-valid with `Preparation: none`; every retained ready stage has a
@@ -182,11 +193,11 @@ docs PR to authoritative main and synchronize it before activation. When A7 perm
 commit, or for an external vault, commit the complete batch on the configured authoritative branch
 and verify that commit there. Then re-run S1/S2 in **active** context and reconcile the marker,
 generation, record, review, links, and cleared barrier from authoritative committed history. Until all
-checks pass, the old pending generation remains the only executable view and its barrier remains
-effective. Require exactly one history change that performs the complete old-to-new publication
-transition. Request, checkpoint, or later evidence-resolution commits may repeat the Decision ID and
-do not count as publications. A mixed tree, multiple matching publication transitions, mismatched
-generation, or missing artifact is **BLOCKED**.
+checks pass, the old pending generation remains the only authoritative active view, and it is
+non-executable under the pending barrier. Require exactly one history change that performs the
+complete old-to-new publication transition. Request, checkpoint, or later evidence-resolution commits
+may repeat the Decision ID and do not count as publications. A mixed tree, multiple matching
+publication transitions, mismatched generation, or missing artifact is **BLOCKED**.
 
 After verified publication, repair stale loop recovery hints to the published generation. Do not run
 or refine a stage in this authoring invocation. A crash before loop update resumes the verified new
@@ -219,6 +230,7 @@ Return exactly this shape, using `none` for absent values and listing every file
 **Published generation:** <integer or none>
 **Revised stages:** <ids or none>
 **Retained stages:** <ids or none>
+**Completed stages:** <ids or none>
 **Retired/replacement mapping:** <mapping or none>
 **Review:** <path or none>
 **Predecessor PR dispositions:** <entries or none>

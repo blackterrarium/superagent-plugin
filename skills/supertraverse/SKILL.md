@@ -383,13 +383,17 @@ superrun calls. Before any REPLANNER dispatch:
    Ambiguous authority, origin, generation, or evidence is **BLOCKED**.
 2. Create one durable `findings/<timestamp>-replan-<topic>.md` record with exactly one stable
    **Decision ID**. Record at least: authority, rationale, source agreement revision; root path and
-   from-generation; code and vault baselines; origin stages and candidate dependency closure; every
-   active path/revision; an initially unassessed per-stage `retain` / `revise` / authorized disposition
-   table with evidence slots; every predecessor PR/branch/worktree and integration disposition; draft
-   paths, successor paths, and retired-ID replacement mapping (initially `none` or `pending`);
+   from-generation; code and vault baselines; origin stages and initial candidate dependency closure;
+   final semantic affected set and expansion reasons (both initially `pending`); every active
+   path/revision; an initially unassessed per-stage `retain` / `revise` / `completed-history` /
+   authorized disposition table with evidence slots; every predecessor PR/branch/worktree and
+   integration disposition; draft paths, successor paths, and retired-ID replacement mapping
+   (initially `none` or `pending`);
    **Resolution** (`pending`, later `published`, `superseded`, or `declined`); published generation;
    publication decision marker; and resolved publication PR/commit evidence. Do not omit a field
-   because it is initially `none`.
+   because it is initially `none`. At this request boundary the final semantic set and expansion
+   reasons stay `pending`, and the disposition table stays unassessed. Superreplan, not the
+   controller, populates them during S4 assessment before candidate review/publication.
 3. In the same A7 change, set the root's sole `Active replan` field to this record. Preserve every
    active Plan link, status, completed stage, closeout, PR reference, and preparation receipt at this
    request boundary. For protected-main internal vaults the docs PR must be merged to authoritative
@@ -426,9 +430,10 @@ loop hints or working-tree contents:
 - **Relevant source, code, vault, path, stage, contract, PR, or worktree baseline changed before
   publication:** reassess the affected set under S4 and update the pending record/drafts before any
   activation. Do not bless stale candidates.
-- **Missing referenced record, duplicate Decision ID, multiple unretired draft successor sets,
-  divergent successors, mismatched generation, multiple matching publication transitions, or
-  mixed/partial publication:** **BLOCKED** until authoritative evidence uniquely reconciles the state.
+- **Missing referenced record, duplicate live records claiming one Decision ID, multiple unretired
+  draft successor sets, divergent successors, mismatched generation, multiple matching publication
+  transitions, or mixed/partial publication:** **BLOCKED** until authoritative evidence uniquely
+  reconciles the state.
 
 For callers that report the artifact handler separately from C6 selection, use these exact results.
 `outcome: continue` means the adopted request can be durably created, resumed, reassessed, or

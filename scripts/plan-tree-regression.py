@@ -159,16 +159,20 @@ CASES = (
      'does not consume either contract. The tracked request names origin S02 and candidate closure '
      '[S02, S03, S05].',
      {'revised_stages': ['S02', 'S03'], 'retained_stages': ['S04', 'S05'],
-      'completed_stages': ['S01'], 'propagation_stop': 'S03'}),
+      'completed_stages': ['S01'], 'completed_disposition': 'completed-history',
+      'propagation_stop': 'S03'}),
     ('impact_foundational_change',
      'An upfront-v1 root is at Plan generation 7. S01 revision 3 is delivered. The unfinished stages '
      'are S02 revision 2 depending on S01, S03 revision 4 depending on S02, S04 revision 1 with '
      'Depends on none, and S05 revision 2 depending on S03. An adopted source-author decision changes '
      'the shared storage architecture named by the acceptance and chosen approach of every unfinished '
      'stage. Verified evidence says none of S02, S03, S04, or S05 can retain its current required '
-     'outcome or shared contracts; no evidence changes delivered S01.',
+     'outcome or shared contracts; no evidence changes delivered S01. The tracked request started '
+     'with origin S02 and graph-derived candidate closure [S02, S03, S05]; S04 is outside that '
+     'initial closure.',
      {'revised_stages': ['S02', 'S03', 'S04', 'S05'], 'retained_stages': [],
-      'completed_stages': ['S01'], 'propagation_stop': 'none'}),
+      'completed_stages': ['S01'], 'completed_disposition': 'completed-history',
+      'propagation_stop': 'none'}),
     ('replan_before_request_commit',
      'An upfront-v1 root is at Plan generation 7 with Active replan none. S01 revision 3 is delivered; '
      'S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. A panel '
@@ -181,7 +185,8 @@ CASES = (
      'revision 4, S04 revision 1, and S05 revision 2 are unfinished. One authoritative tracked change '
      'created decision record D-205 with Resolution pending and set Active replan to that record. The '
      'record captures source revision 11, code baseline c7, vault baseline v7, active paths/revisions, '
-     'candidate closure, and PR/worktree dispositions. It has no draft paths yet.',
+     'candidate closure, and PR/worktree dispositions. Its final semantic affected set, expansion '
+     'reasons, and per-stage dispositions are present as pending; it has no draft paths yet.',
      {'outcome': 'continue', 'resolution': 'pending', 'dispatch': 'superreplan',
       'execution_paused': True}),
     ('replan_drafting_interrupted',
@@ -274,7 +279,7 @@ CASES = (
      'authorized replacements, dependency rewrites, review, record publication fields, generation '
      'increment, and barrier clearing are absent and uncommitted.',
      {'outcome': 'BLOCKED', 'publication': 'none', 'execution_paused': True,
-      'partial_tree_executable': False}),
+      'partial_tree_executable': False, 'authoritative_view_executable': False}),
     ('replan_internal_pr_not_merged',
      'An internal-vault upfront root on authoritative main is at Plan generation 7 with Active replan '
      'D-216b pending. S01 revision 3 is delivered; S02 revision 2, S03 revision 4, S04 revision 1, '
@@ -283,7 +288,7 @@ CASES = (
      'Authoritative main still contains the committed generation-7 pending barrier and has no '
      'publication decision marker.',
      {'outcome': 'continue', 'publication': 'none', 'execution_paused': True,
-      'partial_tree_executable': False}),
+      'partial_tree_executable': False, 'authoritative_view_executable': False}),
     ('legacy_single_leaf_repair',
      'An unmarked legacy incremental root has one repair-requested leaf P0 and a tracked legacy C8 '
      'record with Decision ID D-217, adopted authority, predecessor/closeout/PR disposition, Successor '
@@ -347,12 +352,14 @@ def render_prompt(skills, cases):
         'integers; amendment_kind is none, content-amendment, or '
         'compatible-baseline-revalidation; batch_created, execution_paused, duplicate_publication, '
         'active_link_changed, successor_closed, predecessor_evidence_preserved, old_pr_closed, '
-        'successor_needs_refinement, topology_allowed, preparation_valid, and '
-        'partial_tree_executable are JSON booleans; dispatch is none or superreplan; resolution is '
+        'successor_needs_refinement, topology_allowed, preparation_valid, '
+        'partial_tree_executable, and authoritative_view_executable are JSON booleans; dispatch is '
+        'none or superreplan; resolution is '
         'pending, published, superseded, or declined; replay_action is resume-draft, '
         'resume-published, reassess, or block; propagation_stop is a stage ID or the string none; '
         'late_closeout_action is preserve-history or reconcile-delivery; pr_disposition is '
-        'resume-existing, replace, or none; repair_shape is single-leaf or batch; revised_stages, '
+        'resume-existing, replace, or none; repair_shape is single-leaf or batch; '
+        'completed_disposition is completed-history or none; revised_stages, '
         'retained_stages, completed_stages, retired_stages, and replacement_stages are JSON arrays '
         'of stage IDs.',
     ]
