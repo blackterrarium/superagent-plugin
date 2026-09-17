@@ -567,13 +567,13 @@ point directly at directories containing `<skill>/SKILL.md`.
 | `schema_version` | Integer `1`. |
 | `fixture` | `kind`, isolated `code_repo`, isolated `vault_repo`, and root path. |
 | `expected.root_generation` | Generation published by the initial coherent tree. |
-| `expected.stages[]` | Stable `id`, `revision`, path, dependency IDs, preparation path, historical vault commit containing the prepared bytes and preparation receipt, delivery path and vault commit containing that receipt, delivered code commit, and integration commit. The validator resolves the preparation receipt's independently named examined code baseline; it need not equal the later delivered code commit. |
-| `expected.role_pins` | Expected `harness`, `model`, and `effort` for each evidenced role. The role-bridge log must contain the matching start header and a successful nonempty trailer. |
+| `expected.stages[]` | Stable `id`, `revision`, path, dependency IDs, preparation path, historical vault commit containing the prepared bytes and preparation receipt, delivery path and vault commit containing that receipt, delivered code commit, and integration commit. Actual `Depends on` metadata must match this inventory. The validator resolves the preparation receipt's independently named examined code baseline; it need not equal the later delivered code commit. |
+| `expected.role_pins` | Expected `harness`, `model`, and `effort` for PLAN_REFINER and REPLANNER. Both roles need successful logs, and the retained log inventory must exercise both `native` and `bridged` recipes. |
 | `expected.package_skills` | Skills that must be real copied files in canonical, Codex, Cursor, and Pi roots; defaults to `superstage`, `superrefine`, and `superreplan`. Symlink fallback fails. |
-| `evidence.initial_publication` | Vault commit, complete artifact set, confirmation artifact, and supermeta artifact. A marker without the tree/review artifacts is incomplete. |
-| `evidence.dispatch_logs[]` | Role and actual `role-bridge.sh` log path. Missing trailer means interrupted, not success. |
+| `evidence.initial_publication` | Vault commit, complete artifact set, confirmation artifact, supermeta artifact, and optional tracked `bounded_detail_review`. The root/sub-master Progress Report Plan links are followed to derive the active stage identities; a marker or manifest list cannot replace those links. PT-05 remains INCOMPLETE without a PASS assessment for bounded detail and zero replanning. |
+| `evidence.dispatch_logs[]` | Role, `native` or `bridged` recipe, and actual `role-bridge.sh` log path. Missing trailer means interrupted, not success. A recipe value is an operator declaration backed by the retained dispatch log, not cryptographic provider provenance. |
 | `evidence.traces` | JSONL paths for `normal`, `contract_break`, `batch_resume`, and `legacy`. All four are required for full acceptance. A value may instead be an object with `path`, `code_repo`, `vault_repo`, `root`, and `initial_publication_commit` so independent runs are checked in their own Git context. |
-| `evidence.replan` | Decision ID, record/report paths, atomic publication commit/artifacts, generations, and revised/retained IDs. Optional `vault_repo` and `root` override the normal-run context for the contract-break repository. |
+| `evidence.replan` | Decision ID, record/report/`impact_review` paths, atomic publication commit/artifacts, generations, and revised/retained IDs. Optional `vault_repo` and `root` override the normal-run context for the contract-break repository. PT-06 remains INCOMPLETE without the tracked PASS impact assessment matching the decision and revised/retained sets. |
 | `evidence.legacy` | Repository, commit, and unmarked legacy root snapshot. |
 | `evidence.publications.external` | External-vault repository, commit, and artifact set. |
 | `evidence.packages` | Canonical/Codex/Cursor/Pi skill roots. |
@@ -607,9 +607,9 @@ real manifest names commits that exist in its isolated repositories.
   },
   "evidence": {
     "initial_publication":{"commit":"1111111111111111111111111111111111111111","artifacts":["goal/master-plans/root.md","goal/plans/s01.md","goal/plans/s02.md","goal/plans/s03.md","goal/plans/s04.md","goal/plans/s05.md","goal/reports/tree-review.md"],"tree_review":"goal/reports/tree-review.md","confirmation":"goal/reports/confirmation.md","supermeta":"goal/reports/supermeta.md"},
-    "dispatch_logs":[{"role":"PLAN_REFINER","path":"logs/refiner.log"},{"role":"REPLANNER","path":"logs/replanner.log"}],
+    "dispatch_logs":[{"role":"PLAN_REFINER","recipe":"native","path":"logs/refiner.log"},{"role":"REPLANNER","recipe":"bridged","path":"logs/replanner.log"}],
     "traces":{"normal":"traces/normal.jsonl","contract_break":{"path":"traces/contract-break.jsonl","code_repo":"/tmp/pt-break-code","vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","initial_publication_commit":"7171717171717171717171717171717171717171"},"batch_resume":{"path":"traces/batch-resume.jsonl","code_repo":"/tmp/pt-break-code","vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","initial_publication_commit":"7171717171717171717171717171717171717171"},"legacy":"traces/legacy.jsonl"},
-    "replan":{"vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","decision_id":"D-PT-1","record":"goal/findings/D-PT-1.md","report":"goal/reports/replan-D-PT-1.md","publication_commit":"9999999999999999999999999999999999999999","published_generation":2,"revised_stages":["S02","S03"],"retained_stages":["S04","S05"],"artifacts":["goal/plans/s02-r2.md","goal/plans/s03-r2.md","goal/reports/tree-review-g2.md"]},
+    "replan":{"vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","decision_id":"D-PT-1","record":"goal/findings/D-PT-1.md","report":"goal/reports/replan-D-PT-1.md","impact_review":"goal/reports/impact-D-PT-1.md","publication_commit":"9999999999999999999999999999999999999999","published_generation":2,"revised_stages":["S02","S03"],"retained_stages":["S04","S05"],"artifacts":["goal/plans/s02-r2.md","goal/plans/s03-r2.md","goal/reports/tree-review-g2.md"]},
     "legacy":{"vault_repo":"/tmp/pt-live-legacy-vault","commit":"abababababababababababababababababababab","root":"goal/master-plans/legacy.md"},
     "publications":{"external":{"repo":"/tmp/pt-live-external-vault","commit":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","artifacts":["goal/master-plans/root.md","goal/reports/tree-review.md"]}},
     "packages":{"canonical":"skills","codex":"codex/plugins/superagent/skills","cursor":"cursor/skills","pi":"pi/skills"}
@@ -632,9 +632,13 @@ refreshed receipt. Delivery must point back to that receipt and generation. Its 
 later `expected.stages[].code_commit`, so preparation and delivery baselines remain distinct.
 
 An operation trace is JSON Lines. The validator checks real line count, run identity, sequence,
-operation/role pairs, Git baselines, and trailer count. A normal trace must attribute refinement and
-execution to every delivered stage and contains no post-publication `plan`/`replan`. Contract-break
-and batch-resume traces use `REPLANNER`; the legacy trace uses `PLANNER` on an unmarked root.
+operation/role pairs, Git baselines, and trailer count. A normal trace must put refinement before
+execution for every delivered stage. For a consumer, the provider run and tracked delivery receipt
+must precede its execution-entry snapshot. It contains no post-publication `plan`/`replan`.
+Contract-break and batch-resume traces use `REPLANNER`; the legacy trace uses `PLANNER` on an unmarked
+root. Batch recovery requires two or more contiguous attempts for one decision, first outcome
+`interrupted`, final outcome `published`, and an `interruption_receipt` tracked in the final vault
+snapshot. That decision must match the replan publication.
 
 ```json
 {"type":"trace-header","run_id":"normal-20260916","scenario":"normal","root":"goal/master-plans/root.md","initial_publication_commit":"1111111111111111111111111111111111111111"}

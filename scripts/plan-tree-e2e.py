@@ -18,6 +18,7 @@ import unittest
 PT_IDS = tuple('PT-%02d' % number for number in range(1, 12))
 STATUS_RANK = {'PASS': 0, 'INCOMPLETE': 1, 'FAIL': 2}
 FIELD_RE = re.compile(r'^\*\*([^*]+):\*\*\s*(.*?)\s*$')
+HEADING_RE = re.compile(r'^(#{1,6})\s+(.+?)\s*$')
 HEADER_RE = re.compile(
     r'^role-bridge: start=(\S+) harness=(\S+) model=(\S+) effort=(\S+) '
     r'tools=(\S+) role=(\S+) cwd=(.*)$')
@@ -70,6 +71,105 @@ def markdown_fields(data):
     if duplicates:
         raise ValueError('conflicting duplicate field(s): ' + ', '.join(sorted(duplicates)))
     return fields
+
+
+def markdown_sections(data):
+    """Return nonempty Markdown section bodies keyed by heading text."""
+    lines = data.decode('utf-8').splitlines()
+    sections = {}
+    for index, line in enumerate(lines):
+        match = HEADING_RE.match(line)
+        if not match:
+            continue
+        level = len(match.group(1))
+        name = match.group(2).strip()
+        body = []
+        for following in lines[index + 1:]:
+            next_heading = HEADING_RE.match(following)
+            if next_heading and len(next_heading.group(1)) <= level:
+                break
+            body.append(following)
+        value = '\n'.join(body).strip()
+        if value:
+            sections[name] = value
+    return sections
+
+
+def contract_value(fields, sections, name):
+    return field(fields, name) or sections.get(name)
+
+
+def dependency_ids(value):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    if value.strip().lower() == 'none':
+        return []
+    parts = [part for part in re.split(r'[\s,]+', value.strip()) if part]
+    if any(not re.fullmatch(r'S\d+', part) for part in parts):
+        return None
+    return parts
+
+
+def progress_plan_links(data):
+    """Read Plan cells from the first Markdown table that has a Plan column."""
+    lines = data.decode('utf-8').splitlines()
+    for index, line in enumerate(lines):
+        if '|' not in line:
+            continue
+        headers = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        if 'Plan' not in headers or index + 1 >= len(lines):
+            continue
+        plan_index = headers.index('Plan')
+        links = []
+        for row in lines[index + 2:]:
+            if '|' not in row:
+                break
+            cells = [cell.strip() for cell in row.strip().strip('|').split('|')]
+            if plan_index >= len(cells):
+                continue
+            cell = cells[plan_index]
+            wiki = re.search(r'\[\[([^]|]+)(?:\|[^]]+)?\]\]', cell)
+            markdown = re.search(r'\[[^]]+\]\(([^)]+)\)', cell)
+            if wiki:
+                links.append(wiki.group(1))
+            elif markdown:
+                links.append(markdown.group(1))
+            elif cell and cell.lower() != 'none':
+                links.append(None)
+        return links
+    return None
+
+
+def active_stage_map(repo, commit, root_rel):
+    """Resolve active Plan links through root/sub-master tables to stage identities."""
+    queue = [root_rel]
+    visited = set()
+    stages = {}
+    while queue:
+        relpath = queue.pop(0)
+        if relpath in visited:
+            return result('FAIL', 'active Plan links contain a cycle or duplicate path')
+        visited.add(relpath)
+        blob, error = git_blob(repo, commit, relpath)
+        if error:
+            return result('INCOMPLETE', 'active Plan link is missing: %s' % relpath)
+        try:
+            fields = markdown_fields(blob)
+            stage_id = field(fields, 'Stage ID')
+            if stage_id:
+                if stage_id in stages:
+                    return result('FAIL', 'active Plan links contain duplicate stage %s' % stage_id)
+                stages[stage_id] = relpath
+                continue
+            links = progress_plan_links(blob)
+        except (UnicodeError, ValueError) as exc:
+            return result('FAIL', 'active Plan artifact is malformed: %s' % exc)
+        if links is None or not links:
+            return result('INCOMPLETE', 'active Plan links are absent from %s' % relpath)
+        if any(link is None for link in links):
+            return result('INCOMPLETE', 'an active Plan cell has no resolvable link')
+        queue.extend(links)
+    return result('PASS', 'active Plan links resolve the published stage graph', {'stages': stages})
 
 
 def field(fields, *names):
@@ -272,6 +372,19 @@ def validate_manifest(manifest, manifest_dir):
                         'published root mode and generation match'))
             except (UnicodeError, ValueError) as exc:
                 add(('PT-01', 'PT-10'), result('FAIL', 'published root is malformed: %s' % exc))
+        active_graph = active_stage_map(vault_repo, initial_commit, root_rel)
+        add(('PT-01', 'PT-02'), active_graph)
+        if active_graph['status'] == 'PASS':
+            expected_stage_map = {
+                stage.get('id'): stage.get('path') for stage in expected.get('stages', [])
+                if isinstance(stage, dict) and stage.get('id') and stage.get('path')}
+            actual_stage_map = active_graph.get('facts', {}).get('stages', {})
+            if actual_stage_map != expected_stage_map:
+                add(('PT-01', 'PT-02', 'PT-04'), result('FAIL',
+                    'published active Plan links disagree with expected stage identities'))
+            else:
+                add(('PT-01', 'PT-02'), result('PASS',
+                    'published active Plan links match expected stage identities'))
         review_rel = initial.get('tree_review')
         review_blob, review_error = git_blob(vault_repo, initial_commit, review_rel) \
             if review_rel else (None, 'absent')
@@ -306,6 +419,29 @@ def validate_manifest(manifest, manifest_dir):
                     '%s evidence is inconsistent' % label))
             except (UnicodeError, ValueError) as exc:
                 add(('PT-01',), result('FAIL', '%s evidence is malformed: %s' % (label, exc)))
+        bounded_review_rel = initial.get('bounded_detail_review')
+        if not bounded_review_rel:
+            add(('PT-05',), result('INCOMPLETE',
+                'tracked bounded-detail/no-replan assessment is absent'))
+        else:
+            bounded_blob, bounded_error = git_blob(
+                vault_repo, initial_commit, bounded_review_rel)
+            if bounded_error:
+                add(('PT-05',), result('INCOMPLETE',
+                    'tracked bounded-detail/no-replan assessment is missing'))
+            else:
+                try:
+                    bounded_fields = markdown_fields(bounded_blob)
+                    bounded_ok = (
+                        field(bounded_fields, 'Outcome') == 'PASS' and
+                        field(bounded_fields, 'Scenario') == 'bounded-detail' and
+                        field(bounded_fields, 'Replan dispatches') == '0')
+                    add(('PT-05',), result('PASS' if bounded_ok else 'FAIL',
+                        'bounded-detail/no-replan assessment passes' if bounded_ok else
+                        'bounded-detail/no-replan assessment is contradictory'))
+                except (UnicodeError, ValueError) as exc:
+                    add(('PT-05',), result('FAIL',
+                        'bounded-detail/no-replan assessment is malformed: %s' % exc))
 
     stages = expected.get('stages')
     if not isinstance(stages, list) or not stages:
@@ -315,6 +451,7 @@ def validate_manifest(manifest, manifest_dir):
     stage_ids = set()
     delivered_ids = set()
     dependencies = {}
+    stage_by_id = {}
     for stage in stages:
         if not isinstance(stage, dict) or not isinstance(stage.get('id'), str):
             add(('PT-01', 'PT-02'), result('FAIL', 'stage entry is malformed'))
@@ -324,7 +461,7 @@ def validate_manifest(manifest, manifest_dir):
             add(('PT-01', 'PT-02'), result('FAIL', 'duplicate stage ID %s' % stage_id))
             continue
         stage_ids.add(stage_id)
-        dependencies[stage_id] = stage.get('depends_on', [])
+        stage_by_id[stage_id] = stage
         stage_facts = {}
         facts['stages'][stage_id] = stage_facts
         prepared_commit = git_commit(vault_repo, stage.get('prepared_vault_commit')) \
@@ -341,6 +478,7 @@ def validate_manifest(manifest, manifest_dir):
             continue
         try:
             stage_fields = markdown_fields(stage_blob)
+            stage_sections = markdown_sections(stage_blob)
             prep_fields = markdown_fields(prep_blob)
             actual_digest = hashlib.sha256(prepared_body(stage_blob)).hexdigest()
         except (UnicodeError, ValueError) as exc:
@@ -427,12 +565,38 @@ def validate_manifest(manifest, manifest_dir):
         else:
             add(('PT-03', 'PT-04'), result('PASS',
                 '%s preparation digest matches historical exact bytes' % stage_id))
-        required_contract_fields = ('Stage ID', 'Stage revision', 'Depends on', 'Consumes',
-                                    'Produces', 'Acceptance', 'Verification scenarios')
-        missing_contract = [name for name in required_contract_fields if not field(stage_fields, name)]
+        required_contract_fields = ('Stage ID', 'Stage revision', 'Stage kind', 'Depends on')
+        required_contract_sections = ('Consumes', 'Produces', 'Acceptance',
+                                      'Verification scenarios')
+        missing_contract = [name for name in required_contract_fields
+                            if not field(stage_fields, name)]
+        missing_contract.extend(name for name in required_contract_sections
+                                if not contract_value(stage_fields, stage_sections, name))
         add(('PT-02',), result('FAIL' if missing_contract else 'PASS',
             '%s %s' % (stage_id, ('is missing contract fields: ' + ', '.join(missing_contract))
                         if missing_contract else 'has the required upfront contract fields')))
+        stage_kind = field(stage_fields, 'Stage kind')
+        if stage_kind and stage_kind not in ('implementation', 'discovery'):
+            add(('PT-01', 'PT-02'), result('FAIL',
+                '%s has invalid Stage kind %s' % (stage_id, stage_kind)))
+        actual_dependencies = dependency_ids(field(stage_fields, 'Depends on'))
+        expected_dependencies = stage.get('depends_on')
+        if actual_dependencies is None:
+            add(('PT-01', 'PT-02', 'PT-04'), result('FAIL',
+                '%s actual dependency field is malformed' % stage_id))
+            dependencies[stage_id] = []
+        else:
+            dependencies[stage_id] = actual_dependencies
+            stage_facts['depends_on'] = actual_dependencies
+            if not isinstance(expected_dependencies, list):
+                add(('PT-01', 'PT-02', 'PT-04'), result('INCOMPLETE',
+                    '%s expected dependency inventory is absent' % stage_id))
+            elif actual_dependencies != expected_dependencies:
+                add(('PT-01', 'PT-02', 'PT-04'), result('FAIL',
+                    '%s actual dependencies disagree with the manifest' % stage_id))
+            else:
+                add(('PT-01', 'PT-02', 'PT-04'), result('PASS',
+                    '%s actual dependencies match the manifest' % stage_id))
         code_commit = git_commit(code_repo, stage.get('code_commit')) if code_repo else None
         integration_commit = git_commit(code_repo, stage.get('integration_commit')) if code_repo else None
         if not code_commit or not integration_commit:
@@ -524,16 +688,31 @@ def validate_manifest(manifest, manifest_dir):
 
     role_pins = expected.get('role_pins', {})
     logs = evidence.get('dispatch_logs', [])
+    required_planning_roles = {'PLAN_REFINER', 'REPLANNER'}
+    if isinstance(role_pins, dict):
+        for missing_role in sorted(required_planning_roles - set(role_pins)):
+            add(('PT-08',), result('INCOMPLETE',
+                'required planning role %s is absent' % missing_role))
     if not isinstance(role_pins, dict) or not role_pins or not isinstance(logs, list) or not logs:
         add(('PT-03', 'PT-05', 'PT-08'), result('INCOMPLETE',
             'expected role pins or dispatch logs are absent'))
     else:
         seen_roles = set()
+        seen_recipes = set()
         for item in logs:
             if not isinstance(item, dict) or item.get('role') not in role_pins:
                 add(('PT-08',), result('FAIL', 'dispatch log entry has an unexpected role'))
                 continue
             role = item['role']
+            recipe = item.get('recipe')
+            if recipe is None:
+                add(('PT-08',), result('INCOMPLETE',
+                    '%s dispatch recipe is absent' % role))
+            elif recipe not in ('native', 'bridged'):
+                add(('PT-08',), result('FAIL',
+                    '%s dispatch recipe is invalid' % role))
+            else:
+                seen_recipes.add(recipe)
             checked = check_role_log(resolve_path(item.get('path'), base),
                                      dict(role_pins[role], role=role))
             facts['roles'][role] = checked.get('facts', {})
@@ -547,6 +726,10 @@ def validate_manifest(manifest, manifest_dir):
         for role in role_pins:
             if role not in seen_roles:
                 add(('PT-08',), result('INCOMPLETE', '%s has no successful dispatch log' % role))
+        for recipe in ('native', 'bridged'):
+            if recipe not in seen_recipes:
+                add(('PT-08',), result('INCOMPLETE',
+                    'required %s planning dispatch recipe is absent' % recipe))
 
     package_roots = evidence.get('packages')
     package_skills = expected.get('package_skills', ['superstage', 'superrefine', 'superreplan'])
@@ -575,6 +758,7 @@ def validate_manifest(manifest, manifest_dir):
     traces = evidence.get('traces', {})
     if not isinstance(traces, dict):
         traces = {}
+    batch_resume_decision = None
     for name in ('normal', 'contract_break', 'batch_resume', 'legacy'):
         trace_spec = traces.get(name)
         if isinstance(trace_spec, dict):
@@ -646,24 +830,112 @@ def validate_manifest(manifest, manifest_dir):
                     add(('PT-11',), result('FAIL',
                         'normal trace contains post-publication structural planning'))
             for stage_id in delivered_ids:
-                stage_ops = {item.get('operation') for item in dispatches
-                             if item.get('stage_id') == stage_id}
+                stage_dispatches = [item for item in dispatches
+                                    if item.get('stage_id') == stage_id]
+                stage_ops = {item.get('operation') for item in stage_dispatches}
                 add(('PT-03', 'PT-11'), result(
                     'PASS' if {'refine', 'run'}.issubset(stage_ops) else 'INCOMPLETE',
                     '%s has attributable refinement and execution' % stage_id if
                     {'refine', 'run'}.issubset(stage_ops) else
                     '%s lacks attributable refinement or execution' % stage_id))
+                refine_sequences = [item.get('sequence') for item in stage_dispatches
+                                    if item.get('operation') == 'refine']
+                run_items = [item for item in stage_dispatches
+                             if item.get('operation') == 'run']
+                if refine_sequences and run_items:
+                    first_run = min(item.get('sequence') for item in run_items)
+                    first_refine = min(refine_sequences)
+                    if first_run < first_refine:
+                        add(('PT-03', 'PT-04', 'PT-11'), result('FAIL',
+                            '%s execution occurs before refinement' % stage_id))
+                    else:
+                        add(('PT-03', 'PT-04', 'PT-11'), result('PASS',
+                            '%s refinement precedes execution' % stage_id))
+                for run_item in run_items:
+                    for provider_id in dependencies.get(stage_id, []):
+                        provider_runs = [item.get('sequence') for item in dispatches
+                                         if item.get('stage_id') == provider_id and
+                                         item.get('operation') == 'run']
+                        if not provider_runs:
+                            add(('PT-04', 'PT-11'), result('INCOMPLETE',
+                                '%s execution lacks provider run witness for %s' %
+                                (stage_id, provider_id)))
+                        elif min(provider_runs) >= run_item.get('sequence'):
+                            add(('PT-04', 'PT-11'), result('FAIL',
+                                '%s executes before provider %s' % (stage_id, provider_id)))
+                        before = git_commit(trace_vault, run_item.get('vault_commit_before')) \
+                            if trace_vault else None
+                        provider_stage = stage_by_id.get(provider_id, {})
+                        if not before:
+                            add(('PT-04', 'PT-11'), result('INCOMPLETE',
+                                '%s execution has no resolvable dependency snapshot' % stage_id))
+                        else:
+                            _, delivery_error = git_blob(
+                                trace_vault, before, provider_stage.get('delivery'))
+                            add(('PT-04', 'PT-11'), result(
+                                'FAIL' if delivery_error else 'PASS',
+                                '%s provider %s delivery is absent at execution entry' %
+                                (stage_id, provider_id) if delivery_error else
+                                '%s provider %s was delivered before execution' %
+                                (stage_id, provider_id)))
         elif name == 'contract_break':
             replans = [item for item in dispatches if item.get('operation') == 'replan']
             add(('PT-05', 'PT-06', 'PT-11'), result('PASS' if len(replans) == 1 else 'FAIL',
                 'contract-break trace has exactly one replanning dispatch' if len(replans) == 1
                 else 'contract-break trace does not have exactly one replanning dispatch'))
         elif name == 'batch_resume':
-            add(('PT-07',), result('PASS' if any(item.get('operation') == 'replan'
-                                                    for item in dispatches) else 'FAIL',
-                'batch-resume trace contains replanning' if any(item.get('operation') == 'replan'
-                                                                 for item in dispatches)
-                else 'batch-resume trace contains no replanning'))
+            replans = [item for item in dispatches if item.get('operation') == 'replan']
+            if not replans:
+                add(('PT-07',), result('FAIL',
+                    'batch-resume trace contains no replanning'))
+            elif len(replans) < 2:
+                add(('PT-07',), result('INCOMPLETE',
+                    'batch-resume trace has no interruption and resumed attempt witness'))
+            else:
+                required = ('decision_id', 'attempt', 'outcome')
+                if any(not all(item.get(key) is not None for key in required)
+                       for item in replans):
+                    add(('PT-07',), result('INCOMPLETE',
+                        'batch-resume attempt identity is incomplete'))
+                else:
+                    decisions = {item.get('decision_id') for item in replans}
+                    attempts = [item.get('attempt') for item in replans]
+                    outcomes = [item.get('outcome') for item in replans]
+                    if len(decisions) != 1 or attempts != list(range(1, len(replans) + 1)):
+                        add(('PT-07',), result('FAIL',
+                            'batch-resume attempts do not share one contiguous decision identity'))
+                    elif outcomes[0] != 'interrupted' or outcomes[-1] != 'published':
+                        add(('PT-07',), result('FAIL',
+                            'batch-resume outcomes contradict interruption and publication'))
+                    else:
+                        receipt_rel = replans[0].get('interruption_receipt')
+                        if not receipt_rel:
+                            add(('PT-07',), result('INCOMPLETE',
+                                'batch interruption receipt is absent'))
+                        elif not final_commit:
+                            add(('PT-07',), result('INCOMPLETE',
+                                'batch interruption receipt has no final tracked snapshot'))
+                        else:
+                            receipt_blob, receipt_error = git_blob(
+                                trace_vault, final_commit, receipt_rel)
+                            if receipt_error:
+                                add(('PT-07',), result('INCOMPLETE',
+                                    'batch interruption receipt is not tracked'))
+                            else:
+                                try:
+                                    receipt_fields = markdown_fields(receipt_blob)
+                                    receipt_ok = (
+                                        field(receipt_fields, 'Decision ID') in decisions and
+                                        field(receipt_fields, 'Outcome') == 'interrupted')
+                                    add(('PT-07',), result('PASS' if receipt_ok else 'FAIL',
+                                        'batch interruption receipt matches resumed decision' if
+                                        receipt_ok else
+                                        'batch interruption receipt contradicts resumed decision'))
+                                    if receipt_ok:
+                                        batch_resume_decision = next(iter(decisions))
+                                except (UnicodeError, ValueError) as exc:
+                                    add(('PT-07',), result('FAIL',
+                                        'batch interruption receipt is malformed: %s' % exc))
         elif name == 'legacy':
             add(('PT-09',), result('PASS' if any(item.get('operation') == 'plan'
                                                 for item in dispatches) else 'FAIL',
@@ -675,6 +947,8 @@ def validate_manifest(manifest, manifest_dir):
     if not isinstance(replan, dict):
         add(('PT-05', 'PT-06', 'PT-07'), result('INCOMPLETE',
             'coherent replan publication evidence is absent'))
+        add(('PT-06',), result('INCOMPLETE',
+            'tracked semantic impact assessment is absent'))
     else:
         replan_repo = resolve_path(replan.get('vault_repo'), base) or vault_repo
         replan_root = replan.get('root', root_rel)
@@ -684,6 +958,10 @@ def validate_manifest(manifest, manifest_dir):
             if replan_repo else None
         record_rel = replan.get('record')
         report_rel = replan.get('report')
+        impact_review_rel = replan.get('impact_review')
+        if not impact_review_rel:
+            add(('PT-06',), result('INCOMPLETE',
+                'tracked semantic impact assessment is absent'))
         if not publication:
             add(('PT-05', 'PT-06', 'PT-07'), result('INCOMPLETE',
                 'replan publication commit is absent'))
@@ -695,7 +973,10 @@ def validate_manifest(manifest, manifest_dir):
                 add(('PT-05', 'PT-06', 'PT-07'), result('INCOMPLETE',
                     'replan publication artifact inventory is empty'))
                 extra_artifacts = []
-            for relpath in [replan_root, record_rel, report_rel] + extra_artifacts:
+            core_paths = [replan_root, record_rel, report_rel]
+            if impact_review_rel:
+                core_paths.append(impact_review_rel)
+            for relpath in core_paths + extra_artifacts:
                 blob, error = git_blob(replan_repo, publication, relpath)
                 blobs.append((relpath, blob))
                 if error:
@@ -732,6 +1013,24 @@ def validate_manifest(manifest, manifest_dir):
                     add(('PT-05', 'PT-06', 'PT-07'), result('PASS' if coherent else 'FAIL',
                         'replan publication identities and dispositions match' if coherent else
                         'replan publication identities or dispositions conflict'))
+                    if batch_resume_decision is not None:
+                        add(('PT-07',), result(
+                            'PASS' if batch_resume_decision == replan.get('decision_id') else 'FAIL',
+                            'batch recovery and publication decision identities match' if
+                            batch_resume_decision == replan.get('decision_id') else
+                            'batch recovery and publication decision identities conflict'))
+                    if impact_review_rel:
+                        impact_fields = markdown_fields(dict(blobs)[impact_review_rel])
+                        impact_ok = (
+                            field(impact_fields, 'Outcome') == 'PASS' and
+                            field(impact_fields, 'Decision ID') == replan.get('decision_id') and
+                            sorted(filter(None, re.split(r'[\s,]+',
+                                field(impact_fields, 'Revised stages') or ''))) == revised and
+                            sorted(filter(None, re.split(r'[\s,]+',
+                                field(impact_fields, 'Retained stages') or ''))) == retained)
+                        add(('PT-06',), result('PASS' if impact_ok else 'FAIL',
+                            'semantic impact assessment matches publication' if impact_ok else
+                            'semantic impact assessment contradicts publication'))
                 except (UnicodeError, ValueError) as exc:
                     add(('PT-05', 'PT-06', 'PT-07'), result('FAIL',
                         'replan publication is malformed: %s' % exc))
@@ -818,10 +1117,11 @@ class EvidenceValidatorTests(unittest.TestCase):
         self.code_commit = self.commit(self.code, 'code delivery')
         self.stage_rel = 'goal/plans/s01.md'
         stage = (b'# Stage one\r\n**Stage ID:** S01\r\n**Stage revision:** 1\r\n'
-                 b'**Depends on:** none\r\n**Consumes:** none\r\n'
-                 b'**Produces:** C-ONE@1\r\n**Acceptance:** A-ONE\r\n'
-                 b'**Verification scenarios:** V-ONE\r\n'
-                 b'**Preparation:** [[goal/reports/prep-s01.md]]\r\nBody.\r\n')
+                 b'**Stage kind:** implementation\r\n**Depends on:** none\r\n'
+                 b'**Preparation:** [[goal/reports/prep-s01.md]]\r\n'
+                 b'### Consumes\r\nnone\r\n### Produces\r\n- C-ONE@1: output\r\n'
+                 b'### Acceptance\r\nA-ONE: accepted\r\n'
+                 b'### Verification scenarios\r\nV-ONE: observe output\r\n')
         self.stage_bytes = stage
         self.write_bytes(self.vault / self.stage_rel, stage)
         expected_body = stage.replace(
@@ -844,7 +1144,9 @@ class EvidenceValidatorTests(unittest.TestCase):
                         (prep_rel, digest, self.code_commit, self.code_commit))
         self.write_text(self.vault / 'goal/root.md',
                         '**Planning mode:** upfront-v1\n**Plan generation:** 1\n'
-                        '**Active replan:** none\n**Tree review:** [[goal/reports/tree-review.md]]\n')
+                        '**Active replan:** none\n**Tree review:** [[goal/reports/tree-review.md]]\n\n'
+                        '## Progress Report\n\n| # | Plan | Status |\n'
+                        '|---|---|---|\n| 1 | [[goal/plans/s01.md]] | READY |\n')
         self.write_text(self.vault / 'goal/reports/tree-review.md',
                         '**Outcome:** PASS\n**Plan generation:** 1\n')
         self.write_text(self.vault / 'goal/reports/confirmation.md',
@@ -925,7 +1227,8 @@ class EvidenceValidatorTests(unittest.TestCase):
                     'tree_review': 'goal/reports/tree-review.md',
                     'confirmation': 'goal/reports/confirmation.md',
                     'supermeta': 'goal/reports/supermeta.md'},
-                'dispatch_logs': [{'role': 'PLAN_REFINER', 'path': str(self.refiner_log)}],
+                'dispatch_logs': [{'role': 'PLAN_REFINER', 'recipe': 'native',
+                                   'path': str(self.refiner_log)}],
                 'traces': {'normal': str(self.trace)},
             },
             'claimed_results': {pt: 'PASS' for pt in PT_IDS},
@@ -1029,6 +1332,306 @@ class EvidenceValidatorTests(unittest.TestCase):
         manifest['expected']['stages'][0]['prepared_vault_commit'] = commit
         manifest['expected']['stages'][0]['delivery_vault_commit'] = commit
         return manifest
+
+    def commit_stage_bytes(self, stage_bytes, message='replace stage contract'):
+        self.write_bytes(self.vault / self.stage_rel, stage_bytes)
+        digest = hashlib.sha256(prepared_body(stage_bytes)).hexdigest()
+        for relpath in ('goal/reports/prep-s01.md', 'goal/reports/delivery-s01.md'):
+            path = self.vault / relpath
+            value = re.sub(r'(\*\*Prepared plan SHA-256:\*\* )[0-9a-f]+',
+                           r'\g<1>' + digest, path.read_text(encoding='utf-8'))
+            self.write_text(path, value)
+        return self.commit(self.vault, message)
+
+    def canonical_stage_bytes(self, depends='none'):
+        return (b'# Stage one\r\n**Stage ID:** S01\r\n'
+                b'**Stage revision:** 1\r\n**Stage kind:** implementation\r\n'
+                + ('**Depends on:** %s\r\n' % depends).encode('ascii') +
+                b'**Preparation:** [[goal/reports/prep-s01.md]]\r\n'
+                b'### Consumes\r\nnone\r\n### Produces\r\n- C-ONE@1: output\r\n'
+                b'### Acceptance\r\nA-ONE: accepted\r\n'
+                b'### Verification scenarios\r\nV-ONE: observe output\r\n')
+
+    def trace_records(self):
+        return [json.loads(line) for line in self.trace.read_text().splitlines()]
+
+    def write_trace_records(self, records):
+        self.trace.write_text(''.join(json.dumps(item) + '\n' for item in records),
+                              encoding='utf-8')
+
+    def test_canonical_section_stage_contract_is_accepted(self):
+        commit = self.commit_stage_bytes(self.canonical_stage_bytes())
+        manifest = self.manifest()
+        stage = manifest['expected']['stages'][0]
+        stage['prepared_vault_commit'] = commit
+        stage['delivery_vault_commit'] = commit
+        report = validate_manifest(manifest, self.base)
+        self.assertFalse(any(item['status'] == 'FAIL'
+                             for item in report['requirements']['PT-02']['evidence']))
+
+    def test_missing_canonical_contract_section_fails_pt02(self):
+        stage_bytes = self.canonical_stage_bytes().replace(
+            b'### Verification scenarios\r\nV-ONE: observe output\r\n', b'')
+        commit = self.commit_stage_bytes(stage_bytes)
+        manifest = self.manifest()
+        manifest['expected']['stages'][0]['prepared_vault_commit'] = commit
+        self.assertEqual(self.verdict(manifest, 'PT-02'), 'FAIL')
+
+    def test_missing_stage_kind_fails_pt02(self):
+        stage_bytes = self.canonical_stage_bytes().replace(
+            b'**Stage kind:** implementation\r\n', b'')
+        commit = self.commit_stage_bytes(stage_bytes)
+        manifest = self.manifest()
+        manifest['expected']['stages'][0]['prepared_vault_commit'] = commit
+        self.assertEqual(self.verdict(manifest, 'PT-02'), 'FAIL')
+
+    def test_actual_unknown_dependency_fails_graph(self):
+        commit = self.commit_stage_bytes(self.canonical_stage_bytes('S999'))
+        manifest = self.manifest()
+        stage = manifest['expected']['stages'][0]
+        stage['prepared_vault_commit'] = commit
+        stage['delivery_vault_commit'] = commit
+        self.assertEqual(self.verdict(manifest, 'PT-01'), 'FAIL')
+        self.assertEqual(self.verdict(manifest, 'PT-04'), 'FAIL')
+
+    def test_missing_root_active_plan_link_is_incomplete(self):
+        root = self.vault / 'goal/root.md'
+        self.write_text(root, re.sub(r'^\| 1 \|.*\n', '',
+                                     root.read_text(encoding='utf-8'),
+                                     flags=re.MULTILINE))
+        commit = self.commit(self.vault, 'remove active Plan row')
+        manifest = self.manifest()
+        manifest['evidence']['initial_publication']['commit'] = commit
+        report = validate_manifest(manifest, self.base)
+        evidence = report['requirements']['PT-01']['evidence']
+        self.assertTrue(any(item['status'] == 'INCOMPLETE' and
+                            'active Plan links' in item['message'] for item in evidence))
+
+    def test_execution_before_refinement_fails(self):
+        records = self.trace_records()
+        records[1], records[2] = records[2], records[1]
+        records[1]['sequence'], records[2]['sequence'] = 1, 2
+        self.write_trace_records(records)
+        report = validate_manifest(self.manifest(), self.base)
+        for pt in ('PT-03', 'PT-04'):
+            self.assertTrue(any(item['status'] == 'FAIL' and
+                                'before refinement' in item['message']
+                                for item in report['requirements'][pt]['evidence']))
+
+    def test_single_uninterrupted_batch_is_incomplete(self):
+        records = [
+            {'type': 'trace-header', 'run_id': 'batch-1', 'scenario': 'batch_resume',
+             'root': 'goal/root.md', 'initial_publication_commit': self.initial_commit},
+            {'type': 'dispatch', 'run_id': 'batch-1', 'sequence': 1,
+             'operation': 'replan', 'role': 'REPLANNER', 'decision_id': 'D1',
+             'attempt': 1, 'outcome': 'published',
+             'vault_commit_before': self.initial_commit},
+            {'type': 'trace-trailer', 'run_id': 'batch-1', 'dispatch_count': 1,
+             'final_vault_commit': self.final_vault_commit, 'outcome': 'complete'},
+        ]
+        batch = self.base / 'batch.jsonl'
+        batch.write_text(''.join(json.dumps(item) + '\n' for item in records), encoding='utf-8')
+        manifest = self.manifest()
+        manifest['evidence']['traces']['batch_resume'] = str(batch)
+        report = validate_manifest(manifest, self.base)
+        self.assertTrue(any(item['status'] == 'INCOMPLETE' and 'interruption' in item['message']
+                            for item in report['requirements']['PT-07']['evidence']))
+
+    def test_missing_required_planning_role_is_incomplete(self):
+        report = validate_manifest(self.manifest(), self.base)
+        self.assertTrue(any(item['status'] == 'INCOMPLETE' and 'REPLANNER' in item['message']
+                            for item in report['requirements']['PT-08']['evidence']))
+
+    def test_missing_native_or_bridged_recipe_is_incomplete(self):
+        replanner_log = self.base / 'replanner.log'
+        self.write_text(
+            replanner_log,
+            'role-bridge: start=20260916T120000Z harness=codex model=gpt-5.6-terra '
+            'effort=medium tools=planner role=replanner cwd=%s\n'
+            'role-bridge: end=20260916T120002Z exit=0 secs=2 result_bytes=42\n' % self.code)
+        manifest = self.manifest()
+        manifest['expected']['role_pins']['REPLANNER'] = {
+            'harness': 'codex', 'model': 'gpt-5.6-terra', 'effort': 'medium'}
+        manifest['evidence']['dispatch_logs'].append(
+            {'role': 'REPLANNER', 'path': str(replanner_log)})
+        report = validate_manifest(manifest, self.base)
+        self.assertTrue(any(item['status'] == 'INCOMPLETE' and 'recipe' in item['message']
+                            for item in report['requirements']['PT-08']['evidence']))
+
+    def two_stage_manifest(self, consumer_first=False):
+        self.write_bytes(self.vault / self.stage_rel, self.stage_bytes)
+        stage_one_delivery = (self.vault / 'goal/reports/delivery-s01.md').read_text(
+            encoding='utf-8')
+        (self.vault / 'goal/reports/delivery-s01.md').unlink()
+        stage_two_rel = 'goal/plans/s02.md'
+        stage_two = (b'# Stage two\n**Stage ID:** S02\n**Stage revision:** 1\n'
+                     b'**Stage kind:** implementation\n**Depends on:** S01\n'
+                     b'**Preparation:** [[goal/reports/prep-s02.md]]\n'
+                     b'### Consumes\n- C-ONE@1 from S01: output\n'
+                     b'### Produces\n- C-TWO@1: result\n'
+                     b'### Acceptance\nA-TWO: accepted\n'
+                     b'### Verification scenarios\nV-TWO: observe result\n')
+        self.write_bytes(self.vault / stage_two_rel, stage_two)
+        digest_two = hashlib.sha256(prepared_body(stage_two)).hexdigest()
+        self.write_text(self.vault / 'goal/reports/prep-s02.md',
+                        '**Outcome:** PREPARED\n**Root plan:** goal/root.md\n'
+                        '**Root generation:** 1\n**Stage ID:** S02\n'
+                        '**Stage revision:** 1\n**Prepared plan SHA-256:** %s\n'
+                        '**Code commit:** %s\n' % (digest_two, self.code_commit))
+        root = self.vault / 'goal/root.md'
+        self.write_text(root, root.read_text(encoding='utf-8') +
+                        '| 2 | [[goal/plans/s02.md]] | READY |\n')
+        prepared = self.commit(self.vault, 'publish canonical two-stage graph')
+        self.write_text(self.vault / 'goal/reports/delivery-s01.md', stage_one_delivery)
+        provider_delivered = self.commit(self.vault, 'deliver provider')
+        self.write_text(self.vault / 'goal/reports/delivery-s02.md',
+                        '**Stage ID:** S02\n**Stage revision:** 1\n'
+                        '**Root generation:** 1\n'
+                        '**Preparation:** goal/reports/prep-s02.md\n'
+                        '**Prepared plan SHA-256:** %s\n**Code commit:** %s\n'
+                        '**Integration commit:** %s\n**Delivered:** true\n'
+                        '**Consumable:** true\n' %
+                        (digest_two, self.code_commit, self.code_commit))
+        all_delivered = self.commit(self.vault, 'deliver consumer')
+        manifest = self.manifest()
+        manifest['evidence']['initial_publication']['commit'] = prepared
+        manifest['evidence']['initial_publication']['artifacts'].append(stage_two_rel)
+        stage_one = manifest['expected']['stages'][0]
+        stage_one['prepared_vault_commit'] = prepared
+        stage_one['delivery_vault_commit'] = provider_delivered
+        stage_two_manifest = {
+            'id': 'S02', 'revision': 1, 'path': stage_two_rel,
+            'depends_on': ['S01'], 'preparation': 'goal/reports/prep-s02.md',
+            'prepared_vault_commit': prepared,
+            'delivery': 'goal/reports/delivery-s02.md',
+            'delivery_vault_commit': all_delivered,
+            'code_commit': self.code_commit, 'integration_commit': self.code_commit,
+        }
+        manifest['expected']['stages'].append(stage_two_manifest)
+        ordered = [
+            ('refine', 'PLAN_REFINER', 'S01', prepared),
+            ('run', 'EXECUTOR', 'S01', prepared),
+            ('refine', 'PLAN_REFINER', 'S02', provider_delivered),
+            ('run', 'EXECUTOR', 'S02', provider_delivered),
+        ]
+        if consumer_first:
+            ordered = [ordered[2], ordered[3], ordered[0], ordered[1]]
+            ordered[0] = (ordered[0][0], ordered[0][1], ordered[0][2], prepared)
+            ordered[1] = (ordered[1][0], ordered[1][1], ordered[1][2], prepared)
+        records = [{'type': 'trace-header', 'run_id': 'normal-two', 'scenario': 'normal',
+                    'root': 'goal/root.md', 'initial_publication_commit': prepared}]
+        for sequence, (operation, role, stage_id, before) in enumerate(ordered, 1):
+            item = {'type': 'dispatch', 'run_id': 'normal-two', 'sequence': sequence,
+                    'operation': operation, 'role': role, 'stage_id': stage_id,
+                    'vault_commit_before': before}
+            if role == 'PLAN_REFINER':
+                item['log'] = str(self.refiner_log)
+            records.append(item)
+        records.append({'type': 'trace-trailer', 'run_id': 'normal-two',
+                        'dispatch_count': 4, 'final_vault_commit': all_delivered,
+                        'outcome': 'complete'})
+        self.write_trace_records(records)
+        return manifest
+
+    def test_canonical_two_stage_provider_order_has_no_ordering_failure(self):
+        report = validate_manifest(self.two_stage_manifest(), self.base)
+        for pt in ('PT-04', 'PT-11'):
+            self.assertFalse(any(item['status'] == 'FAIL' and
+                                 ('before provider' in item['message'] or
+                                  'delivery is absent' in item['message'])
+                                 for item in report['requirements'][pt]['evidence']))
+
+    def test_consumer_before_provider_fails_order_and_snapshot(self):
+        report = validate_manifest(self.two_stage_manifest(consumer_first=True), self.base)
+        evidence = report['requirements']['PT-04']['evidence']
+        self.assertTrue(any(item['status'] == 'FAIL' and
+                            ('before provider' in item['message'] or
+                             'delivery is absent' in item['message']) for item in evidence))
+
+    def batch_resume_manifest(self, second_decision='D1'):
+        receipt_rel = 'goal/reports/interruption-D1.md'
+        self.write_text(self.vault / receipt_rel,
+                        '**Decision ID:** D1\n**Outcome:** interrupted\n')
+        final_commit = self.commit(self.vault, 'record interrupted batch')
+        records = [
+            {'type': 'trace-header', 'run_id': 'batch-2', 'scenario': 'batch_resume',
+             'root': 'goal/root.md', 'initial_publication_commit': self.initial_commit},
+            {'type': 'dispatch', 'run_id': 'batch-2', 'sequence': 1,
+             'operation': 'replan', 'role': 'REPLANNER', 'decision_id': 'D1',
+             'attempt': 1, 'outcome': 'interrupted',
+             'interruption_receipt': receipt_rel,
+             'vault_commit_before': self.initial_commit},
+            {'type': 'dispatch', 'run_id': 'batch-2', 'sequence': 2,
+             'operation': 'replan', 'role': 'REPLANNER', 'decision_id': second_decision,
+             'attempt': 2, 'outcome': 'published',
+             'vault_commit_before': self.initial_commit},
+            {'type': 'trace-trailer', 'run_id': 'batch-2', 'dispatch_count': 2,
+             'final_vault_commit': final_commit, 'outcome': 'complete'},
+        ]
+        batch = self.base / 'batch-resume.jsonl'
+        batch.write_text(''.join(json.dumps(item) + '\n' for item in records), encoding='utf-8')
+        manifest = self.manifest()
+        manifest['evidence']['traces']['batch_resume'] = str(batch)
+        return manifest
+
+    def test_same_decision_interruption_and_resume_witness_is_coherent(self):
+        report = validate_manifest(self.batch_resume_manifest(), self.base)
+        self.assertTrue(any(item['status'] == 'PASS' and
+                            'interruption receipt matches' in item['message']
+                            for item in report['requirements']['PT-07']['evidence']))
+
+    def test_mismatched_batch_decision_identity_fails(self):
+        self.assertEqual(self.verdict(self.batch_resume_manifest('D2'), 'PT-07'), 'FAIL')
+
+    def test_missing_semantic_assessments_are_explicitly_incomplete(self):
+        report = validate_manifest(self.manifest(), self.base)
+        self.assertTrue(any('bounded-detail/no-replan assessment is absent' in item['message']
+                            for item in report['requirements']['PT-05']['evidence']))
+        self.assertTrue(any('semantic impact assessment is absent' in item['message']
+                            for item in report['requirements']['PT-06']['evidence']))
+
+    def test_invalid_dispatch_recipe_is_fail(self):
+        manifest = self.manifest()
+        manifest['evidence']['dispatch_logs'][0]['recipe'] = 'claimed'
+        self.assertEqual(self.verdict(manifest, 'PT-08'), 'FAIL')
+
+    def test_contradictory_bounded_detail_assessment_fails(self):
+        review_rel = 'goal/reports/bounded-detail-review.md'
+        self.write_text(self.vault / review_rel,
+                        '**Outcome:** FAIL\n**Scenario:** bounded-detail\n'
+                        '**Replan dispatches:** 0\n')
+        commit = self.commit(self.vault, 'contradict bounded detail assessment')
+        manifest = self.manifest()
+        initial = manifest['evidence']['initial_publication']
+        initial['commit'] = commit
+        initial['bounded_detail_review'] = review_rel
+        self.assertEqual(self.verdict(manifest, 'PT-05'), 'FAIL')
+
+    def test_contradictory_impact_assessment_fails(self):
+        record_rel = 'goal/findings/D1.md'
+        report_rel = 'goal/reports/replan-D1.md'
+        impact_rel = 'goal/reports/impact-D1.md'
+        self.write_text(self.vault / record_rel,
+                        '**Decision ID:** D1\n**Resolution:** published\n')
+        self.write_text(self.vault / report_rel,
+                        '**Decision ID:** D1\n**Revised stages:** S01\n'
+                        '**Retained stages:**\n')
+        self.write_text(self.vault / impact_rel,
+                        '**Outcome:** FAIL\n**Decision ID:** D1\n'
+                        '**Revised stages:** S01\n**Retained stages:**\n')
+        root = self.vault / 'goal/root.md'
+        self.write_text(root, root.read_text(encoding='utf-8').replace(
+            '**Plan generation:** 1', '**Plan generation:** 2'))
+        publication = self.commit(self.vault, 'publish contradictory impact assessment')
+        manifest = self.manifest()
+        manifest['evidence']['replan'] = {
+            'decision_id': 'D1', 'record': record_rel, 'report': report_rel,
+            'impact_review': impact_rel, 'root': 'goal/root.md',
+            'publication_commit': publication, 'published_generation': 2,
+            'revised_stages': ['S01'], 'retained_stages': [],
+            'artifacts': [self.stage_rel],
+        }
+        self.assertEqual(self.verdict(manifest, 'PT-06'), 'FAIL')
 
     def test_replan_required_preparation_outcome_fails_pt03(self):
         manifest = self.preparation_manifest(

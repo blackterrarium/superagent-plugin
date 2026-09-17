@@ -109,7 +109,7 @@
   },
   {
     "path": "claude/scripts/plan-tree-e2e.py",
-    "sha256": "214571bf6cc273f7d7dc0aea1f20f42cb95cd76b841643cf49345f0cd4ba4dc2"
+    "sha256": "bda82ef7d9eb8e4e2b09d01dab43a7fc186b5fbd16194a46b61de54013d5caff"
   },
   {
     "path": "claude/scripts/plan-tree-regression.py",
