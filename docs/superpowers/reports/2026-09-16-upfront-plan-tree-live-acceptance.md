@@ -8,6 +8,18 @@ real Codex CLI dispatches. Bounded stage preparation used `gpt-5.6-terra` at med
 contract-break batch used the distinct Claude `opus` replanner at high effort. Cursor and Pi package
 copies were verified offline; no live claim is made for their model transports.
 
+| Harness | Coverage in this acceptance | Model selection exercised | Scope of claim |
+|---|---|---|---|
+| Codex | Initial tree authorship, six normal stage refinements, five stage executions, and bounded-detail refinement | `PLAN_REFINER=codex:gpt-5.6-terra` / `medium` | Live CLI and lifecycle coverage |
+| Claude | Contract-break detection and the successful affected-stage replanning batch | `REPLANNER=claude:opus` / `high` | Live bridged replanning coverage |
+| Cursor | Generated package, configuration resolution, role routing, and bridge contract checks | Shipped `PLAN_REFINER` and `REPLANNER` selections are `inherit` / `inherit` | Offline compatibility coverage; live model transport not exercised |
+| Pi | Generated package, configuration resolution, role routing, and bridge contract checks | Shipped `PLAN_REFINER=pi:openai-codex/gpt-5.6-terra` / `medium`; `REPLANNER=pi:openai-codex/gpt-5.6-sol` / `high` | Offline compatibility coverage; live model transport not exercised |
+
+The Claude build defaults those roles to `claude:sonnet` / `medium` and
+`claude:claude-opus-4-8` / `high`; the Codex build defaults them to
+`codex:gpt-5.6-terra` / `medium` and `codex:gpt-5.6-sol` / `high`. The live Claude replanner used
+the accepted `opus` tier alias rather than the full default model ID.
+
 | Path | Result |
 |---|---|
 | Initial publication | Three complete generation-1 trees published atomically. |

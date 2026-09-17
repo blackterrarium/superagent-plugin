@@ -263,9 +263,16 @@ Upfront planning activates two independently configurable roles in `.superenv`:
 Both have independent `SUPER_MODEL_<ROLE>` and `SUPER_EFFORT_<ROLE>` keys. `PLANNER`
 remains the initial plan author; `FIX_PLANNER` remains the SDD code-fix role. A refiner
 must hand off contract-breaking changes to replanning instead of expanding its own remit.
-The Codex defaults use `gpt-5.6-terra` / `medium` for refinement and `gpt-5.6-sol` /
-`high` for replanning; Pi uses those models through `openai-codex`. Cursor keeps both
-model and effort settings at `inherit`, so distinct models must be configured explicitly.
+
+| Build | `PLANNER` model / effort | `PLAN_REFINER` model / effort | `REPLANNER` model / effort |
+|---|---|---|---|
+| Claude | `claude:claude-opus-4-8` / `high` | `claude:sonnet` / `medium` | `claude:claude-opus-4-8` / `high` |
+| Codex | `codex:gpt-5.6-sol` / `high` | `codex:gpt-5.6-terra` / `medium` | `codex:gpt-5.6-sol` / `high` |
+| Cursor | `inherit` / `inherit` | `inherit` / `inherit` | `inherit` / `inherit` |
+| Pi | `pi:openai-codex/gpt-5.6-sol` / `high` | `pi:openai-codex/gpt-5.6-terra` / `medium` | `pi:openai-codex/gpt-5.6-sol` / `high` |
+
+These are independent selections. Changing the refiner does not change the replanner. Cursor has no
+effort control, so a distinct refiner or replanner model must be selected explicitly when desired.
 `superagent:init` generates `super-plan-refiner` and `super-replanner` definitions for Claude and
 Cursor when needed; Codex passes native pins on spawn and Pi uses planner-style bridge processes.
 The scheduler remains opt-in. Shipped `SUPER_PLANNING_MODE` is `upfront` for new goals.
@@ -298,6 +305,10 @@ bounded-refinement, contract-break, interruption-recovery, legacy, and external-
 result activates the upfront default. The evidence validator and retained manifest are documented in
 [`scripts/README.md`](scripts/README.md#upfront-plan-tree-evidence-validator) and the
 [live acceptance report](docs/superpowers/reports/2026-09-16-upfront-plan-tree-live-acceptance.md).
+The live run used Codex for initial planning, refinement, and all five implementation stages, and
+Claude for the contract-break replanning batch. Cursor and Pi were covered by generated-package,
+configuration, routing, and bridge tests; this acceptance run did not exercise their live model
+transports.
 
 The full picture of how these roles are dispatched, and how that differs per harness, is in
 [`docs/superagent-structure.html`](docs/superagent-structure.html), the structural reference with
