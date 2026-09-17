@@ -1,8 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-09-17
 
-- Refresh shipped model defaults: Anthropic roles previously pinned to Opus 4.8 now use
+- **Publish a complete plan tree before execution.** `supergoal` now authors and reviews every
+  stage contract up front, records dependencies and execution order, and preserves resumable draft
+  state. The legacy incremental planning mode remains available for existing goals.
+- **Refine bounded implementation details only when a stage becomes eligible.** The new
+  `superstage` and `superrefine` skills let `PLAN_REFINER` inspect current code and predecessor
+  evidence without changing the stage's scope, acceptance criteria, dependencies, or shared
+  contracts. Preparation receipts make that review durable and replayable.
+- **Replan the affected dependency closure after a structural break.** The new `superreplan` skill
+  assigns structural changes to an independent `REPLANNER`, publishes one reviewed replacement
+  generation, and retains unaffected stages. The supervisor pauses execution while a replan batch
+  is incomplete and resumes only from a validated generation.
+- **Add the autonomous coding-loop Stage 3 runtime.** `supercode`, `supercode-external`, and
+  `superdiagnose` now supervise evaluation, evidence-grounded diagnosis, repair rounds, and final
+  completion across restartable external ticks. Project loops use strict phase and operation
+  identities, reconcile committed evidence after interruption, and share monitor, stop, and
+  force-recovery controls with goal loops. Deterministic driver and copied-package suites pass;
+  independent live scheduler acceptance on Claude, Codex, and Pi remains pending.
+- **Make PRD coverage decisions explicit.** `supercoverage` suggestions are resolved during PRD
+  authoring and preserved through implementation and evaluation, with package and live-acceptance
+  checks covering the supported harnesses.
+- **Refresh shipped model defaults.** Anthropic roles previously pinned to Opus 4.8 now use
   `claude-opus-5`; the Claude `PLANNER` uses `claude-fable-5-1`; and the Codex and Pi planners use
   `gpt-6-astra` (through Pi's `openai-codex` provider). Existing repository `.superenv` files remain
   explicit operator configuration and are not overwritten automatically.

@@ -526,9 +526,9 @@ inner `superagent` loop to build it, and evaluates the result (design:
 `docs/superpowers/specs/2026-09-05-coding-loop-design.md`; Stage 2:
 `docs/superpowers/specs/2026-09-06-coding-loop-stage2-design.md`). One round is
 `superagent:supermeta` → `superagent:superagent-external` → `superagent:supereval`; diagnosing a
-failed round and closing the loop automatically are Stage 3. Stage 3 is implemented **under
-acceptance** at version 0.8.1; release 0.9.0 requires separate live acceptance on Claude, Codex and
-Pi. Cursor receives generated compatibility checks.
+failed round and closing the loop automatically are Stage 3. Version 0.9.0 ships the Stage 3
+runtime and deterministic coverage. Independent live scheduler acceptance on Claude, Codex, and
+Pi remains pending; Cursor receives generated compatibility checks.
 
 The generated Codex, Cursor and Pi packages include the project state/evidence helpers, diagnosis
 template, validator and evaluation runner dependencies. Scheduler scripts remain source-repository
