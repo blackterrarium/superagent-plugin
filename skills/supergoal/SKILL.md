@@ -83,10 +83,10 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 Resolve `SUPER_PLANNING_MODE` with the normal configuration precedence. During this rollout its shipped
 value is `incremental`; only `upfront` and `incremental` are valid. A trailing
-`--planning-mode upfront|incremental` overrides it for this new goal only. Reject any other explicit or
-resolved value with `supergoal: planning mode must be upfront or incremental` before writing a scratch
-or vault artifact. Existing roots are never converted: a root with no marker remains legacy incremental
-under superstage S1.
+`--planning-mode <value>` overrides it for this new goal only when `<value>` is one of those two values.
+Reject any other explicit or resolved value with `supergoal: planning mode must be upfront or incremental`
+before writing a scratch or vault artifact. Existing roots are never converted: a root with no marker
+remains legacy incremental under superstage S1.
 
 `--resume-draft <draft-index.md> [--autoconfirm]` accepts exactly one readable scratch index, no goal
 prose, and no mode or slug override. The optional `--autoconfirm` is freshly evaluated against the
@@ -114,7 +114,9 @@ that child to launch a planner.
 `<GOAL>` is the full argument string. First recognize the exact recovery form, allowing only its trailing
 `--autoconfirm`, from **Planning mode and resumable scratch interface**. Otherwise **parse optional flags only off the end of
 it first** — repeatedly strip a trailing `--autoconfirm`, `--slug <slug>`, or
-`--planning-mode <upfront|incremental>` and retain their existing meanings. What remains, trimmed, is
+`--planning-mode <value>`. Validate a stripped mode value immediately: only `upfront` and `incremental`
+are accepted, and any other value returns exactly `supergoal: planning mode must be upfront or
+incremental` before scratch or vault writes. What remains, trimmed, is
 the **goal source**; prose containing those words away from the trailing flag form is unchanged.
 `--slug` and `--autoconfirm` retain their existing validation and two-factor behavior.
 
@@ -160,6 +162,8 @@ Author the root plan yourself per superauthor's A2 authoring standard, drafting 
 outside the goal folder. In `incremental` mode, the root plan MUST:
 
 - be a **seed/master plan**, routed to `master-plans/<STAMP>-<slug>.md`;
+- carry `**Planning mode:** incremental` immediately below the title, before the progress table. This
+  persists the selected new-goal mode; unmarked roots remain legacy incremental and are not rewritten;
 - contain a **progress-report table** using the `supertraverse` C1 schema and C2 status vocabulary
   (do not redefine the columns or statuses here):
 
@@ -169,8 +173,8 @@ outside the goal folder. In `incremental` mode, the root plan MUST:
   decomposing `<GOAL>` into its top-level steps, with **every `Plan` cell blank** and **every `Status`
   `incomplete`**. A blank `Plan` on a not-completed step is exactly the *available task to plan* signal
   `superplan`'s descent keys on — so this is what makes the root traversable. **Place this table at the
-  START of the plan** — the first major section of the plan body, immediately after the title (the root
-  plan has no parent-seed reference) and before any scope/context/analysis sections. The table is the
+  START of the plan** — the first major section of the plan body, immediately after the planning-mode
+  line (the root plan has no parent-seed reference) and before any scope/context/analysis sections. The table is the
   navigational index `superplan`'s descent reads first; do **not** bury it below the analysis that
   justifies the decomposition;
 - carry **no parent-seed reference** (it is the root);
@@ -201,9 +205,10 @@ outside the goal folder. In `incremental` mode, the root plan MUST:
      when there are none).
 
 In `upfront` mode, author the root, every required sub-master, every active stage, directives, and one
-whole-tree review in the same scratch set. The root begins with superstage S1's exact fields
-(`**Planning mode:** upfront-v1`, `**Plan generation:** 1`, `**Active replan:** none`, and
-`**Tree review:** [[reports/<review-file>]]`) before its first progress table. Every active root and
+whole-tree review in the same scratch set. Immediately below the title and before its first progress
+table, the root carries superstage S1's exact fields (`**Planning mode:** upfront-v1`,
+`**Plan generation:** 1`, `**Active replan:** none`, and `**Tree review:** [[reports/<review-file>]]`).
+Every active root and
 sub-master row has an intended-vault Plan link; linked sub-masters carry progress tables and every
 terminal active row links to one stage leaf. Do not leave an active Plan cell blank. Each stage has a
 fresh stable ID and all S2 content: scope/approach, acceptance ownership, contracts, scenarios, bounded
@@ -364,6 +369,8 @@ the merged PR URL (external vault: the vault commit SHA):
 **Planning mode:** upfront-v1 | incremental
 **Stages:** <number of active leaves; 0 for incremental root-only output>
 **Tree review:** <absolute report path | none>
+**Other files created/modified:**
+- <absolute artifact path> — <what changed>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
 

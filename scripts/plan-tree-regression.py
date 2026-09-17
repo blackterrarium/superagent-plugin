@@ -18,6 +18,14 @@ CASES = (
      'The root has no Planning mode marker. The current environment requests upfront mode. '
      'Resolve the mode without rewriting the root.',
      {'mode': 'incremental'}),
+    ('invalid_trailing_planning_mode',
+     'A new supergoal invocation ends with `--planning-mode speculative`. It has no prior scratch '
+     'or vault artifacts. Classify parsing and side effects.',
+     {'outcome': 'BLOCKED', 'publication': 'none', 'code_execution': False}),
+    ('incremental_mode_persisted',
+     'A new supergoal resolves planning mode to incremental and completes root authoring. Classify '
+     'the persisted root marker; this is not an unmarked legacy root.',
+     {'mode': 'incremental', 'root_mode_marker': 'incremental'}),
     ('bounded_unknown',
      'An upfront implementation stage fixes scope, architecture, acceptance, contracts, and '
      'verification scenarios. Internal filenames depend on predecessor evidence; the stage '
@@ -119,7 +127,8 @@ def render_prompt(skills, cases):
         'unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, continue, or done; operation is refine, '
         'replan, or none; role is PLAN_REFINER, REPLANNER, or none; publication is none, scratch, '
         'or vault; draft_action describes scratch artifact handling only: resume, revise, or none; '
-        'confirmation remains separately governed by the current gate; upfront_valid, executable, '
+        'confirmation remains separately governed by the current gate; root_mode_marker is '
+        'incremental, upfront-v1, or absent; upfront_valid, executable, '
         'done, code_execution, duplicate_stage_ids, duplicate_goal_folder, and ledger_appended are '
         'JSON booleans; stages is a JSON integer.',
     ]
@@ -239,8 +248,8 @@ class ValidatorTests(unittest.TestCase):
                       'or done; operation is refine, replan, or none; role is PLAN_REFINER, '
                       'REPLANNER, or none; publication is none, scratch, or vault; draft_action '
                       'describes scratch artifact handling only: resume, revise, or none; '
-                      'confirmation remains separately governed by the current gate; upfront_valid, '
-                      'executable, done, '
+                      'confirmation remains separately governed by the current gate; root_mode_marker '
+                      'is incremental, upfront-v1, or absent; upfront_valid, executable, done, '
                       'code_execution, duplicate_stage_ids, duplicate_goal_folder, and '
                       'ledger_appended are JSON booleans; stages is a JSON integer.')
         self.assertIn(vocabulary, prompt)

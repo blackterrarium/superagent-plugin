@@ -30,3 +30,7 @@ Task 1 spec and quality review passed. Validator self-tests passed 9/9; a fresh 
 ## Live acceptance approval block
 
 The first actual upfront-authoring CLI dispatch did not start: automatic approval review timed out. The permitted retry was rejected because copied repository skills and fixture content would be sent to an external model without explicit approval for that disclosure. No alternate CLI or model will bypass that rejection. Offline implementation and verification continue; real lifecycle acceptance remains INCOMPLETE and the shipped mode remains incremental pending acceptance. Earlier generic transport preflights transmitted no lifecycle content and do not establish PT acceptance.
+
+## Upfront authoring and draft recovery
+
+Task 2 spec/quality review passed after correcting invalid-mode handling and explicit incremental markers. Fresh full scenario suite: [18/18 PASS](evidence/2026-09-16-upfront-plan-tree/task2-final.json). Validator self-tests: 9/9. PRD lint and copied coding-loop package suites: zero failures. Generated variants updated. These remain offline/interpretation results; external authoring acceptance is blocked as recorded above.
