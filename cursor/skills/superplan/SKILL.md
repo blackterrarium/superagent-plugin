@@ -66,7 +66,12 @@ superplan makes — never source code, never execution output.
 Gates, in order:
 
 1. If `<PLAN.md>` is not provided → respond with exactly `I need to know the plan file` and **exit**.
-2. If `<PLAN.md>` is provided but `<TOPIC>` is not → **invoke the `superagent:supertraverse` skill** (Skill
+2. Read `<PLAN.md>`'s planning-mode marker before descent. A root explicitly marked
+   `upfront-v1` is governed by superstage S1/S2: invoke `superagent:superstage` and validate its active
+   graph. A missing active Plan link, duplicate/unresolved stage path, or other structural fault returns
+   `BLOCKED`; do not author a replacement through incremental descent. Only an adopted structural repair
+   may alter that tree. Incremental roots and roots without a marker keep the existing flow unchanged.
+3. If `<PLAN.md>` is provided but `<TOPIC>` is not → **invoke the `superagent:supertraverse` skill** (Skill
    tool) and run its **DESCENT** from `<PLAN.md>`. Descent walks the plan tree down the progress-report
    tables' `Plan` links (multi-layer, not just `<PLAN.md>`'s own rows), skipping completed steps and
    already-planned leaves, and returns:

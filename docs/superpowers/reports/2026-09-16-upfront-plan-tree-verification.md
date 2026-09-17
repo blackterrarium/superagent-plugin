@@ -26,3 +26,7 @@ integration evidence establish live lifecycle acceptance. No overall PASS is cla
 ## Shared contract verification
 
 Task 1 spec and quality review passed. Validator self-tests passed 9/9; a fresh interpreter passed all nine scenarios, including the temporary rollout gate. The original final probe chose correct behavior but used an ambiguous mode label and failed strict validation; both [original](evidence/2026-09-16-upfront-plan-tree/task1-final.json) and [fresh corrected-vocabulary results](evidence/2026-09-16-upfront-plan-tree/task1-final-corrected.json) are retained. The prompt now supplies global output vocabulary without case-specific answers.
+
+## Live acceptance approval block
+
+The first actual upfront-authoring CLI dispatch did not start: automatic approval review timed out. The permitted retry was rejected because copied repository skills and fixture content would be sent to an external model without explicit approval for that disclosure. No alternate CLI or model will bypass that rejection. Offline implementation and verification continue; real lifecycle acceptance remains INCOMPLETE and the shipped mode remains incremental pending acceptance. Earlier generic transport preflights transmitted no lifecycle content and do not establish PT acceptance.

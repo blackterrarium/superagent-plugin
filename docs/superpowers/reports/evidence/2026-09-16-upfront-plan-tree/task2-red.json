@@ -1,0 +1,45 @@
+{
+  "unlinked_active_row": {
+    "reason": "superstage S1 requires every non-terminal declared active-scope row to have a readable Plan link, and S2 requires no blank active Plan cells; it must return BLOCKED rather than use incremental gap filling.",
+    "upfront_valid": false,
+    "outcome": "BLOCKED"
+  },
+  "multi_level_complete_tree": {
+    "reason": "superstage S1 permits candidate validation through an explicit intended-vault-to-scratch map, and S2 accepts a complete mapped graph with unique active IDs, complete contracts, compatible dependencies, no blank active Plan cells, and a passing linked review. S3 still makes Preparation: none unexecutable.",
+    "upfront_valid": true,
+    "stages": 3,
+    "executable": false
+  },
+  "draft_interrupted_before_confirmation": {
+    "reason": "The baseline supergoal contract has scratch drafting and a pre-write human confirmation gate, but it defines neither an upfront-supergoal publication workflow nor a DRAFT-INCOMPLETE/draft-index outcome; absent such a contract, no vault publication is authorized. Superauthor A1 also forbids code execution.",
+    "outcome": "BLOCKED",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "resume_identical_source": {
+    "reason": "Baseline supergoal parses only trailing --autoconfirm and --slug and defines no --resume-draft or draft-index resume protocol. It therefore authorizes neither a resume nor any publication; no duplicate goal folder or stage ID is created.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "draft_action": "none",
+    "duplicate_stage_ids": false,
+    "duplicate_goal_folder": false
+  },
+  "resume_changed_source": {
+    "reason": "Baseline supergoal has no --resume-draft workflow or source-digest comparison rule, so it cannot select revise, resume, or confirmation from this evidence. No publication or code execution is authorized.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "draft_action": "none",
+    "code_execution": false
+  },
+  "confirmation_refused": {
+    "reason": "supergoal step 7 says a declined human gate writes nothing and opens no PR; only --autoconfirm together with SUPER_GOAL_AUTOCONFIRM=true skips that gate. The draft remains in scratch, and superauthor A1 forbids code execution.",
+    "outcome": "BLOCKED",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "supermeta_draft_incomplete": {
+    "reason": "supermeta step 6 appends the iteration-ledger row only after parsing both Goal folder and Root plan from supergoal's complete report. With no complete publication evidence, it writes nothing to the ledger and returns the meta-plan to scratch; DRAFT-INCOMPLETE has no separate baseline success path.",
+    "outcome": "BLOCKED",
+    "ledger_appended": false
+  }
+}

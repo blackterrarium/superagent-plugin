@@ -204,6 +204,12 @@ not into the goal folder. **Nothing is written under the goal folder (no plan fi
 no `findings/` doc) until self-review (A4) passes** — at which point the scratch draft is written into
 the vault automatically.
 
+An upfront initial-tree caller keeps all root, sub-master, stage, directives, and tree-review drafts
+in one scratch set until its whole-tree S2/A4 review and caller-specific confirmation gate succeed.
+The scratch set is never execution authority or a partial publication: its caller records source
+identity, intended vault destinations, stable IDs, review progress, and the remaining gate in a draft
+index so it can resume without inventing a second tree.
+
 > The A2 standard applies to authoring a **plan**. Purely *structural* documents a caller may also
 > write (e.g. a `goal-directives.md` layout guide) are not plans and are exempt from the plan-shaped
 > parts of the standard. The caller states which of its outputs are plans.
@@ -248,6 +254,11 @@ plan directly (A2), so nothing has pre-checked it — run the full checklist wit
 3. **Type/term consistency** — do the types, signatures, contract IDs/revisions, and names used in later tasks match what
    earlier tasks defined? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in
    Task 7 is a bug.
+
+An initial upfront-tree caller applies this checklist across the complete candidate, then also checks
+S2 active-scope coverage, intended-vault-path-to-scratch-path resolution, cross-stage contract
+compatibility and dependency order, unique stable IDs, and the durable review's acceptance-to-stage
+map. It cannot publish a tree with an unlinked active row or replace that gap with incremental planning.
 
 If you find issues, fix them inline — no need to re-review the whole plan.
 

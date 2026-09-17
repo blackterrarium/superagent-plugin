@@ -434,6 +434,7 @@ coding-loop skills, never by the tick.
 | Key | Default | Meaning |
 |---|---|---|
 | SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. Relative: inside the checkout, vault docs merged via PR. Absolute or `~/…`: **external vault** — its own git repo outside the checkout; vault docs are committed there directly, the code repo's history never carries the plan tree. |
+| SUPER_PLANNING_MODE | `incremental` | New goals use `incremental` during the rollout. Set `upfront`, or pass `supergoal --planning-mode upfront`, to draft and review the complete stage tree before one confirmation-gated publication. Existing unmarked roots stay incremental. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory, a sibling of each goal's `master-plans/`. |
 | SUPER_HEAVY_STEP_LIMIT | `6` | Heavy skills (one dispatch each) per cron session before the context-handoff gate hands off. |
 | SUPER_LOCK_STEAL_MIN | `90` | Minutes before a stale overlap lock from a crashed tick is auto-stolen. |
@@ -504,6 +505,7 @@ The pieces:
 | SUPER_PROJECT_DIRNAME | `projects` | Where project folders live under `SUPER_GOAL_ROOT`. A project folder has no `master-plans/`, so the plan-tree skills never mistake it for a goal. |
 | SUPER_EVAL_TIMEOUT_MIN | `60` | Ceiling for any `evaluation.md` check timeout; `prd-lint.sh` FAILs a larger value. |
 | SUPER_GOAL_AUTOCONFIRM | `false` | Two-factor gate: `supergoal --autoconfirm` skips supergoal's step-7 human confirmation **only** when this is `true` (used by `supermeta`'s dispatch). Either alone does nothing; a direct `supergoal` user is unaffected. |
+| Recovery | — | `supergoal --resume-draft <draft-index> [--autoconfirm]` revalidates a saved scratch tree and repeats the current confirmation gate. `supermeta <project-dir> --resume-draft <draft-index>` preserves the original meta-plan and round, appending no ledger row until a complete labelled report is reconciled. |
 | SUPER_CODE_MAX_ITERATIONS | `5` | Reserved for Stage 3: rounds before the loop parks for a human. Nothing reads it yet. |
 
 ### Acceptance coverage ownership

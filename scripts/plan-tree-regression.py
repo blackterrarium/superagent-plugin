@@ -44,6 +44,43 @@ CASES = (
      'PREPARED receipt. Tasks 3 and 5 have not yet installed preparation and operation-routing '
      'consumers. Classify a planning or execution selection attempt in this intermediate build.',
      {'outcome': 'BLOCKED'}),
+    ('unlinked_active_row',
+     'An upfront root has an active, incomplete progress-table row whose Plan cell is blank. Its '
+     'other rows link to valid stages. No authorized disposition removes the blank row. Classify '
+     'the candidate graph and whether authoring may fill it incrementally.',
+     {'upfront_valid': False, 'outcome': 'BLOCKED'}),
+    ('multi_level_complete_tree',
+     'A scratch upfront root links to two sub-masters. Together their linked leaves have unique '
+     'stable IDs S01, S02, and S03, complete S2 contracts, compatible dependencies, and a passing '
+     'scratch tree review resolved through the intended-vault path map. Every initial leaf has '
+     'Preparation: none and its parent row says PLAN WRITTEN — needs refinement.',
+     {'upfront_valid': True, 'stages': 3, 'executable': False}),
+    ('draft_interrupted_before_confirmation',
+     'An upfront supergoal has captured a prose-source snapshot and digest, intended vault paths, '
+     'drafted root/sub-master/stage/review artifacts, stable IDs, completed review items, and '
+     'remaining confirmation work in a scratch draft index. It is interrupted before confirmation.',
+     {'outcome': 'DRAFT-INCOMPLETE', 'publication': 'scratch', 'code_execution': False}),
+    ('resume_identical_source',
+     'supergoal --resume-draft receives an interrupted scratch index whose saved source digest, '
+     'current source, intended destination, and repository assumptions all still match. The index '
+     'already names its root/sub-master/stage/review artifacts and stable IDs. Confirmation has not '
+     'been granted.',
+     {'outcome': 'DRAFT-INCOMPLETE', 'publication': 'scratch', 'draft_action': 'resume',
+      'duplicate_stage_ids': False, 'duplicate_goal_folder': False}),
+    ('resume_changed_source',
+     'supergoal --resume-draft receives an interrupted index for a file-backed goal, but the current '
+     'source file digest differs from the digest saved in that index. No revised draft has been '
+     'explicitly made.',
+     {'outcome': 'DRAFT-INCOMPLETE', 'publication': 'scratch', 'draft_action': 'revise',
+      'code_execution': False}),
+    ('confirmation_refused',
+     'An upfront draft passed S2 and A4 review, but the human declines the whole-artifact '
+     'confirmation gate. The two-factor auto-confirm condition is absent.',
+     {'outcome': 'DRAFT-INCOMPLETE', 'publication': 'scratch', 'code_execution': False}),
+    ('supermeta_draft_incomplete',
+     'supermeta receives a PLANNER result containing DRAFT-INCOMPLETE and an explicit draft-index '
+     'path. It has no complete Goal folder/Root plan publication evidence.',
+     {'outcome': 'DRAFT-INCOMPLETE', 'ledger_appended': False}),
     ('local_detail',
      'New predecessor evidence changes only file placement, helper names, and test setup. Scope, '
      'acceptance, dependency edges, shared contract behavior, and all other commitments survive.',
@@ -71,16 +108,20 @@ def render_prompt(skills, cases):
     """Build a probe prompt containing facts and field names, never answer values."""
     lines = [
         'Read the supplied canonical skill contracts at ' + str(skills.resolve()) +
-        '/{superstage,superauthor,supertraverse}/SKILL.md. Apply their rules to each independent '
+        '/{superstage,superauthor,supertraverse,supergoal,superplan,supermeta,init}/SKILL.md. '
+        'Apply their rules to each independent '
         'fixture below. This is a read-only interpretation: do not dispatch, mutate files, call '
         'Git/network services, read implementation reports, or invent absent rules.',
         'Return one JSON object keyed by scenario id. Every result must be a JSON object with a '
         'nonempty string reason citing the governing rule/evidence, plus every requested field. '
         'Use JSON booleans where a field asks for a boolean and contract spellings for strings.',
         'Global output vocabulary (not per-case answers): mode is incremental, upfront-v1, or '
-        'unsupported; outcome is BLOCKED, continue, or done; operation is refine, replan, or none; '
-        'role is PLAN_REFINER, REPLANNER, or none; upfront_valid, executable, and done are JSON '
-        'booleans.',
+        'unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, continue, or done; operation is refine, '
+        'replan, or none; role is PLAN_REFINER, REPLANNER, or none; publication is none, scratch, '
+        'or vault; draft_action describes scratch artifact handling only: resume, revise, or none; '
+        'confirmation remains separately governed by the current gate; upfront_valid, executable, '
+        'done, code_execution, duplicate_stage_ids, duplicate_goal_folder, and ledger_appended are '
+        'JSON booleans; stages is a JSON integer.',
     ]
     for name, facts, expected in cases:
         lines.extend(('', name + ': ' + facts,
@@ -194,9 +235,14 @@ class ValidatorTests(unittest.TestCase):
     def test_prompt_has_facts_and_fields_without_expected_values(self):
         prompt = render_prompt(Path('skills'), select_cases(['legacy_default', 'bounded_unknown']))
         vocabulary = ('Global output vocabulary (not per-case answers): mode is incremental, '
-                      'upfront-v1, or unsupported; outcome is BLOCKED, continue, or done; operation '
-                      'is refine, replan, or none; role is PLAN_REFINER, REPLANNER, or none; '
-                      'upfront_valid, executable, and done are JSON booleans.')
+                      'upfront-v1, or unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, continue, '
+                      'or done; operation is refine, replan, or none; role is PLAN_REFINER, '
+                      'REPLANNER, or none; publication is none, scratch, or vault; draft_action '
+                      'describes scratch artifact handling only: resume, revise, or none; '
+                      'confirmation remains separately governed by the current gate; upfront_valid, '
+                      'executable, done, '
+                      'code_execution, duplicate_stage_ids, duplicate_goal_folder, and '
+                      'ledger_appended are JSON booleans; stages is a JSON integer.')
         self.assertIn(vocabulary, prompt)
         self.assertEqual(prompt.count(vocabulary), 1)
         self.assertLess(prompt.index(vocabulary), prompt.index('legacy_default:'))
