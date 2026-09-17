@@ -190,15 +190,8 @@ parent-seed references.
   links, stage IDs/contracts, dependency cycles, unreachable work, incomplete coverage, or a bad tree
   review returns **BLOCKED**. A blank Plan cell in active upfront scope is a broken publication, never
   an incremental planning target. An active replan also blocks selection.
-- **Task 1 transition gate (current build):** after a valid upfront graph is recognized, return
-  **BLOCKED** for every upfront planning or execution selection attempt. Report the root and, when
-  selection reached one, the stage path/ID, with the reason that upfront preparation and operation
-  routing consumers are not installed until Tasks 3 and 5. Do not return `NEEDS-REFINEMENT`, a
-  planning target, or an execution leaf to the unchanged `superplan` / `superrun` consumers. Task 3
-  and Task 5 replace this gate only when receipt preparation and every caller's result routing are
-  implemented.
-- **Future selection recipe (dormant while the transition gate above exists):** after S1/S2 validate
-  the active graph and no replan barrier exists, walk active leaves in priority DFS order. Skip a
+- **Upfront selection recipe:** after S1/S2 validate the active graph and no replan barrier exists,
+  walk active leaves in priority DFS order. Skip a
   closed stage only with S3/C9 verified integration or authorized terminal-disposition evidence;
   never trust a row label or closeout alone. Require S3 delivery evidence for every prerequisite.
   An unsatisfied dependency makes that leaf ineligible, but does not stop the walk: continue to a
@@ -214,10 +207,9 @@ parent-seed references.
   Missing or contradictory evidence is **BLOCKED**. The first valid prepared eligible leaf is an
   execution target in execution mode; planning mode skips it. If no executable target exists while
   active work still has unsatisfied dependencies, return **BLOCKED** with the incomplete dependency
-  evidence, never `none`/DONE. This recipe is normative for the post-Task-5 handlers but cannot
-  authorize selection in the current build.
+  evidence, never `none`/DONE.
 
-After that gate, descent is one
+Descent is one
 pre-order DFS whose *target predicate* is selected by mode (symmetric with C7's `planning` /
 `completion` ascent modes); everything else — the DFS walk, C1 schema, C3 link inference, C4
 leaf/internal + completed-row tests, and `not-traversable` root handling — is shared.
@@ -233,9 +225,8 @@ leaf/internal + completed-row tests, and `not-traversable` root handling — is 
   planning-mode ascent; `superfinish` performs completion-mode ascent later via parent-seed
   chaining, C5/C7).
 
-In the current build, every upfront selection returns **BLOCKED**: either the specific S2/replan fault
-or the Task 1 transition gate. After Tasks 3 and 5 replace that gate, both modes may return **`none`**
-only when all active obligations are resolved, **`NEEDS-REFINEMENT`** for the first
+For upfront roots, both modes may return **`none`** only when all active obligations are resolved,
+**`NEEDS-REFINEMENT`** for the first
 dependency-eligible unprepared/stale stage, **`REPLAN-REQUIRED`** for a relevant broken assumption,
 **BLOCKED** for incomplete dependency evidence, or an eligible prepared execution target.
 Incremental traversal continues to return **BLOCKED** for invalid repair state, **`none`** when no
@@ -368,9 +359,8 @@ form; `upfront-v1` roots use one generation-scoped batch. Do not convert one for
 
 Superreplan is already the tick's one heavy skill. For a legacy repair it applies the single-leaf
 authoring clauses below directly; it does not invoke superplan, dispatch a child, or consume a second
-heavy operation. Until Task 5 installs REPLANNER routing, the current supervisor may still dispatch
-the same legacy publication through superplan/PLANNER as a transitional fallback. That fallback never
-handles an upfront batch; Task 5 removes it when the new route is live.
+heavy operation. The supervisor routes every adopted legacy repair to it under REPLANNER; an upfront
+batch uses the same REPLANNER route.
 
 ### Upfront batch request (superagent, before replanning dispatch)
 
@@ -442,8 +432,7 @@ reconciled; `outcome: BLOCKED` means contradictory/missing evidence prevents tha
 verified authoritative published generation, and `publication: none` otherwise. A relevant baseline
 change with one unique draft is `continue` / `scratch` with replay action `reassess`, never permission
 to publish stale work. `dispatch: none` applies until the request commit and root barrier are
-authoritative; afterward a valid pending record names `dispatch: superreplan`. These artifact results
-do not remove the temporary C6 upfront BLOCKED gate before Task 5 installs controller routing.
+authoritative; afterward a valid pending record names `dispatch: superreplan`.
 
 One unique complete internal publication candidate in an open, unmerged A7 docs PR is
 `outcome: continue` / `publication: none`: resume and reconcile that same PR while the committed

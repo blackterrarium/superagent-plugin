@@ -1,0 +1,114 @@
+{
+  "supervisor_native_refinement": {
+    "reason": "Superstage S3 classifies a dependency-eligible contract-valid stage with no preparation as needs refinement, whose next operation is refine under PLAN_REFINER; the controller assigns that role's configured pins.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "process-env",
+    "effort_source": "repo-superenv",
+    "target": "S02",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_bridged_refinement": {
+    "reason": "Superstage S3 requires refine under PLAN_REFINER for the first dependency-eligible unprepared upfront stage; the configured bridged Pi role is usable and both pins resolve from repo .superenv.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "S04",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_prepared_target": {
+    "reason": "Superstage S3 makes an active, unstarted leaf with a current verified preparation receipt executable; the dormant post-Task-5 traversal recipe says planning mode skips the prepared execution target.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "S02",
+    "next_state": "WAITING FOR RUN",
+    "heavy_dispatches": 0
+  },
+  "supervisor_adopted_legacy_repair": {
+    "reason": "Superstage S4 states that an adopted legacy C8 single-leaf repair is structural authoring under REPLANNER; supertraverse C8 says superreplan is the tick's one heavy skill.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "P0",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_adopted_batch_repair": {
+    "reason": "Supertraverse C8 makes one committed pending upfront batch an execution barrier and says its next heavy operation is superreplan under REPLANNER.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "process-env",
+    "target": "D-301",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_stale_hints": {
+    "reason": "Supertraverse C8 requires reconciliation from the authoritative committed tree before trusting stale loop hints; a valid pending batch then names superreplan under REPLANNER as the next heavy operation.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "D-302",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_post_leaf_refinement": {
+    "reason": "After S01's verified integration, Superstage S3 classifies the first eligible unprepared S02 as needs refinement and assigns refine under PLAN_REFINER.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "S02",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_execution_replan_required": {
+    "reason": "Superrun returns REPLAN-REQUIRED and exits without execution so the decision and REPLANNER path can adopt or reject the structural change; without adopted authority, Superstage S4 forbids guessing a replan.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "S02",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_legacy_incremental_planning": {
+    "reason": "Superstage S1 resolves a root without a Planning mode field as legacy incremental regardless of SUPER_PLANNING_MODE, so its ordinary unplanned leaf follows the existing PLANNER plan lifecycle.",
+    "selected_role": "PLANNER",
+    "operation": "plan",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "P1",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_missing_native_definition": {
+    "reason": "The eligible unprepared upfront stage selects refine under PLAN_REFINER by Superstage S3, but the required native generated role definition is absent, a hard error under the role-agent dispatch contract; no fallback role is authorized.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "S02",
+    "next_state": "WAITING FOR PLAN",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  },
+  "supervisor_missing_bridge_cli": {
+    "reason": "A committed pending upfront batch selects superreplan under REPLANNER by supertraverse C8, but the bridge-target prerequisite requires its configured CLI on PATH; no fallback role or harness is authorized.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "D-303",
+    "next_state": "WAITING FOR PLAN",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  }
+}

@@ -146,6 +146,10 @@ Format — YAML frontmatter is the machine state; the body is an append-only hum
 master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # ROOT seed: repo-relative (internal vault) or ABSOLUTE (external vault)
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
 plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's queue-exhaustion hint; other consumers add their own work-model fields here
+planning_operation: none          # optional recovery hint: refine | replan | none; tracked tree/records override it
+planning_target:                  # optional stage ID, legacy repair leaf, or decision record hint
+planning_generation:              # optional upfront root generation hint
+planning_record:                  # optional C8 record path/Decision ID hint
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
 driver: external                  # the only driver in this build (external scheduler — fresh context per tick)
 cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty
@@ -393,7 +397,7 @@ loop-status dir so two ticks never run concurrently:
 
 ## L5 — Sync gate — local `main` must equal `origin/main` (REQUIRED around every skill dispatch)
 
-The caller's sub-steps (`superplan`/`superrun`, or a consumer's own fix-PR flow) merge their PRs to
+The caller's sub-steps (a selected planning operation / `superrun`, or a consumer's own fix-PR flow) merge their PRs to
 `origin/main` and then try `git checkout main && git pull --ff-only`. **That local pull can silently
 fail or be skipped** — most commonly when a `git checkout main` runs *inside a worktree* (where `main`
 is already checked out in the primary tree and the checkout errors **after** the remote `--admin` merge
@@ -494,9 +498,9 @@ duplicate that skeleton — apply A7's.
    vault mode) and the Be-sure verification so the primary checkout reflects the merge before the
    next tick reads the tree.
 
-**superagent's subset.** superagent does **not** itself open/merge work PRs — `superplan`/`superrun`
+**superagent's subset.** superagent does **not** itself open/merge work PRs — selected planning operations / `superrun`
 do that inside their own flows. superagent therefore applies only **L6.1's CI-red → L7 escalation
-trigger** and **L6.3's post-merge sync+be-sure** (around each `superplan`/`superrun` dispatch). A
+trigger** and **L6.3's post-merge sync+be-sure** (around each selected planning operation / `superrun` dispatch). A
 consumer whose per-tick body opens its own PRs applies the full clause.
 
 ---

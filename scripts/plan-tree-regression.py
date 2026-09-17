@@ -47,11 +47,6 @@ CASES = (
      'The active upfront graph has S01 Depends on S02 and S02 Depends on S01. All files and stage '
      'IDs otherwise exist. Classify validation/selection.',
      {'outcome': 'BLOCKED'}),
-    ('temporary_upfront_gate',
-     'The current Task 1 build has a valid upfront-v1 graph and a stage with a documentation-valid '
-     'PREPARED receipt. Tasks 3 and 5 have not yet installed preparation and operation-routing '
-     'consumers. Classify a planning or execution selection attempt in this intermediate build.',
-     {'outcome': 'BLOCKED'}),
     ('unlinked_active_row',
      'An upfront root has an active, incomplete progress-table row whose Plan cell is blank. Its '
      'other rows link to valid stages. No authorized disposition removes the blank row. Classify '
@@ -133,10 +128,10 @@ CASES = (
      {'outcome': 'REPLAN-REQUIRED', 'executable': False,
       'in_place_overwrite': False}),
     ('missing_preparation_receipt',
-     'This fixture uses the dormant post-Task-5 C6 selection handler; its temporary transition gate '
-     'does not apply. The highest DFS-priority upfront stage has satisfied dependencies and is '
-     'unstarted, but its Preparation field is none. superrun is invoked directly on the root.',
-     {'outcome': 'NEEDS-REFINEMENT', 'executable': False}),
+     'A valid upfront-v1 root has no Active replan and a complete active graph. S02 is the first '
+     'DFS-eligible unstarted leaf with satisfied prerequisites, but its Preparation field is none. '
+     'superrun is invoked directly on the root under the current consumer rules.',
+     {'outcome': 'NEEDS-REFINEMENT', 'executable': False, 'code_execution': False}),
     ('partially_executed_stage',
      'A stage has an execution closeout or open code PR showing that implementation already began, '
      'while its remaining work is unresolved. A caller asks the refiner to prepare it in place.',
@@ -294,9 +289,117 @@ CASES = (
      'record with Decision ID D-217, adopted authority, predecessor/closeout/PR disposition, Successor '
      'pending, Disposition pending, and Resolution active. It has no upfront generation, stage IDs, '
      'or Active replan field. superreplan is invoked directly with that root and record; this case '
-     'tests the new wrapper rather than the pre-Task-5 supervisor fallback.',
+     'tests the legacy wrapper and its REPLANNER contract.',
      {'operation': 'replan', 'role': 'REPLANNER', 'repair_shape': 'single-leaf',
       'batch_created': False}),
+    ('supervisor_native_refinement',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The authoritative '
+     'root is upfront-v1 with a valid graph, no Active replan, and S02 is the first DFS-eligible '
+     'unstarted leaf with satisfied dependencies and Preparation: none. The question asks for '
+     'selection and pre-dispatch state. PLAN_REFINER has a native Claude model pin from the process '
+     'environment and a distinct effort pin from repo .superenv.',
+     {'selected_role': 'PLAN_REFINER', 'operation': 'refine', 'model_source': 'process-env',
+      'effort_source': 'repo-superenv', 'target': 'S02', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_cursor_native_refinement',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The authoritative '
+     'upfront-v1 root has no barrier; S03 is the first DFS-eligible unstarted leaf with satisfied '
+     'dependencies and Preparation: none. The question asks for selection and pre-dispatch state. '
+     'SUPER_HARNESS is Cursor. PLAN_REFINER has a valid native Cursor non-inherit model pin from repo '
+     '.superenv and a non-inherit effort pin from that same layer; init generated the matching '
+     'super-plan-refiner definition. The native Cursor effort warning has been emitted and is treated '
+     'as inherit for definition selection.',
+     {'selected_role': 'PLAN_REFINER', 'operation': 'refine', 'model_source': 'repo-superenv',
+      'effort_source': 'repo-superenv', 'dispatch_form': 'named-definition', 'target': 'S03',
+      'next_state': 'PLANNING', 'heavy_dispatches': 1}),
+    ('supervisor_bridged_refinement',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The authoritative '
+     'upfront-v1 root has no barrier; S04 is the first DFS-eligible unstarted leaf with satisfied '
+     'dependencies and no preparation record. The question asks for selection and pre-dispatch state. '
+     'PLAN_REFINER is bridged to Pi; both its model and effort pins come from repo .superenv. The '
+     'configured Pi CLI and relay/definition required by this harness are available.',
+     {'selected_role': 'PLAN_REFINER', 'operation': 'refine', 'model_source': 'repo-superenv',
+      'effort_source': 'repo-superenv', 'target': 'S04', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_prepared_target',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The authoritative '
+     'upfront-v1 root has no barrier and S02 is the first eligible leaf. Its current preparation '
+     'record validates against the active generation, source, contracts, predecessors, findings, and '
+     'code baseline. The unused PLAN_REFINER native definition is absent. EXECUTOR model and effort '
+     'would resolve from harness defaults. The question asks for the next selected action before any '
+     'heavy dispatch in this tick.',
+     {'selected_role': 'EXECUTOR', 'operation': 'run', 'model_source': 'harness-default',
+      'effort_source': 'harness-default', 'target': 'S02', 'next_state': 'WAITING FOR RUN',
+      'heavy_dispatches': 0}),
+    ('supervisor_adopted_legacy_repair',
+     'Tick entry state is WAITING FOR PLAN after pre-sync. The root has no Planning mode marker and '
+     'has one reconciled adopted C8 single-leaf repair record for P0; it has no upfront batch. The '
+     'question asks for selection and pre-dispatch state. REPLANNER has deliberately equal Codex '
+     'model and effort values to PLAN_REFINER, both from repo .superenv.',
+     {'selected_role': 'REPLANNER', 'operation': 'replan', 'model_source': 'repo-superenv',
+      'effort_source': 'repo-superenv', 'target': 'P0', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_adopted_batch_repair',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The authoritative '
+     'upfront-v1 root at generation 4 points Active replan at one committed pending record D-301. '
+     'The question asks for selection and pre-dispatch state. REPLANNER is a native Claude pin: its '
+     'model is from repo .superenv and its effort is from the process environment.',
+     {'selected_role': 'REPLANNER', 'operation': 'replan', 'model_source': 'repo-superenv',
+      'effort_source': 'process-env', 'target': 'D-301', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_stale_hints',
+     'Tick entry state is persisted PLANNING with stale hints planning_operation: refine, '
+     'planning_target: S03, planning_generation: 3, and planning_record: none. Crash recovery first '
+     'restores WAITING FOR PLAN and reconciles tracked artifacts. The authoritative upfront-v1 root is '
+     'generation 4 and has one committed pending Active replan record D-302. The question asks for '
+     'the recovered tick selection and pre-dispatch state. REPLANNER is bridged to Pi and both pins '
+     'come from repo .superenv.',
+     {'selected_role': 'REPLANNER', 'operation': 'replan', 'model_source': 'repo-superenv',
+      'effort_source': 'repo-superenv', 'target': 'D-302', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_post_leaf_refinement',
+     'A superrun Final Report has verified integration and closeout of S01. The result handler has '
+     'already set WAITING FOR PLAN, synchronized the tree, and is now asked for the following tick\'s '
+     'selection and pre-dispatch state. The authoritative upfront-v1 root has no barrier; S02 is the '
+     'first eligible unstarted leaf and lacks a preparation record. PLAN_REFINER model and effort both '
+     'come from harness defaults.',
+     {'selected_role': 'PLAN_REFINER', 'operation': 'refine', 'model_source': 'harness-default',
+      'effort_source': 'harness-default', 'target': 'S02', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_execution_replan_required',
+     'A superrun result handler reports REPLAN-REQUIRED with verified S02 contract-break evidence, '
+     'but no decision has been adopted and no durable C8 record exists. The existing autonomous '
+     'decision-ladder panel rungs ran and could not resolve authority, so this case is now awaiting '
+     'the user decision rather than skipping those rungs. The question asks for the post-result state. '
+     'S04 is independently prepared, but the execution finding has priority.',
+     {'selected_role': 'none', 'operation': 'none', 'model_source': 'none', 'effort_source': 'none',
+      'target': 'none', 'next_state': 'WAITING FOR INPUT', 'heavy_dispatches': 0}),
+    ('supervisor_legacy_incremental_planning',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The root has no '
+     'Planning mode marker even though the process environment requests upfront. It has an ordinary '
+     'unplanned incremental leaf P1 and no repair request. The question asks for selection and '
+     'pre-dispatch state. PLANNER model and effort both come from harness defaults.',
+     {'selected_role': 'PLANNER', 'operation': 'plan', 'model_source': 'harness-default',
+      'effort_source': 'harness-default', 'target': 'P1', 'next_state': 'PLANNING',
+      'heavy_dispatches': 1}),
+    ('supervisor_missing_native_definition',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. An eligible '
+     'upfront stage S02 requires refinement. PLAN_REFINER is native Claude with a full model and '
+     'effort pin, both from repo .superenv, but its required generated super-plan-refiner definition '
+     'is absent. The question asks for the immediate selected-role-only preflight observation before '
+     'the existing decision ladder runs; no fallback role is authorized.',
+     {'selected_role': 'PLAN_REFINER', 'operation': 'refine', 'model_source': 'repo-superenv',
+      'effort_source': 'repo-superenv', 'target': 'S02', 'next_state': 'WAITING FOR PLAN',
+      'heavy_dispatches': 0, 'outcome': 'BLOCKED'}),
+    ('supervisor_missing_bridge_cli',
+     'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. A committed '
+     'upfront batch D-303 requires replanning. REPLANNER is bridged to Pi from repo .superenv, but '
+     'the configured Pi CLI is unavailable. The question asks for the immediate selected-role-only '
+     'preflight observation before the existing decision ladder runs; no fallback role or harness is '
+     'authorized.',
+     {'selected_role': 'REPLANNER', 'operation': 'replan', 'model_source': 'repo-superenv',
+      'effort_source': 'repo-superenv', 'target': 'D-303', 'next_state': 'WAITING FOR PLAN',
+      'heavy_dispatches': 0, 'outcome': 'BLOCKED'}),
 )
 
 
@@ -314,8 +417,8 @@ def select_cases(names=None):
 
 def render_prompt(skills, cases):
     """Build a probe prompt containing facts and field names, never answer values."""
-    skill_names = ['superstage', 'superauthor', 'supertraverse', 'superrefine', 'superrun',
-                   'supergoal', 'superplan', 'supermeta', 'init']
+    skill_names = ['superagent', 'superloop', 'superstage', 'superauthor', 'supertraverse',
+                   'superrefine', 'superrun', 'supergoal', 'superplan', 'supermeta', 'init']
     if (skills / 'superreplan' / 'SKILL.md').is_file():
         skill_names.insert(4, 'superreplan')
     lines = [
@@ -324,26 +427,33 @@ def render_prompt(skills, cases):
         'Apply their rules to each independent '
         'fixture below. This is a read-only interpretation: do not dispatch, mutate files, call '
         'Git/network services, read implementation reports, or invent absent rules.',
+        'Supervisor scenarios apply the CURRENT superagent/superloop consumer rules, including any '
+        'active transition gate. Do not answer from a future or dormant recipe unless the current '
+        'consumer explicitly makes it active.',
         'Return one JSON object keyed by scenario id. Every result must be a JSON object with a '
         'nonempty string reason citing the governing rule/evidence, plus every requested field. '
         'Use JSON booleans where a field asks for a boolean and contract spellings for strings.',
-        'For the Task 4 cases, outcome classifies the current artifact/replay handler, not C6 stage '
-        'selection; the temporary C6 upfront BLOCKED gate remains until Task 5. dispatch names the '
-        'next heavy skill authorized after durable request reconciliation, not a claim that the '
+        'For the artifact/replay cases, outcome classifies the current artifact/replay handler, not C6 '
+        'stage selection. dispatch names the next heavy skill authorized after durable request '
+        'reconciliation, not a claim that the '
         'current supervisor already routes it. publication names the furthest coherent artifact '
         'form safe to resume: scratch for one unique draft/checkpoint even when it needs '
         'reassessment, vault only for a complete authoritative committed/integrated generation, and '
         'none when neither exists. A dirty active-tree edit or unmerged internal docs PR is none. '
         'execution_paused says whether this adopted decision/batch imposes its own whole-goal '
-        'execution barrier, independent of the temporary C6 rollout gate and ordinary preparation '
-        'or dependency readiness. '
+        'execution barrier, independent of ordinary preparation or dependency readiness. '
         'replay_action names artifact reconciliation, not the later controller status. The '
         'propagation_stop value for no preserved stage boundary is the JSON string "none", never '
         'JSON null.',
         'Global output vocabulary (not per-case answers): mode is incremental, upfront-v1, or '
         'unsupported; outcome is BLOCKED, DRAFT-INCOMPLETE, NEEDS-REFINEMENT, PREPARED, '
-        'REPLAN-REQUIRED, continue, or done; operation is refine, '
-        'replan, or none; role is PLAN_REFINER, REPLANNER, or none; publication is none, scratch, '
+        'REPLAN-REQUIRED, continue, or done; operation is plan, refine, run, replan, or none; role '
+        'is PLANNER, PLAN_REFINER, REPLANNER, EXECUTOR, or none; model_source and effort_source are '
+        'process-env, repo-superenv, harness-default, or none; next_state is WAITING FOR PLAN, '
+        'PLANNING, WAITING FOR RUN, or WAITING FOR INPUT; dispatch_form is named-definition, '
+        'generic-child, bridge-relay, bridge-process, codex-spawn, or none; target is a stage ID, legacy leaf ID, '
+        'decision ID, or none; heavy_dispatches is the scheduled/authorized count in this case, '
+        'integer 0 or 1; publication is none, scratch, '
         'or vault; draft_action describes scratch artifact handling only: resume, revise, or none; '
         'confirmation remains separately governed by the current gate; root_mode_marker is '
         'incremental, upfront-v1, or absent; upfront_valid, executable, '
@@ -361,7 +471,9 @@ def render_prompt(skills, cases):
         'resume-existing, replace, or none; repair_shape is single-leaf or batch; '
         'completed_disposition is completed-history or none; revised_stages, '
         'retained_stages, completed_stages, retired_stages, and replacement_stages are JSON arrays '
-        'of stage IDs.',
+        'of stage IDs. Scenario operation describes the selected action. The persisted '
+        'planning_operation recovery hint remains refine, replan, or none: legacy plan and run '
+        'selections persist none.',
     ]
     for name, facts, expected in cases:
         lines.extend(('', name + ': ' + facts,
@@ -431,6 +543,33 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(any(error.startswith(
             'scope_expansion_during_preparation.outcome:') for error in errors))
 
+    def test_supervisor_cases_pin_recovery_and_one_heavy_dispatch(self):
+        cases = select_cases(['supervisor_stale_hints', 'supervisor_prepared_target',
+                              'supervisor_missing_bridge_cli',
+                              'supervisor_execution_replan_required',
+                              'supervisor_cursor_native_refinement'])
+        answers = self.valid_answers(cases)
+        self.assertEqual(validate_answers(answers, cases), [])
+        answers['supervisor_stale_hints']['target'] = 'S03'
+        self.assertTrue(any(error.startswith('supervisor_stale_hints.target:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['supervisor_prepared_target']['heavy_dispatches'] = 1
+        self.assertTrue(any(error.startswith('supervisor_prepared_target.heavy_dispatches:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['supervisor_missing_bridge_cli']['next_state'] = 'WAITING FOR INPUT'
+        self.assertTrue(any(error.startswith('supervisor_missing_bridge_cli.next_state:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['supervisor_execution_replan_required']['target'] = 'S02'
+        self.assertTrue(any(error.startswith('supervisor_execution_replan_required.target:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['supervisor_cursor_native_refinement']['dispatch_form'] = 'generic-child'
+        self.assertTrue(any(error.startswith('supervisor_cursor_native_refinement.dispatch_form:')
+                            for error in validate_answers(answers, cases)))
+
     def test_selected_cases_require_exact_selected_membership(self):
         cases = select_cases(['contract_break', 'legacy_default'])
         self.assertEqual([case[0] for case in cases], ['legacy_default', 'contract_break'])
@@ -494,6 +633,19 @@ class ValidatorTests(unittest.TestCase):
         self.assertNotIn('mode: incremental', prompt)
         self.assertNotIn('upfront_valid: true', prompt.lower())
         self.assertNotIn('executable: false', prompt.lower())
+
+    def test_supervisor_prompt_has_entry_phase_fields_without_answers(self):
+        prompt = render_prompt(Path('skills'), select_cases(['supervisor_native_refinement',
+                                                               'supervisor_prepared_target']))
+        self.assertIn('Tick entry state is WAITING FOR PLAN', prompt)
+        self.assertIn('selection and pre-dispatch state', prompt)
+        self.assertIn('CURRENT superagent/superloop consumer rules', prompt)
+        self.assertIn('/{superagent,superloop,superstage', prompt)
+        self.assertIn('model_source and effort_source are', prompt)
+        self.assertIn('Return fields: reason, selected_role, operation, model_source, effort_source, '
+                      'target, next_state, heavy_dispatches', prompt)
+        self.assertNotIn('selected_role: PLAN_REFINER', prompt)
+        self.assertNotIn('heavy_dispatches: 1', prompt)
 
     def test_load_answers_reports_malformed_json_and_missing_file(self):
         with tempfile.TemporaryDirectory() as directory:

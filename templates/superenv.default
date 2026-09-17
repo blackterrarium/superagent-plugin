@@ -59,11 +59,13 @@ SUPER_EFFORT_META_PLANNER=high          # supermeta
 SUPER_EFFORT_EVALUATOR=high             # supereval judged objectives
 SUPER_EFFORT_DIAGNOSER=xhigh            # superdiagnose RCA (Stage 3)
 
-# ── Upfront planning roles (reserved — dispatch not implemented yet) ──
+# ── Upfront planning roles ─────────────────────────────────────────
 # PLANNER remains the initial plan author. Refinement preserves a stage's scope,
 # acceptance criteria and shared contracts; invalidated contracts go to REPLANNER.
 # Replanning covers the affected stage and affected dependents, not every later stage.
-# These keys do not change current superplan/superrun routing or generate role agents yet.
+# The supervisor resolves each pair independently (environment > repo config > harness default).
+# PLAN_REFINER prepares eligible upfront stages; REPLANNER publishes adopted legacy repairs and
+# upfront batches. Equal pins are intentional when configured and do not couple the roles.
 SUPER_MODEL_PLAN_REFINER=claude:sonnet
 SUPER_EFFORT_PLAN_REFINER=medium
 SUPER_MODEL_REPLANNER=claude:claude-opus-4-8

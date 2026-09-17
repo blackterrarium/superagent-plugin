@@ -52,7 +52,7 @@ The four skills in the cycle:
 | `superfinish` | Records findings, writes a closeout report, and flips the tree's rows complete on the way back up. | No |
 
 The **`superagent` supervisor** sits above the cycle. Each **tick** dispatches exactly one
-`superplan` or `superrun`, advances the state machine, and stops. Ticks repeat until the tree is
+the selected planning operation or `superrun`, advances the state machine, and stops. Ticks repeat until the tree is
 both fully planned and fully executed. The supervisor can run as an in-session cron job (attended)
 or as an external loop where an OS scheduler fires a fresh headless session per tick (unattended).
 See [Running the loop](#running-the-loop).
@@ -175,8 +175,9 @@ parked fires are free.
 | Context | Accumulates. A per-session heavy-step budget (`SUPER_HEAVY_STEP_LIMIT`, default 6) hands off to a fresh context before the window fills. | Never accumulates. Each tick is a fresh headless session (`claude -p`, `agent -p`, `codex exec`, or `pi -p` per `SUPER_HARNESS`), so the loop runs straight to `DONE`. |
 | Launched with | `superagent:superagent <PLAN.md>` | `superagent:superagent-external <PLAN.md>` |
 
-Each tick dispatches **at most one** of `superplan` / `superrun`, never inline in the supervisor's
-own context, and always **synchronously**. `superplan` runs in its own subagent. `superrun` runs
+Each tick dispatches **at most one** planning operation (`superplan`, `superrefine`, or `superreplan`)
+or `superrun`, never inline in the supervisor's own context, and always **synchronously**. A selected
+planning operation runs in its role-specific subagent/bridge. `superrun` runs
 as the top-level agent of its **own CLI process**, started through `scripts/role-bridge.sh --tools
 executor` from the supervisor's Bash tool (see [Design notes](#design-notes) for why). The
 dispatched skill returns its Final Report verbatim; the supervisor relays it, advances the state
@@ -185,7 +186,8 @@ machine, and lets the driver fire the next tick.
 **Headless ticks require the plugin to be installed and enabled for headless sessions in the
 target repo.** The external tick's prompt is a file read (`Read .../skills/superagent/SKILL.md and
 run exactly ONE --tick on loop file <loop-file>`) rather than a Skill-tool invocation, but the
-loop's internal `superagent:superplan` / `superagent:superrun` dispatches still go through the
+loop's internal `superagent:superplan` / `superagent:superrefine` / `superagent:superreplan` /
+`superagent:superrun` dispatches still go through the
 `Skill` tool. If the plugin is not enabled there, those dispatches fail opaquely deep inside the
 tick.
 
@@ -229,14 +231,16 @@ the template so you can edit knobs in place.
 
 ### Roles
 
-Fourteen role keys control which model and effort each part of the plugin uses. The supervisor is
-the tick itself; nine loop roles are dispatched by it, and four **coding-loop roles** (0.7.0, see
+Sixteen role keys control which model and effort each part of the plugin uses. The supervisor is
+the tick itself; eleven loop roles participate in it, and four **coding-loop roles** (0.7.0, see
 [Coding loop](#coding-loop)) are dispatched by the coding-loop skills.
 
 | Role | Runs |
 |---|---|
 | `SUPERVISOR` | The superagent tick itself. Always native to `SUPER_HARNESS`; can never be bridged. |
 | `PLANNER` | The `superplan` / `supergoal` dispatch subagent. |
+| `PLAN_REFINER` | `superrefine`: bounded preparation of one eligible upfront stage. |
+| `REPLANNER` | `superreplan`: adopted legacy C8 repair or upfront structural batch. |
 | `EXECUTOR` | `superrun`, the subagent-driven-development (SDD) controller. Runs as its own CLI process. |
 | `PANEL` | The L7 escalation panel (three read-only agents). |
 | `IMPLEMENTER`, `FIX_APPLIER` | SDD worker tasks. |
@@ -249,9 +253,9 @@ the tick itself; nine loop roles are dispatched by it, and four **coding-loop ro
 
 Each role has a `SUPER_MODEL_<ROLE>` and a `SUPER_EFFORT_<ROLE>` key.
 
-The proposed upfront-planning lifecycle reserves two additional roles in `.superenv`:
+Upfront planning activates two independently configurable roles in `.superenv`:
 
-| Reserved role | Intended responsibility | Default model / effort |
+| Role | Responsibility | Default model / effort |
 |---|---|---|
 | `PLAN_REFINER` | Prepare a stage against the actual code, preserving its scope, acceptance criteria and shared contracts. | `claude:sonnet` / `medium` |
 | `REPLANNER` | Rework an invalidated stage and affected dependents; leave unaffected plans intact. | `claude:claude-opus-4-8` / `high` |
@@ -262,8 +266,9 @@ must hand off contract-breaking changes to replanning instead of expanding its o
 The Codex defaults use `gpt-5.6-terra` / `medium` for refinement and `gpt-5.6-sol` /
 `high` for replanning; Pi uses those models through `openai-codex`. Cursor keeps both
 model and effort settings at `inherit`, so distinct models must be configured explicitly.
-These settings are **reserved**: dispatch and init agent generation do not consume them
-yet. Current planning and execution behavior is unchanged.
+`superagent:init` generates `super-plan-refiner` and `super-replanner` definitions for Claude and
+Cursor when needed; Codex passes native pins on spawn and Pi uses planner-style bridge processes.
+The scheduler remains opt-in: shipped `SUPER_PLANNING_MODE` is `incremental` until live acceptance.
 
 The full picture of how these roles are dispatched, and how that differs per harness, is in
 [`docs/superagent-structure.html`](docs/superagent-structure.html), the structural reference with
@@ -382,8 +387,8 @@ Defaults shown are the Claude Code build's. Other builds differ; see
 Every role in the [Roles](#roles) table has one `SUPER_MODEL_<ROLE>` key and one
 `SUPER_EFFORT_<ROLE>` key. The model key picks which model (and, via the prefix, which harness)
 that role runs on; the effort key sets its reasoning effort. The accepted values are in
-[Model values](#model-values) and [Effort values](#effort-values). The nine loop roles other than the
-supervisor split into two groups: the planner, executor and panel are dispatched by the tick, and
+[Model values](#model-values) and [Effort values](#effort-values). The eleven loop roles other than
+the supervisor split into two groups: planner, plan-refiner, replanner, executor, and panel are dispatched by the tick, and
 the six SDD roles (implementer, fix-applier, the three reviewers, fix-planner) are dispatched by
 the executor while it runs an implementation plan. The four coding-loop roles are dispatched by the
 coding-loop skills, never by the tick.
@@ -392,6 +397,8 @@ coding-loop skills, never by the tick.
 |---|---|---|
 | SUPER_MODEL_SUPERVISOR | `claude:claude-opus-4-8` | The superagent tick itself: reads the loop-status file, runs the sync and CI gates, picks the next skill to dispatch, merges PRs, and runs the L7 panel. Always native to `SUPER_HARNESS`; the tick passes it as `--model`. `inherit` resolves to `claude-opus-4-8` on a headless tick because there is no session to inherit from. |
 | SUPER_MODEL_PLANNER | `claude:claude-opus-4-8` | The subagent that runs `supergoal` and `superplan`: writes the root master plan, the sub-master plans, and the implementation plans. Plan quality has the most downstream leverage, so this stays on a strong model. |
+| SUPER_MODEL_PLAN_REFINER | `claude:sonnet` | The `superrefine` role that resolves bounded current-code and predecessor details without changing commitments. |
+| SUPER_MODEL_REPLANNER | `claude:claude-opus-4-8` | The `superreplan` role for adopted single-leaf repairs and generation-scoped structural batches. |
 | SUPER_MODEL_EXECUTOR | `claude:claude-opus-4-8` | `superrun`, the SDD controller that executes one implementation plan: dispatches the six SDD roles below, filters their review findings by confidence (`SUPER_REVIEW_CONFIDENCE_FILTER`), and opens and integrates the code PR. Runs as its own CLI process rather than a subagent. It applies the confidence filter itself, so it needs judgment. |
 | SUPER_MODEL_PANEL | `claude:claude-opus-4-8` | The three read-only agents of the L7 escalation panel (Rung 1), dispatched when a delegated skill reports BLOCKED, CI red, a critical finding, or a clarification instead of finishing. Each recommends a resolution; the supervisor adjudicates. |
 | SUPER_MODEL_IMPLEMENTER | `claude:sonnet` | The SDD implementer: one fresh subagent per plan task that writes the code and tests, then is resumed for fix rounds 1–3 with the reviewer's open findings. It gets the full task text, so a mid tier is enough. |
@@ -404,7 +411,7 @@ coding-loop skills, never by the tick.
 | SUPER_MODEL_META_PLANNER | `claude:claude-opus-4-8` | The `supermeta` subagent: reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. Mirrors the planner. |
 | SUPER_MODEL_EVALUATOR | `claude:claude-opus-4-8` | The read-only grader `supereval` dispatches for judged objectives. Command checks run in bash and use no model. |
 | SUPER_MODEL_DIAGNOSER | `claude:claude-opus-4-8` | The `superdiagnose` subagent (Stage 3): root-cause analysis of a failed evaluation report. |
-| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by the planner, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since the planner and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
+| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by planning roles, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since planner, plan-refiner, replanner, and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Effort for `supergoal` / `superplan`. Plans are the highest-leverage artifact, so this is the one dispatch-side role above `medium`. |
@@ -596,7 +603,8 @@ bridge a `:<level>` model suffix. Defaults mirror the Codex build through the `o
 provider: `pi:openai-codex/gpt-5.6-sol` for supervisor, planner, executor, panel, reviewers, and
 fix-planner; `pi:openai-codex/gpt-5.6-terra` for implementer and fix-applier.
 
-**Dispatch is hybrid.** The supervisor never uses a subagent tool. `superplan` and `superrun` are
+**Dispatch is hybrid.** The supervisor never uses a subagent tool. `superplan`, `superrefine`,
+`superreplan`, and `superrun` are
 blocking bash calls to `scripts/role-bridge.sh` with `--tools planner` / `--tools executor`, and
 the L7 panel is one blocking call to `scripts/bridge-fanout.sh` (three concurrent bridge runs,
 1800 s timeout). `superrun`'s SDD children go through superpowers' Pi mapping (the `pi-subagents`

@@ -214,7 +214,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
 
 ## Step 3 — Role agents (model/effort pins)
 
-Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
+Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `codex exec -m`.
 On Codex there are **no generated agent-definition files at all**: role pins dispatch
 at runtime as `spawn_agent` parameters — `SUPER_MODEL_<ROLE>` → `model`,
@@ -228,6 +228,8 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | Model key | Effort key | Generated definition |
 |---|---|---|
 | SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_PLAN_REFINER | SUPER_EFFORT_PLAN_REFINER | `.claude/agents/super-plan-refiner.md` |
+| SUPER_MODEL_REPLANNER | SUPER_EFFORT_REPLANNER | `.claude/agents/super-replanner.md` |
 | SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.claude/agents/super-executor.md` |
 | SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.claude/agents/super-panel.md` |
 | SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.claude/agents/super-implementer.md` |

@@ -61,10 +61,9 @@ apply S2. The root must resolve exactly to `upfront-v1`; incremental and unmarke
 existing superplan lifecycle. Return **BLOCKED** for an invalid graph, an active replan barrier, a
 missing/duplicate/retired stage ID, or unreadable required evidence.
 
-Standalone superrefine may validate S1–S5 directly; do not invoke supertraverse because its current
-C6 transition gate remains in force until Task 5 installs every operation handler. Resolve the
-requested stage directly from S1's active map and apply S3/S5 evidence predicates without recursively
-calling S3's receipt classification.
+Standalone superrefine may validate S1–S5 directly; use the explicit requested stage ID rather than
+asking traversal to select a second target. Resolve it from S1's active map and apply S3/S5 evidence
+predicates without recursively calling S3's receipt classification.
 
 Before drafting, require all of the following:
 

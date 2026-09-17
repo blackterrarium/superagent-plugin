@@ -112,9 +112,7 @@ is a fresh execution-entry check, not a recursive traversal call. A current vali
 and S3-satisfied prerequisites permit Step 2. A missing receipt or an unrelated-baseline advance that
 needs focused compatible revalidation returns `NEEDS-REFINEMENT` with the exact root/stage ID; leave
 the leaf untouched. A relevant changed assumption returns `REPLAN-REQUIRED`; missing or contradictory
-evidence is BLOCKED. Do not prepare a stage while running as EXECUTOR. The current C6 transition gate
-continues to return BLOCKED until Task 5 installs all caller routing; this entry check governs the
-post-gate handler only.
+evidence is BLOCKED. Do not prepare a stage while running as EXECUTOR.
 
 ## Repair successor context
 
