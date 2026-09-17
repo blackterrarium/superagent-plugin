@@ -361,10 +361,109 @@ its next section without printing a separate report.**
 
 ## C8. Authorized repair — durable request and successor publication
 
-**Consumer:** superagent applies an adopted re-plan decision; superplan publishes its successor.
-This is an explicit repair transition, not a relaxation of ordinary C4/C7 idempotency.
+**Consumers:** superagent applies an adopted re-plan decision; superreplan authors and publishes the
+repair under REPLANNER. This is an explicit repair transition, not a relaxation of ordinary C4/C7
+idempotency. Resolve mode through superstage S1: unmarked/incremental roots use the legacy single-leaf
+form; `upfront-v1` roots use one generation-scoped batch. Do not convert one form into the other.
 
-### Request (superagent, before changing loop status)
+Superreplan is already the tick's one heavy skill. For a legacy repair it applies the single-leaf
+authoring clauses below directly; it does not invoke superplan, dispatch a child, or consume a second
+heavy operation. Until Task 5 installs REPLANNER routing, the current supervisor may still dispatch
+the same legacy publication through superplan/PLANNER as a transitional fallback. That fallback never
+handles an upfront batch; Task 5 removes it when the new route is live.
+
+### Upfront batch request (superagent, before replanning dispatch)
+
+One pending batch is an execution barrier for the whole goal, including unaffected stages and direct
+superrun calls. Before any REPLANNER dispatch:
+
+1. Read the adopted panel/user decision, its triggering finding/evidence, authoritative source
+   agreement/revision, current root generation, S1 active map, S2 contracts, code/vault baselines, and
+   every originating stage. Use superstage S4 to derive the candidate transitive dependent closure.
+   Ambiguous authority, origin, generation, or evidence is **BLOCKED**.
+2. Create one durable `findings/<timestamp>-replan-<topic>.md` record with exactly one stable
+   **Decision ID**. Record at least: authority, rationale, source agreement revision; root path and
+   from-generation; code and vault baselines; origin stages and candidate dependency closure; every
+   active path/revision; an initially unassessed per-stage `retain` / `revise` / authorized disposition
+   table with evidence slots; every predecessor PR/branch/worktree and integration disposition; draft
+   paths, successor paths, and retired-ID replacement mapping (initially `none` or `pending`);
+   **Resolution** (`pending`, later `published`, `superseded`, or `declined`); published generation;
+   publication decision marker; and resolved publication PR/commit evidence. Do not omit a field
+   because it is initially `none`.
+3. In the same A7 change, set the root's sole `Active replan` field to this record. Preserve every
+   active Plan link, status, completed stage, closeout, PR reference, and preparation receipt at this
+   request boundary. For protected-main internal vaults the docs PR must be merged to authoritative
+   main; when A7 permits direct internal integration, or for an external vault, the complete change
+   must be committed on the configured authoritative branch. Only committed, synchronized
+   authoritative state counts. Then, and only then, may the controller persist `WAITING FOR PLAN`
+   and the Decision ID/record recovery hints.
+
+An adopted decision interrupted before step 3 is not discarded and does not authorize execution.
+Reconcile the persisted decision authority, create or finish this same request, and keep execution
+paused; a loop log alone does not authorize REPLANNER. Once the committed root points at the pending
+record, the next heavy operation is `superreplan <root> <record>` under REPLANNER.
+
+There is at most one active upfront batch per goal. A later finding joins an unpublished batch only
+through an explicit adopted record revision that updates origins, closure, baselines, and authority;
+otherwise it waits for a subsequent batch after publication. Superseding or declining a pending batch
+requires recorded adopting authority. Clear the barrier with no generation increment only in one A7
+change that records the `superseded`/`declined` resolution and proves the still-active tree and every
+live consumer remain valid; otherwise the unresolved structural obligation stays paused/BLOCKED.
+
+### Upfront batch reconciliation and replay
+
+Always reconcile from the authoritative committed/integrated tree and Git history before trusting
+loop hints or working-tree contents:
+
+- **Pending request, no unique draft:** dispatch/resume superreplan with the same record.
+- **Pending request, one unique scratch batch referencing the Decision ID:** resume that batch. Draft
+  candidates never become active Plan links and are never executable.
+- **Published record and active root at its published generation, with `Active replan: none`:** locate
+  exactly one complete old-to-new A7 publication transition by its Decision ID marker and tracked
+  artifact changes, then resume the new tree. Request/checkpoint and later evidence-resolution commits
+  may repeat that ID; they are not publication transitions. Stale `PLANNING`/old-generation loop hints
+  are repaired without republishing.
+- **Relevant source, code, vault, path, stage, contract, PR, or worktree baseline changed before
+  publication:** reassess the affected set under S4 and update the pending record/drafts before any
+  activation. Do not bless stale candidates.
+- **Missing referenced record, duplicate Decision ID, multiple unretired draft successor sets,
+  divergent successors, mismatched generation, multiple matching publication transitions, or
+  mixed/partial publication:** **BLOCKED** until authoritative evidence uniquely reconciles the state.
+
+For callers that report the artifact handler separately from C6 selection, use these exact results.
+`outcome: continue` means the adopted request can be durably created, resumed, reassessed, or
+reconciled; `outcome: BLOCKED` means contradictory/missing evidence prevents that handler. Report
+`publication: scratch` only for one unique resumable draft/checkpoint, `publication: vault` only for a
+verified authoritative published generation, and `publication: none` otherwise. A relevant baseline
+change with one unique draft is `continue` / `scratch` with replay action `reassess`, never permission
+to publish stale work. `dispatch: none` applies until the request commit and root barrier are
+authoritative; afterward a valid pending record names `dispatch: superreplan`. These artifact results
+do not remove the temporary C6 upfront BLOCKED gate before Task 5 installs controller routing.
+
+One unique complete internal publication candidate in an open, unmerged A7 docs PR is
+`outcome: continue` / `publication: none`: resume and reconcile that same PR while the committed
+pending barrier remains authoritative. It is not a published tree and never authorizes execution.
+Return **BLOCKED** instead when the PR candidate is partial, divergent, stale without a resolvable
+reassessment, or otherwise ambiguous.
+
+A7 writes files before it commits them, so a dirty root that appears to clear the barrier or expose a
+new generation is still the committed pending generation. An internal docs branch/open PR does not
+activate a code-root tree before merge to authoritative main; a configured direct-internal or
+external-vault edit does not activate until its complete batch is committed on the authoritative
+branch. Never validate selection against those uncommitted or unmerged candidate contents. Keep the
+pending barrier in force, resume the same Decision ID where unique, and block if the mixed state is
+ambiguous.
+
+Publication evidence is not self-referential. The atomic batch records its stable Decision ID as the
+publication marker and can leave resolved publication PR/commit evidence pending. After integration,
+find the unique commit from that marker plus its tracked artifact set; a later reconciliation/report
+may write the resolved SHA. Never require a commit to contain its own future hash.
+
+A late predecessor closeout after publication is historical evidence. If the active row now points to
+its successor, C7 must not update that row or ancestors from the predecessor closeout. Reconcile any
+real delivered work through the record and successor; never close the successor by inference.
+
+### Legacy single-leaf request (superagent, before replanning dispatch)
 
 1. Identify the affected active leaf, immediate-parent row and ancestor path. Read its finding,
    closeout, PR/branch/worktree and the adopted panel/user decision. If the target or authority
@@ -402,9 +501,11 @@ or disposition evidence; do not infer resolution from a status word alone. A par
 publication must be reconciled from files and commit evidence before dispatch; contradictory
 links or multiple successors are BLOCKED. Reuse the decision ID; do not duplicate records on retry.
 
-### Publish (superplan)
+### Legacy single-leaf publication (superreplan)
 
-For the selected repair row, read the C8 record, predecessor, finding and closeout. Write a
+For the selected repair row, superreplan applies superauthor A2/A3/A6/A7 and superplan's legacy
+self-review, routing, parent-row, and reporting clauses directly without invoking superplan. Read the
+C8 record, predecessor, finding and closeout. Write a
 **new implementation plan** in `plans/` with a fresh filename and parent reference to the same
 immediate parent. Include `Supersedes: [[predecessor]]`, `Repair: [[record]]`, explicit corrections,
 remaining work, regression checks and integration disposition. Preserve the predecessor unchanged.

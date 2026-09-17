@@ -1,0 +1,24 @@
+{
+  "impact_local_s02_detail": {
+    "reason": "superstage S4 classifies bounded internal file placement and test-setup changes that preserve acceptance, scope, approach, dependencies, required outcome, and shared-contract semantics as refinement; it creates no structural batch.",
+    "operation": "refine",
+    "role": "PLAN_REFINER",
+    "batch_created": false,
+    "execution_paused": false
+  },
+  "replan_published_before_loop_update": {
+    "reason": "supertraverse C8 treats a published record whose authoritative root is at the published generation with Active replan none and exactly one complete Decision-ID-marked publication transition as a reconciled publication; stale PLANNING and old-generation loop hints are repaired without republishing.",
+    "outcome": "continue",
+    "resolution": "published",
+    "replay_action": "resume-published",
+    "duplicate_publication": false,
+    "execution_paused": false
+  },
+  "replan_internal_pr_not_merged": {
+    "reason": "supertraverse C8 says one unique complete internal candidate in an open, unmerged A7 docs PR is continue/publication none; authoritative main retains the committed pending barrier, so execution remains paused and the candidate cannot be executable.",
+    "outcome": "continue",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false
+  }
+}

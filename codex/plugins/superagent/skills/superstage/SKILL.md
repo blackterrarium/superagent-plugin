@@ -232,6 +232,37 @@ change may affect all unfinished dependents when the evidence shows that reach. 
 completed; corrections become explicit new work with consumer rewiring. Supersession never merges,
 closes, deletes, or forgives an old PR.
 
+The impact assessment is a complete accounting, not just a list of files to rewrite. Record the root
+generation and each active stage path/revision at assessment time, then assign every originating or
+candidate-closure stage exactly one disposition:
+
+- `revise` when its acceptance, scope, approach, dependency, required outcome, consumed evidence, or
+  produced contract must change;
+- `retain` when current evidence proves its approved boundary remains fulfillable; cite the preserved
+  consumed/produced contract and why propagation stops there; or
+- an authorized terminal disposition with the adopting authority and its effect on every consumer.
+
+Also record active stages outside the candidate closure as retained, so the result accounts for the
+whole active graph. A local implementation detail that preserves all commitments stays refinement and
+does not create a structural batch. A semantic change to a provider is not automatically a rewrite of
+every descendant: propagate across each dependency edge only until an unchanged output contract makes
+the next consumer valid. Conversely, include every unfinished stage whose shared foundational decision
+is invalidated even if it is on an otherwise independent dependency branch.
+
+Do not revise delivered history in place. If completed work needs correction, keep its stage and
+delivery evidence completed, assign fresh stage IDs to explicit corrective work, and rewire affected
+consumers. A split or merge likewise requires a total old-ID to fresh-ID replacement mapping; retired
+IDs are never reused or left as live dependency targets. For partially executed unmerged work, preserve
+the predecessor plan, task history, PR/branch/worktree and closeout evidence. A successor states the
+remaining tasks and an explicit verified `resume existing` or authorized `replace` integration
+disposition. Replanning itself never closes, merges, deletes, or forgives that PR.
+
+After a generation change, a revised stage always needs refinement. A retained preparation is current
+only when a focused recorded revalidation proves the stage body/revision, source, relevant code,
+consumed contracts, provider receipts, findings, and other S5 evidence unchanged and binds that result
+to the new generation. Otherwise the retained stage is `needs refinement`; an old-generation receipt
+alone is never current.
+
 Legacy C8 single-leaf repair remains supported. An adopted repair is structural authoring under
 `REPLANNER`, while its existing durable decision, predecessor, PR disposition, publication, and replay
 rules remain binding.
