@@ -18,11 +18,10 @@ plan, and advance the parent seed's progress-report table.
 
 **superfinish reads execution context and writes vault docs. It NEVER executes, implements, or
 resumes any planned work.** It does not write source code, does not run tests or builds, and does not
-create worktrees. It runs once the implementation is already done and records what happened. The one
-thing it *does* commit is the **vault bookkeeping docs themselves** — once written, it commits and
-merges them to `main` via a pull request **automatically, under the user's standing authorization,
-without asking** (see **Commit and merge the vault docs — via PR** below). That is its only commit —
-never source code, never execution output. After the Final Report, the skill is done.
+create worktrees. It runs once the implementation is already done and records what happened. It
+publishes only the **vault bookkeeping docs themselves**: `github` uses the commit/PR path and `none`
+uses verified local persistence. Publication is automatic under the user's standing authorization.
+It never commits source code or execution output. After the Final Report, the skill is done.
 
 | Thought | Reality |
 |---------|---------|
@@ -60,7 +59,7 @@ If the input is a seed/master/sub-master plan, **report the error and exit**:
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -159,6 +158,13 @@ Then **invoke the `superagent:supertraverse` skill** (Skill tool) and run its **
 chaining parent-seed references from this completed leaf up to the root. supertraverse C7 specifies
 the per-row update precisely; this section need not restate it. In brief:
 
+- **Local mode:** first write `reports/<timestamp>-<topic>-completed-local.md` with root/active leaf,
+  `git_mode: none`, before/result snapshot ids and manifests, added/modified/deleted paths, local
+  command results and evidence paths, task/final review outcomes, acceptance coverage, outstanding
+  obligations, timestamp, and `PR/commit: N/A (SUPER_GIT_MODE=none)`. Reopen and validate it. Set the
+  active leaf to `completed-local`; roll an ancestor to `completed-local` only when every active
+  descendant has a valid local receipt or authorized disposition and no repair obligation remains.
+
 - **The leaf's own row** (the row pointing at `<PLAN.md>` in its immediate parent) gets either
   `executed — PR open` (the code PR is still open at superfinish time) or `completed-and-merged`
   (the code PR has been squash-merged to `main`) — pick the one that matches reality. Either way,
@@ -199,6 +205,10 @@ Do not dump the full drafts to chat up front. The user's single checkpoint is th
 (below), which clearly enumerates every file written this run.
 
 ## Commit and merge the vault docs — via PR (REQUIRED)
+
+When `SUPER_GIT_MODE=none`, this heading means durable local publication under superauthor A7's
+local branch. Reopen the report, plan note, repair record, and every updated ancestor; verify the
+receipt fields above; run no git/GitHub operation; then continue to the Final Report.
 
 Once the vault files are written, commit those bookkeeping docs and merge them to `main` via a pull
 request — **without asking the user for confirmation** (standing authorization, above). If
@@ -280,5 +290,6 @@ appear here.**
 
     **PR:** <url> (merged)
     **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+    **Persistence:** completed-local receipt verified (SUPER_GIT_MODE=none)  (local mode instead)
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.

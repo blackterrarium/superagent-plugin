@@ -54,7 +54,7 @@ source code, never execution output.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -205,6 +205,10 @@ re-enabled by auto-accept / `bypassPermissions` mode; it is the default behavior
 Do not print the full draft to chat up front. The user's single checkpoint is the **Final Report** (A8),
 which clearly enumerates every file written this run.
 
+In `SUPER_GIT_MODE=none`, the same standing authorization covers durable local publication under
+the inherited workspace lock. It does not authorize git/GitHub operations; proceed through A6 and
+the local A7 branch without pausing.
+
 ## A6 — Capture findings
 
 After self-review, identify any **findings** or new insights uncovered during the authoring phase —
@@ -224,6 +228,15 @@ it** — false findings are harmful to the goal. Only record what you have verif
 findings, record none.
 
 ## A7 — Commit and merge via PR (caller-parameterized)
+
+**Local persistence (`SUPER_GIT_MODE=none`) overrides every commit recipe in this skill and every
+caller.** Write only the caller's explicit artifact list, reopen each file and verify its expected
+identity/content, and report the physical paths. Do not inspect tracking state or run git, gh,
+credential, branch, worktree, commit, push, PR, merge, sync, or CI operations. For completion work,
+also write and verify the `completed-local` receipt defined by superloop L6. Persistence is the
+durable file plus its verified receipt; A7 then returns directly to A8. This override applies equally
+to internal and external vaults and to duplicated commit sections in superplan, superfinish,
+supergoal, superprd, and supermeta.
 
 After the artifact(s) and any `findings/` docs are written into the goal folder, commit those planning
 artifacts. **Never pause before writing, committing, or merging** — the user has granted standing
@@ -333,6 +346,7 @@ skill):
 **<primary artifact>:** <full path>      ← the most important line; always include it
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)  (local mode — print this line instead)
 
 **Other files created/modified:**
 - <path> — <what changed>     (or: none)

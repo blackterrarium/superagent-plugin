@@ -21,7 +21,7 @@ work-model-specific specifics.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -115,6 +115,8 @@ Format — YAML frontmatter is the machine state; the body is an append-only hum
 ```markdown
 ---
 master_plan: <SUPER_GOAL_ROOT>/<goal>/master-plans/<seed>.md   # ROOT seed: repo-relative (internal vault) or ABSOLUTE (external vault)
+git_mode: github | none                # immutable execution contract; legacy missing means github
+project_root: <physical REPO>          # scheduler/control-plane root, required for new goals
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
 plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's queue-exhaustion hint; other consumers add their own work-model fields here
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
@@ -183,6 +185,12 @@ gives genuine isolation between successive ticks (they never share a context at 
 differ only in *who fires the tick* and *whether context accumulates*.
 
 ### Step 0 — Parse the invocation, then guard / bootstrap / resume
+
+Before any git/auth/CI action or dispatch, compare effective `SUPER_GIT_MODE` and physical `REPO`
+with the loop/root markers. An unmarked legacy goal means `github`. A mismatch writes
+`WAITING FOR INPUT` with the recorded/effective values and recovery choices, releases owned locks,
+and exits without git, gh, GitHub API, credentials, merge claims, or dispatch. Version one never
+migrates an in-flight goal automatically.
 
 `$ARGUMENTS` arrives in one of two forms.
 
@@ -495,6 +503,15 @@ codex-only:end -->
 
 ## L3 — Overlap lock — `acquire_lock()` / `release_lock()` (REQUIRED for every tick, both drivers)
 
+In `SUPER_GIT_MODE=none`, the project writer lock is outer to L3. The external wrapper runs the
+mutating tick through `workspace-state.py run --root "$REPO"` and also `--root "$vault_root"` for
+an external vault. A nested planner/executor inherits `SUPER_WORKSPACE_TOKEN` and
+`SUPER_WORKSPACE_OWNER_PID`, validates the existing owner, and borrows it; it never creates a second
+writer. Direct interactive mutation must either have a demonstrably live inherited session owner or
+run the operation through the helper. Acquire multiple roots in physical-path lexical order, then L3.
+A busy project yields without iteration/status advancement. Release only matching tokens; a live or
+ambiguous owner is never age-stolen. This lock coordinates Superagent writers, not arbitrary editors.
+
 External ticks run in **independent sessions**, so a long tick (a run with a 30-min CI gate) can
 still be running when the next interval fires. Guard every tick with an atomic file lock in the
 loop-status dir so two ticks never run concurrently:
@@ -604,6 +621,15 @@ and continues from the persisted `status` in a clean context.
 
 ## L5 — Sync gate — local `main` must equal `origin/main` (REQUIRED around every skill dispatch)
 
+**Local branch (`SUPER_GIT_MODE=none`).** Do not run this section's git sync commands. Before a
+dispatch, verify the recorded mode/root and owned workspace token. Capture a pre-task filesystem
+snapshot/manifest outside project and vault roots. After execution and review, capture the result and
+compare paths, contents, deletions, and executable bits. Reject inconsistent capture or source changes
+during evidence collection. Be-sure verification reopens every reported artifact, receipt, review, and
+required command result at its durable path. A status label or report alone is never proof. Preserve
+unrelated user changes; snapshots are inspection evidence, never automatic rollback or overwrite.
+After this branch succeeds, continue to the caller without applying the GitHub sync recipes below.
+
 The caller's sub-steps (`superplan`/`superrun`, or a consumer's own fix-PR flow) merge their PRs to
 `origin/main` and then try `git checkout main && git pull --ff-only`. **That local pull can silently
 fail or be skipped** — most commonly when a `git checkout main` runs *inside a worktree* (where `main`
@@ -682,6 +708,14 @@ divergent tree is a **safety stop**, not something to guess past or force.
 ---
 
 ## L6 — PR integration discipline
+
+**Local branch (`SUPER_GIT_MODE=none`).** There is no integration PR, commit, push, merge, sync, or
+CI poll. A leaf may become `completed-local` only after its closeout receipt is reopened and verifies:
+root and active leaf identity; `git_mode: none`; before/result snapshot identities and manifest paths;
+added/modified/deleted files; local commands with exit/result evidence; task and final review outcomes;
+acceptance coverage; outstanding obligations; and timestamp. Commit/PR fields read
+`N/A (SUPER_GIT_MODE=none)`. Only then may parent progress advance. L6 returns to the caller after
+durable verification; it never invokes A7's GitHub branch.
 
 An autonomy loop that opens and merges its own PRs MUST follow the same `SUPER_PROTECTED_MAIN`-gated
 discipline the rest of the `super*` family uses (if `SUPER_PROTECTED_MAIN=true`, the shipped default,

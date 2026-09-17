@@ -1,0 +1,56 @@
+{
+  "local_complete": {
+    "done": true,
+    "reason": "C9 permits complete only after every active local obligation passes with no unresolved blocker, repair, CI wait, or conflicting evidence.",
+    "evidence": "supertraverse C9 requires a validated completed-local receipt with manifests, command results, reviews, acceptance coverage, obligations, and timestamp; the fixture supplies all of them."
+  },
+  "label_without_evidence": {
+    "done": false,
+    "reason": "A completed-local label is never sufficient proof.",
+    "evidence": "supertraverse C9 says a label or report without the receipt and required files is BLOCKED; the fixture is missing that evidence."
+  },
+  "failed_descendant": {
+    "done": false,
+    "reason": "An ancestor can roll up to completed-local only when every active descendant has valid completion evidence or an authorized disposition.",
+    "evidence": "supertraverse C7 retains partial progress when an active descendant failed without disposition, as stated by this fixture."
+  },
+  "failed_review": {
+    "done": false,
+    "reason": "Local publication retains task and final review gates.",
+    "evidence": "superloop L6 and superrun Step 3a require passing review outcomes in the completed-local receipt; this fixture has a failed required review."
+  },
+  "late_predecessor": {
+    "overwrite_successor": false,
+    "reason": "Repair history is historical and cannot replace the current active successor.",
+    "evidence": "supertraverse C8 follows the recorded successor chain and C9 states delayed predecessor closeouts cannot complete or overwrite a successor."
+  },
+  "repair_replay": {
+    "duplicate_successor": false,
+    "reset_repair": false,
+    "reason": "Fresh ticks reconcile the stable Decision ID and published Successor link idempotently.",
+    "evidence": "supertraverse C8 replay and superagent repair reconciliation require reusing an existing successor without resetting the row or creating another successor."
+  },
+  "legacy_to_local": {
+    "mode_mismatch": true,
+    "git_operations": false,
+    "reason": "An unmarked legacy root means github, so effective none is a contract mismatch handled before side effects.",
+    "evidence": "superloop L2 and supertraverse C9 require WAITING FOR INPUT/BLOCKED before git, gh, credentials, dispatch, or merge claims."
+  },
+  "local_to_github": {
+    "mode_mismatch": true,
+    "merge_claim": false,
+    "reason": "The recorded local mode is immutable for the goal and differs from effective github.",
+    "evidence": "superloop L2 parks a mismatch without integration operations, and supertraverse C9 rejects a mismatched root as integration proof."
+  },
+  "local_receipt_in_github": {
+    "done": false,
+    "reason": "A local receipt is completion evidence only in effective none mode.",
+    "evidence": "supertraverse C2/C4/C9 explicitly says completed-local is not merged or integrated in github mode."
+  },
+  "local_sdd": {
+    "suppress_git_stages": true,
+    "retain_test_review_gates": true,
+    "reason": "The local superrun override binds the SDD controller and every child prompt.",
+    "evidence": "superrun Steps 2, 3, 3a, and 5 prohibit worktree/commit/PR/merge/finishing while retaining local tests, task review, final review, and acceptance verification."
+  }
+}

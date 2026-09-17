@@ -61,7 +61,7 @@ instead:
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -117,6 +117,9 @@ Author the root plan yourself per superauthor's A2 authoring standard, drafting 
 outside the goal folder. The root plan MUST:
 
 - be a **seed/master plan**, routed to `master-plans/<STAMP>-<slug>.md`;
+- record `**Git mode:** <SUPER_GIT_MODE>` and `**Project root:** <physical REPO>` in its opening
+  metadata. These are immutable execution-contract markers; missing markers on legacy roots mean
+  `github`;
 - contain a **progress-report table** using the `supertraverse` C1 schema and C2 status vocabulary
   (do not redefine the columns or statuses here):
 
@@ -270,6 +273,10 @@ folders are tracked — matches existing goal folders that keep `handoff/.gitkee
 
 ### 9. Commit & merge via PR (superauthor A7)
 
+When `SUPER_GIT_MODE=none`, apply A7's local persistence branch: reopen the root plan,
+`goal-directives.md`, `.gitkeep` files, and findings; verify their paths/content; run no git/GitHub
+operation; and report local persistence.
+
 Apply A7 with these caller parameters:
 
 - **branch prefix:** `goal/<slug>`  → branch `goal/<slug>-<DATE>`
@@ -296,6 +303,7 @@ the merged PR URL (external vault: the vault commit SHA):
 **Goal directives:** <full path to goal-directives.md>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)  (local mode — instead of PR/Commit)
 
 **Subfolders created:**
 - master-plans/, plans/, findings/, reports/, handoff/, todo/

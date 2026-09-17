@@ -21,7 +21,7 @@ fills the gaps with you, and only then writes the folder.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -278,6 +278,9 @@ success. For an already approved identical revision, carry its existing approval
 Create the project folder; write the three files with `**Status:** READY`; create
 `meta-plans/`, `eval-reports/`, `diagnoses/` each with a `.gitkeep`. Then A7 with:
 
+- **Local mode:** when `SUPER_GIT_MODE=none`, reopen and verify these six explicit artifacts under
+  inherited workspace ownership, report their physical paths, and skip every branch/commit/PR step.
+
 - **branch prefix:** `project/<slug>` → branch `project/<slug>-<DATE>`
 - **commit subject:** `docs(project): <slug> — superprd output`
 - **PR title:** `docs(project): <slug>`
@@ -297,6 +300,7 @@ Create the project folder; write the three files with `**Status:** READY`; creat
 **PRD:** <path>   **Knowledge base:** <path>   **Evaluation:** <path>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)   (local mode instead)
 **Readiness:** R1–R8 all PASS
 **Warnings:** <prd-lint WARNs and open reviewer findings, or none>
 **Next:** superagent:supermeta <project-dir>   (Stage 2 of the coding loop)

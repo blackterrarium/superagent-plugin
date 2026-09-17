@@ -22,7 +22,7 @@ that invokes `superagent:supergoal`.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -188,6 +188,9 @@ Append this row to `prd.md`'s `## Iteration ledger` table (the goal-folder path 
 
 Then apply **A7** with:
 
+- **Local mode:** when `SUPER_GIT_MODE=none`, reopen and verify the meta-plan, updated `prd.md`, and
+  returned goal/root paths under inherited workspace ownership. Do not run git/GitHub operations.
+
 - **branch prefix:** `project/<project-slug>-r<N>-meta`
 - **commit subject:** `docs(project): <project-slug> round <N> meta-plan`
 - **PR title:** `docs(project): <project-slug> r<N> meta-plan`
@@ -208,6 +211,7 @@ Then apply **A7** with:
 **Goal folder:** <path>   **Root plan:** <path to master-plans/…>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)   (local mode instead)
 **Repair guidance:** none — first round | <diagnosis path>
 **Next:** superagent:superagent-external <root plan>   (then superagent:supereval <project-dir> when the loop is DONE)
 ```
