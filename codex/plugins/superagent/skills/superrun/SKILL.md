@@ -160,13 +160,22 @@ Read `Stage kind` before entering the code-worktree path. If the selected upfron
 2. Review the observed result in a separate pass against the stage's evidence requirements, decision
    criteria, acceptance IDs, assumptions it may invalidate, and produced discovery contracts. Missing,
    ambiguous or contradictory evidence is BLOCKED; do not invent a decision.
-3. Draft the evidence artifact and documented decision outside the vault, including the execution-entry
+3. Before delivery publication, synchronize code and vault state and re-run the current-authority gate:
+   validate S1/S2, root generation and Active replan, active stage path/ID/revision, execution snapshot,
+   and any C8 disposition. If unchanged with no barrier, continue. If a request is pending, do not
+   publish obsolete delivery: retain the reviewed experiment as a scratch checkpoint/history bound to
+   its snapshot, ensure C8 inventories that checkpoint/evidence before replanning, and return to the C8
+   path with execution paused. After a batch publishes, deliver from this attempt only when its explicit
+   disposition retains the same active stage/execution identity and validates the evidence against that
+   stage. A replacement/successor must execute its own prepared discovery contract; the old experiment
+   remains historical input, not its delivery.
+4. Draft the evidence artifact and documented decision outside the vault, including the execution-entry
    snapshot, source/code revisions examined, contract/assumption IDs, result, decision criteria and
    delivered discovery-contract revisions. Publish them as one authoritative docs unit using
    superauthor A7: protected internal vault → merged docs PR; direct internal mode → configured direct
    commit; external vault → vault commit. Verify the actual A7 PR/commit and tracked artifacts. This is
    the discovery delivery identity; an ignored loop file or scratch result is insufficient.
-4. Invoke superfinish with the stage, execution snapshot, and verified evidence/decision publication.
+5. Invoke superfinish with the stage, execution snapshot, and verified evidence/decision publication.
    Its closeout is a separate idempotent bookkeeping A7 unit. Then report and exit; Step 5 has no code
    worktree to remove.
 
@@ -411,12 +420,16 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
      unchanged active stage with no barrier, continue. A pending batch is a whole-goal barrier even
      when CI is green. Preserve the old PR/branch/worktree/run evidence in that record and do not merge
      while its stage disposition is unresolved;
-   - when a batch published after execution began, never merge from the queued packet alone. Continue
-     only through the published record's explicit, verified `resume-existing` disposition and active
-     successor instructions after their required review/test gates. That explicit old-to-successor
-     mapping authorizes the named identity change. `replace`, retirement, any other changed or
-     unmapped active link/identity, unresolved disposition, missing record, or contradictory publication
-     blocks this merge and preserves the old integration history for reconciliation.
+   - when a batch published after execution began, never merge from the queued packet alone. Direct
+     post-CI completion is allowed only when the record explicitly retains the **same execution
+     identity**: same active stage path/ID/revision, prepared plan/receipt and execution attempt, with
+     focused new-generation validation and an integration disposition that preserves it. A mapped
+     successor is different even when it says `resume-existing`: route that active prepared successor
+     through normal Steps 1–3 on the reused branch/worktree, capture its own execution snapshot, execute
+     remaining/corrective tasks, and rerun required reviews/tests. Old CI remains historical evidence
+     and cannot merge or close either identity. `replace`, retirement, changed or unmapped identity,
+     unresolved disposition, missing record, or contradictory publication likewise blocks direct merge
+     and preserves the old integration history for reconciliation.
 
    This gate applies identically to ordinary completion and post-CI resume. A barrier/identity failure
    returns BLOCKED or REPLAN-REQUIRED with the root, Decision ID, stage, PR and snapshot; it never closes
@@ -468,13 +481,19 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
 
 When superrun is invoked with a **CI-terminal
 resume packet** — the CI-PENDING fields (leaf plan, root, worktree, branch, PR url, run ids) plus each
-run's terminal conclusion — do **not** re-run Steps 1–3: the leaf is already implemented and its runs
-are already terminal. Require its complete execution snapshot. Enter the recorded worktree (it was
-left in place), verify the actual branch/PR head and each conclusion with one `gh run view <id>` per run
-(trust but verify — the packet may be stale), then run Step 3a's integration-authority gate against the
-current authoritative root, C8 record, and disposition. Merge only when both the CI verdict and current
-authority pass. A packet queued before a batch request is recovery evidence, never merge authority.
-Then continue with Steps 4–5 and return the real **Final Report**.
+run's terminal conclusion — first require its complete execution snapshot. Enter the recorded worktree
+(it was left in place), verify the actual branch/PR head and each conclusion with one `gh run view <id>`
+per run (trust but verify — the packet may be stale), then run Step 3a's integration-authority gate
+against the current authoritative root, C8 record, and disposition. A packet queued before a batch
+request is recovery evidence, never merge authority.
+
+Only when the active identity is unchanged (including an explicitly retained same-identity stage
+validated in the new generation) may this terminal handler avoid re-running Steps 1–3, merge after both
+CI and current authority pass, and continue with Steps 4–5. If C8 maps the packet to a successor, the
+old terminal packet is a redirect rather than execution evidence for that successor: re-enter normal
+target/receipt validation, use the successor's authorized reused branch/worktree, capture its new
+execution snapshot, and run its remaining/corrective tasks, reviews, and tests through Steps 2–3 before
+any merge or closeout.
 
 ## Step 4 — Close out the plan (invoke `superagent:superfinish`)
 

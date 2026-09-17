@@ -150,20 +150,24 @@ Preserve any repair predecessor PR/branch/worktree and disposition history. Miss
 evidence for the claimed outcome is BLOCKED. For incremental plans, keep the legacy evidence rules and
 record the resolvable plan/code identity available.
 
-Before drafting a timestamped report, scan the synchronized authoritative vault and history for a
-delivery receipt with the same stage/generation/revision (or legacy plan), execution snapshot, and
-delivery identity:
+Before drafting a timestamped report, derive one stable **execution-attempt key** from the immutable
+execution snapshot plus code repository/PR number (or the discovery evidence-publication identity).
+The current PR head, CI results, open/merged state and merge commit are versioned observations of that
+attempt, not parts of its lookup key. Scan the synchronized authoritative vault and history by this key:
 
-- exactly one complete integrated receipt, or one verified partial report for the still-open matching
-  PR/head, plus matching plan note/active-row history means that outcome's prior closeout succeeded.
-  Reuse it, report its existing publication PR/commit, and perform no duplicate write or A7 publication;
-- one partial publication means resume and complete that same report/note/ascent/A7 unit, retaining its
-  identity and filename. Do not allocate a second timestamped report;
+- exactly one matching report plus matching plan note/active-row history means prior publication
+  succeeded. If its latest observation already matches the verified outcome, reuse it and perform no
+  duplicate write/A7 publication. If it is partial and the same PR later advances head, CI or merge
+  state, append/version those observations and upgrade that **same report path** in place; never allocate
+  another timestamped report merely because mutable PR outcome fields changed;
+- one incomplete closeout A7 publication means resume and complete that same
+  report/note/ascent/publication unit, retaining its identity and filename. Do not allocate a second
+  timestamped report;
 - multiple or conflicting receipts, or a claimed publication absent from authoritative history, is
   BLOCKED until reconciled.
 
 This is the idempotency key for a lost final response. Filename timestamps, session memory, a row
-status, or a top note alone are not authoritative delivery identity.
+status, or a top note alone are not authoritative execution-attempt identity or delivery evidence.
 
 ## After-Run Finish
 
@@ -219,8 +223,13 @@ named `reports/YYYY-MM-DD-hh_mm-<topic>.md` (today's date and the current UTC ho
   commit, or the discovery evidence/decision publication; for partial execution, the verified open PR,
   exact head, CI result/blocker and explicit `delivered: false`, `consumable: false`.
 - **Delivered contracts** — every produced contract ID and semantic revision, with concrete evidence
-  that the delivered result satisfies it. An explicit `none` is allowed only when the stage produces
-  no contract.
+  that the delivered result satisfies it. For a partial report, list every declared produced contract
+  and revision as `pending — not delivered; consumable: false`, with no satisfaction claim. An explicit
+  `none` is allowed only when the stage produces no contract. On verified integration, upgrade those
+  same entries in place to delivered evidence and `consumable: true`.
+- **Attempt observations** — append/version each verified PR head, CI run/conclusion, blocker, merge
+  state and merge/direct-integration commit under the stable execution-attempt key. Do not rewrite the
+  historical failed/open observation when the attempt later succeeds.
 - **Repair/integration history** — every predecessor PR and its verified reuse/replacement/closure or
   adopted disposition, plus the active successor relationship when applicable.
 
@@ -246,10 +255,11 @@ summarizes the work done and links to the closeout report (step 2) as a full-pat
 at the top, **not** at the end of the file, so a reader sees the outcome first. **Keep it short** — a
 few lines at most, not a restatement of the report.
 
-**Idempotency:** if `<PLAN.md>` already contains a close-out note referencing a closeout report for
-this exact delivery identity, do nothing and move on. A note for another revision/delivery is history,
-not a match. Digest verification continues to use Gate 3's historical prepared-plan blob; never compare
-the receipt digest to this newly annotated current file.
+**Idempotency:** if `<PLAN.md>` already contains a close-out note referencing the report for this exact
+stable execution-attempt key, keep that link. Reuse the report when observations match or revise it in
+place for a partial-to-delivered upgrade. A note for another attempt is history, not a match. Digest
+verification continues to use Gate 3's historical prepared-plan blob; never compare the receipt digest
+to this newly annotated current file.
 
 ### 4. Update the Plan Tree Upward
 
@@ -268,9 +278,11 @@ the per-row update precisely; this section need not restate it. In brief:
 
 - **The leaf's own row** (the row pointing at `<PLAN.md>` in its immediate parent) gets either
   `executed — PR open` (the code PR is still open at superfinish time) or `completed-and-merged`
-  (the code PR has been squash-merged to `main`) — pick the one that matches reality. Either way,
-  add the PR number to the **PR** column and a one-line rollup + `Closeout: [[…]]` wikilink in
-  **Comments**. A follow-up superfinish invocation flips `executed — PR open` →
+  (the code PR has been squash-merged to `main`) — pick the one that matches reality. Evidence-only
+  discovery with verified evidence/decision publication uses `completed-and-merged` / `done` without a
+  code PR. Add a one-line rollup + `Closeout: [[…]]` wikilink in **Comments**. Put `#NNN` in the PR
+  column only for code work; leave it blank (or explicit `none`) for evidence-only discovery and cite
+  its A7 publication in Comments/report. A follow-up superfinish invocation flips `executed — PR open` →
   `completed-and-merged` once the code PR merges (idempotent re-run).
 - **Each ancestor row above the leaf** is flipped to `completed-and-merged` only when *every* row
   in the child's progress-report table is merged-on-`main` per C4 (`completed-and-merged` / `done`
@@ -290,7 +302,8 @@ by the shared ascent — `in progress (partially executed)` when ancestors are p
 merged). Re-running superfinish after the code PR merges is the supported way to flip
 `executed — PR open` → `completed-and-merged` and propagate the parent rollup upward.
 
-For upfront completion, C7 consumes the delivery receipt, not the row label alone. It may mark an
+For upfront ascent, C7 consumes the identity-bound closeout record, not the row label alone. A partial
+record can support only `executed — PR open`. It may mark an
 implementation stage complete only with verified integration and delivered-contract revisions, or a
 discovery stage complete with its verified evidence/decision. A verified contract contradiction is
 surfaced before the next dispatch and affected unfinished preparation is no longer executable; routine
@@ -327,8 +340,8 @@ a direct commit to the default branch is permitted instead — see `superauthor`
 superfinish output [skip ci]"`, push only if the vault has an `origin`. The skeleton below is
 the internal-mode path. A7's **precondition** applies: if `<vault_root>` is not its own
 repository, STOP and report — never improvise a `git init`. The progress-table **PR** cell of a
-*planning* row stays blank in external mode (there is no PR for a vault-only commit); an
-*executed* row still records the code PR number.
+*planning* row stays blank in external mode (there is no PR for a vault-only commit); an executed code
+row records its code PR number, while evidence-only discovery stays blank / `none`.
 
 Treat the report, plan note, findings and ancestor updates as one authoritative A7 publication unit.
 On retry, reconcile the exact execution/outcome identity against integrated history before opening a branch or

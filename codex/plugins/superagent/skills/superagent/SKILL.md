@@ -375,8 +375,11 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    being durably published pauses this PR even when all runs are green. Ensure its record preserves the
    PR/branch/worktree/run ids and snapshot, set `status: WAITING FOR PLAN`, and do not resume a merge
    while the stage disposition is unresolved. After a published batch, resume only through its explicit
-   verified `resume-existing` disposition and active successor instructions; otherwise preserve the old
-   PR history and route to replanning/reconciliation.
+   disposition. An explicitly retained same execution identity may continue post-CI after its focused
+   new-generation validation. A mapped `resume-existing` successor is redirected through superrun's
+   normal prepared-stage execution on the reused branch/worktree, with a successor snapshot and its own
+   remaining tasks/reviews/tests; the old packet is historical and cannot authorize direct merge.
+   Otherwise preserve the old PR history and route to replanning/reconciliation.
 3. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
    `SUPER_GH_DISABLE_SANDBOX=true` — or the same batched curl) — never advance on the Monitor's report
    alone.

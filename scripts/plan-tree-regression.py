@@ -199,9 +199,11 @@ CASES = (
     ('replan_before_request_commit',
      'An upfront-v1 root is at Plan generation 7 with Active replan none. S01 revision 3 is delivered; '
      'S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. A panel '
-     'adopted decision D-204, but neither a tracked decision record nor a tracked root Active replan '
-     'pointer exists. The loop log alone names D-204. A tick is about to dispatch replanning.',
-     {'outcome': 'continue', 'publication': 'none', 'dispatch': 'none',
+     'adopted valid, verified, unambiguous decision D-204, but neither a tracked decision record nor a '
+     'tracked root Active replan pointer exists. The loop log alone names D-204. Observe the '
+     'controller pre-dispatch reconciliation before request publication finishes; classify whether '
+     'authoritative request publication is required before any replan dispatch.',
+     {'request_publication_required': True, 'publication': 'none', 'dispatch': 'none',
       'execution_paused': True}),
     ('replan_after_request_commit',
      'An upfront-v1 root is at Plan generation 7. S01 revision 3 is delivered; S02 revision 2, S03 '
@@ -219,7 +221,7 @@ CASES = (
      'lists unique scratch drafts and intended vault paths for S02 and S03 plus a generation-8 review. '
      'No draft path is an active Plan link and no publication marker exists. The authoring session '
      'ended after self-review began.',
-     {'outcome': 'continue', 'publication': 'scratch', 'replay_action': 'resume-draft',
+     {'publication': 'scratch', 'replay_action': 'resume-draft',
       'execution_paused': True}),
     ('replan_published_before_loop_update',
      'The loop still carries planning_generation 7, planning_record D-207, and PLANNING. The tracked '
@@ -239,7 +241,9 @@ CASES = (
      'revision 2 are unfinished. Old S03 revision 4 had partially executed on PR 88; its replacement '
      'S03 revision 5 is the active Plan link and the record preserves PR 88 disposition and remaining '
      'tasks. After publication, a late closeout for old S03 revision 4 arrives and names PR 88. It '
-     'does not prove integration of active S03 revision 5.',
+     'does not prove integration of active S03 revision 5. For this observation, active_link_changed '
+     'means a new mutation made by the late-closeout handler, not the historical replacement already '
+     'published by D-208.',
      {'outcome': 'continue', 'late_closeout_action': 'preserve-history',
       'active_link_changed': False, 'successor_closed': False}),
     ('replan_stale_baseline',
@@ -248,7 +252,7 @@ CASES = (
      'The pending record and drafts captured source revision 11, code baseline c7, and vault baseline '
      'v7. Before publication, source revision 12 changes S03 acceptance and authoritative vault '
      'baseline v8 changes its active path. No reassessment records those changes.',
-     {'outcome': 'continue', 'publication': 'scratch', 'replay_action': 'reassess',
+     {'publication': 'scratch', 'replay_action': 'reassess',
       'execution_paused': True}),
     ('replan_duplicate_decision',
      'An upfront-v1 root is at Plan generation 7 with Active replan pointing to findings/D-210-a.md. '
@@ -281,11 +285,14 @@ CASES = (
     ('replan_split_merge_mapping',
      'An upfront-v1 root is at Plan generation 7 with pending D-214. S01 revision 3 is delivered; S02 '
      'revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. The authorized '
-     'candidate retires S02 and S03, splits their responsibilities into fresh IDs S06 and S07, and '
+     'unpublished candidate retires S02 and S03, splits their responsibilities into fresh IDs S06 '
+     'and S07, and '
      'merges one old output into fresh S08. The record contains the total old/new mapping '
      'S02->[S06,S07], S03->[S08], rewires every live consumer to S06/S07/S08, and does not reuse a '
-     'retired ID. The candidate whole graph and mapping are otherwise valid under S2.',
-     {'outcome': 'continue', 'topology_allowed': True,
+     'retired ID. The candidate whole graph and mapping are otherwise valid under S2, but it has no '
+     'publication or stage-preparation receipts. Classify structural topology validity separately from '
+     'whether any replacement is executable; do not infer S3/S5 readiness.',
+     {'topology_allowed': True, 'executable': False,
       'retired_stages': ['S02', 'S03'], 'replacement_stages': ['S06', 'S07', 'S08']}),
     ('replan_retained_preparation',
      'An upfront-v1 root moved from Plan generation 7 to 8 through published D-215. S04 revision 1 was '
@@ -317,7 +324,7 @@ CASES = (
      'generation-8 candidate, a published-looking D-216b record, and a root with Active replan none. '
      'Authoritative main still contains the committed generation-7 pending barrier and has no '
      'publication decision marker.',
-     {'outcome': 'continue', 'publication': 'none', 'execution_paused': True,
+     {'publication': 'none', 'execution_paused': True,
       'partial_tree_executable': False, 'authoritative_view_executable': False}),
     ('legacy_single_leaf_repair',
      'An unmarked legacy incremental root has one repair-requested leaf P0 and a tracked legacy C8 '
@@ -332,7 +339,8 @@ CASES = (
      'decision D1. E1 and D1 are tracked on the authoritative vault branch, meet the stage criteria, '
      'identify delivered discovery contract C-DISCOVERY@1, and invalidate no live assumption. There '
      'was deliberately no code branch or PR. All other active obligations are verified complete.',
-     {'done': True, 'code_pr_required': False, 'discovery_evidence_verified': True}),
+     {'done': True, 'code_pr_required': False, 'discovery_evidence_verified': True,
+      'pr_cell': 'none'}),
     ('discovery_execution_entry_without_code_changes',
      'Direct superrun selects a prepared upfront discovery stage whose specified experiment reads '
      'existing data, writes only vault evidence and a decision, and makes no code changes. The stage '
@@ -348,6 +356,26 @@ CASES = (
      'superfinish to record the partial outcome.',
      {'partial_closeout_allowed': True, 'delivered': False, 'consumable': False,
       'row_status': 'executed — PR open'}),
+    ('discovery_barrier_after_experiment',
+     'Evidence-only discovery S01 completed and reviewed its experiment under generation 4, but before '
+     'the evidence/decision A7 publication the synchronized root acquired committed pending Active '
+     'replan B-81 with S01 disposition unresolved. The experiment evidence exists only in scratch.',
+     {'evidence_publication': 'none', 'execution_paused': True,
+      'checkpoint_preserved': True, 'next_state': 'WAITING FOR PLAN'}),
+    ('mapped_successor_ci_redirect',
+     'A terminal green CI packet belongs to old S02 revision 2 and execution snapshot X2. Published '
+     'batch B-82 maps that work to active prepared successor S02 revision 3 with explicit '
+     'resume-existing on the same PR/branch/worktree. The successor has corrective tasks and its own '
+     'preparation receipt, but no execution-entry snapshot, task review, or new test evidence yet.',
+     {'merge_allowed': False, 'resume_action': 'normal-successor-execution',
+      'old_ci_authoritative': False, 'successor_snapshot_required': True}),
+    ('partial_closeout_upgrade_after_merge',
+     'S02 execution attempt X2 plus PR 83 already has one authoritative partial closeout report. It '
+     'lists C-STORE@1 as pending/non-consumable at observed head H1 after failed CI. The same PR later '
+     'advances to verified head H2, passes CI, and merges as M2. superfinish retries with those current '
+     'observations and the same stable execution-attempt key X2+PR83.',
+     {'report_action': 'upgrade-in-place', 'duplicate_publication': False,
+      'delivered': True, 'consumable': True, 'produced_contract_status': 'delivered'}),
     ('routine_closeout_finding',
      'A verified S01 closeout finding records an internal helper rename and links the affected '
      'assumption ID. It changes no acceptance, scope, dependency, consumed or produced contract, or '
@@ -518,6 +546,8 @@ def render_prompt(skills, cases):
         'execution_paused says whether this adopted decision/batch imposes its own whole-goal '
         'execution barrier, independent of ordinary preparation or dependency readiness. '
         'replay_action names artifact reconciliation, not the later controller status. The '
+        'state/action fields describe only the current handler action at the stated observation '
+        'point; historical transitions named in the facts do not set those fields. The '
         'propagation_stop value for no preserved stage boundary is the JSON string "none", never '
         'JSON null.',
         'Global output vocabulary (not per-case answers): mode is incremental, upfront-v1, or '
@@ -534,9 +564,11 @@ def render_prompt(skills, cases):
         'incremental, upfront-v1, or absent; upfront_valid, executable, '
         'done, code_execution, code_pr_required, discovery_evidence_verified, merge_allowed, '
         'worktree_required, sdd_required, partial_closeout_allowed, delivered, consumable, '
+        'checkpoint_preserved, old_ci_authoritative, successor_snapshot_required, '
         'execution_snapshot_required, historical_snapshot_required, delivery_receipt_reused, '
         'pr_evidence_preserved, replan_required, affected_preparation_valid, duplicate_stage_ids, '
-        'duplicate_goal_folder, commitments_preserved, and in_place_overwrite are JSON booleans; '
+        'duplicate_goal_folder, commitments_preserved, request_publication_required, and '
+        'in_place_overwrite are JSON booleans; '
         'digest_basis is execution-snapshot or current-annotated-plan; execution_path is '
         'discovery-evidence or code-delivery; evidence_publication is authoritative-vault or none; '
         'row_status is executed — PR open or completed-and-merged; stages and stage_revision are JSON '
@@ -550,6 +582,9 @@ def render_prompt(skills, cases):
         'resume-published, reassess, or block; propagation_stop is a stage ID or the string none; '
         'late_closeout_action is preserve-history or reconcile-delivery; pr_disposition is '
         'resume-existing, replace, or none; repair_shape is single-leaf or batch; '
+        'resume_action is normal-successor-execution or direct-post-ci; report_action is '
+        'upgrade-in-place or reuse; produced_contract_status is pending-nonconsumable or delivered; '
+        'pr_cell is none or a PR number; '
         'completed_disposition is completed-history or none; revised_stages, '
         'retained_stages, completed_stages, retired_stages, and replacement_stages are JSON arrays '
         'of stage IDs. Scenario operation describes the selected action. The persisted '
@@ -656,11 +691,15 @@ class ValidatorTests(unittest.TestCase):
                               'execution_snapshot_historical_digest',
                               'merged_lost_closeout_response',
                               'ci_pending_replan_request',
+                              'replan_split_merge_mapping',
                               'replan_retained_preparation',
                               'replan_revised_preparation',
                               'discovery_completion_without_code_pr',
                               'discovery_execution_entry_without_code_changes',
                               'partial_closeout_open_pr',
+                              'discovery_barrier_after_experiment',
+                              'mapped_successor_ci_redirect',
+                              'partial_closeout_upgrade_after_merge',
                               'routine_closeout_finding',
                               'contract_contradiction_finding',
                               'stale_completed_ancestor_unsatisfied_dependency'])
@@ -668,6 +707,10 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(validate_answers(answers, cases), [])
         answers['ci_pending_replan_request']['merge_allowed'] = True
         self.assertTrue(any(error.startswith('ci_pending_replan_request.merge_allowed:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['replan_split_merge_mapping']['executable'] = True
+        self.assertTrue(any(error.startswith('replan_split_merge_mapping.executable:')
                             for error in validate_answers(answers, cases)))
         answers = self.valid_answers(cases)
         answers['merged_lost_closeout_response']['duplicate_publication'] = True
@@ -687,6 +730,30 @@ class ValidatorTests(unittest.TestCase):
         answers['partial_closeout_open_pr']['delivered'] = True
         self.assertTrue(any(error.startswith('partial_closeout_open_pr.delivered:')
                             for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['discovery_barrier_after_experiment']['evidence_publication'] = \
+            'authoritative-vault'
+        self.assertTrue(any(error.startswith(
+            'discovery_barrier_after_experiment.evidence_publication:')
+            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['mapped_successor_ci_redirect']['merge_allowed'] = True
+        self.assertTrue(any(error.startswith('mapped_successor_ci_redirect.merge_allowed:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['partial_closeout_upgrade_after_merge']['report_action'] = 'reuse'
+        self.assertTrue(any(error.startswith(
+            'partial_closeout_upgrade_after_merge.report_action:')
+            for error in validate_answers(answers, cases)))
+
+    def test_replan_request_must_publish_before_dispatch(self):
+        cases = select_cases(['replan_before_request_commit'])
+        answers = self.valid_answers(cases)
+        self.assertEqual(validate_answers(answers, cases), [])
+        answers['replan_before_request_commit']['request_publication_required'] = False
+        self.assertTrue(any(error.startswith(
+            'replan_before_request_commit.request_publication_required:')
+            for error in validate_answers(answers, cases)))
 
     def test_selected_cases_require_exact_selected_membership(self):
         cases = select_cases(['contract_break', 'legacy_default'])
