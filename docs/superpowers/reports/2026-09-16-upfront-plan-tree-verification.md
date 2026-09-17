@@ -105,6 +105,12 @@ refinement/provider chronology, and keeps PT-05–PT-08 INCOMPLETE without their
 scenario witnesses. The final synthetic suite ran 48 tests in 17.539s with exit 0. These checks do
 not change the 0 PASS / 0 FAIL / 11 INCOMPLETE live matrix.
 
+The final residual RED run exited 1 with 53 tests and five failures: blank/`none` active Plan cells
+were skipped, and later bounded-detail assessments could not be validated or linked to their initial
+run. Active missing links now remain INCOMPLETE while explicit terminal rows are excluded; the
+assessment names its own descendant commit and repeats the initial-publication identity. The final
+synthetic suite ran 53 tests in 18.344s with exit 0.
+
 ## Live acceptance approval block
 
 The first actual upfront-authoring CLI dispatch did not start: automatic approval review timed out.

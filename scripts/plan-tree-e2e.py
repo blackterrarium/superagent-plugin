@@ -120,21 +120,25 @@ def progress_plan_links(data):
         if 'Plan' not in headers or index + 1 >= len(lines):
             continue
         plan_index = headers.index('Plan')
+        status_index = headers.index('Status') if 'Status' in headers else None
         links = []
         for row in lines[index + 2:]:
             if '|' not in row:
                 break
             cells = [cell.strip() for cell in row.strip().strip('|').split('|')]
-            if plan_index >= len(cells):
+            status = cells[status_index].strip().lower() \
+                if status_index is not None and status_index < len(cells) else ''
+            status = status.strip('*` ')
+            if status in ('declined', 'deferred', 'out-of-scope'):
                 continue
-            cell = cells[plan_index]
+            cell = cells[plan_index] if plan_index < len(cells) else ''
             wiki = re.search(r'\[\[([^]|]+)(?:\|[^]]+)?\]\]', cell)
             markdown = re.search(r'\[[^]]+\]\(([^)]+)\)', cell)
             if wiki:
                 links.append(wiki.group(1))
             elif markdown:
                 links.append(markdown.group(1))
-            elif cell and cell.lower() != 'none':
+            else:
                 links.append(None)
         return links
     return None
@@ -419,29 +423,54 @@ def validate_manifest(manifest, manifest_dir):
                     '%s evidence is inconsistent' % label))
             except (UnicodeError, ValueError) as exc:
                 add(('PT-01',), result('FAIL', '%s evidence is malformed: %s' % (label, exc)))
-        bounded_review_rel = initial.get('bounded_detail_review')
-        if not bounded_review_rel:
+
+    bounded = evidence.get('bounded_detail_assessment')
+    if not isinstance(bounded, dict):
+        add(('PT-05',), result('INCOMPLETE',
+            'tracked bounded-detail/no-replan assessment is absent'))
+    else:
+        bounded_repo = resolve_path(bounded.get('vault_repo'), base) or vault_repo
+        bounded_commit = git_commit(bounded_repo, bounded.get('commit')) \
+            if bounded_repo and bounded.get('commit') else None
+        bounded_initial = git_commit(bounded_repo, bounded.get('initial_publication_commit')) \
+            if bounded_repo and bounded.get('initial_publication_commit') else None
+        if not bounded_commit or not bounded_initial or not bounded.get('path'):
             add(('PT-05',), result('INCOMPLETE',
-                'tracked bounded-detail/no-replan assessment is absent'))
+                'bounded-detail assessment commit, path, or initial-run link is missing'))
+        elif bounded_repo == vault_repo and bounded_initial != initial_commit:
+            add(('PT-05',), result('FAIL',
+                'bounded-detail assessment links the wrong initial publication'))
         else:
-            bounded_blob, bounded_error = git_blob(
-                vault_repo, initial_commit, bounded_review_rel)
-            if bounded_error:
-                add(('PT-05',), result('INCOMPLETE',
-                    'tracked bounded-detail/no-replan assessment is missing'))
+            _, ancestry_error = git(
+                bounded_repo, 'merge-base', '--is-ancestor', bounded_initial, bounded_commit)
+            if ancestry_error:
+                add(('PT-05',), result('FAIL',
+                    'bounded-detail assessment does not descend from its initial publication'))
             else:
-                try:
-                    bounded_fields = markdown_fields(bounded_blob)
-                    bounded_ok = (
-                        field(bounded_fields, 'Outcome') == 'PASS' and
-                        field(bounded_fields, 'Scenario') == 'bounded-detail' and
-                        field(bounded_fields, 'Replan dispatches') == '0')
-                    add(('PT-05',), result('PASS' if bounded_ok else 'FAIL',
-                        'bounded-detail/no-replan assessment passes' if bounded_ok else
-                        'bounded-detail/no-replan assessment is contradictory'))
-                except (UnicodeError, ValueError) as exc:
-                    add(('PT-05',), result('FAIL',
-                        'bounded-detail/no-replan assessment is malformed: %s' % exc))
+                bounded_blob, bounded_error = git_blob(
+                    bounded_repo, bounded_commit, bounded.get('path'))
+                if bounded_error:
+                    add(('PT-05',), result('INCOMPLETE',
+                        'tracked bounded-detail/no-replan assessment is missing'))
+                else:
+                    try:
+                        bounded_fields = markdown_fields(bounded_blob)
+                        receipt_initial = field(bounded_fields, 'Initial publication commit')
+                        if not receipt_initial:
+                            add(('PT-05',), result('INCOMPLETE',
+                                'bounded-detail assessment initial-run identity is absent'))
+                        else:
+                            bounded_ok = (
+                                receipt_initial == bounded_initial and
+                                field(bounded_fields, 'Outcome') == 'PASS' and
+                                field(bounded_fields, 'Scenario') == 'bounded-detail' and
+                                field(bounded_fields, 'Replan dispatches') == '0')
+                            add(('PT-05',), result('PASS' if bounded_ok else 'FAIL',
+                                'bounded-detail/no-replan assessment passes' if bounded_ok else
+                                'bounded-detail/no-replan assessment is contradictory'))
+                    except (UnicodeError, ValueError) as exc:
+                        add(('PT-05',), result('FAIL',
+                            'bounded-detail/no-replan assessment is malformed: %s' % exc))
 
     stages = expected.get('stages')
     if not isinstance(stages, list) or not stages:
@@ -1407,6 +1436,30 @@ class EvidenceValidatorTests(unittest.TestCase):
         self.assertTrue(any(item['status'] == 'INCOMPLETE' and
                             'active Plan links' in item['message'] for item in evidence))
 
+    def active_plan_cell_report(self, cell, status='incomplete'):
+        root = self.vault / 'goal/root.md'
+        self.write_text(root, root.read_text(encoding='utf-8') +
+                        '| 2 | %s | %s |\n' % (cell, status))
+        commit = self.commit(self.vault, 'add incomplete active Plan row')
+        manifest = self.manifest()
+        manifest['evidence']['initial_publication']['commit'] = commit
+        return validate_manifest(manifest, self.base)
+
+    def test_blank_active_plan_cell_is_incomplete(self):
+        evidence = self.active_plan_cell_report('')['requirements']['PT-01']['evidence']
+        self.assertTrue(any(item['status'] == 'INCOMPLETE' and
+                            'active Plan cell' in item['message'] for item in evidence))
+
+    def test_none_active_plan_cell_is_incomplete(self):
+        evidence = self.active_plan_cell_report('none')['requirements']['PT-01']['evidence']
+        self.assertTrue(any(item['status'] == 'INCOMPLETE' and
+                            'active Plan cell' in item['message'] for item in evidence))
+
+    def test_authorized_terminal_none_plan_is_not_active(self):
+        evidence = self.active_plan_cell_report('none', 'declined')[
+            'requirements']['PT-01']['evidence']
+        self.assertFalse(any('active Plan cell' in item['message'] for item in evidence))
+
     def test_execution_before_refinement_fails(self):
         records = self.trace_records()
         records[1], records[2] = records[2], records[1]
@@ -1599,12 +1652,42 @@ class EvidenceValidatorTests(unittest.TestCase):
         review_rel = 'goal/reports/bounded-detail-review.md'
         self.write_text(self.vault / review_rel,
                         '**Outcome:** FAIL\n**Scenario:** bounded-detail\n'
-                        '**Replan dispatches:** 0\n')
+                        '**Replan dispatches:** 0\n'
+                        '**Initial publication commit:** %s\n' % self.initial_commit)
         commit = self.commit(self.vault, 'contradict bounded detail assessment')
         manifest = self.manifest()
-        initial = manifest['evidence']['initial_publication']
-        initial['commit'] = commit
-        initial['bounded_detail_review'] = review_rel
+        manifest['evidence']['bounded_detail_assessment'] = {
+            'commit': commit, 'path': review_rel,
+            'initial_publication_commit': self.initial_commit}
+        self.assertEqual(self.verdict(manifest, 'PT-05'), 'FAIL')
+
+    def test_later_tracked_bounded_detail_assessment_passes_check(self):
+        review_rel = 'goal/reports/bounded-detail-review.md'
+        self.write_text(self.vault / review_rel,
+                        '**Outcome:** PASS\n**Scenario:** bounded-detail\n'
+                        '**Replan dispatches:** 0\n'
+                        '**Initial publication commit:** %s\n' % self.initial_commit)
+        commit = self.commit(self.vault, 'record later bounded detail assessment')
+        manifest = self.manifest()
+        manifest['evidence']['bounded_detail_assessment'] = {
+            'commit': commit, 'path': review_rel,
+            'initial_publication_commit': self.initial_commit}
+        report = validate_manifest(manifest, self.base)
+        self.assertTrue(any(item['status'] == 'PASS' and
+                            'bounded-detail/no-replan assessment passes' in item['message']
+                            for item in report['requirements']['PT-05']['evidence']))
+
+    def test_bounded_detail_assessment_wrong_initial_link_fails(self):
+        review_rel = 'goal/reports/bounded-detail-review.md'
+        self.write_text(self.vault / review_rel,
+                        '**Outcome:** PASS\n**Scenario:** bounded-detail\n'
+                        '**Replan dispatches:** 0\n'
+                        '**Initial publication commit:** %s\n' % self.initial_commit)
+        commit = self.commit(self.vault, 'record mislinked bounded detail assessment')
+        manifest = self.manifest()
+        manifest['evidence']['bounded_detail_assessment'] = {
+            'commit': commit, 'path': review_rel,
+            'initial_publication_commit': self.final_vault_commit}
         self.assertEqual(self.verdict(manifest, 'PT-05'), 'FAIL')
 
     def test_contradictory_impact_assessment_fails(self):
