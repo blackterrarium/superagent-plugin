@@ -136,6 +136,33 @@ CASES = (
      'A stage has an execution closeout or open code PR showing that implementation already began, '
      'while its remaining work is unresolved. A caller asks the refiner to prepare it in place.',
      {'outcome': 'BLOCKED', 'in_place_overwrite': False}),
+    ('manual_superrun_pending_batch',
+     'A direct manual superrun invocation reads an upfront-v1 root whose Active replan points to a '
+     'committed pending batch. S02 was prepared before the request, but its disposition is unresolved. '
+     'No implementation or merge has begun in this invocation.',
+     {'outcome': 'BLOCKED', 'executable': False, 'code_execution': False,
+      'merge_allowed': False}),
+    ('execution_snapshot_historical_digest',
+     'S02 enters execution at Plan generation 4, Stage revision 2, with preparation receipt R2 and '
+     'prepared-plan digest H2. Its execution-entry vault revision V4 and reviewed code revision C4 are '
+     'known. After code integration, superfinish inserts its closeout note into the current stage file, '
+     'so the current bytes no longer hash to H2. Classify the required closeout identity check.',
+     {'execution_snapshot_required': True, 'historical_snapshot_required': True,
+      'digest_basis': 'execution-snapshot'}),
+    ('merged_lost_closeout_response',
+     'S01 code PR 71 and its tracked closeout delivery receipt were already integrated. The receipt '
+     'binds generation 4, S01 revision 2, preparation R1/digest H1, PR 71 and its merge commit, and the '
+     'active parent row links that same report. The caller lost superfinish\'s response and retries from '
+     'a fresh context.',
+     {'outcome': 'continue', 'duplicate_publication': False,
+      'delivery_receipt_reused': True, 'code_execution': False}),
+    ('ci_pending_replan_request',
+     'S02 entered execution from generation 4 and queued CI on PR 72. Before CI completed, adopted '
+     'batch B-72 was committed and root Active replan points to it; B-72 records PR 72, branch, '
+     'worktree, run ids, and an unresolved S02 disposition. CI is now green and the supervisor has the '
+     'old CI resume packet.',
+     {'merge_allowed': False, 'execution_paused': True, 'pr_evidence_preserved': True,
+      'next_state': 'WAITING FOR PLAN'}),
     ('impact_local_s02_detail',
      'An upfront-v1 root is at Plan generation 7 with no Active replan. S01 revision 3 is delivered. '
      'The unfinished stages are S02 revision 2 depending on S01, S03 revision 4 depending on S02, '
@@ -267,6 +294,11 @@ CASES = (
      'unchanged. The batch records a focused revalidation receipt binding those facts to generation '
      '8; the old generation-7 receipt also remains as history.',
      {'preparation_valid': True, 'successor_needs_refinement': False}),
+    ('replan_revised_preparation',
+     'An upfront-v1 root moved from Plan generation 7 to 8 through a published batch. S03 was revised '
+     'from revision 4 to revision 5 and its old generation-7 preparation remains linked only as '
+     'history. The replacement has no generation-8 preparation receipt yet.',
+     {'preparation_valid': False, 'successor_needs_refinement': True}),
     ('replan_atomicity_violation',
      'An upfront-v1 root still says Plan generation 7 and Active replan D-216 pending. S01 revision 3 '
      'is delivered; S02 revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. '
@@ -292,6 +324,29 @@ CASES = (
      'tests the legacy wrapper and its REPLANNER contract.',
      {'operation': 'replan', 'role': 'REPLANNER', 'repair_shape': 'single-leaf',
       'batch_created': False}),
+    ('discovery_completion_without_code_pr',
+     'Upfront discovery stage S01 required a named experiment, evidence artifact E1, and documented '
+     'decision D1. E1 and D1 are tracked on the authoritative vault branch, meet the stage criteria, '
+     'identify delivered discovery contract C-DISCOVERY@1, and invalidate no live assumption. There '
+     'was deliberately no code branch or PR. All other active obligations are verified complete.',
+     {'done': True, 'code_pr_required': False, 'discovery_evidence_verified': True}),
+    ('routine_closeout_finding',
+     'A verified S01 closeout finding records an internal helper rename and links the affected '
+     'assumption ID. It changes no acceptance, scope, dependency, consumed or produced contract, or '
+     'downstream evidence. S02 has a current preparation receipt.',
+     {'replan_required': False, 'affected_preparation_valid': True}),
+    ('contract_contradiction_finding',
+     'A verified S01 closeout finding identifies contract C-INGEST@1 and proves its delivered behavior '
+     'contradicts the semantics consumed by prepared unfinished S02. No repair decision has yet been '
+     'adopted.',
+     {'replan_required': True, 'affected_preparation_valid': False,
+      'executable': False}),
+    ('stale_completed_ancestor_unsatisfied_dependency',
+     'An upfront root and internal ancestor are labelled completed-and-merged. Their active links '
+     'still reach unfinished S03, which depends on C-INGEST@1 from S02. S02 was declined, and no '
+     'adopted disposition rewires or removes S03. Descent queues appear empty only because of the stale '
+     'closed ancestor.',
+     {'outcome': 'BLOCKED', 'done': False, 'executable': False}),
     ('supervisor_native_refinement',
      'Tick entry state is WAITING FOR PLAN after pre-sync and repair reconciliation. The authoritative '
      'root is upfront-v1 with a valid graph, no Active replan, and S02 is the first DFS-eligible '
@@ -418,7 +473,8 @@ def select_cases(names=None):
 def render_prompt(skills, cases):
     """Build a probe prompt containing facts and field names, never answer values."""
     skill_names = ['superagent', 'superloop', 'superstage', 'superauthor', 'supertraverse',
-                   'superrefine', 'superrun', 'supergoal', 'superplan', 'supermeta', 'init']
+                   'superrefine', 'superrun', 'superfinish', 'supergoal', 'superplan',
+                   'supermeta', 'init']
     if (skills / 'superreplan' / 'SKILL.md').is_file():
         skill_names.insert(4, 'superreplan')
     lines = [
@@ -457,8 +513,11 @@ def render_prompt(skills, cases):
         'or vault; draft_action describes scratch artifact handling only: resume, revise, or none; '
         'confirmation remains separately governed by the current gate; root_mode_marker is '
         'incremental, upfront-v1, or absent; upfront_valid, executable, '
-        'done, code_execution, duplicate_stage_ids, duplicate_goal_folder, commitments_preserved, '
-        'and in_place_overwrite are JSON booleans; stages and stage_revision are JSON '
+        'done, code_execution, code_pr_required, discovery_evidence_verified, merge_allowed, '
+        'execution_snapshot_required, historical_snapshot_required, delivery_receipt_reused, '
+        'pr_evidence_preserved, replan_required, affected_preparation_valid, duplicate_stage_ids, '
+        'duplicate_goal_folder, commitments_preserved, and in_place_overwrite are JSON booleans; '
+        'digest_basis is execution-snapshot or current-annotated-plan; stages and stage_revision are JSON '
         'integers; amendment_kind is none, content-amendment, or '
         'compatible-baseline-revalidation; batch_created, execution_paused, duplicate_publication, '
         'active_link_changed, successor_closed, predecessor_evidence_preserved, old_pr_closed, '
@@ -569,6 +628,32 @@ class ValidatorTests(unittest.TestCase):
         answers['supervisor_cursor_native_refinement']['dispatch_form'] = 'generic-child'
         self.assertTrue(any(error.startswith('supervisor_cursor_native_refinement.dispatch_form:')
                             for error in validate_answers(answers, cases)))
+
+    def test_closeout_and_recovery_cases_require_delivery_identity_results(self):
+        cases = select_cases(['manual_superrun_pending_batch',
+                              'execution_snapshot_historical_digest',
+                              'merged_lost_closeout_response',
+                              'ci_pending_replan_request',
+                              'replan_retained_preparation',
+                              'replan_revised_preparation',
+                              'discovery_completion_without_code_pr',
+                              'routine_closeout_finding',
+                              'contract_contradiction_finding',
+                              'stale_completed_ancestor_unsatisfied_dependency'])
+        answers = self.valid_answers(cases)
+        self.assertEqual(validate_answers(answers, cases), [])
+        answers['ci_pending_replan_request']['merge_allowed'] = True
+        self.assertTrue(any(error.startswith('ci_pending_replan_request.merge_allowed:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['merged_lost_closeout_response']['duplicate_publication'] = True
+        self.assertTrue(any(error.startswith('merged_lost_closeout_response.duplicate_publication:')
+                            for error in validate_answers(answers, cases)))
+        answers = self.valid_answers(cases)
+        answers['discovery_completion_without_code_pr']['code_pr_required'] = True
+        self.assertTrue(any(error.startswith(
+            'discovery_completion_without_code_pr.code_pr_required:')
+            for error in validate_answers(answers, cases)))
 
     def test_selected_cases_require_exact_selected_membership(self):
         cases = select_cases(['contract_break', 'legacy_default'])

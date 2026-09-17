@@ -327,7 +327,10 @@ At each **ancestor** along the path, locate the row whose **active** child-plan 
 at the child you just came from. For completion ascent, a `repair requested` row or a row
 whose active Plan now points to a successor MUST NOT be advanced by the predecessor's
 closeout. Record historical evidence only and return without changing active rows or ancestors.
-Never match a row through its repair history. Otherwise apply the mode's update:
+Never match a row through its repair history. If the predecessor actually merged, first record its
+delivery/contracts and PR disposition in the C8 history; it stays completed history and any needed
+correction is fresh work. A late predecessor closeout never closes the successor. Otherwise apply the
+mode's update:
 
 - **Planning mode** (superplan, after a new plan is written): set that row's **Status** →
   `in progress (planning underway)` **only if** it was previously not-started / `incomplete`. **Never
@@ -338,10 +341,18 @@ Never match a row through its repair history. Otherwise apply the mode's update:
 - **Completion mode** (superfinish, after a leaf is executed): the leaf row itself and ancestors
   are updated separately because they answer different questions.
   - **Leaf-row update** (the row pointing at the executed implementation plan): set the row's
-    Status based on the leaf's code-PR merge state at superfinish time —
+    Status based on the leaf's authoritative delivery receipt at superfinish time. For upfront work,
+    first verify its execution snapshot (generation, Stage ID/revision, historical preparation
+    receipt/digest and reviewed revisions), delivered contract revisions, and actual integration. The
+    S5 digest is checked against the recorded pre-execution vault blob, not the closeout-annotated
+    current plan. A completed stage is not reclassified by applying the unstarted-stage preparation
+    predicate to its annotated bytes. Then —
     - `executed — PR open` if the code PR is still open (closeout exists; main does not yet have
       the code).
     - `completed-and-merged` (or `done`) if the code PR has been squash-merged to `main`.
+    - For a discovery stage with no code PR, `completed-and-merged` / `done` only when its specified
+      evidence and documented decision are tracked and verified and its delivered discovery contracts
+      are identified.
     In either case, write a one-line rollup + `Closeout: [[…]]` link in Comments, and record the
     PR number (`#NNN`) in the PR column. A later superfinish invocation flips `executed — PR open`
     to `completed-and-merged` once the PR merges (idempotent re-run).
@@ -349,7 +360,7 @@ Never match a row through its repair history. Otherwise apply the mode's update:
     child plan's progress-report table and apply the "all children merged-on-`main`" test (C4 —
     treating `deferred` / `declined` / `out-of-scope` as non-blocking; treating
     `executed — PR open` as NOT-yet-merged-on-`main`, i.e. blocking).
-    - If every row is merged-on-`main`, flip the ancestor's row → `completed-and-merged` (or
+    - If every row is delivery-verified under C9 (including no-PR discovery rows), flip the ancestor's row → `completed-and-merged` (or
       `done`) and write a one-line rollup + `Closeout: [[…]]` link in Comments.
     - Otherwise set the ancestor's row to `in progress (partially executed)` — but **only if the
       row was previously `incomplete`, `PLAN WRITTEN — needs refinement`,
@@ -401,7 +412,8 @@ superrun calls. Before any REPLANNER dispatch:
    final semantic affected set and expansion reasons (both initially `pending`); every active
    path/revision; an initially unassessed per-stage `retain` / `revise` / `completed-history` /
    authorized disposition table with evidence slots; every predecessor PR/branch/worktree and
-   integration disposition; draft paths, successor paths, and retired-ID replacement mapping
+   integration disposition; for an executing/CI-pending stage, its execution snapshot, run ids,
+   current PR/head and an initially unresolved merge disposition; draft paths, successor paths, and retired-ID replacement mapping
    (initially `none` or `pending`);
    **Resolution** (`pending`, later `published`, `superseded`, or `declined`); published generation;
    publication decision marker; and resolved publication PR/commit evidence. Do not omit a field
@@ -420,6 +432,11 @@ An adopted decision interrupted before step 3 is not discarded and does not auth
 Reconcile the persisted decision authority, create or finish this same request, and keep execution
 paused; a loop log alone does not authorize REPLANNER. Once the committed root points at the pending
 record, the next heavy operation is `superreplan <root> <record>` under REPLANNER.
+
+If the request catches a stage in CI wait, let the run finish or remain queued without treating it as
+authority: preserve the packet and actual PR/branch/worktree history in the record, stop post-CI merge,
+and require superreplan to assign `resume-existing`, `replace`, or another adopted disposition. Never
+discard that history and never merge obsolete work merely because it was queued first.
 
 There is at most one active upfront batch per goal. A later finding joins an unpublished batch only
 through an explicit adopted record revision that updates origins, closure, baselines, and authority;
@@ -553,8 +570,10 @@ rows, PRs and missing evidence. This audit is read-only; reconcile via the ownin
 
 Resolve mode with superstage S1. For `upfront-v1`, validate the complete active graph with S2 and
 include every active stage, dependency, contract delivery, preparation pointer, and active-replan
-barrier in the audit. An invalid graph is BLOCKED. Incremental and unmarked roots retain the legacy
-audit below.
+barrier in the audit. Inspect the synchronized authoritative root, not loop hints or an unmerged docs
+candidate. A non-`none` barrier, missing/malformed record, or partial publication is BLOCKED/incomplete
+according to C8 and can never be DONE. An invalid graph is BLOCKED. Incremental and unmarked roots
+retain the legacy audit below.
 
 1. Read the synchronized authoritative tree from the root. Visit active child links recursively
    even when internal rows carry closed status or closeout banners. Track visited paths: cycles,
@@ -568,21 +587,41 @@ audit below.
    work, verify the recorded integration commit on main (local main when no remote) and closeout.
    Documentation-only work uses its tracked committed deliverable on the authoritative main/vault
    branch. A docs closeout commit alone never substitutes for the code integration evidence.
-   In upfront mode, also verify that delivered evidence identifies every produced contract revision
+   An upfront implementation delivery receipt must bind its execution-entry root generation,
+   Stage ID/revision, historical preparation receipt/digest, reviewed code/source revisions, actual
+   merge/direct-integration identity, and every produced contract revision. Verify the preparation
+   digest against the recorded historical plan blob, not the closeout-annotated current file. For a
+   discovery stage, accept no-code completion only when its specified evidence and documented decision
+   are tracked and verified and its delivered discovery contracts are identified.
+   In upfront mode, verify that delivered evidence identifies every produced contract revision
    consumed by active stages. A provider's approved decline/defer/out-of-scope disposition can close
    its own obligation but cannot satisfy a consumer; that live consumer keeps the goal incomplete or
    BLOCKED pending an adopted replan.
-3. If the audit discovers unfinished work hidden by an ancestor's closed-for-descent status
+3. Re-evaluate every dependency edge from delivery receipts. A closed ancestor cannot hide a live
+   consumer whose prerequisite delivery is absent, declined, at the wrong contract revision, or only
+   open/CI-pending; report that path BLOCKED. Revised stages after a generation publication require a
+   new preparation. A retained stage keeps preparation only with the focused new-generation
+   revalidation required by S4/S5. Old-generation preparation alone is an active obligation, not
+   completion evidence.
+4. Inspect findings, closeouts and C8 records that name active contract/assumption IDs. Routine verified
+   findings that preserve commitments create no planning obligation. A verified contradiction keeps
+   affected unfinished preparation non-executable and requires the decision/adoption path; an
+   unverified finding is never proof. Any adopted-but-unpublished request, unresolved batch/repair,
+   conflicting disposition, or unresolved affected consumer prevents completion.
+5. If the audit discovers unfinished work hidden by an ancestor's closed-for-descent status
    or closeout marker, return **BLOCKED** with that path for authorized reconciliation.
    Returning `incomplete` without restoring reachability would repeat the same empty queues.
    Otherwise, `executed — PR open`, closed-but-unmerged PR, pending CI, unresolved repair or BLOCKED finding,
    missing/unverifiable integration evidence, or inconsistent state => **BLOCKED**, even if a
    report also says `none`. Ordinary unplanned/ready work => **incomplete**. A valid pending C8
    request => **incomplete** with its repair planning target; invalid repair state => **BLOCKED**.
-4. For repair history, verify each predecessor PR's disposition: reused and now merged, or
+6. For repair history, verify each predecessor PR's disposition: reused and now merged, or
    explicitly replaced/closed with authority, or intentionally declined/deferred with reason.
    Historical closeout links never suppress active repair work. Supersession alone does not
    satisfy an unresolved predecessor PR. Do not execute or reopen finished predecessors.
-5. **complete** requires every active obligation to pass, no unresolved blocker/repair/CI wait,
-   and no conflicting report evidence. Report checked rows and integration/disposition evidence
-   to the caller. Unknown evidence => BLOCKED, never optimistic completion.
+7. **complete** requires the root barrier to be clear; the active graph valid; every active stage and
+   prerequisite delivery resolved; every implementation/discovery delivery receipt verified; all
+   predecessor PR/integration history accounted for; and no unresolved finding, repair, batch, CI wait,
+   or other active obligation. Report checked rows, contracts, receipts and integration/disposition
+   evidence to the caller. Empty traversal queues are only the trigger for this audit. Unknown evidence
+   => BLOCKED, never optimistic completion.

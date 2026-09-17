@@ -1,0 +1,49 @@
+Read the supplied skill contracts at /Users/eugene/src/superagent-plugin/.claude/worktrees/upfront-plan-tree/skills/{superagent,supertraverse,superplan,superrun,superfinish}/SKILL.md. Apply their algorithms to independent fixtures below. This is a read-only simulation: no dispatch, git, network or fixture mutation. Do not read implementation reports or test expectations. Return one JSON object keyed by scenario id. Each result needs a reason citing the governing rule plus the requested fields. Use booleans for done, durable_repair, overwrite_successor, duplicate_successor, reset_repair; planning values repair/none/other; execution values successor/none/other; outcome values escalate/continue/done. Do not improve or invent absent rules.
+
+adopted_replan: One row: executed — PR open, Plan leaf, PR #1 open/BLOCKED, Closeout link and leaf closeout banner. Panel adopts re-plan 3/3. Apply the decision then compute the next planning target. No code has merged.
+Return fields: planning, done, durable_repair
+
+mixed_none_blocked: plan_exhausted=true. Planner returned none. Executor returns none AND explicitly reports the sole closed-out leaf PR #1 still open/BLOCKED. No decision has resolved it. Choose supervisor outcome before any new panel result.
+Return fields: outcome, done
+
+closeout_repair: A valid committed adopted repair record names this step and old leaf. Row is repair requested, with old Plan and Closeout link; old leaf has closeout banner. Compute planning and execution selection before any successor is written.
+Return fields: planning, execution, done
+
+merged: Both queues empty. Only active leaf is completed-and-merged. Code PR is verified MERGED and its merge commit is verified in main; closeout is tracked; no repairs/blockers.
+Return fields: done
+
+declined: Both queues empty. One leaf verified merged on main; another explicitly declined with a recorded authorized reason and PR disposition; no remaining repair or blocker.
+Return fields: done
+
+fresh_tick: Fresh tick knows only persisted files: loop has adopted re-plan in Decisions but no tree edit (crash before publication). Closed-out old leaf has open blocked PR. Recover the decision before dispatch and compute planning target.
+Return fields: planning, durable_repair, done
+
+successor: Repair published: active Plan successor, ready-to-execute row, successor has no closeout. Predecessor and its closeout are linked only inside repair history. Old PR integration is explicitly planned; it remains open. Compute execution target.
+Return fields: execution, done
+
+stale_ancestor: Both queues return none. Root row says completed-and-merged with Closeout but links to internal child table whose leaf is executed — PR open with open PR. No authorized disposition or successor exists. Audit completion.
+Return fields: done, outcome
+
+missing_evidence: Both queues empty. Sole row says done with a closeout link, but its claimed merged PR cannot be queried and main integration cannot be verified.
+Return fields: done, outcome
+
+late_closeout: Current step active Plan points to ready successor. Repair history points to predecessor. A delayed superfinish for predecessor reports old PR merged. Should it replace the active link or complete the successor row?
+Return fields: overwrite_successor
+
+replay: Same adopted repair decision is replayed after its successor was committed and active Plan already points to successor. Loop status lagged publication. Should recovery create another successor or reset the row to repair requested?
+Return fields: duplicate_successor, reset_repair
+
+hidden_ready: Both queues return none. Root closed row links to internal table with ordinary ready/unplanned unfinished work. C9 discovers it but C6 cannot reach it because the ancestor is closed. Choose audit outcome before any reconciliation.
+Return fields: done, outcome
+
+second_repair: Valid tracked R1 decision published P0->P1. P1 later failed and a separate adopted R2 published P1->P2, the active ready successor. Fresh tick replays both decisions; all links and decisions agree. Is R1 a blocking contradiction?
+Return fields: outcome, execution, duplicate_successor
+
+declined_repair: Repair R1 was pending. A later authorized decline resolved that repair record and step with reason and PR disposition. Fresh tick replays the old R1 decision. Both queues empty, no other obligations. Should it reopen repair?
+Return fields: reset_repair, done
+
+direct_merge: Both queues empty. Sole active code leaf completed-and-merged without a PR under direct integration. Recorded integration commit is verified on local main (no remote exists), and closeout is tracked. No unresolved history.
+Return fields: done
+
+closed_pr: Both queues empty. Active row is closed-out. Code PR was CLOSED without merge; no decline/defer decision or successor exists.
+Return fields: done, outcome

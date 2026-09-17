@@ -65,7 +65,9 @@ contract. It must name this project, its original meta-plan/source snapshot and 
 destination, stable draft identity, and original round. Reuse those values exactly; do not allocate a
 new round or write another meta-plan. First reconcile a lost response against the intended destination:
 a complete tracked root, all indexed artifacts, and matching review is publication evidence and can flow
-to the normal labelled-report parse; absent publication resumes the same index; partial, conflicting, or
+to the normal labelled-report parse only when its A7 PR/commit is verified in authoritative internal
+main or the external vault branch. Reconstruct the result from those actual artifacts and history, not
+from a success-looking child message. Absent publication resumes the same index; partial, conflicting, or
 multiple publication is `BLOCKED`. The saved draft itself is never approval: the resumed child still
 receives the current two-factor confirmation invocation.
 
@@ -225,7 +227,9 @@ child, with no planner children beneath it.
 
 Parse labelled `**Goal folder:**` and `**Root plan:**` from a complete returned report; an upfront
 complete report must also carry labelled `**Planning mode:** upfront-v1`, `**Stages:**`, and
-`**Tree review:**`. **If** the report contains `DRAFT-INCOMPLETE` and `**Draft index:**`, supermeta
+`**Tree review:**`, plus the merged internal `**PR:**` or external-vault `**Commit:**` publication
+evidence. Synchronize and verify that one A7 unit contains every reported artifact before appending the
+ledger. **If** the report contains `DRAFT-INCOMPLETE` and `**Draft index:**`, supermeta
 writes nothing to the ledger, preserves/reports that index and its original meta-plan/source/round, and
 exits so the explicit resume form can reuse it. **If** the report is missing a required complete field,
 or supergoal reports a refusal — the key is not `true`
@@ -235,6 +239,11 @@ to the ledger, **moves the meta-plan back** out of `meta-plans/` into scratch, a
 failure **verbatim** with the scratch path, then exits.
 
 ### 7. Ledger and commit (A7)
+
+Before appending, reconcile `prd.md` and authoritative history for this project/round/meta-plan/goal
+identity. A matching integrated ledger row means a prior supermeta publication succeeded after its
+response was lost: reuse it and report the existing PR/commit without appending or publishing again. A
+single partial A7 unit resumes with the same row and branch; conflicting rows/publications are BLOCKED.
 
 Append this row to `prd.md`'s `## Iteration ledger` table (the goal-folder path is
 `**Goal folder:**` from step 6 made relative to `<vault_root>`):

@@ -1,0 +1,20 @@
+{
+  "ci_resume_pending_batch": {
+    "merge_allowed": true,
+    "required_checks": [
+      "Enter the recorded worktree.",
+      "Verify each recorded run conclusion with one gh run view <id> per run.",
+      "Apply superrun Step 3a's terminal branch: all-green merges; any red conclusion blocks."
+    ],
+    "reason": "The concrete superrun 'Resume entry — post-CI' says not to re-run Steps 1–3, then requires only per-run conclusion verification before taking Step 3a's terminal branch. It names no Active replan, C8 record, S1/S3/S5, or S02-disposition cross-check. That permits the merge here after green verification, even though supertraverse C8 calls a pending upfront batch an execution barrier and superstage S3 says an upfront stage is executable only when no active replan exists."
+  },
+  "closeout_snapshot": {
+    "execution_identity_required": false,
+    "historical_snapshot_rule": false,
+    "reason": "superfinish Step 3 only directs insertion of a brief top-of-plan close-out note and links it to the report; its idempotency condition checks only whether such a note already references a report. The current concrete closeout flow does not retain or verify the pre-execution Stage ID/revision, root generation, preparation receipt, or digest, and it does not validate a historical plan-body snapshot rather than the currently annotated bytes."
+  },
+  "closeout_lost_response": {
+    "duplicate_closeout": true,
+    "reason": "superfinish's general after-run sentence says to re-detect and skip steps already done in a prior run for the session, but concrete Step 2 has no closeout-report identity or authoritative integration-reconciliation check before it writes a timestamped report. Step 3 can skip an existing top note, and C7 can leave an evidence-matching row untouched, without preventing a new report. The current consumer rules therefore do not require reconciliation of the already integrated closeout before duplicate report creation."
+  }
+}

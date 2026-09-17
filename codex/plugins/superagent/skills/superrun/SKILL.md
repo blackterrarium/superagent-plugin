@@ -126,6 +126,25 @@ needs focused compatible revalidation returns `NEEDS-REFINEMENT` with the exact 
 the leaf untouched. A relevant changed assumption returns `REPLAN-REQUIRED`; missing or contradictory
 evidence is BLOCKED. Do not prepare a stage while running as EXECUTOR.
 
+Before implementation, capture one **execution-entry snapshot** from that verified state: root path and
+Plan generation; active stage path, Stage ID and Stage revision; Preparation report path and its
+prepared-plan digest; the authoritative vault commit containing that stage and receipt; reviewed code
+revision; source agreement/revision; and every consumed contract revision/provider delivery receipt.
+The existing tracked prepared plan plus receipt are the durable snapshot; do not create a second
+database or a pre-code docs publication. Carry this exact identity into the code PR description (or
+direct-integration evidence), any CI-PENDING packet, and superfinish. If recovery must reconstruct it,
+use only the tracked receipt, the exact historical vault blob/commit, and verified branch/PR history;
+missing or conflicting identity is BLOCKED. Never derive a past execution identity from the current
+plan after closeout or replanning has edited it.
+
+Before dispatching SDD, reconcile evidence that the selected identity already ran. A verified merged
+PR/direct integration with no complete closeout means **closeout recovery**: do not implement again;
+invoke superfinish with the execution snapshot and actual integration evidence. A verified already
+published delivery receipt is also handed to superfinish for idempotent reconciliation rather than
+creating another report. An open/CI-pending attempt resumes its recorded branch/worktree path. If an
+active successor replaced this identity, preserve the old attempt as history and follow C8; never
+execute or close the successor by inference.
+
 ## Repair successor context
 
 For a C8 successor, read its Repair record and integration disposition before Step 2. If it
@@ -309,7 +328,10 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
    glob); if `SUPER_BRANCH_STYLE` is anything else, follow that style instead. If
    `SUPER_PROTECTED_MAIN=true` (the shipped default), also open the code PR with `gh pr create`. If
    `SUPER_PROTECTED_MAIN=false`, skip `gh pr create` — there is no PR in this branch, only the pushed
-   feature branch (still pushed so CI, if any, has something to run against).
+   feature branch (still pushed so CI, if any, has something to run against). Record the execution-entry
+   snapshot in the PR description when there is a PR, or in the verified direct-integration evidence
+   handed to superfinish when there is not; this makes a lost response recoverable from actual delivery
+   history.
 2. **CI-green gate — monitor-parked, never polled — keyed by `SUPER_TEST_EVIDENCE` three ways:**
    - **`SUPER_TEST_EVIDENCE=ci`:** collect the run id of **every** CI run this leaf queued (`gh run
      list --branch <branch>` — one run per push; a sharded batch has several, see **CI scheduling**
@@ -345,10 +367,30 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
          **Branch:** <branch name>
          **Code PR:** <url> (open — awaiting CI) — or `N/A (SUPER_PROTECTED_MAIN=false)` if there is no PR
          **CI runs:** <every queued run id, comma-separated>
+         **Execution snapshot:** generation <N>; stage <ID> revision <N>; preparation <path> digest <sha256>;
+         vault commit <sha>; reviewed code <sha>; source <revision>; consumed deliveries <IDs/receipts>
          **Remaining:** CI-green gate verdict (Step 3a) → superfinish closeout (Step 4) → worktree exit (Step 5)
 
    On the terminal state (Monitor fired, or the supervisor resumed you) — or immediately, when no
-   wait was needed (`SUPER_TEST_EVIDENCE=local` with no runs found):
+   wait was needed (`SUPER_TEST_EVIDENCE=local` with no runs found), run this **integration-authority
+   gate before either merge mechanism**:
+
+   - synchronize authoritative code and vault state; re-read S1/S2, the active Plan link, root
+     generation/Active replan, current stage identity, and any C8 record/disposition;
+   - match the branch, PR/head or direct-integration candidate, and execution-entry snapshot. For an
+     unchanged active stage with no barrier, continue. A pending batch is a whole-goal barrier even
+     when CI is green. Preserve the old PR/branch/worktree/run evidence in that record and do not merge
+     while its stage disposition is unresolved;
+   - when a batch published after execution began, never merge from the queued packet alone. Continue
+     only through the published record's explicit, verified `resume-existing` disposition and active
+     successor instructions after their required review/test gates. `replace`, retirement, a changed
+     active link/identity, unresolved disposition, missing record, or contradictory publication blocks
+     this merge and preserves the old integration history for reconciliation.
+
+   This gate applies identically to ordinary completion and post-CI resume. A barrier/identity failure
+   returns BLOCKED or REPLAN-REQUIRED with the root, Decision ID, stage, PR and snapshot; it never closes
+   or merges the old PR and never treats green CI as authority. Once the gate passes:
+
    - **ALL runs GREEN, or no CI wait was needed** → (`SUPER_PROTECTED_MAIN=true`, the shipped
      default) merge per `SUPER_MERGE_METHOD` (default `squash`) — e.g.
      `gh pr merge --squash --delete-branch` (plain merge — **not** `--admin` unless
@@ -382,6 +424,10 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
                                                     # git -C "$primary_root" commit -m "<leaf-plan title>"
    git -C "$primary_root" push   # only if a remote exists — a repo with no remote simply keeps the merge local
    ```
+
+   Put the complete execution snapshot in the merge/squash commit message body so direct integration
+   has the same recoverable identity as a PR description. Verify that commit on authoritative main
+   before invoking superfinish.
 4. If `SUPER_GH_DISABLE_SANDBOX=true` (macOS hosts where `gh` needs keychain access to verify the
    TLS cert), all `gh` commands need `dangerouslyDisableSandbox: true`. If `false` (the shipped
    default), run `gh` normally. Do **not** add Anthropic/Claude attribution or `Co-Authored-By`
@@ -392,18 +438,26 @@ primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir
 When superrun is invoked with a **CI-terminal
 resume packet** — the CI-PENDING fields (leaf plan, root, worktree, branch, PR url, run ids) plus each
 run's terminal conclusion — do **not** re-run Steps 1–3: the leaf is already implemented and its runs
-are already terminal. Enter the recorded worktree (it was left in place), verify the packet's
-conclusions with one `gh run view <id>` per run (trust but verify — the packet may be stale), and take
-Step 3a's terminal-state branch directly: merge on all-green, BLOCKED on any-red. Then continue with
-Steps 4–5 and return the real **Final Report**.
+are already terminal. Require its complete execution snapshot. Enter the recorded worktree (it was
+left in place), verify the actual branch/PR head and each conclusion with one `gh run view <id>` per run
+(trust but verify — the packet may be stale), then run Step 3a's integration-authority gate against the
+current authoritative root, C8 record, and disposition. Merge only when both the CI verdict and current
+authority pass. A packet queued before a batch request is recovery evidence, never merge authority.
+Then continue with Steps 4–5 and return the real **Final Report**.
 
 ## Step 4 — Close out the plan (invoke `superagent:superfinish`)
 
 Once execution is complete, invoke the `superagent:superfinish` skill (Skill tool), **passing the
-target leaf `<PLAN.md>`** (superfinish's Gate-1 resolution precedence #2 — "passed by a calling
+target leaf `<PLAN.md>`, its execution-entry snapshot, and actual delivery evidence** (superfinish's
+Gate-1 resolution precedence #2 — "passed by a calling
 skill"). It captures findings, writes the closeout report, annotates the leaf plan, runs
 `supertraverse` **completion-mode ascent** (C7) to advance the parent seed's progress-report table,
 and merges its docs-only **closeout PR**. Capture that PR URL too.
+
+An upfront discovery stage may reach Step 4 without a code PR only when its specified experiment
+evidence and documented decision are verified and tracked on the authoritative vault branch. Pass that
+evidence, decision, and delivered discovery-contract revisions to superfinish. Absence of source-code
+work is not a waiver of the stage's evidence contract.
 
 ## Step 5 — Worktree lifecycle
 

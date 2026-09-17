@@ -298,9 +298,14 @@ synchronously, then sets the next status — all in one turn. Ticks never overla
 fire between turns; in `external` mode the **lock (L3)** serializes them. So a **persisted** transient
 state means a crashed prior tick (which also left a stale lock that `acquire_lock()` steals
 immediately when its recorded owner PID is dead, else after
-`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note, **map the persisted transient state back to its matching
-ready state** (the caller supplies the transient→ready mapping for its own status values — superagent:
-`PLANNING → WAITING FOR PLAN`, `RUNNING → WAITING FOR RUN`), and fall through to that branch this tick.
+`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note and reconcile the
+caller-owned authoritative artifacts before retrying. A published docs operation, merged code delivery,
+open/CI-pending PR, or integrated closeout may have succeeded after the response was lost; actual
+tracked commits/PRs and identity-bound receipts override the stale transient hint. Then **map the
+persisted transient state back to its matching ready state** (the caller supplies the
+transient→ready mapping for its own status values — superagent: `PLANNING → WAITING FOR PLAN`,
+`RUNNING → WAITING FOR RUN`) and fall through to that branch. Recovery reuses the existing identity;
+it never duplicates publication or reruns delivered work merely because loop state lagged.
 
 ### Tick teardown invariant — never exit on a transient status, never end a tick with a question
 
@@ -677,6 +682,12 @@ is present and tracked:
   are checked on the code repo as before;
 - (optional) the merge is in history — `git log --oneline origin/main | grep <pr-number>`.
 
+For an identity-bearing operation, verify the report against its actual authoritative publication:
+the recorded stage/generation/revision or Decision ID, source/preparation/delivery identity, and the
+one integrated A7 transition. A filename, loop hint, unmerged docs PR, or child success message alone
+does not pass Be-sure. On a lost response, one matching integrated unit is success to reuse; competing
+or partial units require reconciliation before another write.
+
 If a reported artifact is **missing** after a clean `sync_main()`, the merge did not propagate as
 claimed: `git fetch` once more and re-check; if still missing → **STOP and escalate** with the
 discrepancy. **Do not advance the state machine on an unverified merge** — that is how the loop drifts
@@ -702,9 +713,11 @@ skeleton lives in `superauthor` clause A7** (merge per `SUPER_MERGE_METHOD`, def
 a repo whose branch protection doesn't require it trips the harness security classifier). Do not
 duplicate that skeleton — apply A7's.
 
-1. **CI-green gate before merge.** A code PR is merged only once its gating CI lane is green (the caller
-   names the lane). If CI is **red**, do **not** merge — route to the escalation ladder (L7) with the
-   failure as the decision packet.
+1. **CI-green and current-authority gate before merge.** A code PR is merged only once its gating CI
+   lane is green (the caller names the lane) **and** the caller revalidates the current authoritative
+   work identity/barrier/disposition. A queued-before-request packet is not merge authority. If CI is
+   red, an adopted barrier is pending, the active identity changed, or disposition is unresolved, do
+   **not** merge — preserve the PR evidence and route to the caller's reconciliation/escalation path.
 2. **Merge via A7.** Apply `superauthor` A7's merge — per `SUPER_MERGE_METHOD` (default `squash`), never
    `--admin` unless `SUPER_ADMIN_MERGE=true` permits it. If `SUPER_PROTECTED_MAIN=true` (the shipped
    default), the default branch is protected; never direct-push. If `SUPER_PROTECTED_MAIN=false`, a

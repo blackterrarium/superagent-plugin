@@ -58,7 +58,7 @@ codex-only:end -->
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
 | "Context is getting low but I'll squeeze one more `superplan`/`superrun` in while I'm here" | NO. **Run the Session skill-budget gate (Step 0.5) before every iteration.** After `SUPER_HEAVY_STEP_LIMIT` heavy skills (default 6) in one cron session → persist, stop the cron driver, and hand off; tell the user to `/clear` and re-run `/superagent`. A skill that dies mid-run with the window blown leaves no clean resume. | <!-- cc-only -->
 | "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, arm the completion **Monitor**, release the lock, end the tick. The harness re-invokes you exactly once, when ALL runs are terminal. Per-tick / in-context polling is the context waste the parked state exists to eliminate. | <!-- cc-only -->
-| "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | cron: NO — strict no-op (the Monitor owns the wait; read status, release lock, exit — no `gh`, no `curl`, no subagent). external: ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. | <!-- cc-only -->
+| "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | Reconcile the authoritative root/C8 barrier first. Then cron with no barrier change: no CI query (the Monitor owns the wait); external: ONE batched `curl` over the recorded run ids. Never dispatch a heavy skill while still parked. | <!-- cc-only -->
 <!-- cursor-only:start
 | "superrun yielded CI-PENDING — I'll poll `gh run view` / `gh run watch` in a loop until it finishes" | NO. **Park.** Record the CI packet, set `WAITING FOR CI`, release the lock, end the tick. Each later scheduled tick does ONE batched `curl` over the recorded run ids and exits unless every run is terminal. Per-tick heavy polling is the context waste the parked state exists to eliminate. |
 | "A tick fired while WAITING FOR CI — I'll check the run status while I'm here" | ONE batched `curl` over the recorded run ids, then exit if any is still running — never a heavy dispatch. |
@@ -373,7 +373,11 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    as an inline list of GitHub Actions run ids), `repo:` (the `owner/name` of the repository the
    runs live in — the PR's **base** repository, e.g. from `gh repo view --json nameWithOwner`; this is
    what lets the wrapper find the runs when the clone's remote is a fork), `branch:`, `pr:`, `leaf:`,
-   `worktree:`, and `since: <ISO-8601 UTC timestamp, e.g. 2026-08-28T14:05:00Z>`. Set
+   `worktree:`, the execution snapshot's `plan_generation:`, `stage_id:`, `stage_revision:`,
+   `preparation:`, `preparation_digest:`, `vault_commit:`, `reviewed_code_revision:`,
+   `source_revision:` and `consumed_deliveries:`, and `since: <ISO-8601 UTC timestamp, e.g.
+   2026-08-28T14:05:00Z>`. These are recovery hints copied from superrun's packet; the tracked
+   preparation, authoritative history, PR and C8 record remain the evidence. Set
    `status: WAITING FOR CI`. It must look exactly like this:
 
    ```yaml
@@ -384,6 +388,15 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
      pr: <number>
      leaf: <plan path>
      worktree: <path>
+     plan_generation: <N>
+     stage_id: <ID>
+     stage_revision: <N>
+     preparation: <report path>
+     preparation_digest: <sha256>
+     vault_commit: <sha>
+     reviewed_code_revision: <sha>
+     source_revision: <revision>
+     consumed_deliveries: <contract IDs and receipt paths>
      since: <ISO-8601 UTC timestamp>
    ```
 
@@ -421,19 +434,26 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 1. Entry points: the **Monitor fired** (cron — harness re-invokes the session), or an **external
    `WAITING FOR CI` tick's one batched curl** found every run `completed`, or a **form-(B) RESUME**
    found `status: WAITING FOR CI` (see below). `acquire_lock()` if not already held this tick.
-2. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
+2. Run `sync_main()` / `sync_vault()` and reconcile C8 plus the execution snapshot against the
+   authoritative root **before** dispatching a resume process. A pending batch or an adopted request
+   being durably published pauses this PR even when all runs are green. Ensure its record preserves the
+   PR/branch/worktree/run ids and snapshot, set `status: WAITING FOR PLAN`, and do not resume a merge
+   while the stage disposition is unresolved. After a published batch, resume only through its explicit
+   verified `resume-existing` disposition and active successor instructions; otherwise preserve the old
+   PR history and route to replanning/reconciliation.
+3. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
    `SUPER_GH_DISABLE_SANDBOX=true` — or the same batched curl) — never advance on the Monitor's report
    alone.
-3. **Resume `superagent:superrun`:** the process that yielded has exited, so there is nothing to
+4. **Resume `superagent:superrun`:** the process that yielded has exited, so there is nothing to
    message — dispatch a **fresh** `superrun` process exactly as in `WAITING FOR RUN` step 3 (bridge,
    `--tools executor`, foreground Bash, `timeout: 7200000`; model per **Model resolution** under
    **Subagent dispatch**, from `SUPER_MODEL_EXECUTOR`), with a prompt that instructs it to invoke
    `superagent:superrun` with the full `ci_wait` packet + each run's conclusion via its
    **Resume entry — post-CI**. It returns the real Final Report.
-4. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
+5. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
    next state, iteration log). Clear the `ci_wait:` block.
    **cron:** re-arm the driver (`CronCreate`, record the new `cron_id`) so ticks resume. <!-- cc-only -->
-5. The heavy-skill count for this leaf was already incremented on the tick that dispatched
+6. The heavy-skill count for this leaf was already incremented on the tick that dispatched
    `superrun` (Step 2); the park and resume ticks increment `iteration` but **not**
    `session_skill_count` again.
 
@@ -499,9 +519,14 @@ next status — all in one turn). Ticks never overlap: in `cron` mode they fire 
 `external` mode the **lock** serializes them. So a **persisted** `PLANNING`/`RUNNING` means a crashed
 prior tick (which also left a stale lock that `acquire_lock()` steals immediately when its recorded
 owner PID is dead, else after `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log
-a recovery note, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, and fall through to
-that branch this tick. (`WAITING FOR CI` is **not** a crash — it is the durable parked state; see its
-own branch.)
+a recovery note, then reconcile authoritative artifacts before redispatch. `PLANNING` reconciliation
+uses the tracked root/record and may recover a published preparation/replan instead of repeating it.
+`RUNNING` reconciliation inspects the actual branch/PR/main history and execution snapshot: a merged
+delivery with missing closeout routes to superrun's closeout recovery, an existing delivery receipt is
+reused, and open/CI-pending work resumes its recorded integration path. Never rerun implementation
+solely because the final response was lost. After reconciliation, reset `PLANNING → WAITING FOR PLAN` /
+`RUNNING → WAITING FOR RUN` and fall through to that branch this tick. (`WAITING FOR CI` is **not** a
+crash — it is the durable parked state; see its own branch.)
 
 The same mapping applies **in-flight**: if this tick's own dispatch is interrupted and the step cannot
 be completed (superloop L2, tick teardown invariant), apply the reset **now** — log the interruption,
@@ -511,9 +536,14 @@ report so the next tick retries. Never end the tick asking what to do, and never
 
 ### `WAITING FOR CI` (parked — the cheap branch)
 The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-parked**).
+First synchronize authoritative code/vault state and reconcile C8 against the packet's execution
+snapshot. This request-recovery check precedes the driver-specific CI query. If an adopted batch is
+being committed or the root has a pending Active replan, preserve the packet's PR/worktree/run history
+in that record, move to `WAITING FOR PLAN`, and end without dispatching post-CI superrun. Green CI never
+bypasses the barrier. Missing/conflicting identity enters the existing decision ladder.
 <!-- cc-only:start -->
-- **cron:** strict no-op — the Monitor owns the wait. Read status, `release_lock()`, exit. No `gh`,
-  no `curl`, no subagent. (Normally no cron tick even fires here — the driver was suspended at
+- **cron, when reconciliation found no barrier change:** the Monitor owns the wait. After the
+  authoritative check, `release_lock()`, exit. No `gh`, no `curl`, no subagent. (Normally no cron tick even fires here — the driver was suspended at
   parking; this covers a straggler tick or a manual `--tick`.)
 <!-- cc-only:end -->
 - **external:** run **one batched `curl`** over all ids in `ci_wait.runs` (auth `gh auth token` — with
@@ -535,6 +565,9 @@ After the pre-sync gate in `WAITING FOR PLAN` or `WAITING FOR RUN`, reconcile ad
 Decisions with the authoritative tree using **supertraverse C8**. This also applies after crash
 recovery and a resumed user decision. Apply missing requests; reconcile partial publications;
 reuse already-published successors. Clear `plan_exhausted` when a repair is newly requested.
+Also inspect newly integrated delivery receipts/findings before selection: a verified contract or
+assumption contradiction invalidates affected unfinished preparation and enters the existing
+decision/adoption path; a routine finding that preserves commitments creates no planning operation.
 If reconciliation changes the ready state, run that state's dispatch instead. Never dispatch a
 normal traversal against a log-only repair decision. Ambiguous or uncommitted repair state goes
 to the decision ladder; no queue exhaustion or DONE transition is allowed from that state.
@@ -592,7 +625,9 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
 4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
    skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
    `sync_main()` (then `sync_vault()` in external vault mode), then verify `superrun`'s reported merges landed:
-   the leaf's closeout report exists and is tracked (on local `main` for an internal vault; in the vault repo for an external one — L5's two-kind rule), and (if the code PR merged) its
+   the leaf's closeout delivery receipt exists and is tracked (on local `main` for an internal vault;
+   in the vault repo for an external one — L5's two-kind rule), matches the execution snapshot and
+   delivered contract revisions, and (if the code PR merged) its
    squash commit is in `origin/main` history. A merged code PR but stale local `main` is the exact bug
    this gate exists for — reconcile (ff-pull) or escalate. Do not advance on an unverified merge, and
    surface the failure in this tick's `Findings & issues` line.
@@ -610,7 +645,8 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
      over `none` or a claimed completed leaf. Run the **Decision-escalation ladder** below.
      Apply adopted re-plan through **supertraverse C8**, not just a loop-status edit. If the panel
      cannot converge, use `WAITING FOR INPUT`. Never silently spin on an invisible blocked leaf.
-   - **Executed a leaf** (integration and closeout verified) → `status: WAITING FOR PLAN`,
+   - **Executed a leaf** (integration and identity-bound delivery receipt verified; for discovery,
+     required evidence/decision verified without requiring a code PR) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
    - **`none`** (no execution target, with no higher-priority blocker):
      - If `plan_exhausted` is false → `status: WAITING FOR PLAN`.
