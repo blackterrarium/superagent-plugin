@@ -61,6 +61,73 @@ fi
 . "$SCRIPT_DIR/_common.sh"
 load_superenv "$REPO"
 
+SUPERVISOR="$(superagent_supervisor "$LOOP_FILE" "${SUPERAGENT_SUPERVISOR:-superagent}")" || exit 2
+if [[ -n "${SUPERAGENT_SLUG:-}" ]]; then
+  superagent_check_registration "$SUPERAGENT_SLUG" "$LOOP_FILE" "$SUPERVISOR" || exit 2
+fi
+# --- L3 lock safety net (issue #15) -----------------------------------------
+# The overlap lock is acquired/released by the AGENT inside the session
+# (superloop L3). If the CLI kills the session mid-flight (background-wait
+# ceiling, crash, OOM), release_lock() never runs and the leaked lock wedges the
+# loop until the SUPER_LOCK_STEAL_MIN (90 min) steal window expires. The wrapper
+# outlives the session, so it is the safety net: acquire_lock() records
+# $SUPERAGENT_TICK_PID (this wrapper's PID, exported here) in <lockdir>/owner,
+# and the EXIT trap reaps the lock ONLY when the owner file names this very tick
+# — a wrapper that exited early on the held-lock path must never reap a peer's
+# live lock.
+LOCK_DIR="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").lockd"
+export SUPERAGENT_TICK_PID=$$
+reap_own_lock() {
+  if [[ -d "$LOCK_DIR" && "$(cat "$LOCK_DIR/owner" 2>/dev/null)" == "$$" ]]; then
+    echo "=== $(ts) superagent-tick reaping leaked L3 lock (session ended before release_lock): $LOCK_DIR ===" >>"$LOG_FILE"
+    rm -rf "$LOCK_DIR"
+  fi
+}
+trap reap_own_lock EXIT
+# A signal received while waiting on the CLI child must still run the EXIT trap
+# (bash skips it for a fatal unhandled signal).
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
+# BUILDING is a local, fail-closed gate before credentials or model startup.
+if [[ "$SUPERVISOR" == supercode ]]; then
+  command -v python3 >/dev/null || { echo "supercode requires python3" >&2; exit 2; }
+  python3 "$SCRIPT_DIR/_coding_loop_state.py" read "$LOOP_FILE" >/dev/null || exit 2
+  if [[ "$(superagent_loop_status "$LOOP_FILE")" == BUILDING ]]; then
+    gate_args=(building-gate "$LOOP_FILE" --repo "$REPO" --vault "$(vault_root "$REPO")"
+      --conf "${XDG_CONFIG_HOME:-$HOME/.config}/superagent")
+    observe_inner() {
+      inner_slug="$(python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); from _coding_loop_state import read_state; print(read_state(Path(sys.argv[2]))["inner_slug"])' "$SCRIPT_DIR" "$LOOP_FILE")" || return 2
+      inner_armed=false; inner_active=false
+      if [[ "$inner_slug" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+        if [[ "$(superagent_scheduler)" == launchd ]]; then
+          inner_job="$(superagent_launchd_state "$inner_slug")"
+          [[ -z "$inner_job" ]] || inner_armed=true
+          [[ "$inner_job" != running ]] || inner_active=true
+        else
+          systemctl --user is-active --quiet "superagent-tick@$inner_slug.timer" >/dev/null 2>&1 && inner_armed=true
+          systemctl --user is-active --quiet "superagent-tick@$inner_slug.service" >/dev/null 2>&1 && inner_active=true
+        fi
+      fi
+      return 0
+    }
+    observe_inner || exit 2
+    gate_result="$(python3 "$SCRIPT_DIR/_coding_loop_state.py" "${gate_args[@]}" --slug "$inner_slug" --armed "$inner_armed" --active "$inner_active")" || exit 2
+    if [[ "${gate_result%%$'\n'*}" != SKIP ]]; then
+      superagent_acquire_gate_lock "$LOCK_DIR" || exit 0
+      # Scheduler, registration, inner bytes, receipt and outer state are ALL
+      # re-read after acquisition. No stale pre-lock result can advance state.
+      observe_inner || exit 2
+      gate_result="$(python3 "$SCRIPT_DIR/_coding_loop_state.py" "${gate_args[@]}" --slug "$inner_slug" --armed "$inner_armed" --active "$inner_active" --write)" || exit 2
+    fi
+    if [[ "${gate_result%%$'\n'*}" == INPUT ]]; then
+      superagent_notify waiting-for-input "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+    fi
+    echo "=== $(ts) supercode BUILDING gate: $gate_result ===" >>"$LOG_FILE"
+    exit 0
+  fi
+fi
+
 # --- WAITING FOR INPUT gate ---------------------------------------------------
 # A loop parked on WAITING FOR INPUT resumes only when a human writes
 # `answer: <option>` under ## Pending decision. Until then every scheduler fire
@@ -152,7 +219,7 @@ if [[ "$HARNESS" == cursor ]]; then
   # by scripts/build-cursor-skills.sh); pass it as --plugin-dir so the loop's
   # internal superplan/superrun skill dispatches resolve.
   SKILLS_ROOT="$PLUGIN_ROOT/cursor"
-  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+  if [[ ! -f "$SKILLS_ROOT/skills/${SUPERVISOR}/SKILL.md" ]]; then
     echo "superagent-tick: Cursor build missing at $SKILLS_ROOT (run scripts/build-cursor-skills.sh)" >&2
     exit 7
   fi
@@ -167,7 +234,7 @@ elif [[ "$HARNESS" == codex ]]; then
   # (codex plugin marketplace add <repo>/codex && codex plugin add superagent@superagent);
   # the tick itself only needs the SKILL.md file path for its file-read prompt.
   SKILLS_ROOT="$PLUGIN_ROOT/codex"
-  if [[ ! -f "$SKILLS_ROOT/plugins/superagent/skills/superagent/SKILL.md" ]]; then
+  if [[ ! -f "$SKILLS_ROOT/plugins/superagent/skills/${SUPERVISOR}/SKILL.md" ]]; then
     echo "superagent-tick: Codex build missing at $SKILLS_ROOT (run scripts/build-codex-skills.sh)" >&2
     exit 7
   fi
@@ -180,7 +247,7 @@ elif [[ "$HARNESS" == pi ]]; then
   # scripts/build-pi-skills.sh). Skills are delivered per run with --skill (additive; no install
   # step); superpowers comes from the operator's global Pi package install.
   SKILLS_ROOT="$PLUGIN_ROOT/pi"
-  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+  if [[ ! -f "$SKILLS_ROOT/skills/${SUPERVISOR}/SKILL.md" ]]; then
     echo "superagent-tick: Pi build missing at $SKILLS_ROOT (run scripts/build-pi-skills.sh)" >&2
     exit 7
   fi
@@ -281,37 +348,14 @@ fi
 # installed AND enabled (or passed via --plugin-dir on Cursor) for this headless
 # session. Non-interactive: the tick must never block on a question.
 if [[ "$HARNESS" == claude ]]; then
-  PROMPT="Read ${SKILLS_ROOT}/skills/superagent/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING or RUNNING at exit. Then stop."
+  PROMPT="Read ${SKILLS_ROOT}/skills/${SUPERVISOR}/SKILL.md and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER call AskQuestion/AskUserQuestion, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING, RUNNING, META-PLANNING, EVALUATING or DIAGNOSING at exit. Then stop."
 else
   # cursor + codex: same invariants; generic wording (no Ask* tools in these harnesses).
-  SUPERVISOR_SKILL="$SKILLS_ROOT/skills/superagent/SKILL.md"
-  [[ "$HARNESS" == codex ]] && SUPERVISOR_SKILL="$SKILLS_ROOT/plugins/superagent/skills/superagent/SKILL.md"
-  PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING or RUNNING at exit. Then stop."
+  SUPERVISOR_SKILL="$SKILLS_ROOT/skills/${SUPERVISOR}/SKILL.md"
+  [[ "$HARNESS" == codex ]] && SUPERVISOR_SKILL="$SKILLS_ROOT/plugins/superagent/skills/${SUPERVISOR}/SKILL.md"
+  PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING, RUNNING, META-PLANNING, EVALUATING or DIAGNOSING at exit. Then stop."
 fi
 
-# --- L3 lock safety net (issue #15) -----------------------------------------
-# The overlap lock is acquired/released by the AGENT inside the session
-# (superloop L3). If the CLI kills the session mid-flight (background-wait
-# ceiling, crash, OOM), release_lock() never runs and the leaked lock wedges the
-# loop until the SUPER_LOCK_STEAL_MIN (90 min) steal window expires. The wrapper
-# outlives the session, so it is the safety net: acquire_lock() records
-# $SUPERAGENT_TICK_PID (this wrapper's PID, exported here) in <lockdir>/owner,
-# and the EXIT trap reaps the lock ONLY when the owner file names this very tick
-# — a wrapper that exited early on the held-lock path must never reap a peer's
-# live lock.
-LOCK_DIR="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").lockd"
-export SUPERAGENT_TICK_PID=$$
-reap_own_lock() {
-  if [[ -d "$LOCK_DIR" && "$(cat "$LOCK_DIR/owner" 2>/dev/null)" == "$$" ]]; then
-    echo "=== $(ts) superagent-tick reaping leaked L3 lock (session ended before release_lock): $LOCK_DIR ===" >>"$LOG_FILE"
-    rm -rf "$LOCK_DIR"
-  fi
-}
-trap reap_own_lock EXIT
-# A signal received while waiting on the CLI child must still run the EXIT trap
-# (bash skips it for a fatal unhandled signal).
-trap 'exit 143' TERM
-trap 'exit 130' INT
 
 echo "=== $(ts) superagent-tick harness=${HARNESS} model=${TICK_MODEL:-default} effort=${TICK_EFFORT:-default} sandbox=${SUPER_CODEX_SANDBOX:-n/a} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
 # Not probed (no live check) — the prompt below reads skills/superagent/SKILL.md
@@ -434,7 +478,7 @@ fi
 if [[ "$rc" -eq 0 && -r "$LOOP_FILE" ]]; then
   final_status="$(sed -n 's/^status:[[:space:]]*//p' "$LOOP_FILE" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//' || true)"
   case "$final_status" in
-    PLANNING|RUNNING)
+    PLANNING|RUNNING|META-PLANNING|EVALUATING|DIAGNOSING)
       lock_owner_state="$(superagent_lock_owner_state "$LOCK_DIR")"
       if [[ "$lock_owner_state" == alive\ * && "${lock_owner_state#alive }" != "$$" ]]; then
         echo "=== $(ts) superagent-tick: held-lock no-op — peer tick (pid ${lock_owner_state#alive }) is mid-flight; transient status '${final_status}' is the peer's, not a stranding ===" >>"$LOG_FILE"

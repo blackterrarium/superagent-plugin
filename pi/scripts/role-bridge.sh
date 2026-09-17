@@ -95,6 +95,9 @@ echo "role-bridge: log=$log" >&2
 # proved nothing). The header goes in before the CLI starts — a bridge killed mid-run leaves a
 # header with no trailer, which is itself the evidence. stdout is untouched: still the CLI's final
 # message and nothing else. scripts/mix-e2e.sh parses both lines; bridge-test.sh pins their shape.
+# Requested role telemetry for optional bounded runtime wrappers. The wrapper
+# consumes and clears this label; it is not proof of actual runtime identity.
+export SUPERAGENT_ROLE="$role"
 start_epoch="$(date +%s)"
 echo "role-bridge: start=$(date -u '+%Y%m%dT%H%M%SZ') harness=$harness model=$model effort=$effort tools=$tools role=$role cwd=$cwd" >>"$log"
 trailer() {  # trailer <exit-code>

@@ -1,7 +1,7 @@
 ---
 name: supergoal
 description: Use when starting a brand-new multi-PR initiative from a goal description (not an existing plan file) — creates the goal vault folder (YYYY-MM-DD-hh_mm-<slug>), its goal-directives.md, the standard subfolders, and the ROOT master plan that seeds the planning tree.
-argument-hint: "<goal description | path/to/goal.md> [--planning-mode upfront|incremental] [--autoconfirm] [--slug <slug>] | --resume-draft <draft-index.md> [--autoconfirm]"
+argument-hint: "<goal description | path/to/goal.md> [--planning-mode upfront|incremental] [--autoconfirm] [--slug <slug>] [--operation <path>] | --resume-draft <draft-index.md> [--autoconfirm]"
 license: MIT
 related skills: superauthor, superplan, supertraverse
 ---
@@ -49,7 +49,11 @@ Given a **goal description** (a prose prompt, or a path to an existing `.md` fil
 and author the **root master plan** that seeds the planning tree — the document `superplan` later
 descends into.
 
-**Input:** `<GOAL>` — a prose goal description or path to an existing `.md` file, optionally followed by `--planning-mode upfront|incremental`, `--autoconfirm`, and/or `--slug <slug>` (parsed in step 1). **Required.** `--resume-draft <draft-index.md> [--autoconfirm]` is the separate recovery form.
+**Input:** `<GOAL>` — the argument string: a prose goal description **or** a path to an existing
+`.md` file holding one, optionally followed by `--planning-mode upfront|incremental`,
+`--autoconfirm`, `--slug <slug>`, and `--operation <path>` (parsed in step 1). **Required.**
+`--resume-draft <draft-index.md> [--autoconfirm]` is the separate recovery form. Without
+`--operation`, manual behavior is unchanged.
 
 ## What supergoal is — and how it differs from superplan
 
@@ -126,7 +130,7 @@ before writing a scratch or vault artifact. Existing roots are never converted: 
 remains legacy incremental under superstage S1.
 
 `--resume-draft <draft-index.md> [--autoconfirm]` accepts exactly one readable scratch index, no goal
-prose, and no mode or slug override. The optional `--autoconfirm` is freshly evaluated against the
+prose, and no mode, slug, or operation override. The optional `--autoconfirm` is freshly evaluated against the
 current `SUPER_GOAL_AUTOCONFIRM` configuration; a saved auto-confirm state cannot satisfy the gate. The
 index records original source kind/path or prose snapshot, SHA-256 source digest, intended
 goal folder and every intended vault path, mode, stable IDs, drafted artifact paths, completed S2/A4/
@@ -150,7 +154,7 @@ that child to launch a planner.
 
 `<GOAL>` is the full argument string. First recognize the exact recovery form, allowing only its trailing
 `--autoconfirm`, from **Planning mode and resumable scratch interface**. Otherwise **parse optional flags only off the end of
-it first** — repeatedly strip a trailing `--autoconfirm`, `--slug <slug>`, or
+it first** — repeatedly strip a trailing `--autoconfirm`, `--slug <slug>`, `--operation <path>`, or
 `--planning-mode <value>`. Validate a stripped mode value immediately: only `upfront` and `incremental`
 are accepted, and any other value returns exactly `supergoal: planning mode must be upfront or
 incremental` before scratch or vault writes. What remains, trimmed, is
@@ -166,6 +170,17 @@ and re-runs the affected S2/A4 review before its confirmation gate.
 - If the goal source names an **existing `.md` file** → read that file; its contents are the goal
   description. Remember the file's path — step 5 cites it as `**Source:**`.
 - Otherwise the goal source is a **prose** goal description (there is no source file).
+
+With `--operation`, load duplicate-key-rejecting JSON with exactly the operation fields accepted by
+`_coding_loop_state.py`. Require `phase` = `META-PLANNING`, empty `code_commit` and `report`, and
+valid nonempty remaining identity. The goal source must resolve to the recorded `meta_plan`, and the
+recorded `goal_folder` must resolve inside `<vault_root>`. The operation file is read-only. Reject a
+caller slug that does not equal the recorded goal folder's `<project-slug>-r<N>` suffix.
+
+The operation-mode last output line is compact JSON with `outcome`, `phase`, `operation_id`, `round`,
+`meta_plan`, `goal_folder`, `root_plan`, `goal_complete`, `goal_recoverable`,
+`goal_completion_reason`, `artifacts`, and `reason`. Only verified integration on
+`main` yields `INTEGRATED`; prose output, a local folder, or an unmerged commit never does.
 
 Nothing else changes: the input-gate message is exactly `I need a goal description`, and a direct user
 who passes a bare prose goal with no flags sees identical behaviour to before.
@@ -189,6 +204,19 @@ who passes a bare prose goal with no flags sees identical behaviour to before.
 For an upfront new goal, reserve this destination in the scratch index only. The read-only collision
 check still occurs, but no folder, subfolder, or vault file exists before step 7.
 
+In operation mode, take `N`, `<STAMP>`, `<slug>`, the source revision and exact goal folder only from
+the recorded identity; never consult the clock or disambiguate. Before authoring, run
+`_coding_loop_evidence.py reconcile <primary_root> <vault_root> --operation <path>`. If it returns
+`INTEGRATED` with `goal_complete: true`, return the exact goal/root paths and skip authoring and A7.
+If `goal_complete` is false and `goal_recoverable` is true, use `goal_completion_reason` to repair
+only the missing matching `goal-directives.md` or tracked scaffold directories through the normal
+draft, confirmation and A7 flow. A false `goal_recoverable`, including a mismatched directive or
+extra root plan, is a hard conflict; never overwrite it. `ABSENT` permits one normal
+draft/approval/write flow. On `CONFLICT`, resume only exact matching scaffolding or a pending A7
+branch/PR owned by this operation, then reconcile again. Any different Operation, source, round,
+agreement, meta-plan, or folder identity is a hard conflict. Never validate feature-branch bytes as
+main evidence.
+
 ### 3. Invoke superagent:superauthor
 
 Invoke the `superagent:superauthor` skill (Skill tool) and apply A1–A8 for the rest of the run.
@@ -201,6 +229,8 @@ outside the goal folder. In `incremental` mode, the root plan MUST:
 - be a **seed/master plan**, routed to `master-plans/<STAMP>-<slug>.md`;
 - carry `**Planning mode:** incremental` immediately below the title, before the progress table. This
   persists the selected new-goal mode; unmarked roots remain legacy incremental and are not rewritten;
+- in operation mode only, add one header line immediately after the planning-mode line:
+  `**Operation:** <id> · **Round:** <N> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit> · **Related:** [[<recorded meta_plan without .md>]]`;
 - contain a **progress-report table** using the `supertraverse` C1 schema and C2 status vocabulary
   (do not redefine the columns or statuses here):
 
@@ -245,6 +275,8 @@ In `upfront` mode, author the root, every required sub-master, every active stag
 whole-tree review in the same scratch set. Immediately below the title and before its first progress
 table, the root carries superstage S1's exact fields (`**Planning mode:** upfront-v1`,
 `**Plan generation:** 1`, `**Active replan:** none`, and `**Tree review:** [[reports/<review-file>]]`).
+In operation mode only, add immediately after those fields and before the first progress table:
+`**Operation:** <id> · **Round:** <N> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit> · **Related:** [[<recorded meta_plan without .md>]]`.
 Every active root and
 sub-master row has an intended-vault Plan link; linked sub-masters carry progress tables and every
 terminal active row links to one stage leaf. Do not leave an active Plan cell blank. Each stage has a
@@ -265,7 +297,8 @@ author it directly, drafting to scratch alongside the plan. It must be fully
    lives inside `<vault_root>` (wikilink form, path-from-vault-root without the `.md`), or
    `**Source:** <relative repo path>` when it is a file outside the vault (a plain relative path). When
    `<GOAL>` was prose, write **no** source line. The step-7 `**Confirmation:**` line, when written, sits
-   immediately **below** this source line.
+   immediately **below** this source line. In operation mode only, add immediately below those lines:
+   `**Operation:** <id> · **Round:** <N> · **Agreement revision:** <agreement_revision> · **Source vault commit:** <source_vault_commit>`.
 2. **Goal / Objectives — FIRST**, immediately after the title (and after the optional `**Source:**` /
    `**Confirmation:**` header lines when present): the *why*, the target outcome, and success criteria
    distilled from `<GOAL>`. (This is the one intentional deviation from older directives docs that open
@@ -356,7 +389,9 @@ write.** Present a concise summary — do **not** dump the full drafts:
 Then ask explicitly — e.g. *"Write this goal folder and root plan to the vault and open the PR?"* — and
 **wait for the user's answer:**
 
-- **Approved** → proceed to step 8 (write-out) and step 9 (commit & PR).
+- **Approved** → in operation mode, add
+  `**Confirmation:** user-confirmed on <DATE>` in the same header position as the auto-confirm line;
+  then proceed to step 8 (write-out) and step 9 (commit & PR). Manual mode keeps its existing output.
 - **Changes requested** → revise the relevant scratch draft(s), re-run self-review (step 6), and
   re-present this gate. Still no vault write.
 - **Declined** → write nothing and open no PR. Preserve the scratch index and report
@@ -378,6 +413,17 @@ intended-vault-path map. The files are still uncommitted (or an internal docs PR
 they are not an active authoritative tree and candidate validation cannot authorize execution. Include
 every artifact explicitly in the one A7 publication. Never publish a root, a subset of stages, or a
 review separately.
+
+In operation-mode recovery, `goal_recoverable: true` means the exact root plan is already verified
+on `main` and only named scaffold artifacts are absent. Keep that root unchanged. After the normal
+confirmation gate, write a missing `goal-directives.md` from the reviewed scratch draft with the
+same Operation/source identity and supported Confirmation record, and create only the missing
+standard directories plus their intended `.gitkeep` files. Reuse every matching existing file and
+resume the same A7 work. Do not require a missing file to carry metadata before creating it.
+
+An existing directive with mismatched identity/provenance/confirmation, an extra root plan, or any
+other `goal_recoverable: false` result is a hard conflict. Do not overwrite its bytes, add another
+root, or create another folder.
 
 ### 9. Commit & merge via PR (superauthor A7)
 
@@ -401,6 +447,9 @@ which active validation is valid: every indexed artifact must be readable and tr
 authoritative revision, and the active graph must match the candidate that passed step 8. A failed
 post-publication active validation is BLOCKED and must be reported; it never falls back to the earlier
 candidate result. Initial stages still require their normal preparation receipts before execution.
+
+After A7 in operation mode, run reconciliation again. Return `INTEGRATED` only when it names the
+recorded goal folder and unique root plan at `main`; dirty or unmerged work remains non-integrated.
 
 ### 10. Final Report (superauthor A8)
 
@@ -438,3 +487,5 @@ fields. Report `DRAFT-INCOMPLETE`, `**Draft index:** <absolute path>`, source/di
 work; it has no vault publication, PR, ledger effect, or execution.
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.
+
+In operation mode only, print the compact operation-result JSON as the final line after the report.

@@ -42,6 +42,25 @@ drivers own and never blocks their ticks. It is **multi-instance by default** �
 registry is every per-goal env file under `~/.config/superagent/*.env`, so one invocation
 covers all concurrent loops. Pass a `<slug>` to scope to one.
 
+## Project loops and separate identities
+
+These controls also handle supercode projects. Monitor text/JSON retain existing fields and expose
+`supervisor`, `project`, `round`, `inner_slug`, `inner_status`, `last_verdict`, and `pending_owner`.
+Use the registered custom slug from status output; never guess it from a project/goal basename.
+`stop.sh (<PLAN.md> | <project-dir> | --slug SLUG)` and
+`force-stop.sh (<PLAN.md> | <project-dir> | --slug SLUG)` resolve exact registration, repo and state
+identity before mutation. Unknown or mismatched targets refuse. Existing drain/hard/purge and
+force-stop apply/drain/no-kick semantics remain; a selected outer action affects only that outer.
+Its output reports the remaining child registration and exact separate `stop.sh --slug CHILD`
+command. Run that child command only when stopping the child was explicitly requested. Never imply
+an outer stop killed the inner. Both state files and committed artifacts remain preserved.
+
+Project force recovery uses the persistent `.reclaim` advisory guard and refuses a live peer.
+It leaves state untouched: the next native tick reconciles artifacts before mapping META-PLANNING
+→ WAITING FOR META-PLAN, EVALUATING → WAITING FOR EVAL, or DIAGNOSING → WAITING FOR DIAGNOSIS.
+It never maps project transients to WAITING FOR RUN. Agreement adoption and raised limits require
+explicit recorded answers per supercode; a rearm alone is not an answer.
+
 ## Repo configuration (.superenv)
 
 Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
