@@ -17,11 +17,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
+superagent_load_context "$PWD" run || exit $?
 
 usage() { echo "usage: stop.sh <PLAN.md> [--hard] [--purge] [--slug <goal-slug>] [--dry-run]" >&2; exit 2; }
 

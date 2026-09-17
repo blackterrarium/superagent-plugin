@@ -16,11 +16,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-load_superenv "$REPO"
+superagent_load_context "$PWD" run || exit $?
 
 usage() {
   echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi]" >&2
@@ -67,6 +65,8 @@ mkdir -p "$CONF_DIR"
 
 {
   echo "REPO=$REPO"
+  echo "SUPERAGENT_PROJECT_ROOT=$REPO"
+  echo "SUPERAGENT_GIT_MODE=$SUPER_GIT_MODE"
   # The plugin's own scripts/ dir — recorded at install time because the systemd
   # unit runs detached from any Claude Code session (no $CLAUDE_PLUGIN_ROOT in its
   # environment), and superagent-tick.sh lives in the plugin, not in $REPO.

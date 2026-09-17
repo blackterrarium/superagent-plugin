@@ -16,27 +16,7 @@ instead of waiting out the `SUPER_LOCK_STEAL_MIN`-minute (default 90) lock-steal
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
-
-Everything here runs on the **host that runs the loops** (the vault root — the primary checkout for
-an internal vault, the vault repo for an external one — holding the gitignored
-`<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating repo:
-`SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks). Resolve `primary_root`
-first if invoked from a worktree, set
-`$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory (see
-[scripts/README.md](../../scripts/README.md) for the convention), and run the script
-from `primary_root`:
-
-```
-primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-SUPERAGENT_SCRIPTS="${CLAUDE_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
-# for cron/systemd use the absolute install path — see scripts/README.md
-```
+Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## When to use this (vs superagent-stop)
 

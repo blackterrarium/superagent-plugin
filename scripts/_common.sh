@@ -420,6 +420,53 @@ superagent_workspace_run() {
   python3 "$helper" run "${root_args[@]}" -- "${command[@]}"
 }
 
+superagent_loop_field() {
+  local file="${1:-}" key="${2:-}"
+  [[ -n "$file" && -n "$key" ]] || return 0
+  sed -n "s/^${key}:[[:space:]]*//p" "$file" 2>/dev/null | head -1
+}
+
+# Existing unmarked loops are GitHub-mode contracts. A mismatch is reported and
+# parked before authentication, CI, git, or model dispatch can run.
+superagent_validate_mode_contract() {
+  local loop="${1:-}" recorded="${SUPERAGENT_GIT_MODE-}" recorded_root="${SUPERAGENT_PROJECT_ROOT-}"
+  [[ -n "$recorded" ]] || recorded="$(superagent_loop_field "$loop" git_mode)"
+  [[ -n "$recorded" ]] || recorded=github
+  [[ -n "$recorded_root" ]] || recorded_root="$(superagent_loop_field "$loop" project_root)"
+  if [[ "$recorded" == "$SUPER_GIT_MODE" && ( -z "$recorded_root" || "$recorded_root" == "$REPO" ) ]]; then
+    return 0
+  fi
+  local detail="recorded mode/root=${recorded}/${recorded_root:-<legacy>} effective=${SUPER_GIT_MODE}/${REPO}"
+  echo "superagent: goal execution contract mismatch: $detail" >&2
+  if [[ -n "$loop" && -f "$loop" && -w "$loop" ]]; then
+    local tmp; tmp="$(mktemp)"
+    DETAIL="$detail" awk '
+      /^status:[[:space:]]*/ { print "status: WAITING FOR INPUT"; next }
+      /^## Pending decision/ {
+        print
+        print "reason: git-mode-mismatch"
+        print "detail: " ENVIRON["DETAIL"]
+        print "Restore the recorded SUPER_GIT_MODE to continue, or start a new goal with an explicit predecessor disposition."
+        in_pending=1; found=1; next
+      }
+      in_pending && /^## / { in_pending=0 }
+      in_pending { next }
+      { print }
+      END {
+        if (!found) {
+          print ""
+          print "## Pending decision"
+          print "reason: git-mode-mismatch"
+          print "detail: " ENVIRON["DETAIL"]
+          print "Restore the recorded SUPER_GIT_MODE to continue, or start a new goal with an explicit predecessor disposition."
+        }
+      }
+    ' "$loop" >"$tmp" && cat "$tmp" >"$loop"
+    rm -f "$tmp"
+  fi
+  return 2
+}
+
 # ---------------------------------------------------------------------------
 # Goal-vault location. SUPER_GOAL_ROOT is repo-relative by default (`vault`) — the
 # vault lives inside the checkout and its docs are committed there via PR. An

@@ -17,17 +17,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-load_superenv "$REPO"
+superagent_load_context "$PWD" run || exit $?
 
 usage() {
   echo "usage: launch.sh <PLAN.md> [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi] [--dry-run]" >&2
   exit 2
 }
 
+ORIGINAL_ARGS=("$@")
 PLAN="${1:-}"
 [[ -z "$PLAN" || "$PLAN" == -* ]] && usage
 shift
@@ -122,6 +121,17 @@ if [[ "$DRY" == 1 ]]; then
   exit 0
 fi
 
+if [[ "$SUPER_GIT_MODE" == none && "${SUPERAGENT_WORKSPACE_WRAPPED:-}" != 1 ]]; then
+  workspace_roots=("$REPO")
+  if vault_is_external && [[ -d "$VAULT" && "$VAULT" != "$REPO" ]]; then workspace_roots+=("$VAULT"); fi
+  set +e
+  superagent_workspace_run "${workspace_roots[@]}" -- env SUPERAGENT_WORKSPACE_WRAPPED=1 "$0" "${ORIGINAL_ARGS[@]}"
+  workspace_rc=$?
+  set -e
+  [[ $workspace_rc -eq 3 ]] && { echo 'superagent: local workspace is busy; launch made no changes' >&2; exit 3; }
+  exit "$workspace_rc"
+fi
+
 if [[ -n "$LOOP_FILE" ]]; then
   echo "Reusing existing loop file: $LOOP_FILE"
 else
@@ -131,6 +141,8 @@ else
   cat >"$LOOP_FILE" <<EOF
 ---
 master_plan: $PLAN_REL
+git_mode: $SUPER_GIT_MODE
+project_root: $REPO
 status: WAITING FOR PLAN
 plan_exhausted: false
 prior_status:

@@ -37,13 +37,19 @@ _field() { # <loop-file> <key>  -> first "key: value" match
 _json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 # Populate globals for one slug.
-REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""
+REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""; SUPERAGENT_GIT_MODE=""; SUPERAGENT_PROJECT_ROOT=""
 _collect() {
   local slug="$1" envf="$CONF_DIR/$1.env"
-  REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""
+  REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""; SUPERAGENT_GIT_MODE=""; SUPERAGENT_PROJECT_ROOT=""
   if [[ -f "$envf" ]]; then
     set -a; # shellcheck disable=SC1090
     . "$envf"; set +a
+  fi
+  local recorded_mode="${SUPERAGENT_GIT_MODE:-github}"
+  if [[ "$recorded_mode" == none ]]; then
+    row_gh_state=disabled
+  else
+    row_gh_state="$(SUPER_GIT_MODE=github gh_auth_state)"
   fi
   status=""; iteration=""; pending=0; done_=0; exists=0; answer_recorded=false
   if [[ -n "$LOOP_FILE" && -f "$LOOP_FILE" ]]; then
@@ -98,9 +104,6 @@ if [[ ${#slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Host-wide gh auth state (superrun's CI/PR steps depend on it).
-GH_STATE="$(gh_auth_state)"
-
 # ---- JSON output ----
 if [[ "$JSON" == 1 ]]; then
   out="["; first=1
@@ -110,7 +113,7 @@ if [[ "$JSON" == 1 ]]; then
     out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
       "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
       "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
-      "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$GH_STATE")")
+      "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$row_gh_state")")
   done
   out+="]"
   echo "$out"
@@ -126,7 +129,7 @@ if [[ -n "$ONE" ]]; then
   echo "Status:      ${status:-<none>}   iteration=${iteration:-?}"
   echo "Timer:       ${timer_active:-unknown}   next-fire=${next_fire}"
   echo "Tick now:    ${tick_running:-unknown}   lock-held=$([[ $lock_held == 1 ]] && echo yes || echo no)"
-  echo "gh auth:     $GH_STATE"
+  echo "gh auth:     $row_gh_state"
   if [[ $pending != 0 && $exists == 1 ]]; then
     echo
     echo "=== ## Pending decision ==="
@@ -150,9 +153,8 @@ if [[ -n "$ONE" ]]; then
 fi
 
 # ---- Multi-loop table ----
-printf 'gh auth: %s\n\n' "$GH_STATE"
-printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' SLUG STATUS ITER TIMER TICK LOCK INPUT
-printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' ------------------------ ------------------ ----- -------- ------ ------ -----
+printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' SLUG STATUS ITER TIMER TICK LOCK INPUT GH-AUTH
+printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' ------------------------ ------------------ ----- -------- ------ ------ ----- ------------
 for slug in "${slugs[@]}"; do
   _collect "$slug"
   # A `case` embedded inside `$(...)` mis-parses on bash 3.2 (macOS's shipped
@@ -162,11 +164,11 @@ for slug in "${slugs[@]}"; do
   # statement instead.
   input_col=-
   case $pending in 1) input_col=YES ;; 2) input_col=ans ;; esac
-  printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' \
+  printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' \
     "$slug" "${status:-<none>}" "${iteration:-?}" \
     "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
     "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
-    "$input_col"
+    "$input_col" "$row_gh_state"
 done
 echo
 echo "Drill in: $SCRIPT_DIR/status.sh <slug>   |   JSON: $SCRIPT_DIR/status.sh --json"
