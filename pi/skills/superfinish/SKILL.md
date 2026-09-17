@@ -14,7 +14,8 @@ related skills: superplan, supertraverse
 >   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
 >   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
->   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
+>   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the

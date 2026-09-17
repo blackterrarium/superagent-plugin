@@ -57,8 +57,8 @@ both fully planned and fully executed. The supervisor can run as an in-session c
 or as an external loop where an OS scheduler fires a fresh headless session per tick (unattended).
 See [Running the loop](#running-the-loop).
 
-For the structural reference, with diagrams of the architecture, the state machine, the ten agent
-roles, and how each harness dispatches them, see
+For the structural reference, with diagrams of the architecture, the state machine, the sixteen
+configured roles (one supervisor plus fifteen dispatch roles), and how each harness dispatches them, see
 [`docs/superagent-structure.html`](docs/superagent-structure.html).
 
 ## Quick start (Claude Code)
@@ -111,7 +111,7 @@ This produces a goal folder with a root master plan.
 
 | Mode | How | Notes |
 |---|---|---|
-| Manual, one step at a time | Invoke `superagent:superplan`, `superagent:superrun`, `superagent:superfinish` directly. | Full control, no loop. |
+| Manual, one step at a time | Invoke `superagent:superplan` for incremental authoring, `superagent:superrefine` / `superagent:superreplan` for the applicable upfront operation, then `superagent:superrun` / `superagent:superfinish`. | Full control, no loop. |
 | Attended loop | `superagent:superagent <PLAN.md>` | Runs in your session as a cron job. Launch the session with the Bash timeout variables described under [Timeouts](#timeouts). |
 | Unattended loop | `superagent:superagent-external <PLAN.md>` | Arms a per-goal OS scheduler entry. Needs no console session. |
 
@@ -231,9 +231,9 @@ the template so you can edit knobs in place.
 
 ### Roles
 
-Sixteen role keys control which model and effort each part of the plugin uses. The supervisor is
-the tick itself; eleven loop roles participate in it, and four **coding-loop roles** (0.7.0, see
-[Coding loop](#coding-loop)) are dispatched by the coding-loop skills.
+Sixteen role keys control which model and effort each part of the plugin uses: one native-only
+supervisor and fifteen dispatch roles. Eleven dispatch roles participate in the goal loop, and four
+**coding-loop roles** (0.7.0, see [Coding loop](#coding-loop)) are dispatched by the coding-loop skills.
 
 | Role | Runs |
 |---|---|
@@ -269,6 +269,34 @@ model and effort settings at `inherit`, so distinct models must be configured ex
 `superagent:init` generates `super-plan-refiner` and `super-replanner` definitions for Claude and
 Cursor when needed; Codex passes native pins on spawn and Pi uses planner-style bridge processes.
 The scheduler remains opt-in: shipped `SUPER_PLANNING_MODE` is `incremental` until live acceptance.
+
+### Planning modes, preparation, and recovery
+
+`SUPER_PLANNING_MODE=upfront` is available for new goals as an opt-in. The equivalent one-goal
+selection is `supergoal --planning-mode upfront`; use `--planning-mode incremental` to select the
+incremental lifecycle explicitly. A root's persisted marker is authoritative after creation.
+Unmarked roots always remain legacy incremental roots, regardless of the current default, so the
+incremental fallback is permanent and does not require rewriting existing vaults.
+
+An upfront goal publishes its complete reviewed stage tree in one confirmation-gated docs change.
+Each unstarted leaf begins with `Preparation: none`. When its dependencies are delivered, the
+supervisor dispatches `PLAN_REFINER` to resolve bounded file, task, and test details against current
+code and predecessor evidence. A `PREPARED` receipt binds the stage ID/revision, source and contract
+revisions, delivery receipts, code baseline, and the SHA-256 of the exact historical plan bytes with
+only the Preparation metadata line omitted. `superrun` revalidates that identity before execution.
+
+A local implementation detail stays in refinement. Evidence that changes scope, acceptance,
+dependencies, or a shared contract returns `REPLAN-REQUIRED` to the existing decision ladder. Once
+adopted, `REPLANNER` writes a durable batch, pauses execution, revises the affected closure, retains
+independent stages with evidence, reviews the whole remaining tree, and publishes one new generation.
+An interrupted draft resumes the same decision ID; a commit completed before loop-state update is
+reconciled from the tracked publication. Partial or conflicting publication remains blocked.
+
+Live PT-01–PT-11 acceptance has not run because approval to disclose the isolated fixture and copied
+repository instructions to an external model was not granted. The shipped default therefore remains
+`incremental`; it may switch only after that acceptance is authorized and passes. The offline evidence
+validator and current matrix are documented in [`scripts/README.md`](scripts/README.md#upfront-plan-tree-evidence-validator)
+and the [verification report](docs/superpowers/reports/2026-09-16-upfront-plan-tree-verification.md).
 
 The full picture of how these roles are dispatched, and how that differs per harness, is in
 [`docs/superagent-structure.html`](docs/superagent-structure.html), the structural reference with
@@ -415,6 +443,8 @@ coding-loop skills, never by the tick.
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Effort for `supergoal` / `superplan`. Plans are the highest-leverage artifact, so this is the one dispatch-side role above `medium`. |
+| SUPER_EFFORT_PLAN_REFINER | `medium` | Effort for bounded stage preparation and its focused preservation review. |
+| SUPER_EFFORT_REPLANNER | `high` | Effort for impact assessment, replacement drafting, and whole-remaining-tree batch review. |
 | SUPER_EFFORT_EXECUTOR | `medium` | Effort for the `superrun` controller, passed to its CLI process. The hard thinking is delegated to the reviewers and the fix-planner. |
 | SUPER_EFFORT_PANEL | `xhigh` | Effort for each L7 panelist. Fires rarely, only when everything cheaper has failed, so it can afford the top setting. |
 | SUPER_EFFORT_IMPLEMENTER | `medium` | Effort for the per-task implementer. Enough for TDD against a fully specified task. |
@@ -636,6 +666,9 @@ unprefixed on Codex, Cursor, and Pi.
 | `supermeta` | Meta-planner of the coding loop: turn a READY project folder into the round's meta-plan and drive `supergoal` (auto-confirmed) to scaffold the goal folder the inner loop builds; appends the iteration-ledger row. |
 | `supereval` | Evaluator of the coding loop: run a round's `evaluation.md` command checks against the latest `main` in a detached worktree, grade judged objectives with a read-only evaluator, and record one PASS/FAIL verdict in the eval report and iteration ledger. |
 | `superplan` | Author the next step's plan (sub-master or implementation leaf), route it, commit and merge via PR. |
+| `superstage` | Shared upfront lifecycle contracts: mode resolution, maturity, graph/dependency checks, preparation validity and contract-change classification. Not invoked directly. |
+| `superrefine` | Prepare one eligible upfront stage from current code and predecessor evidence without changing commitments. |
+| `superreplan` | Publish an adopted legacy repair or upfront affected-stage batch under the replanner role. |
 | `superrun` | Execute the next ready leaf via `subagent-driven-development`, integrate the code PR, hand off to `superfinish`. |
 | `superfinish` | Post-execution bookkeeping: findings, closeout report, ancestor rows flipped complete. |
 | `superagent` | The autonomy supervisor. One dispatch per tick, via either driver. Never auto-triggers; invoke as `superagent:superagent <PLAN.md>`. |
@@ -645,7 +678,7 @@ unprefixed on Codex, Cursor, and Pi.
 | `superagent-force-stop` | Recovery for a hung tick: halt, reap the stale lock, kick a recovery tick. |
 | `superloop` | Shared clause library the supervisor is built on: loop-status file, drivers, overlap lock, context-handoff gate, sync gate, PR-merge discipline, escalation ladder. Not invoked directly. |
 | `superauthor` | Shared plan-authoring library used by `supergoal` / `superplan`. Not invoked directly. |
-| `supertraverse` | Shared plan-tree navigation used by `superplan` / `superrun` / `superfinish`. Not invoked directly. |
+| `supertraverse` | Shared plan-tree navigation used by `superplan` / `superrefine` / `superreplan` / `superrun` / `superfinish`. Not invoked directly. |
 
 ## Design notes
 

@@ -55,10 +55,10 @@ line in the tick log records the model in use (`model=...`).
 
 `SUPER_MODEL_SUPERVISOR` (and `TICK_MODEL`) must be **native** to `SUPER_HARNESS`: the value's
 grammar is `[<harness>:]<model>` with the same `claude|codex|cursor|pi` prefix and inference rules
-as the thirteen subagent role keys (see the main [`README.md`](../README.md#configuration)'s
+as the fifteen dispatch role keys (see the main [`README.md`](../README.md#configuration)'s
 Configuration section), but a prefix — explicit or inferred — that names a harness other than the
 resolved `SUPER_HARNESS` is a hard error (exit 11; see Exit codes below) rather than a bridge: the
-supervisor itself can never be dispatched through `role-bridge.sh`, only the thirteen dispatch-hook
+supervisor itself can never be dispatched through `role-bridge.sh`, only the fifteen dispatch-hook
 role keys can.
 
 ## Effort
@@ -73,8 +73,8 @@ non-`inherit` `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` is logged as a warning and
 passed through.
 
 This domain applies to `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` specifically, since the supervisor
-is always native to `SUPER_HARNESS`. The thirteen subagent role keys (`SUPER_EFFORT_PLANNER`,
-`_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
+is always native to `SUPER_HARNESS`. The fifteen dispatch role keys (`SUPER_EFFORT_PLANNER`,
+`_PLAN_REFINER`, `_REPLANNER`, `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
 `_BRANCH_REVIEWER`, `_FIX_PLANNER`, `_PRD_REVIEWER`, `_META_PLANNER`, `_EVALUATOR`, `_DIAGNOSER`)
 are validated in **their own resolved harness's** domain
 instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
@@ -142,7 +142,8 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
   commands and Skill-tool semantics for a disable-model-invocation skill are unverified in headless print
   mode, so the tick's prompt `Read`s `${PLUGIN_ROOT}/skills/superagent/SKILL.md` directly (`PLUGIN_ROOT`
   derived from the wrapper script's own location) rather than invoking the skill by name — but the loop's
-  own internal `superagent:superplan` / `superagent:superrun` dispatches still go through the `Skill` tool
+  own internal `superagent:superplan` / `superagent:superrefine` / `superagent:superreplan` /
+  `superagent:superrun` dispatches still go through the `Skill` tool
   once the session is running, so the plugin must still be installed and enabled for that to resolve. This
   wrapper does **not** probe for plugin presence (no live check); if the plugin is missing or disabled,
   those in-session dispatches fail opaquely deep inside the tick, not as a wrapper-level preflight error.
@@ -160,7 +161,7 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
 - `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only; the wrapper
   sources `.env`) — **or** a `claude` CLI already logged in (subscription/OAuth hosts): when no key is
   set the tick logs a note and relies on the CLI's own stored login instead of aborting.
-- **`gh` authenticated in the tick.** `superplan`/`superrun` use `gh` for CI/PR operations
+- **`gh` authenticated in the tick.** Planning operations and `superrun` use `gh` for CI/PR operations
   (`gh pr create` / `gh run watch` / `gh pr merge --admin`). The CLI runs each tick in a tool sandbox
   that blocks `gh` from reading its own config/keyring, so `gh` authenticates only via **`GH_TOKEN` in
   the environment**. Put `GH_TOKEN=<token>` in `.env` (canonical, repo-policy path — the wrapper sources
@@ -531,6 +532,122 @@ SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/cache/<marketplace-name>/superag
 
 Overlap is handled by the L3 lock regardless of scheduler, so a short interval is fine even if a tick
 runs long — the next fire no-ops until the lock releases.
+
+## Upfront plan-tree evidence validator
+
+`plan-tree-e2e.py` validates retained evidence; it never starts a model, scheduler, network call, or
+goal loop. A manifest is an index into isolated code and vault repositories. The validator reads the
+named Git objects and files, derives a verdict for every PT-01–PT-11 requirement, and prints JSON.
+
+```bash
+python3 scripts/plan-tree-e2e.py --manifest /absolute/path/run-manifest.json
+python3 scripts/plan-tree-e2e.py --self-test
+```
+
+Each result is `PASS`, `FAIL`, or `INCOMPLETE`. Missing files, logs, commits, or interrupted traces are
+`INCOMPLETE`; present evidence with conflicting identities, pins, digests, graph edges, or ancestry is
+`FAIL`. A top-level `claimed_results`, `pass`, or similar manifest value has no effect. The validator
+does not treat an empty dispatch list as evidence of zero operations. A complete trace needs a header,
+contiguous dispatch sequence, and trailer whose count matches the actual records.
+
+`fixture.kind` must be `live` before a PT result can pass. Use `synthetic-offline` for fixtures and
+self-tests; it forces every PT verdict to at least `INCOMPLETE`, even when individual artifact checks
+pass. `live` is an operator declaration plus artifact validation, not cryptographic proof of provider
+provenance. Record it only after the actual configured role calls have run. Prepared fixture files,
+forwarding wrappers, proposed schedules, scenario JSON, and fake CLI output are not live receipts.
+
+### Manifest schema
+
+Paths at the top level and under `evidence` are absolute or relative to the manifest directory.
+Stage, root, publication, and replan artifact paths are relative to `fixture.vault_repo`; package roots
+point directly at directories containing `<skill>/SKILL.md`.
+
+| Field | Contract |
+|---|---|
+| `schema_version` | Integer `1`. |
+| `fixture` | `kind`, isolated `code_repo`, isolated `vault_repo`, and root path. |
+| `expected.root_generation` | Generation published by the initial coherent tree. |
+| `expected.stages[]` | Stable `id`, `revision`, path, dependency IDs, preparation path, historical vault commit containing the prepared bytes and preparation receipt, delivery path and vault commit containing that receipt, delivered code commit, and integration commit. The validator resolves the preparation receipt's independently named examined code baseline; it need not equal the later delivered code commit. |
+| `expected.role_pins` | Expected `harness`, `model`, and `effort` for each evidenced role. The role-bridge log must contain the matching start header and a successful nonempty trailer. |
+| `expected.package_skills` | Skills that must be real copied files in canonical, Codex, Cursor, and Pi roots; defaults to `superstage`, `superrefine`, and `superreplan`. Symlink fallback fails. |
+| `evidence.initial_publication` | Vault commit, complete artifact set, confirmation artifact, and supermeta artifact. A marker without the tree/review artifacts is incomplete. |
+| `evidence.dispatch_logs[]` | Role and actual `role-bridge.sh` log path. Missing trailer means interrupted, not success. |
+| `evidence.traces` | JSONL paths for `normal`, `contract_break`, `batch_resume`, and `legacy`. All four are required for full acceptance. A value may instead be an object with `path`, `code_repo`, `vault_repo`, `root`, and `initial_publication_commit` so independent runs are checked in their own Git context. |
+| `evidence.replan` | Decision ID, record/report paths, atomic publication commit/artifacts, generations, and revised/retained IDs. Optional `vault_repo` and `root` override the normal-run context for the contract-break repository. |
+| `evidence.legacy` | Repository, commit, and unmarked legacy root snapshot. |
+| `evidence.publications.external` | External-vault repository, commit, and artifact set. |
+| `evidence.packages` | Canonical/Codex/Cursor/Pi skill roots. |
+
+This complete five-stage shape shows the fields. The commit strings are illustrative object IDs; a
+real manifest names commits that exist in its isolated repositories.
+
+```json
+{
+  "schema_version": 1,
+  "fixture": {
+    "kind": "live",
+    "code_repo": "/tmp/pt-live-code",
+    "vault_repo": "/tmp/pt-live-vault",
+    "root": "goal/master-plans/root.md"
+  },
+  "expected": {
+    "root_generation": 1,
+    "stages": [
+      {"id":"S01","revision":1,"path":"goal/plans/s01.md","depends_on":[],"preparation":"goal/reports/prep-s01.md","prepared_vault_commit":"1111111111111111111111111111111111111111","delivery":"goal/reports/delivery-s01.md","delivery_vault_commit":"6161616161616161616161616161616161616161","code_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","integration_commit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      {"id":"S02","revision":2,"path":"goal/plans/s02.md","depends_on":["S01"],"preparation":"goal/reports/prep-s02.md","prepared_vault_commit":"2222222222222222222222222222222222222222","delivery":"goal/reports/delivery-s02.md","delivery_vault_commit":"6262626262626262626262626262626262626262","code_commit":"cccccccccccccccccccccccccccccccccccccccc","integration_commit":"dddddddddddddddddddddddddddddddddddddddd"},
+      {"id":"S03","revision":1,"path":"goal/plans/s03.md","depends_on":["S02"],"preparation":"goal/reports/prep-s03.md","prepared_vault_commit":"3333333333333333333333333333333333333333","delivery":"goal/reports/delivery-s03.md","delivery_vault_commit":"6363636363636363636363636363636363636363","code_commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","integration_commit":"ffffffffffffffffffffffffffffffffffffffff"},
+      {"id":"S04","revision":1,"path":"goal/plans/s04.md","depends_on":[],"preparation":"goal/reports/prep-s04.md","prepared_vault_commit":"4444444444444444444444444444444444444444","delivery":"goal/reports/delivery-s04.md","delivery_vault_commit":"6464646464646464646464646464646464646464","code_commit":"1212121212121212121212121212121212121212","integration_commit":"3434343434343434343434343434343434343434"},
+      {"id":"S05","revision":1,"path":"goal/plans/s05.md","depends_on":["S03"],"preparation":"goal/reports/prep-s05.md","prepared_vault_commit":"5555555555555555555555555555555555555555","delivery":"goal/reports/delivery-s05.md","delivery_vault_commit":"6565656565656565656565656565656565656565","code_commit":"5656565656565656565656565656565656565656","integration_commit":"7878787878787878787878787878787878787878"}
+    ],
+    "role_pins": {
+      "PLAN_REFINER":{"harness":"codex","model":"gpt-5.6-terra","effort":"medium"},
+      "REPLANNER":{"harness":"claude","model":"claude-opus-4-8","effort":"high"}
+    },
+    "package_skills":["superstage","superrefine","superreplan"]
+  },
+  "evidence": {
+    "initial_publication":{"commit":"1111111111111111111111111111111111111111","artifacts":["goal/master-plans/root.md","goal/plans/s01.md","goal/plans/s02.md","goal/plans/s03.md","goal/plans/s04.md","goal/plans/s05.md","goal/reports/tree-review.md"],"tree_review":"goal/reports/tree-review.md","confirmation":"goal/reports/confirmation.md","supermeta":"goal/reports/supermeta.md"},
+    "dispatch_logs":[{"role":"PLAN_REFINER","path":"logs/refiner.log"},{"role":"REPLANNER","path":"logs/replanner.log"}],
+    "traces":{"normal":"traces/normal.jsonl","contract_break":{"path":"traces/contract-break.jsonl","code_repo":"/tmp/pt-break-code","vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","initial_publication_commit":"7171717171717171717171717171717171717171"},"batch_resume":{"path":"traces/batch-resume.jsonl","code_repo":"/tmp/pt-break-code","vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","initial_publication_commit":"7171717171717171717171717171717171717171"},"legacy":"traces/legacy.jsonl"},
+    "replan":{"vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","decision_id":"D-PT-1","record":"goal/findings/D-PT-1.md","report":"goal/reports/replan-D-PT-1.md","publication_commit":"9999999999999999999999999999999999999999","published_generation":2,"revised_stages":["S02","S03"],"retained_stages":["S04","S05"],"artifacts":["goal/plans/s02-r2.md","goal/plans/s03-r2.md","goal/reports/tree-review-g2.md"]},
+    "legacy":{"vault_repo":"/tmp/pt-live-legacy-vault","commit":"abababababababababababababababababababab","root":"goal/master-plans/legacy.md"},
+    "publications":{"external":{"repo":"/tmp/pt-live-external-vault","commit":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","artifacts":["goal/master-plans/root.md","goal/reports/tree-review.md"]}},
+    "packages":{"canonical":"skills","codex":"codex/plugins/superagent/skills","cursor":"cursor/skills","pi":"pi/skills"}
+  }
+}
+```
+
+Normal, bounded/external, and contract-break acceptance runs may and normally do use different code
+and vault repositories. Keep the normal run in `fixture`; put trace context overrides on every trace
+from another run, put the contract-break vault/root on `evidence.replan`, and use the independent
+external repository under `evidence.publications.external`. The validator never resolves a break-run
+commit in the normal-run vault.
+
+For every stage, `prepared_vault_commit` must contain the stage, its linked preparation receipt, and
+the applicable root snapshot. The validator derives the applicable Plan generation from that
+historical root, requires a `PREPARED` receipt for the same root, stage, revision, digest, and
+Preparation link, and resolves the receipt's Code commit in `fixture.code_repo`. This also supports a
+later compatible-baseline revalidation: name the commit containing the new root generation and
+refreshed receipt. Delivery must point back to that receipt and generation. Its Code commit is the
+later `expected.stages[].code_commit`, so preparation and delivery baselines remain distinct.
+
+An operation trace is JSON Lines. The validator checks real line count, run identity, sequence,
+operation/role pairs, Git baselines, and trailer count. A normal trace must attribute refinement and
+execution to every delivered stage and contains no post-publication `plan`/`replan`. Contract-break
+and batch-resume traces use `REPLANNER`; the legacy trace uses `PLANNER` on an unmarked root.
+
+```json
+{"type":"trace-header","run_id":"normal-20260916","scenario":"normal","root":"goal/master-plans/root.md","initial_publication_commit":"1111111111111111111111111111111111111111"}
+{"type":"dispatch","run_id":"normal-20260916","sequence":1,"operation":"refine","role":"PLAN_REFINER","stage_id":"S01","vault_commit_before":"1111111111111111111111111111111111111111","log":"logs/refiner-s01.log"}
+{"type":"dispatch","run_id":"normal-20260916","sequence":2,"operation":"run","role":"EXECUTOR","stage_id":"S01","vault_commit_before":"1111111111111111111111111111111111111111"}
+{"type":"trace-trailer","run_id":"normal-20260916","dispatch_count":2,"final_vault_commit":"2222222222222222222222222222222222222222","outcome":"complete"}
+```
+
+The validator reports evidence sufficiency. It cannot prove that a whole-tree review was semantically
+good, that a provider truly generated a log, or that unrecorded operations never occurred. Preserve
+the isolated repositories, complete logs, trace writer, review artifacts, and integration history for
+human audit. Timing and token totals belong in the run report only when actual logs provide them;
+unknown remains unknown.
 
 ## Pi e2e testbench (`pi-e2e.sh`)
 

@@ -1,0 +1,27 @@
+ok   - vault_root 'vault' → /r/vault
+ok   - vault_root 'vault/sub' → /r/vault/sub
+ok   - vault_root 'vault/' → /r/vault
+ok   - vault_root '/abs/path' → /abs/path
+ok   - vault_root '/abs/path/' → /abs/path
+ok   - vault_root '~/x' → /Users/eugene/x
+ok   - vault_root '~' → /Users/eugene
+ok   - vault_is_external: relative → false
+ok   - vault_is_external: unset → false
+ok   - vault_is_external: absolute → true
+ok   - vault_is_external: tilde → true
+ok   - vault_root: missing primary arg → rc 1
+ok   - launch: external plan accepted (--dry-run)
+ok   - launch: external plan is reported by its absolute path
+ok   - launch: external loop file lands beside the plan's master-plans/
+ok   - launch: plan under neither root still rejected
+ok   - launch: internal plan still accepted and repo-relative
+ok   - launch: internal plan outside the repo still rejected
+ok   - stop: absolute master_plan matched to its registered slug
+ok   - force-stop: absolute master_plan matched to its registered slug
+ok   - init: newline guard + idempotent append into .gitignore
+ok   - init --local-only: entries land in .git/info/exclude once each
+ok   - init --local-only: .gitignore untouched by the exclude writes
+ok   - init --local-only: git sees the excluded files as ignored
+ok   - init: SKILL.md quotes the idempotent append rule
+ok   - init --local-only: exclude resolves through --git-common-dir from a worktree
+vault-external-test: 0 failure(s)
