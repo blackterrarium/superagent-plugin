@@ -123,6 +123,11 @@ check "local auth gates are disabled without credential discovery" env \
   SUPER_GIT_MODE=none SUPER_TEST_EVIDENCE=local REPO="$T/plain" \
   bash -c '. "$1/scripts/_common.sh"; superagent_load_context "$PWD" run && ensure_gh_auth && test "$(gh_auth_state)" = disabled' _ "$ROOT"
 
+check "common workspace wrapper runs a command under local ownership" env \
+  PATH="$T/bin:/usr/bin:/bin" FORBIDDEN_LOG="$FORBIDDEN_LOG" \
+  SUPER_GIT_MODE=none SUPER_TEST_EVIDENCE=local REPO="$T/plain" \
+  bash -c '. "$1/scripts/_common.sh"; superagent_load_context "$PWD" run || exit; superagent_workspace_run "$REPO" -- /bin/sh -c '\''printf owned >"$1"'\'' _ "$REPO/owned.txt"; test "$(cat "$REPO/owned.txt")" = owned' _ "$ROOT"
+
 if [[ -s "$FORBIDDEN_LOG" ]]; then
   bad "local cases made forbidden calls: $(tr '\n' ';' <"$FORBIDDEN_LOG")"
 else

@@ -393,6 +393,33 @@ superagent_load_context() {
   superagent_validate_git_mode
 }
 
+superagent_workspace_state_helper() {
+  local helper
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/workspace-state.py"
+  [[ -f "$helper" ]] || { echo "superagent: workspace helper not found: $helper" >&2; return 2; }
+  printf '%s\n' "$helper"
+}
+
+# superagent_workspace_run ROOT [ROOT ...] -- COMMAND [ARG ...]
+# Canonical sorting and inherited-owner validation are delegated to the Python
+# helper so every lifecycle entry point uses the same locking rules.
+superagent_workspace_run() {
+  local helper root_args=() command=()
+  helper="$(superagent_workspace_state_helper)" || return $?
+  while [[ $# -gt 0 && "$1" != -- ]]; do
+    root_args+=(--root "$1")
+    shift
+  done
+  [[ $# -gt 0 && "$1" == -- ]] || { echo 'superagent: workspace_run requires -- before the command' >&2; return 2; }
+  shift
+  command=("$@")
+  [[ ${#root_args[@]} -gt 0 && ${#command[@]} -gt 0 ]] || {
+    echo 'superagent: workspace_run requires at least one root and a command' >&2
+    return 2
+  }
+  python3 "$helper" run "${root_args[@]}" -- "${command[@]}"
+}
+
 # ---------------------------------------------------------------------------
 # Goal-vault location. SUPER_GOAL_ROOT is repo-relative by default (`vault`) — the
 # vault lives inside the checkout and its docs are committed there via PR. An
