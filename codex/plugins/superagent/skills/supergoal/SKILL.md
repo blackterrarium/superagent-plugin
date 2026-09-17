@@ -118,8 +118,8 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 ## Planning mode and resumable scratch interface
 
-Resolve `SUPER_PLANNING_MODE` with the normal configuration precedence. During this rollout its shipped
-value is `incremental`; only `upfront` and `incremental` are valid. A trailing
+Resolve `SUPER_PLANNING_MODE` with the normal configuration precedence. Its shipped value is
+`upfront`; only `upfront` and `incremental` are valid. A trailing
 `--planning-mode <value>` overrides it for this new goal only when `<value>` is one of those two values.
 Reject any other explicit or resolved value with `supergoal: planning mode must be upfront or incremental`
 before writing a scratch or vault artifact. Existing roots are never converted: a root with no marker

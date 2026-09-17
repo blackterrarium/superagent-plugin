@@ -1,0 +1,1 @@
+build-cursor-skills: cursor/ is up to date

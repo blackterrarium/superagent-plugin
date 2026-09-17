@@ -570,7 +570,7 @@ point directly at directories containing `<skill>/SKILL.md`.
 | `expected.stages[]` | Stable `id`, `revision`, path, dependency IDs, preparation path, historical vault commit containing the prepared bytes and preparation receipt, delivery path and vault commit containing that receipt, delivered code commit, and integration commit. Actual `Depends on` metadata must match this inventory. The validator resolves the preparation receipt's independently named examined code baseline; it need not equal the later delivered code commit. |
 | `expected.role_pins` | Expected `harness`, `model`, and `effort` for PLAN_REFINER and REPLANNER. Both roles need successful logs, and the retained log inventory must exercise both `native` and `bridged` recipes. |
 | `expected.package_skills` | Skills that must be real copied files in canonical, Codex, Cursor, and Pi roots; defaults to `superstage`, `superrefine`, and `superreplan`. Symlink fallback fails. |
-| `evidence.initial_publication` | Vault commit, complete artifact set, confirmation artifact, and supermeta artifact. Root/sub-master Progress Report Plan links are followed to derive active stage identities; blank or `none` Plan cells on active rows are INCOMPLETE. Explicit `declined`, `deferred`, and `out-of-scope` terminal rows are excluded. |
+| `evidence.initial_publication` | Vault commit, complete artifact set, and confirmation artifact. A `supermeta` artifact is required when supermeta performed the publication; standalone supergoal publication is proven by the atomic initial commit. Root/sub-master Progress Report Plan links are followed to derive active stage identities; goal-relative and extensionless links are resolved. Blank or `none` Plan cells on active rows are INCOMPLETE. Explicit `declined`, `deferred`, and `out-of-scope` terminal rows are excluded. |
 | `evidence.bounded_detail_assessment` | Later vault commit, report path, and `initial_publication_commit` for the bounded-detail/no-replan scenario. The later commit must descend from that initial run, and the tracked PASS report repeats the initial commit identity and records zero replan dispatches. PT-05 remains INCOMPLETE when this later witness is absent. |
 | `evidence.dispatch_logs[]` | Role, `native` or `bridged` recipe, and actual `role-bridge.sh` log path. Missing trailer means interrupted, not success. A recipe value is an operator declaration backed by the retained dispatch log, not cryptographic provider provenance. |
 | `evidence.traces` | JSONL paths for `normal`, `contract_break`, `batch_resume`, and `legacy`. All four are required for full acceptance. A value may instead be an object with `path`, `code_repo`, `vault_repo`, `root`, and `initial_publication_commit` so independent runs are checked in their own Git context. |
@@ -628,10 +628,13 @@ commit in the normal-run vault.
 For every stage, `prepared_vault_commit` must contain the stage, its linked preparation receipt, and
 the applicable root snapshot. The validator derives the applicable Plan generation from that
 historical root, requires a `PREPARED` receipt for the same root, stage, revision, digest, and
-Preparation link, and resolves the receipt's Code commit in `fixture.code_repo`. This also supports a
-later compatible-baseline revalidation: name the commit containing the new root generation and
-refreshed receipt. Delivery must point back to that receipt and generation. Its Code commit is the
-later `expected.stages[].code_commit`, so preparation and delivery baselines remain distinct.
+Preparation link, and resolves the receipt's examined code baseline in `fixture.code_repo`.
+Preparation receipts may use the shipped `Plan generation`, `Prepared leaf SHA-256`, and
+`Examined code commit` labels or their older schema aliases. Delivery closeouts may carry identity
+metadata as list items and use `Stage: SNN revision N`, `Preparation receipt`, and
+`Prepared-plan digest`; when a squash-integrated closeout has no separate Code commit, its
+Integration commit is the delivered code identity. This also supports a later compatible-baseline
+revalidation: name the commit containing the new root generation and refreshed receipt.
 
 An operation trace is JSON Lines. The validator checks real line count, run identity, sequence,
 operation/role pairs, Git baselines, and trailer count. A normal trace must put refinement before

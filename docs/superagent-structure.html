@@ -201,11 +201,11 @@ implementation-plan leaves.</p>
   <li>Both descents can return <code>none</code> (nothing to do) or <code>not-traversable</code> (the root lacks a progress table). The supervisor treats the latter as an escalation trigger.</li>
 </ul>
 
-<p><strong>Planning modes.</strong> The shipped default remains <code>incremental</code> while live
-PT-01–PT-11 acceptance is incomplete. New goals may opt into <code>upfront-v1</code> with
-<code>SUPER_PLANNING_MODE=upfront</code> or <code>supergoal --planning-mode upfront</code>. A persisted
-root marker governs that goal; unmarked roots permanently retain legacy incremental traversal even
-after a future default change.</p>
+<p><strong>Planning modes.</strong> The shipped default is <code>upfront</code> after live
+PT-01–PT-11 acceptance passed all 11 requirements. New goals publish an <code>upfront-v1</code> tree
+unless <code>SUPER_PLANNING_MODE=incremental</code> or
+<code>supergoal --planning-mode incremental</code> selects the incremental lifecycle. A persisted root
+marker governs that goal; unmarked roots permanently retain legacy incremental traversal.</p>
 <p>An upfront root publishes the complete reviewed tree before code execution. Eligible leaves pass
 through PLAN_REFINER and receive a historical-byte digest preparation receipt before EXECUTOR may run.
 A local detail remains refinement. A contract, scope, acceptance, or topology break goes through the

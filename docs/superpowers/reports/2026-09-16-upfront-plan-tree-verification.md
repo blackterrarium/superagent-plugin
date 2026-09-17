@@ -1,10 +1,10 @@
 # Upfront plan tree verification
 
-**Status:** Offline implementation evidence is present; live PT acceptance is INCOMPLETE.
+**Status:** Superseded by the 2026-09-17 live acceptance PASS; the body preserves the pre-live evidence state.
 **Implementation base:** `a78820f`
 **Plan:** [Implementation plan](../plans/2026-09-16-upfront-plan-tree.md)
 **Design:** [Design](../specs/2026-09-16-upfront-plan-tree-design.md)
-**Proposed live scope:** [Prepared, not executed](2026-09-16-upfront-plan-tree-live-acceptance.md)
+**Live result:** [PT-01–PT-11 PASS](2026-09-16-upfront-plan-tree-live-acceptance.md)
 
 ## Evidence levels and verdict rules
 
@@ -139,4 +139,18 @@ The final review identified four runtime control-flow gaps: legacy/exhausted sup
 
 The earlier 69-case and legacy16 outputs remain historical evidence for their recorded Task6 source hashes. The changed three skills received a fresh [ten-case interpretation](evidence/2026-09-16-upfront-plan-tree/final-boundaries-green.json), assessed against the [pre-fix baseline](evidence/2026-09-16-upfront-plan-tree/final-boundaries-baseline.json); all ten stated routes match the required boundaries. See the [assessment and limits](evidence/2026-09-16-upfront-plan-tree/final-boundaries-assessment.md) and [current hashes](evidence/2026-09-16-upfront-plan-tree/final-boundaries-source-hashes.json). Regression self-tests now pass 15/15; all three regenerated package checks and configuration tests pass. Live acceptance remains INCOMPLETE.
 
-The final rebuilt copied-package suite also exited 0; [full output](evidence/2026-09-16-upfront-plan-tree/postreview-package.log.txt) includes all four package variants. Offline implementation and review are complete. The isolated live test, default switch, and integration remain pending.
+The final rebuilt copied-package suite also exited 0; [full output](evidence/2026-09-16-upfront-plan-tree/postreview-package.log.txt) includes all four package variants. At this report's original cutoff, offline implementation and review were complete while the isolated live test, default switch, and integration remained pending.
+
+## Live acceptance addendum — 2026-09-17
+
+The authorized isolated run completed after this offline report was written. The retained validator
+result is **11 PASS / 0 FAIL / 0 INCOMPLETE**. Five normal stages completed with 25 of 25 fixture
+tests; bounded-detail refinement triggered no replan; the accepted contract break revised S02/S03
+and retained S01/S04/S05; an interrupted replanner attempt resumed under the same decision; internal,
+external, and legacy vault behavior all passed. The validator self-test now passes 61 tests, including
+regressions for the exact artifact schema emitted by the shipped skills. See the
+[live acceptance report](2026-09-16-upfront-plan-tree-live-acceptance.md) and its adjacent manifest,
+verdict, traces, bundles, role-log archive, and hash inventory.
+
+This addendum satisfies the rollout gate described above. The shipped default is now
+`SUPER_PLANNING_MODE=upfront`; explicit incremental mode and unmarked legacy behavior remain supported.

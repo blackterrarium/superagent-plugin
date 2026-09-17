@@ -1,0 +1,3 @@
+{"type":"trace-header","run_id":"contract-break-20260917","scenario":"contract-break","root":"2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md","initial_publication_commit":"4b3a41da3c312b7f1ad635efe6e33c88cf0d2f8d"}
+{"type":"dispatch","run_id":"contract-break-20260917","sequence":1,"operation":"replan","role":"REPLANNER","decision_id":"UPT-BREAK-20260917-001","vault_commit_before":"47a4530e3c03446097edd153f7ecfaa1cbd8bc4c","log":"/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/REPLANNER-20260917T041512Z-9024.log"}
+{"type":"trace-trailer","run_id":"contract-break-20260917","dispatch_count":1,"final_vault_commit":"d9549791e317b09552a01652d07bf06f3d25947b","outcome":"published"}

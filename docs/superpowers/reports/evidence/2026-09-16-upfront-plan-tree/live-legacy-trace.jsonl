@@ -1,0 +1,3 @@
+{"type":"trace-header","run_id":"legacy-20260917","scenario":"legacy","root":"goal/master-plans/legacy-root.md","initial_publication_commit":"7a587e5b61906fd51c2a11f8858ada4182b088c6"}
+{"type":"dispatch","run_id":"legacy-20260917","sequence":1,"operation":"plan","role":"PLANNER","stage_id":"S01","vault_commit_before":"7a587e5b61906fd51c2a11f8858ada4182b088c6"}
+{"type":"trace-trailer","run_id":"legacy-20260917","dispatch_count":1,"final_vault_commit":"29246402db8aa623a8e0329d4ffcb460205ef931","outcome":"planned"}

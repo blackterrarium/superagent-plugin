@@ -13,6 +13,9 @@ ok() { echo "ok   - $1"; }
 fail() { echo "FAIL - $1"; FAILS=$((FAILS + 1)); }
 check() { local name="$1"; shift; if "$@"; then ok "$name"; else fail "$name"; fi; }
 
+check "shipped planning mode defaults to upfront" grep -q \
+  '^SUPER_PLANNING_MODE=upfront[[:space:]]' "$ROOT/templates/superenv.default"
+
 # This is the native Claude dispatch predicate consumed by the supervisor: a
 # tier plus non-inherit effort must select the named generated definition.
 . "$COMMON"

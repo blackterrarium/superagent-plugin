@@ -268,13 +268,14 @@ The Codex defaults use `gpt-5.6-terra` / `medium` for refinement and `gpt-5.6-so
 model and effort settings at `inherit`, so distinct models must be configured explicitly.
 `superagent:init` generates `super-plan-refiner` and `super-replanner` definitions for Claude and
 Cursor when needed; Codex passes native pins on spawn and Pi uses planner-style bridge processes.
-The scheduler remains opt-in: shipped `SUPER_PLANNING_MODE` is `incremental` until live acceptance.
+The scheduler remains opt-in. Shipped `SUPER_PLANNING_MODE` is `upfront` for new goals.
 
 ### Planning modes, preparation, and recovery
 
-`SUPER_PLANNING_MODE=upfront` is available for new goals as an opt-in. The equivalent one-goal
-selection is `supergoal --planning-mode upfront`; use `--planning-mode incremental` to select the
-incremental lifecycle explicitly. A root's persisted marker is authoritative after creation.
+`SUPER_PLANNING_MODE=upfront` makes new goals publish a complete reviewed plan tree by default. The
+equivalent one-goal selection is `supergoal --planning-mode upfront`; use
+`--planning-mode incremental` to select the incremental lifecycle explicitly. A root's persisted
+marker is authoritative after creation.
 Unmarked roots always remain legacy incremental roots, regardless of the current default, so the
 incremental fallback is permanent and does not require rewriting existing vaults.
 
@@ -292,11 +293,11 @@ independent stages with evidence, reviews the whole remaining tree, and publishe
 An interrupted draft resumes the same decision ID; a commit completed before loop-state update is
 reconciled from the tracked publication. Partial or conflicting publication remains blocked.
 
-Live PT-01–PT-11 acceptance has not run because approval to disclose the isolated fixture and copied
-repository instructions to an external model was not granted. The shipped default therefore remains
-`incremental`; it may switch only after that acceptance is authorized and passes. The offline evidence
-validator and current matrix are documented in [`scripts/README.md`](scripts/README.md#upfront-plan-tree-evidence-validator)
-and the [verification report](docs/superpowers/reports/2026-09-16-upfront-plan-tree-verification.md).
+Live PT-01–PT-11 acceptance passed all 11 requirements on 2026-09-17 across the normal,
+bounded-refinement, contract-break, interruption-recovery, legacy, and external-vault paths. That
+result activates the upfront default. The evidence validator and retained manifest are documented in
+[`scripts/README.md`](scripts/README.md#upfront-plan-tree-evidence-validator) and the
+[live acceptance report](docs/superpowers/reports/2026-09-16-upfront-plan-tree-live-acceptance.md).
 
 The full picture of how these roles are dispatched, and how that differs per harness, is in
 [`docs/superagent-structure.html`](docs/superagent-structure.html), the structural reference with
@@ -471,7 +472,7 @@ coding-loop skills, never by the tick.
 | Key | Default | Meaning |
 |---|---|---|
 | SUPER_GOAL_ROOT | `vault` | Goal folders land at `<SUPER_GOAL_ROOT>/<STAMP>-<slug>/`. Relative: inside the checkout, vault docs merged via PR. Absolute or `~/…`: **external vault** — its own git repo outside the checkout; vault docs are committed there directly, the code repo's history never carries the plan tree. |
-| SUPER_PLANNING_MODE | `incremental` | New goals use `incremental` during the rollout. Set `upfront`, or pass `supergoal --planning-mode upfront`, to draft and review the complete stage tree before one confirmation-gated publication. Existing unmarked roots stay incremental. |
+| SUPER_PLANNING_MODE | `upfront` | New goals draft and review the complete stage tree before one confirmation-gated publication. Set `incremental`, or pass `supergoal --planning-mode incremental`, for the incremental lifecycle. Existing unmarked roots stay incremental. |
 | SUPER_LOOP_STATUS_DIRNAME | `loop-status` | Gitignored loop-state directory, a sibling of each goal's `master-plans/`. |
 | SUPER_HEAVY_STEP_LIMIT | `6` | Heavy skills (one dispatch each) per cron session before the context-handoff gate hands off. |
 | SUPER_LOCK_STEAL_MIN | `90` | Minutes before a stale overlap lock from a crashed tick is auto-stolen. |

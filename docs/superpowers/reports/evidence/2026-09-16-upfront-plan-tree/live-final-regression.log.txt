@@ -1,0 +1,20 @@
+test_accepts_all_exact_cases_and_required_values (__main__.ValidatorTests) ... ok
+test_closeout_and_recovery_cases_require_delivery_identity_results (__main__.ValidatorTests) ... ok
+test_final_review_boundary_cases_enforce_routing_results (__main__.ValidatorTests) ... ok
+test_load_answers_reports_malformed_json_and_missing_file (__main__.ValidatorTests) ... ok
+test_prompt_has_facts_and_fields_without_expected_values (__main__.ValidatorTests) ... ok
+test_refinement_case_rejects_wrong_outcome (__main__.ValidatorTests) ... ok
+test_rejects_missing_case (__main__.ValidatorTests) ... ok
+test_rejects_missing_empty_and_non_string_reasons (__main__.ValidatorTests) ... ok
+test_rejects_missing_wrong_and_bool_integer_types (__main__.ValidatorTests) ... ok
+test_rejects_non_object_top_level_and_case_values (__main__.ValidatorTests) ... ok
+test_rejects_unknown_case_selection (__main__.ValidatorTests) ... ok
+test_replan_request_must_publish_before_dispatch (__main__.ValidatorTests) ... ok
+test_selected_cases_require_exact_selected_membership (__main__.ValidatorTests) ... ok
+test_supervisor_cases_pin_recovery_and_one_heavy_dispatch (__main__.ValidatorTests) ... ok
+test_supervisor_prompt_has_entry_phase_fields_without_answers (__main__.ValidatorTests) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.003s
+
+OK

@@ -360,21 +360,21 @@ scripts/README.md, docs/superagent-structure.html; execution-time verification r
   `--manifest FILE` validates recorded receipts and prints a per-PT verdict; missing evidence is
   INCOMPLETE, inconsistent evidence is FAIL. `--self-test` tests fixture receipts and corrupted
   identities offline. No network or model calls are hidden inside validation.
-- [ ] Execute the spec's five-stage fixture through actual configured roles in an isolated test
+- [x] Execute the spec's five-stage fixture through actual configured roles in an isolated test
   repository. Retain the goal source, generated complete tree, confirmation/auto-confirm evidence,
   scheduler/dispatch logs, real preparation changes, reviews/tests, and integration receipts.
   Run a normal path, a bounded-detail update, and an injected contract-break path as separate goals.
   Use existing approved test infrastructure when available; configure the concrete isolated target
   explicitly at execution time rather than guessing a production repository or scheduler slug.
-- [ ] Include a real refinement/replanning dispatch with distinct model/effort pins and one bridged
+- [x] Include a real refinement/replanning dispatch with distinct model/effort pins and one bridged
   role; separately test native pin recipes for each packaged harness using offline/fresh-agent
   checks. Report exactly which harnesses received live execution; do not generalize one harness's
   result to all four. Exercise both internal/external publication and one interrupted batch resume.
-- [ ] Verify quantitative lifecycle outcomes from receipts: normal path has zero post-publication
+- [x] Verify quantitative lifecycle outcomes from receipts: normal path has zero post-publication
   structural authoring/replanning dispatches; each executed stage has preparation evidence; the
   injected break invokes REPLANNER and rewrites only the justified set. Report refinement time,
   replan time, amendments, retained/revised IDs, and available token usage without inventing data.
-- [ ] Run the final offline commands individually and record actual output/exit status:
+- [x] Run the final offline commands individually and record actual output/exit status:
 
 ```bash
 python3 scripts/plan-tree-regression.py --self-test
@@ -394,13 +394,13 @@ Print/run fresh-agent scenario suites separately with `--prompt` and `--answers`
 alone do not exercise skill interpretation. In a clean implementation checkout, generator checks
 must pass; do not erase the original checkout's unrelated cachebuster to manufacture that result.
 
-- [ ] Write the verification report with a PT requirement → test/receipt → result matrix. Distinguish
+- [x] Write the verification report with a PT requirement → test/receipt → result matrix. Distinguish
   offline config tests, model-interpretation probes, and live transport. Resolve failures before
   claiming completion; unavailable live evidence leaves the corresponding acceptance incomplete.
-- [ ] Switch shipped SUPER_PLANNING_MODE to upfront after acceptance. Document explicit incremental
+- [x] Switch shipped SUPER_PLANNING_MODE to upfront after acceptance. Document explicit incremental
   selection, permanent legacy fallback, stage preparation, model keys, contract-change escalation,
   and batch recovery. Update the architecture reference to match the final behavior.
-- [ ] Review the complete change for requirement coverage and role/model correctness. Commit only
+- [x] Review the complete change for requirement coverage and role/model correctness. Commit only
   owned files and integrate through the repository's normal PR policy. Version/release changes
   follow the actual release decision, not a speculative version embedded in this plan.
 
