@@ -13,7 +13,8 @@ license: MIT
 >   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
 >   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
->   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
+>   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
@@ -71,8 +72,8 @@ report** (the caller's per-tick report).
 ## Caller-supplied parameters (the work-model seam)
 
 The caller supplies, once, at invocation:
-- **`<consumer>`** — the caller's own slash-command name, used in the driver's tick prompt (`/<consumer> --tick <loop-file>`) — see L2. For superagent this is `superagent`.
-- **`<bootstrap-input>`** — the caller's required bootstrap input, the L2 hard gate (no input + no existing loop file ⇒ print the hard-gate message and exit). Must be the goal's **root** seed/master plan (superagent: the root `<PLAN.md>`) — see L2.
+- **`<consumer>`** — the caller's own slash-command name, used in the driver's tick prompt (`/<consumer> --tick <loop-file>`) — see L2. For superagent this is `superagent`; the project consumer is `supercode`.
+- **`<bootstrap-input>`** — the caller's required bootstrap input, the L2 hard gate (no input + no existing loop file ⇒ print the hard-gate message and exit). Defaults to the goal's **root** seed/master plan (superagent: root `<PLAN.md>`); supercode supplies the real project directory and external driver only — see L2.
 - **Status vocabulary + role→value mapping** — the caller's concrete `status:` values *and* the mapping of each onto L1's generic roles (a *ready* state, a *transient/running* state, `WAITING FOR INPUT`, `DONE`), plus any extra frontmatter fields the caller stores beyond the L1 baseline — see L1.
 - **Heavy-step definition + THRESHOLD** — what increments `session_skill_count`, and the handoff THRESHOLD (this plugin's callers resolve it from `SUPER_HEAVY_STEP_LIMIT`, default 6) — see L4.
 - **Be-sure artifact list** — the output file(s)/PR(s) the caller's just-completed sub-step reports, which the Be-sure verification confirms are present and tracked (L5's two-kind rule) — see L5/L6.
@@ -92,6 +93,11 @@ The caller supplies, once, at invocation:
 ---
 
 ## L1 — The loop-status file
+
+The supercode consumer instead uses its existing registered project state (default
+`<project>/<SUPER_LOOP_STATUS_DIRNAME>/supercode.md`), stores `project` rather than `master_plan`,
+and supplies its own operation-aware transient recovery and DONE validation. These project overrides
+do not alter the following plan-tree defaults.
 
 State lives in a single per-goal file: `<goal-folder>/<SUPER_LOOP_STATUS_DIRNAME>/<YYYY-MM-DD>-<slug>.md`.
 
@@ -144,6 +150,10 @@ git_mode: github | none                # immutable execution contract; legacy mi
 project_root: <physical REPO>          # scheduler/control-plane root, required for new goals
 status: WAITING FOR PLAN          # caller's status vocabulary (see the status roles below)
 plan_exhausted: false             # CALLER-SPECIFIC: e.g. superagent's queue-exhaustion hint; other consumers add their own work-model fields here
+planning_operation: none          # optional recovery hint: refine | replan | none; tracked tree/records override it
+planning_target:                  # optional stage ID, legacy repair leaf, or decision record hint
+planning_generation:              # optional upfront root generation hint
+planning_record:                  # optional C8 record path/Decision ID hint
 prior_status:                     # status to restore after a WAITING FOR INPUT escalation resolves
 driver: external                  # the only driver in this build (external scheduler — fresh context per tick)
 cron_id:                          # unused in this build (Claude Code in-session driver only); leave empty
@@ -286,14 +296,25 @@ end — and run the **Context-handoff gate (L4)** before the body, exactly like 
 
 ### Crash recovery — a persisted transient/running state means a crashed tick
 
+**Consumer recovery seam:** supercode must reconcile committed operation artifacts and full
+acceptance context before any transient reset. Its mappings are META-PLANNING → WAITING FOR
+META-PLAN, EVALUATING → WAITING FOR EVAL, DIAGNOSING → WAITING FOR DIAGNOSIS. Incomplete reusable
+META keeps its original goal/operation. Conflicts park. The following plan-tree recovery defaults
+remain unchanged; neither consumer resets a live peer's transient or lock.
+
 The transient/running role (L1) is transient *within* a tick: the loop sets it, runs the body
 synchronously, then sets the next status — all in one turn. Ticks never overlap: in `cron` mode they
 fire between turns; in `external` mode the **lock (L3)** serializes them. So a **persisted** transient
 state means a crashed prior tick (which also left a stale lock that `acquire_lock()` steals
 immediately when its recorded owner PID is dead, else after
-`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note, **map the persisted transient state back to its matching
-ready state** (the caller supplies the transient→ready mapping for its own status values — superagent:
-`PLANNING → WAITING FOR PLAN`, `RUNNING → WAITING FOR RUN`), and fall through to that branch this tick.
+`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note and reconcile the
+caller-owned authoritative artifacts before retrying. A published docs operation, merged code delivery,
+open/CI-pending PR, or integrated closeout may have succeeded after the response was lost; actual
+tracked commits/PRs and identity-bound partial-closeout/delivery records override the stale transient hint. Then **map the
+persisted transient state back to its matching ready state** (the caller supplies the
+transient→ready mapping for its own status values — superagent: `PLANNING → WAITING FOR PLAN`,
+`RUNNING → WAITING FOR RUN`) and fall through to that branch. Recovery reuses the existing identity;
+it never duplicates publication or reruns delivered work merely because loop state lagged.
 
 ### Tick teardown invariant — never exit on a transient status, never end a tick with a question
 
@@ -373,6 +394,14 @@ ambiguous owner is never age-stolen. This lock coordinates Superagent writers, n
 External ticks run in **independent sessions**, so a long tick (a run with a 30-min CI gate) can
 still be running when the next interval fires. Guard every tick with an atomic file lock in the
 loop-status dir so two ticks never run concurrently:
+- **Project consumer (`supercode`) override:** use the installed
+  `scripts/_coding_loop_state.py acquire-lock LOCK_DIR --owner DRIVER_PID --steal-min MIN` for
+  **every** acquire/reclaim path, including answers and force recovery. The helper serializes
+  mkdir, stale re-read/removal, and owner/acquired publication under `fcntl.flock` on the persistent
+  sibling `LOCK_DIR.reclaim`. Never unlink that inode, even during stop/recovery. Exit on return 1
+  (busy); report return 2 as invalid/error. A live owner is never age-stolen. Release the main
+  `.lockd` only if owner still names this driver PID. Do not execute the legacy rm/reacquire recipe
+  below for projects. Legacy goal consumers retain the Python-free default.
 - **`acquire_lock()`** — atomically `mkdir "<loop-file-dir>/.<loop-file-basename>.lockd"`. The lock
   derives from the **loop file's own directory** (`<vault_root>/<goal>/<SUPER_LOOP_STATUS_DIRNAME>/`),
   never from `primary_root` (see **L1**). `<loop-file-dir>` is an absolute path — inside the primary
@@ -415,7 +444,7 @@ required command result at its durable path. A status label or report alone is n
 unrelated user changes; snapshots are inspection evidence, never automatic rollback or overwrite.
 After this branch succeeds, continue to the caller without applying the GitHub sync recipes below.
 
-The caller's sub-steps (`superplan`/`superrun`, or a consumer's own fix-PR flow) merge their PRs to
+The caller's sub-steps (a selected planning operation / `superrun`, or a consumer's own fix-PR flow) merge their PRs to
 `origin/main` and then try `git checkout main && git pull --ff-only`. **That local pull can silently
 fail or be skipped** — most commonly when a `git checkout main` runs *inside a worktree* (where `main`
 is already checked out in the primary tree and the checkout errors **after** the remote `--admin` merge
@@ -479,6 +508,12 @@ is present and tracked:
   are checked on the code repo as before;
 - (optional) the merge is in history — `git log --oneline origin/main | grep <pr-number>`.
 
+For an identity-bearing operation, verify the report against its actual authoritative publication:
+the recorded stage/generation/revision or Decision ID, source/preparation/delivery identity, and the
+one integrated A7 transition. A filename, loop hint, unmerged docs PR, or child success message alone
+does not pass Be-sure. On a lost response, one matching integrated unit is success to reuse; competing
+or partial units require reconciliation before another write.
+
 If a reported artifact is **missing** after a clean `sync_main()`, the merge did not propagate as
 claimed: `git fetch` once more and re-check; if still missing → **STOP and escalate** with the
 discrepancy. **Do not advance the state machine on an unverified merge** — that is how the loop drifts
@@ -512,9 +547,11 @@ skeleton lives in `superauthor` clause A7** (merge per `SUPER_MERGE_METHOD`, def
 a repo whose branch protection doesn't require it trips the harness security classifier). Do not
 duplicate that skeleton — apply A7's.
 
-1. **CI-green gate before merge.** A code PR is merged only once its gating CI lane is green (the caller
-   names the lane). If CI is **red**, do **not** merge — route to the escalation ladder (L7) with the
-   failure as the decision packet.
+1. **CI-green and current-authority gate before merge.** A code PR is merged only once its gating CI
+   lane is green (the caller names the lane) **and** the caller revalidates the current authoritative
+   work identity/barrier/disposition. A queued-before-request packet is not merge authority. If CI is
+   red, an adopted barrier is pending, the active identity changed, or disposition is unresolved, do
+   **not** merge — preserve the PR evidence and route to the caller's reconciliation/escalation path.
 2. **Merge via A7.** Apply `superauthor` A7's merge — per `SUPER_MERGE_METHOD` (default `squash`), never
    `--admin` unless `SUPER_ADMIN_MERGE=true` permits it. If `SUPER_PROTECTED_MAIN=true` (the shipped
    default), the default branch is protected; never direct-push. If `SUPER_PROTECTED_MAIN=false`, a
@@ -524,14 +561,18 @@ duplicate that skeleton — apply A7's.
    vault mode) and the Be-sure verification so the primary checkout reflects the merge before the
    next tick reads the tree.
 
-**superagent's subset.** superagent does **not** itself open/merge work PRs — `superplan`/`superrun`
+**superagent's subset.** superagent does **not** itself open/merge work PRs — selected planning operations / `superrun`
 do that inside their own flows. superagent therefore applies only **L6.1's CI-red → L7 escalation
-trigger** and **L6.3's post-merge sync+be-sure** (around each `superplan`/`superrun` dispatch). A
+trigger** and **L6.3's post-merge sync+be-sure** (around each selected planning operation / `superrun` dispatch). A
 consumer whose per-tick body opens its own PRs applies the full clause.
 
 ---
 
 ## L7 — Decision-escalation ladder — autonomy posture
+
+For the project consumer, this ladder may resolve routine operation failures only. Specification
+changes, agreement adoption and raised round-limit decisions require an explicit recorded author
+answer; no panel vote can approve them or weaken acceptance.
 
 The bar is **not** "never ask the user." Routine actions (commits, PR merges) never need approval, but
 delegated skills legitimately surface genuine decision points. The loop resolves them itself first,

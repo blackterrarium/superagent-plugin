@@ -13,6 +13,9 @@ plan, and advance the parent seed's progress-report table.
 
 **Input:** `<PLAN.md>` — the executed implementation plan (the `.md` file from a goal folder's
 `plans/` subfolder). May be passed explicitly, by a calling skill, or inferred from the session.
+For an upfront stage, the caller also passes the execution-entry snapshot and actual delivery evidence
+defined by superrun. A recovery invocation may reconstruct them only from authoritative tracked
+artifacts and verified branch/PR history; it never guesses from current annotated plan bytes.
 
 ## The deliverable is vault bookkeeping — and ONLY that
 
@@ -89,6 +92,52 @@ of which subfolder each file type goes in. Route every write according to it. Th
 If a goal folder lacks `reports/` or `findings/`, create the subfolder when writing (do not invent a
 different location).
 
+## Execution identity and lost-response recovery (Gate 3)
+
+Resolve the root and mode through superstage S1. For an upfront stage require one complete
+execution-entry snapshot: root/generation, active stage path and Stage ID/revision, Preparation report
+and digest, authoritative vault commit containing the prepared stage/receipt, reviewed code revision,
+source revision, and consumed contract/provider receipts. Verify the prepared digest against the stage
+blob at that recorded vault commit, omitting only the Preparation line per superstage S5. The current
+plan may already contain a closeout note and is therefore not the prepared digest input. A completed
+stage never has to satisfy the current *unstarted-stage* preparation predicate forever; closeout proves
+which valid historical preparation and execution snapshot produced the actual delivery.
+
+Classify the actual outcome separately:
+
+- **Complete delivery:** verify the code PR and merge commit on authoritative main, an authorized
+  direct-integration commit, or (for evidence-only discovery) the specified evidence/decision A7
+  publication. This identity plus the execution snapshot can become a delivery receipt and satisfy
+  produced contracts.
+- **Partial execution:** verify the same execution snapshot plus the actual open PR, exact head commit,
+  branch/worktree when retained, and CI run/conclusion or blocker. This permits a partial closeout report
+  and `executed — PR open`; it is explicitly **not delivered**, satisfies no produced contract, and is
+  non-consumable by dependencies. A later invocation after verified integration revises this same
+  identity-bound report into the complete delivery receipt instead of creating another report.
+
+Preserve any repair predecessor PR/branch/worktree and disposition history. Missing or contradictory
+evidence for the claimed outcome is BLOCKED. For incremental plans, keep the legacy evidence rules and
+record the resolvable plan/code identity available.
+
+Before drafting a timestamped report, derive one stable **execution-attempt key** from the immutable
+execution snapshot plus code repository/PR number (or the discovery evidence-publication identity).
+The current PR head, CI results, open/merged state and merge commit are versioned observations of that
+attempt, not parts of its lookup key. Scan the synchronized authoritative vault and history by this key:
+
+- exactly one matching report plus matching plan note/active-row history means prior publication
+  succeeded. If its latest observation already matches the verified outcome, reuse it and perform no
+  duplicate write/A7 publication. If it is partial and the same PR later advances head, CI or merge
+  state, append/version those observations and upgrade that **same report path** in place; never allocate
+  another timestamped report merely because mutable PR outcome fields changed;
+- one incomplete closeout A7 publication means resume and complete that same
+  report/note/ascent/publication unit, retaining its identity and filename. Do not allocate a second
+  timestamped report;
+- multiple or conflicting receipts, or a claimed publication absent from authoritative history, is
+  BLOCKED until reconciled.
+
+This is the idempotency key for a lost final response. Filename timestamps, session memory, a row
+status, or a top note alone are not authoritative execution-attempt identity or delivery evidence.
+
 ## After-Run Finish
 
 Do the four steps below. **Draft every write to a scratch path OUTSIDE the goal folder** (e.g.
@@ -119,6 +168,14 @@ header block (`# Title`, `**Date:**`, `**Status:**`, `**Related:**` / `**Parent:
 false findings poison the goal. Only record what the session's evidence verifies. If there are no
 findings, that is fine — record none.
 
+For upfront work, link each finding to the affected stable contract and/or assumption IDs, or state
+explicitly that no such ID is affected. Classify from verified evidence. A routine implementation fact
+that preserves acceptance, scope, dependencies, contract semantics, and downstream evidence does not
+start a planning cycle or invalidate preparation. A verified contradiction of a shared contract or
+assumption names each affected unfinished stage and invalidates its old preparation for selection; flag
+`REPLAN-REQUIRED` so the existing decision/adoption path can create C8's durable batch. The finding is
+evidence for that decision, never proof by assertion and never authority to rewrite the tree itself.
+
 ### 2. Closeout Report
 
 Write a closeout report for this session to the **`reports/`** subfolder (per `goal-directives.md`),
@@ -128,11 +185,36 @@ named `reports/YYYY-MM-DD-hh_mm-<topic>.md` (today's date and the current UTC ho
 - **Next steps** — what remains, deferred items, follow-ups.
 - **Reference to the findings** uncovered this session (the docs from step 1), if any.
 - **Reference to `<PLAN.md>`** — the plan this report grades, as a full-path wikilink.
+- **Execution identity** — the execution-entry snapshot from Gate 3, including its historical prepared
+  plan commit/blob, receipt path/digest, root generation, Stage ID/revision, reviewed code revision,
+  source revision, and consumed delivery receipts (or the available legacy identity).
+- **Outcome identity** — for complete delivery, code PR/merge commit, authorized direct integration
+  commit, or the discovery evidence/decision publication; for partial execution, the verified open PR,
+  exact head, CI result/blocker and explicit `delivered: false`, `consumable: false`.
+- **Delivered contracts** — every produced contract ID and semantic revision, with concrete evidence
+  that the delivered result satisfies it. For a partial report, list every declared produced contract
+  and revision as `pending — not delivered; consumable: false`, with no satisfaction claim. An explicit
+  `none` is allowed only when the stage produces no contract. On verified integration, upgrade those
+  same entries in place to delivered evidence and `consumable: true`.
+- **Attempt observations** — append/version each verified PR head, CI run/conclusion, blocker, merge
+  state and merge/direct-integration commit under the stable execution-attempt key. Do not rewrite the
+  historical failed/open observation when the attempt later succeeds.
+- **Repair/integration history** — every predecessor PR and its verified reuse/replacement/closure or
+  adopted disposition, plus the active successor relationship when applicable.
 
 Open with the standard header block (`# Title`, `**Date:**`, `**Type:** Sub-PR closeout`,
 `**Status:**`, `**Related:**`). When CI evidence exists, cite the source CI run id(s) and verify the
 artifact dates postdate the commits. Close the loop both ways — the
 report links back to the plan/seed it grades.
+
+For complete delivery this report is the stage's durable **delivery receipt**. For partial execution it
+is a durable **partial closeout**, not a delivery receipt; no consumer may use it as prerequisite
+evidence. A discovery stage is complete without a code PR only when its plan's experiment evidence and
+decision criteria are satisfied, the evidence and documented decision were published through the
+applicable internal A7 docs PR/direct commit or external-vault commit, and every produced discovery
+contract is identified. If that decision
+contradicts a live contract/assumption, publish the verified finding and return REPLAN-REQUIRED through
+the same adoption path used for implementation stages; do not mark affected consumers executable.
 
 ### 3. Update Plan
 
@@ -142,8 +224,11 @@ summarizes the work done and links to the closeout report (step 2) as a full-pat
 at the top, **not** at the end of the file, so a reader sees the outcome first. **Keep it short** — a
 few lines at most, not a restatement of the report.
 
-**Idempotency:** if `<PLAN.md>` already contains a close-out note referencing a closeout report for
-this work, do nothing and move on.
+**Idempotency:** if `<PLAN.md>` already contains a close-out note referencing the report for this exact
+stable execution-attempt key, keep that link. Reuse the report when observations match or revise it in
+place for a partial-to-delivered upgrade. A note for another attempt is history, not a match. Digest
+verification continues to use Gate 3's historical prepared-plan blob; never compare the receipt digest
+to this newly annotated current file.
 
 ### 4. Update the Plan Tree Upward
 
@@ -151,7 +236,9 @@ Identify the **immediate parent** seed/master plan `<PLAN.md>` was derived from 
 reference near the top of `<PLAN.md>` (superplan injects one; this is the `supertraverse` C5 "up" link).
 Before ascent, check **supertraverse C7/C8's active-plan guard**. A predecessor closeout must
 not overwrite a pending repair or a successor's active row. Record its outcome as historical
-only. For a successor, include actual predecessor PR disposition and integration evidence in
+only. If that predecessor actually merged, reconcile the delivered code and contracts into the C8
+record before any fresh correction work; completed history stays completed and any incompatible
+correction gets a fresh stage ID. For a successor, include actual predecessor PR disposition and integration evidence in
 the closeout and repair record; mark Resolution `integrated` only after all integration and
 predecessor dispositions are verified. Leave unresolved dispositions explicitly blocking.
 Then **invoke the `superagent:supertraverse` skill** (Skill tool) and run its **ASCENT in completion mode**,
@@ -167,9 +254,11 @@ the per-row update precisely; this section need not restate it. In brief:
 
 - **The leaf's own row** (the row pointing at `<PLAN.md>` in its immediate parent) gets either
   `executed — PR open` (the code PR is still open at superfinish time) or `completed-and-merged`
-  (the code PR has been squash-merged to `main`) — pick the one that matches reality. Either way,
-  add the PR number to the **PR** column and a one-line rollup + `Closeout: [[…]]` wikilink in
-  **Comments**. A follow-up superfinish invocation flips `executed — PR open` →
+  (the code PR has been squash-merged to `main`) — pick the one that matches reality. Evidence-only
+  discovery with verified evidence/decision publication uses `completed-and-merged` / `done` without a
+  code PR. Add a one-line rollup + `Closeout: [[…]]` wikilink in **Comments**. Put `#NNN` in the PR
+  column only for code work; leave it blank (or explicit `none`) for evidence-only discovery and cite
+  its A7 publication in Comments/report. A follow-up superfinish invocation flips `executed — PR open` →
   `completed-and-merged` once the code PR merges (idempotent re-run).
 - **Each ancestor row above the leaf** is flipped to `completed-and-merged` only when *every* row
   in the child's progress-report table is merged-on-`main` per C4 (`completed-and-merged` / `done`
@@ -188,6 +277,13 @@ by the shared ascent — `in progress (partially executed)` when ancestors are p
 `executed — PR open` when the leaf's PR is still open, `completed-and-merged` when the PR has
 merged). Re-running superfinish after the code PR merges is the supported way to flip
 `executed — PR open` → `completed-and-merged` and propagate the parent rollup upward.
+
+For upfront ascent, C7 consumes the identity-bound closeout record, not the row label alone. A partial
+record can support only `executed — PR open`. It may mark an
+implementation stage complete only with verified integration and delivered-contract revisions, or a
+discovery stage complete with its verified evidence/decision. A verified contract contradiction is
+surfaced before the next dispatch and affected unfinished preparation is no longer executable; routine
+findings leave preparation valid.
 
 If no parent seed can be identified (no parent-seed reference and none inferable), note this in the
 Final Report under "Other files" as "parent plan: none found — not updated" and continue; do not
@@ -224,8 +320,13 @@ a direct commit to the default branch is permitted instead — see `superauthor`
 superfinish output [skip ci]"`, push only if the vault has an `origin`. The skeleton below is
 the internal-mode path. A7's **precondition** applies: if `<vault_root>` is not its own
 repository, STOP and report — never improvise a `git init`. The progress-table **PR** cell of a
-*planning* row stays blank in external mode (there is no PR for a vault-only commit); an
-*executed* row still records the code PR number.
+*planning* row stays blank in external mode (there is no PR for a vault-only commit); an executed code
+row records its code PR number, while evidence-only discovery stays blank / `none`.
+
+Treat the report, plan note, findings and ancestor updates as one authoritative A7 publication unit.
+On retry, reconcile the exact execution/outcome identity against integrated history before opening a branch or
+committing: reuse a complete unit, resume the one unique partial unit, and block on competing units.
+An ignored loop-state hint or an unmerged internal docs branch is never authoritative publication.
 
 **Scope of the commit: only the bookkeeping docs** written this run — the closeout report, new/revised
 `findings/` docs, the `<PLAN.md>` close-out note, and **every ancestor plan file** the completion-mode
@@ -276,6 +377,7 @@ appear here.**
 
     **Plan:** <full path to PLAN.md>
     **Goal folder:** <full path>
+    **Closeout record:** <reports/...> — <stage/generation/revision and outcome identity> (partial / delivered; created / resumed / already integrated)
 
     **Files created/modified:**
     - <reports/...> — closeout report (created)

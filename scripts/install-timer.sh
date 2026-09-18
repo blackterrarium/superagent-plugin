@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 superagent_load_context "$PWD" run || exit $?
 
 usage() {
-  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi]" >&2
+  echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--supervisor superagent|supercode] [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi]" >&2
   exit 2
 }
 
@@ -30,6 +30,7 @@ SLUG="${1:-}"; LOOP_FILE_IN="${2:-}"
 shift 2
 
 INTERVAL="${SUPER_TICK_INTERVAL:-30m}"; TICK_TIMEOUT=""; OUTPUT_FORMAT="stream"; MODEL=""
+SUPERVISOR=superagent
 HARNESS="$(superagent_harness)" || exit 2
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --timeout)  TICK_TIMEOUT="${2:?--timeout needs a value}"; shift 2 ;;
     --output)   OUTPUT_FORMAT="${2:?--output needs a value}"; shift 2 ;;
     --model)    MODEL="${2:?--model needs a value}"; shift 2 ;;
+    --supervisor) SUPERVISOR="${2:?--supervisor needs a value}"; shift 2 ;;
     --harness)  HARNESS="${2:?--harness needs a value}"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage ;;
   esac
@@ -52,6 +54,8 @@ if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then
 fi
 LOOP_FILE="$(cd "$(dirname "$LOOP_FILE_IN")" && pwd -P)/$(basename "$LOOP_FILE_IN")"
 
+SUPERVISOR="$(superagent_supervisor "$LOOP_FILE" "$SUPERVISOR")" || exit 2
+superagent_check_registration "$SLUG" "$LOOP_FILE" "$SUPERVISOR" || exit 2
 SCHEDULER="$(superagent_scheduler)"
 # Validate the interval up front on launchd (StartInterval takes seconds only),
 # before any state is written.
@@ -64,17 +68,20 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 mkdir -p "$CONF_DIR"
 
 {
-  printf 'REPO=%q\n' "$REPO"
-  printf 'SUPERAGENT_PROJECT_ROOT=%q\n' "$REPO"
-  printf 'SUPERAGENT_GIT_MODE=%q\n' "$SUPER_GIT_MODE"
+  printf 'REPO=%s\n' "$REPO"
+  printf 'SUPERAGENT_PROJECT_ROOT=%s\n' "$REPO"
+  printf 'SUPERAGENT_GIT_MODE=%s\n' "$SUPER_GIT_MODE"
+  # Detached ticks must discover inner/outer registrations in the same root.
+  printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}"
   # The plugin's own scripts/ dir — recorded at install time because the systemd
   # unit runs detached from any Claude Code session (no $CLAUDE_PLUGIN_ROOT in its
   # environment), and superagent-tick.sh lives in the plugin, not in $REPO.
-  printf 'SUPERAGENT_SCRIPT_DIR=%q\n' "$SCRIPT_DIR"
-  printf 'LOOP_FILE=%q\n' "$LOOP_FILE"
+  printf 'SUPERAGENT_SCRIPT_DIR=%s\n' "$SCRIPT_DIR"
+  printf 'LOOP_FILE=%s\n' "$LOOP_FILE"
   # The goal slug, so a tick can find its own scheduler entry for the DONE
   # self-disarm (superagent-tick.sh; SUPER_AUTO_DISARM_ON_DONE).
-  printf 'SUPERAGENT_SLUG=%q\n' "$SLUG"
+  printf 'SUPERAGENT_SLUG=%s\n' "$SLUG"
+  printf 'SUPERAGENT_SUPERVISOR=%s\n' "$SUPERVISOR"
   # Only pin TICK_TIMEOUT when a cap is explicitly given; otherwise omit it so the
   # wrapper runs uncapped (no systemd/script wall-clock ceiling).
   [[ -n "$TICK_TIMEOUT" ]] && echo "TICK_TIMEOUT=$TICK_TIMEOUT"
@@ -100,9 +107,15 @@ if [[ "$SCHEDULER" == launchd ]]; then
   mkdir -p "$(dirname "$PLIST")"
 
   NEW_PLIST="$(mktemp)"
+  # Shell-quote the input redirection target, then XML-escape the rendered
+  # argument and sed-escape replacement bytes. Values inside the env file are
+  # loaded literally by the template, never sourced/evaluated.
+  env_shell="'$(printf '%s' "$CONF_DIR/$SLUG.env" | sed "s/'/'\\\\''/g")'"
+  env_xml="$(printf '%s' "$env_shell" | sed -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+  env_sed="$(printf '%s' "$env_xml" | sed 's/[\\&|]/\\&/g')"
   sed -e "s|@SLUG@|$SLUG|g" \
       -e "s|@INTERVAL_SECS@|$INTERVAL_SECS|g" \
-      -e "s|@ENV_FILE@|$CONF_DIR/$SLUG.env|g" \
+      -e "s|@ENV_FILE@|$env_sed|g" \
       "$SCRIPT_DIR/launchd/com.superagent.tick.plist.template" >"$NEW_PLIST"
 
   if [[ -f "$PLIST" ]] && cmp -s "$NEW_PLIST" "$PLIST" && [[ -n "$(superagent_launchd_state "$SLUG")" ]]; then
@@ -136,6 +149,17 @@ else
   mkdir -p "$UNIT_DIR"
   install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.service" "$UNIT_DIR/superagent-tick@.service"
   install -m 0644 "$SCRIPT_DIR/systemd/superagent-tick@.timer"   "$UNIT_DIR/superagent-tick@.timer"
+
+  # Override the template's default HOME location for this instance. A
+  # separate serialized view preserves literal registry values (notably \)
+  # without changing the format consumed by existing lifecycle scripts.
+  SERVICE_DROPIN="$UNIT_DIR/superagent-tick@$SLUG.service.d"
+  mkdir -p "$SERVICE_DROPIN"
+  superagent_systemd_environment "$CONF_DIR/$SLUG.env" >"$SERVICE_DROPIN/environment"
+  {
+    printf '[Service]\nEnvironmentFile=\nEnvironmentFile='
+    superagent_systemd_path "$SERVICE_DROPIN/environment"
+  } >"$SERVICE_DROPIN/environment.conf"
 
   # Per-instance interval override.
   DROPIN_DIR="$UNIT_DIR/superagent-tick@$SLUG.timer.d"

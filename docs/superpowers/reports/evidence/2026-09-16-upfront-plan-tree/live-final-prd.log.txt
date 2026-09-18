@@ -1,0 +1,45 @@
+ok   - valid project exits 0
+ok   - usage error without a dir
+ok   - missing evaluation.md is a FAIL
+ok   - prd header without Status is a FAIL
+ok   - missing prd section is a FAIL
+ok   - out-of-order prd section is a FAIL
+ok   - wrong ledger header is a FAIL
+ok   - alignment separator with no rows is a FAIL
+ok   - valid kb rows PASS
+ok   - wrong kb table header is a FAIL
+ok   - missing repo-file is a FAIL
+ok   - unmatched repo-glob is a FAIL
+ok   - non-http doc-url is a FAIL
+ok   - malformed context7 id is a FAIL
+ok   - missing sample-code is a FAIL
+ok   - absent entry-point symbol is a WARN
+ok   - entry-point without :symbol is a FAIL
+ok   - unknown kind is a FAIL
+ok   - empty kb table is a FAIL
+ok   - empty locator is a FAIL
+ok   - entry-point with trailing colon is a FAIL
+ok   - valid evaluation PASSes
+ok   - missing setup line is a FAIL
+ok   - nonexistent env cwd is a WARN
+ok   - malformed Pass when is a FAIL
+ok   - stdout regex Pass when is accepted
+ok   - non-numeric timeout is a FAIL
+ok   - timeout above SUPER_EVAL_TIMEOUT_MIN is a FAIL
+ok   - command not on PATH is a WARN
+ok   - repo-relative command is a PASS
+ok   - duplicate check id is a FAIL
+ok   - judged row without criteria is a FAIL
+ok   - no checks at all is a FAIL
+ok   - criterion naming an unknown check FAILs
+ok   - check serving no criterion FAILs
+ok   - criterion with no check ids FAILs
+ok   - non-numeric SUPER_EVAL_TIMEOUT_MIN is a WARN and falls back
+ok   - escaped pipe in a regex Pass when is accepted
+ok   - --json emits an array
+ok   - --json parses and has the four keys
+ok   - --json escapes a tab in a cell
+ok   - leading-zero timeout is accepted
+ok   - acceptance prose preserves legacy lint compatibility
+ok   - acceptance and suggestion tables do not become executable checks
+prd-lint-test: 0 failure(s)

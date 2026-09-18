@@ -1,0 +1,51 @@
+{
+  "status": "prepared; approval pending; no live lifecycle dispatch started",
+  "runs": [
+    {
+      "id": "normal-internal",
+      "code": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code",
+      "vault": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code/vault",
+      "purpose": "complete five-stage execution; zero structural planning after initial tree"
+    },
+    {
+      "id": "bounded-external",
+      "code": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/external-code",
+      "vault": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/external-vault",
+      "purpose": "complete-tree external publication and bounded-detail preparation"
+    },
+    {
+      "id": "break-external",
+      "code": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-code",
+      "vault": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault",
+      "purpose": "S02/S03 batch with S04/S05 retained; interrupted durable request recovery"
+    }
+  ],
+  "expected_dependencies": {
+    "S01": [],
+    "S02": [
+      "S01"
+    ],
+    "S03": [
+      "S02"
+    ],
+    "S04": [],
+    "S05": [
+      "S03",
+      "S04"
+    ]
+  },
+  "configured_live_roles": {
+    "PLAN_REFINER": {
+      "model": "codex:gpt-5.6-terra",
+      "effort": "medium"
+    },
+    "REPLANNER": {
+      "model": "claude:opus",
+      "effort": "high"
+    }
+  },
+  "limitations": [
+    "Pi transport authentication expired; do not generalize other live harness results to Pi.",
+    "Code repositories use disposable local bare origins and configured direct integration; production PR behavior requires separate evidence."
+  ]
+}

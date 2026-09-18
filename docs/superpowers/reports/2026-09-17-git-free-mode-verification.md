@@ -36,7 +36,7 @@ The following terms are used deliberately:
 | Check | Result | Evidence kind | Evidence |
 |---|---:|---|---|
 | `build-{codex,cursor,pi}-skills.sh` followed by all three `--check` runs | PASS | real deterministic execution | generated trees under `codex/`, `cursor/`, and `pi/`; each check reported up to date |
-| `bash scripts/coding-loop-package-test.sh` | PASS | real deterministic execution with fake transports | canonical, Codex, Cursor, and Pi copied packages ran outside the source checkout; each Stage 1/2 helper suite passed |
+| `bash scripts/coding-loop-package-test.sh` | PASS | real deterministic execution with fake transports | canonical, Codex, Cursor, and Pi copied packages ran outside the source checkout; Stage 1/2 helpers passed for all four and the generated packages passed the Stage 3 isolation checks |
 | `bash scripts/git-mode-test.sh` | PASS, 0 failures | real deterministic execution | default/precedence, nested discovery, owned local bootstrap, shared external-vault contention, mixed local/GitHub status isolation, controls invoked outside the project by slug, busy-lock yield, mode mismatch, zero local git/gh calls, and unchanged bytes in a pre-existing `.git` directory |
 | `python3 scripts/workspace-state-test.py` | PASS, 18 tests | real deterministic execution | ownership, inherited locks, shared-vault exclusion, dead-owner recovery, snapshot identity/copy/change/deletion/mode/symlink rules, exclusions, and tokenized cleanup |
 | `bash scripts/bridge-test.sh` | PASS, 0 failures | real deterministic execution with fake CLIs | harness argv, model/effort/tool mapping, fanout, lifecycle helpers, and direct-mode regressions |
@@ -51,6 +51,28 @@ The following terms are used deliberately:
 The copied-package test is the offline transport/packaging matrix for all four distributions. The
 fresh model probes are recorded separately because matching static scenario answers does not turn an
 offline package test into real harness execution.
+
+## Integration with current main
+
+Before PR publication, `origin/main` had advanced to `75ebd5d` (`v0.9.0`) with the Stage 3 coding
+loop and upfront plan-tree lifecycle. That base was merged into the isolated implementation branch.
+Conflict resolution preserved Stage 3's literal-data registry and systemd adapter, upfront planning
+selection, coding-loop phase identity, and generated helpers while applying git-free mode before any
+shared git/GitHub path. `supercode` remains a GitHub-mode supervisor and now refuses local-mode launch
+before invoking git or GitHub; ordinary `superagent` local lifecycle behavior is unchanged.
+
+The reconciled tree passed these additional real deterministic suites:
+
+- `coding-loop-state-test.py -v`: 63 tests.
+- `coding-loop-diagnosis-test.py -v`: 12 tests.
+- `coding-loop-driver-test.py -v`: 71 tests, including copied packages and scheduler adapters.
+- `coding-loop-stage3-live-test.py -v`: 41 tests. The sandboxed run passed 38 and could not invoke
+  `ps` for three process-ownership cases; the authorized process-inspection rerun passed all 41.
+- `plan-tree-config-test.sh`: 0 failures; `plan-tree-e2e.py --self-test`: 61 tests.
+
+The four real harness runs below predate this current-main reconciliation and were not repeated. They
+remain direct evidence for the git-free lifecycle itself; the post-merge evidence above is
+deterministic integration coverage of the shared Stage 3 and upfront-plan paths.
 
 ## Real harness execution
 

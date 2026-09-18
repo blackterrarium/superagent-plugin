@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "fixture": {
+    "kind": "live",
+    "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code",
+    "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/internal-code",
+    "root": "vault/2026-09-17-03_51-normal-internal/master-plans/2026-09-17-03_51-normal-internal.md"
+  },
+  "expected": {
+    "root_generation": 1,
+    "stages": [
+      {
+        "id": "S01",
+        "revision": 2,
+        "path": "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s01-parse-ndjson.md",
+        "depends_on": [],
+        "preparation": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-04_05-s01-preparation.md",
+        "prepared_vault_commit": "b2b3dbd4dbba5e0ace4e526dd578b9033cb2add8",
+        "delivery": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-04_33-s01-closeout.md",
+        "delivery_vault_commit": "3da92f977d9dea8bba110d5dc4c63e2c79b48ae9",
+        "code_commit": "27b669e14953a74d24959456a219b9493a1daf5f",
+        "integration_commit": "27b669e14953a74d24959456a219b9493a1daf5f"
+      },
+      {
+        "id": "S02",
+        "revision": 2,
+        "path": "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s02-atomic-persistence.md",
+        "depends_on": ["S01"],
+        "preparation": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-04_40-s02-preparation.md",
+        "prepared_vault_commit": "4f1d4892ef05556203b750ddaa6e7ddc61e1160e",
+        "delivery": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-05_22-s02-closeout.md",
+        "delivery_vault_commit": "c68731d50821e4242dc257ef702d824fae10baca",
+        "code_commit": "e87a113d489e27e369370227204bc10d0a5cd14f",
+        "integration_commit": "e87a113d489e27e369370227204bc10d0a5cd14f"
+      },
+      {
+        "id": "S03",
+        "revision": 2,
+        "path": "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s03-ingest-service.md",
+        "depends_on": ["S02"],
+        "preparation": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-06_10-s03-preparation.md",
+        "prepared_vault_commit": "16f7690083ff49cdc5e3c26a79dc4fdf0a0c15be",
+        "delivery": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-11_17-s03-closeout.md",
+        "delivery_vault_commit": "1ab456368ed7b29845c0968266c89e7d1dca393a",
+        "code_commit": "1272aa4808c9bb95a88d83cbbae50f00f255c9c9",
+        "integration_commit": "1272aa4808c9bb95a88d83cbbae50f00f255c9c9"
+      },
+      {
+        "id": "S04",
+        "revision": 2,
+        "path": "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s04-version-status.md",
+        "depends_on": [],
+        "preparation": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-12_10-s04-preparation.md",
+        "prepared_vault_commit": "822f0b5a133258c142986e4e1f8d5b7cd768f3bc",
+        "delivery": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-11_54-s04-closeout.md",
+        "delivery_vault_commit": "83c05a70e3087b1fb18ec0875034b4adfcd72d26",
+        "code_commit": "ffdea07e6415b9100d476802df84eecdc28423c7",
+        "integration_commit": "ffdea07e6415b9100d476802df84eecdc28423c7"
+      },
+      {
+        "id": "S05",
+        "revision": 3,
+        "path": "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s05-cli.md",
+        "depends_on": ["S03", "S04"],
+        "preparation": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-12_06-s05-preparation.md",
+        "prepared_vault_commit": "60e8abdaaa242b546ca12365a712fb66926c13fc",
+        "delivery": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-12_49-s05-closeout.md",
+        "delivery_vault_commit": "155ad0f9a8d7d9372e0e256f3f1e24cd44da2796",
+        "code_commit": "3639fbcbb407f082d668d31295abf115661ff5b7",
+        "integration_commit": "3639fbcbb407f082d668d31295abf115661ff5b7"
+      }
+    ],
+    "role_pins": {
+      "PLAN_REFINER": {"harness": "codex", "model": "gpt-5.6-terra", "effort": "medium"},
+      "REPLANNER": {"harness": "claude", "model": "opus", "effort": "high"}
+    },
+    "package_skills": ["superstage", "superrefine", "superreplan"]
+  },
+  "evidence": {
+    "initial_publication": {
+      "commit": "dd8fb3d855f755e5285c001b8d6743a39299d288",
+      "artifacts": [
+        "vault/2026-09-17-03_51-normal-internal/goal-directives.md",
+        "vault/2026-09-17-03_51-normal-internal/master-plans/2026-09-17-03_51-normal-internal.md",
+        "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s01-parse-ndjson.md",
+        "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s02-atomic-persistence.md",
+        "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s03-ingest-service.md",
+        "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s04-version-status.md",
+        "vault/2026-09-17-03_51-normal-internal/plans/2026-09-17-03_51-s05-cli.md",
+        "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-03_51-whole-tree-review.md"
+      ],
+      "tree_review": "vault/2026-09-17-03_51-normal-internal/reports/2026-09-17-03_51-whole-tree-review.md",
+      "confirmation": "vault/2026-09-17-03_51-normal-internal/goal-directives.md"
+    },
+    "bounded_detail_assessment": {
+      "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/external-vault",
+      "commit": "780888c0126a18b7ff980350e603b448325606a4",
+      "path": "2026-09-17-03_51-bounded-external/reports/2026-09-17-12_55-bounded-detail-assessment.md",
+      "initial_publication_commit": "d6d123013ee72054df3a0502332c6d00b06e435f"
+    },
+    "dispatch_logs": [
+      {"role": "PLAN_REFINER", "recipe": "native", "path": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/PLAN_REFINER-20260917T040434Z-70498.log"},
+      {"role": "REPLANNER", "recipe": "bridged", "path": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/logs/superagent-bridge/REPLANNER-20260917T041512Z-9024.log"}
+    ],
+    "traces": {
+      "normal": "live-normal-trace.jsonl",
+      "contract_break": {
+        "path": "live-contract-break-trace.jsonl",
+        "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-code",
+        "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault",
+        "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+        "initial_publication_commit": "4b3a41da3c312b7f1ad635efe6e33c88cf0d2f8d"
+      },
+      "batch_resume": {
+        "path": "live-batch-resume-trace.jsonl",
+        "code_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-code",
+        "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault",
+        "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+        "initial_publication_commit": "4b3a41da3c312b7f1ad635efe6e33c88cf0d2f8d"
+      },
+      "legacy": {
+        "path": "live-legacy-trace.jsonl",
+        "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/legacy-vault",
+        "root": "goal/master-plans/legacy-root.md",
+        "initial_publication_commit": "7a587e5b61906fd51c2a11f8858ada4182b088c6"
+      }
+    },
+    "replan": {
+      "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/break-vault",
+      "root": "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+      "decision_id": "UPT-BREAK-20260917-001",
+      "record": "2026-09-17-03_52-break-external/findings/2026-09-17-04_10-replan-persistence-result.md",
+      "report": "2026-09-17-03_52-break-external/reports/2026-09-17-12_56-replan-publication-assessment.md",
+      "impact_review": "2026-09-17-03_52-break-external/reports/2026-09-17-12_56-semantic-impact-assessment.md",
+      "publication_commit": "d9549791e317b09552a01652d07bf06f3d25947b",
+      "published_generation": 2,
+      "revised_stages": ["S02", "S03"],
+      "retained_stages": ["S01", "S04", "S05"],
+      "artifacts": [
+        "2026-09-17-03_52-break-external/master-plans/2026-09-17-03_52-break-external.md",
+        "2026-09-17-03_52-break-external/plans/2026-09-17-04_11-s02-atomic-json-store.md",
+        "2026-09-17-03_52-break-external/plans/2026-09-17-04_11-s03-ingest-service.md",
+        "2026-09-17-03_52-break-external/findings/2026-09-17-04_10-replan-persistence-result.md",
+        "2026-09-17-03_52-break-external/reports/2026-09-17-04_11-generation-2-tree-review.md",
+        "2026-09-17-03_52-break-external/reports/2026-09-17-12_56-replan-interruption.md",
+        "2026-09-17-03_52-break-external/reports/2026-09-17-12_56-replan-publication-assessment.md",
+        "2026-09-17-03_52-break-external/reports/2026-09-17-12_56-semantic-impact-assessment.md"
+      ]
+    },
+    "legacy": {
+      "vault_repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/legacy-vault",
+      "commit": "29246402db8aa623a8e0329d4ffcb460205ef931",
+      "root": "goal/master-plans/legacy-root.md"
+    },
+    "publications": {
+      "external": {
+        "repo": "/var/folders/qn/7bff6lmd5g32dd779w3n1cv80000gn/T/superagent-upfront-live-rano_6vt/external-vault",
+        "commit": "d6d123013ee72054df3a0502332c6d00b06e435f",
+        "artifacts": [
+          "2026-09-17-03_51-bounded-external/goal-directives.md",
+          "2026-09-17-03_51-bounded-external/master-plans/2026-09-17-03_51-bounded-external.md",
+          "2026-09-17-03_51-bounded-external/reports/2026-09-17-03_51-initial-tree-review.md"
+        ]
+      }
+    },
+    "packages": {
+      "canonical": "../../../../../skills",
+      "codex": "../../../../../codex/plugins/superagent/skills",
+      "cursor": "../../../../../cursor/skills",
+      "pi": "../../../../../pi/skills"
+    }
+  }
+}

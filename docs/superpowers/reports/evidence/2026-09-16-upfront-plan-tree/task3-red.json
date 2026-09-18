@@ -1,0 +1,51 @@
+{
+  "preparation_noop": {
+    "reason": "superstage S5 says attaching only the Preparation pointer does not change plan semantics or increment Stage revision; the complete contract can receive its first PREPARED receipt.",
+    "outcome": "PREPARED",
+    "stage_revision": 1,
+    "commitments_preserved": true,
+    "amendment_kind": "none"
+  },
+  "predecessor_detail_preparation": {
+    "reason": "superstage S4 permits refinement of bounded predecessor-dependent filenames, helpers, and test setup when acceptance, scope, approach, dependencies, and contract semantics remain fixed; S5 increments Stage revision when preparation changes stage content.",
+    "outcome": "PREPARED",
+    "stage_revision": 2,
+    "commitments_preserved": true,
+    "amendment_kind": "content-amendment"
+  },
+  "scope_expansion_during_preparation": {
+    "reason": "superstage S4 requires REPLANNER structural replanning when evidence changes a scope boundary; it is not an in-place refinement.",
+    "outcome": "REPLAN-REQUIRED",
+    "commitments_preserved": false,
+    "in_place_overwrite": false
+  },
+  "source_revision_changed": {
+    "reason": "superstage S4 classifies an acceptance or source-ownership change as replanning, and S5 makes the prior receipt invalid when its source revision no longer matches current evidence.",
+    "outcome": "REPLAN-REQUIRED",
+    "executable": false,
+    "in_place_overwrite": false
+  },
+  "unrelated_head_advance": {
+    "reason": "superstage S3/S5 require a focused relevance check rather than raw HEAD equality; with no relevant change, record a refreshed validation receipt tied to the new baseline without silently editing old evidence.",
+    "outcome": "PREPARED",
+    "stage_revision": 1,
+    "commitments_preserved": true,
+    "amendment_kind": "compatible-baseline-revalidation"
+  },
+  "relevant_contract_advance": {
+    "reason": "superstage S4 requires replanning for changed shared-contract behavior or semantic revision, and S5 requires receipt contract revisions to match current evidence.",
+    "outcome": "REPLAN-REQUIRED",
+    "executable": false,
+    "in_place_overwrite": false
+  },
+  "missing_preparation_receipt": {
+    "reason": "superstage S3 says an upfront leaf without a valid PREPARED receipt is not executable and returns needs-refinement/BLOCKED to the calling entry point rather than falling through to legacy selection.",
+    "outcome": "BLOCKED",
+    "executable": false
+  },
+  "partially_executed_stage": {
+    "reason": "superstage S3 classifies verified execution evidence as integration pending and directs recovery through execution/CI; it says never to overwrite an already-running stage's task history with in-place preparation.",
+    "outcome": "BLOCKED",
+    "in_place_overwrite": false
+  }
+}

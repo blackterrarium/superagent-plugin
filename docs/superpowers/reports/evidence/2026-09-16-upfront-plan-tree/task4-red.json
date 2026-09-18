@@ -1,0 +1,125 @@
+{
+  "impact_local_s02_detail": {
+    "reason": "Superstage S4 permits PLAN_REFINER refinement when acceptance, scope, chosen approach, dependencies, and shared-contract semantics remain unchanged.",
+    "operation": "refine",
+    "role": "PLAN_REFINER",
+    "batch_created": false,
+    "execution_paused": false
+  },
+  "impact_absorbed_at_s03": {
+    "reason": "Superstage S4 revises only consumers whose commitments or evidence change and stops propagation at the preserved C-S03@2 contract.",
+    "revised_stages": ["S02", "S03"],
+    "retained_stages": ["S04", "S05"],
+    "completed_stages": ["S01"],
+    "propagation_stop": "S03"
+  },
+  "impact_foundational_change": {
+    "reason": "Superstage S4 classifies a changed foundational architecture as replanning and preserves completed work while revising every affected unfinished stage.",
+    "revised_stages": ["S02", "S03", "S04", "S05"],
+    "retained_stages": [],
+    "completed_stages": ["S01"],
+    "propagation_stop": null
+  },
+  "replan_before_request_commit": {
+    "reason": "Superstage S1 requires an active replan to be one tracked, unambiguous record; the loop log is not a durable active-replan record.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "dispatch": "none",
+    "execution_paused": true
+  },
+  "replan_after_request_commit": {
+    "reason": "The tracked pending record and root Active replan pointer form the durable barrier required by Superstage S1, so structural replanning is the next operation.",
+    "outcome": "REPLAN-REQUIRED",
+    "resolution": "pending",
+    "dispatch": "superreplan",
+    "execution_paused": true
+  },
+  "replan_drafting_interrupted": {
+    "reason": "An active tracked replan remains an S1 execution barrier; its unique unpublished scratch drafts are resumable authoring state.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "replay_action": "resume-draft",
+    "execution_paused": true
+  },
+  "replan_published_before_loop_update": {
+    "reason": "The tracked generation-8 root, record publication marker, complete atomic change, and review are publication evidence; reconcile rather than publish a duplicate.",
+    "outcome": "continue",
+    "resolution": "published",
+    "replay_action": "resume-published",
+    "duplicate_publication": false,
+    "execution_paused": false
+  },
+  "late_predecessor_closeout": {
+    "reason": "Superstage S4 preserves completed history and requires explicit successor evidence; a predecessor closeout does not prove integration of the active successor.",
+    "outcome": "continue",
+    "late_closeout_action": "preserve-history",
+    "active_link_changed": false,
+    "successor_closed": false
+  },
+  "replan_stale_baseline": {
+    "reason": "Superstage S3/S4 treat relevant source and active-vault changes as invalidating evidence; the pending replan requires reassessment before publication.",
+    "outcome": "REPLAN-REQUIRED",
+    "publication": "scratch",
+    "replay_action": "reassess",
+    "execution_paused": true
+  },
+  "replan_duplicate_decision": {
+    "reason": "Conflicting pending records for one decision ID are ambiguous evidence; Superstage S1 requires one unambiguous active record.",
+    "outcome": "BLOCKED",
+    "dispatch": "none",
+    "duplicate_publication": false
+  },
+  "replan_missing_record": {
+    "reason": "Superstage S1 treats a missing active-replan record as malformed and BLOCKED; it remains an execution barrier until reconciled.",
+    "outcome": "BLOCKED",
+    "dispatch": "none",
+    "execution_paused": true
+  },
+  "replan_divergent_successors": {
+    "reason": "Superstage S1 candidate validation requires a complete unambiguous path map; two divergent scratch successors cannot authorize publication or execution.",
+    "outcome": "BLOCKED",
+    "publication": "scratch",
+    "replay_action": "block",
+    "execution_paused": true
+  },
+  "replan_partial_pr_reuse": {
+    "reason": "Superstage S4 preserves predecessor evidence and does not close an old PR by supersession; verified reuse must retain remaining work and rerun review/tests.",
+    "pr_disposition": "resume-existing",
+    "predecessor_evidence_preserved": true,
+    "old_pr_closed": false,
+    "successor_needs_refinement": true
+  },
+  "replan_split_merge_mapping": {
+    "reason": "Superstage S2 permits split/merge replacements only with fresh stage IDs, explicit replacement mapping, and rewired live consumers, all supplied here.",
+    "outcome": "REPLAN-REQUIRED",
+    "topology_allowed": true,
+    "retired_stages": ["S02", "S03"],
+    "replacement_stages": ["S06", "S07", "S08"]
+  },
+  "replan_retained_preparation": {
+    "reason": "Superstage S5 permits compatible-baseline revalidation when the focused receipt binds unchanged stage, source, contracts, evidence, and findings to the new generation.",
+    "preparation_valid": true,
+    "successor_needs_refinement": false
+  },
+  "replan_atomicity_violation": {
+    "reason": "Superstage S1/S2 allow candidate state only with a complete path map and require complete post-publication active validation; the partial working-tree successor is not executable.",
+    "outcome": "BLOCKED",
+    "publication": "scratch",
+    "execution_paused": true,
+    "partial_tree_executable": false
+  },
+  "replan_internal_pr_not_merged": {
+    "reason": "Superstage S1 active validation is on authoritative tracked main; an unmerged docs-branch candidate cannot clear main's pending active-replan barrier.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "execution_paused": true,
+    "partial_tree_executable": false
+  },
+  "legacy_single_leaf_repair": {
+    "reason": "Superstage S4 retains legacy C8 single-leaf repair as structural authoring under REPLANNER.",
+    "operation": "replan",
+    "role": "REPLANNER",
+    "repair_shape": "single-leaf",
+    "batch_created": false
+  }
+}

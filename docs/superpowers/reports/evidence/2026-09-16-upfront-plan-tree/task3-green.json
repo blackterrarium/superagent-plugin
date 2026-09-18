@@ -1,0 +1,146 @@
+{
+  "legacy_default": {
+    "reason": "superstage S1 defines an unmarked root as legacy incremental regardless of SUPER_PLANNING_MODE and forbids auto-conversion.",
+    "mode": "incremental"
+  },
+  "invalid_trailing_planning_mode": {
+    "reason": "supergoal input gate accepts only upfront or incremental and rejects another trailing explicit mode before scratch or vault writes.",
+    "outcome": "BLOCKED",
+    "publication": "none",
+    "code_execution": false
+  },
+  "incremental_mode_persisted": {
+    "reason": "supergoal requires a newly authored incremental root to carry the exact Planning mode: incremental marker.",
+    "mode": "incremental",
+    "root_mode_marker": "incremental"
+  },
+  "bounded_unknown": {
+    "reason": "superstage S2 permits bounded predecessor-dependent filenames with a stated resolution method, but S3 requires a current PREPARED receipt for execution.",
+    "upfront_valid": true,
+    "executable": false
+  },
+  "missing_architecture": {
+    "reason": "superstage S2 forbids deferring architecture without bounded alternatives, criteria, evidence, or a discovery-stage contract.",
+    "upfront_valid": false
+  },
+  "open_provider": {
+    "reason": "superstage S3 says an open code PR and closeout are not integrated delivery; the dependent contract remains unsatisfied.",
+    "executable": false,
+    "done": false
+  },
+  "declined_provider": {
+    "reason": "superstage S3 says a provider decline does not deliver to a live consumer; an adopted replan must remove or replace that dependency before completion.",
+    "executable": false,
+    "done": false
+  },
+  "dependency_cycle": {
+    "reason": "superstage S2 classifies cycles in active dependencies as a graph-validation fault.",
+    "outcome": "BLOCKED"
+  },
+  "temporary_upfront_gate": {
+    "reason": "supertraverse C6 Task 1 transition gate returns BLOCKED for every upfront selection until Tasks 3 and 5 install preparation and routing consumers.",
+    "outcome": "BLOCKED"
+  },
+  "unlinked_active_row": {
+    "reason": "superstage S2 requires no blank active Plan cells and forbids repairing a published upfront graph through incremental gap filling.",
+    "upfront_valid": false,
+    "outcome": "BLOCKED"
+  },
+  "multi_level_complete_tree": {
+    "reason": "The mapped scratch tree has unique active IDs, complete S2 contracts, compatible dependencies, and a passing intended-vault review; initial Preparation: none leaves are valid but unexecutable under S3.",
+    "upfront_valid": true,
+    "stages": 3,
+    "executable": false
+  },
+  "draft_interrupted_before_confirmation": {
+    "reason": "supergoal keeps the fully drafted upfront tree in scratch until confirmation; interruption after review reports DRAFT-INCOMPLETE and does no code work.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "resume_identical_source": {
+    "reason": "supergoal resume reuses a matching scratch set, intended paths, and stable IDs, but reapplies the current confirmation gate and cannot publish from draft existence alone.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "resume",
+    "duplicate_stage_ids": false,
+    "duplicate_goal_folder": false
+  },
+  "resume_changed_source": {
+    "reason": "supergoal requires an explicitly revised scratch draft when the saved source digest differs, preserving the old draft and reporting DRAFT-INCOMPLETE.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "revise",
+    "code_execution": false
+  },
+  "confirmation_refused": {
+    "reason": "supergoal step 7 says a declined confirmation writes nothing and preserves the scratch index as DRAFT-INCOMPLETE; no execution occurs.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "code_execution": false
+  },
+  "supermeta_draft_incomplete": {
+    "reason": "supermeta step 6 preserves a reported DRAFT-INCOMPLETE index and writes nothing to the iteration ledger without complete goal-folder publication evidence.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "ledger_appended": false
+  },
+  "local_detail": {
+    "reason": "superstage S4 assigns bounded file placement, helper, and test-detail changes that preserve commitments to PLAN_REFINER refinement.",
+    "operation": "refine",
+    "role": "PLAN_REFINER"
+  },
+  "contract_break": {
+    "reason": "superstage S4 requires REPLANNER replanning when shared contract behavior cannot be preserved for downstream consumers.",
+    "operation": "replan",
+    "role": "REPLANNER"
+  },
+  "preparation_noop": {
+    "reason": "superstage S5 defines a first attached receipt with no plan-body amendment as PREPARED, amendment none, with Stage revision unchanged.",
+    "outcome": "PREPARED",
+    "stage_revision": 1,
+    "commitments_preserved": true,
+    "amendment_kind": "none"
+  },
+  "predecessor_detail_preparation": {
+    "reason": "superstage S4 permits refinement of bounded predecessor-proven placement, helper, and test details; S5 calls the resulting body change a content-amendment and increments revision.",
+    "outcome": "PREPARED",
+    "stage_revision": 2,
+    "commitments_preserved": true,
+    "amendment_kind": "content-amendment"
+  },
+  "scope_expansion_during_preparation": {
+    "reason": "superrefine and superstage S4 require REPLAN-REQUIRED for a scope-boundary change and preserve the approved leaf rather than overwriting it.",
+    "outcome": "REPLAN-REQUIRED",
+    "commitments_preserved": false,
+    "in_place_overwrite": false
+  },
+  "source_revision_changed": {
+    "reason": "A changed authoritative acceptance condition is an S4 commitment change; superrefine requires REPLAN-REQUIRED and S3/S5 cannot treat the old receipt as executable.",
+    "outcome": "REPLAN-REQUIRED",
+    "executable": false,
+    "in_place_overwrite": false
+  },
+  "unrelated_head_advance": {
+    "reason": "superstage S5 requires a focused compatible baseline revalidation receipt for an unrelated HEAD advance, preserving the stage revision and commitments.",
+    "outcome": "PREPARED",
+    "stage_revision": 1,
+    "commitments_preserved": true,
+    "amendment_kind": "compatible-baseline-revalidation"
+  },
+  "relevant_contract_advance": {
+    "reason": "superstage S4 treats a shared contract behavior and semantic-revision change as replanning; the stale consumer receipt is not executable and must not be overwritten in place.",
+    "outcome": "REPLAN-REQUIRED",
+    "executable": false,
+    "in_place_overwrite": false
+  },
+  "missing_preparation_receipt": {
+    "reason": "The dormant post-Task-5 C6 recipe returns NEEDS-REFINEMENT for the first dependency-eligible upfront leaf without a current PREPARED receipt.",
+    "outcome": "NEEDS-REFINEMENT",
+    "executable": false
+  },
+  "partially_executed_stage": {
+    "reason": "superrefine's entry gate and superstage S3 forbid in-place preparation once execution evidence exists; the established execution or CI recovery path owns it.",
+    "outcome": "BLOCKED",
+    "in_place_overwrite": false
+  }
+}

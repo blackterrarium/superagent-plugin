@@ -1,0 +1,127 @@
+{
+  "missing_preparation_receipt": {
+    "reason": "supertraverse C6 classifies a dependency-eligible upfront leaf with a missing S5 receipt as NEEDS-REFINEMENT; it is neither an execution target nor executable code work.",
+    "outcome": "NEEDS-REFINEMENT",
+    "executable": false,
+    "code_execution": false
+  },
+  "legacy_single_leaf_repair": {
+    "reason": "superreplan's incremental/legacy wrapper requires the valid adopted C8 record and preserves the one repair-requested row as a single-leaf successor without an upfront batch.",
+    "operation": "replan",
+    "role": "REPLANNER",
+    "repair_shape": "single-leaf",
+    "batch_created": false
+  },
+  "supervisor_native_refinement": {
+    "reason": "superagent WAITING FOR PLAN selects PLAN_REFINER for the first dependency-eligible S5 NEEDS-REFINEMENT stage and persists PLANNING before one heavy dispatch; role pins resolve env before .superenv.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "process-env",
+    "effort_source": "repo-superenv",
+    "target": "S02",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_bridged_refinement": {
+    "reason": "superagent WAITING FOR PLAN selects the first eligible NEEDS-REFINEMENT stage for PLAN_REFINER; an available bridged relay remains that role's one authorized dispatch and both pins resolve from .superenv.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "S04",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_prepared_target": {
+    "reason": "superagent WAITING FOR PLAN sends a valid prepared upfront target straight to WAITING FOR RUN, clears planning hints, and ends the branch with zero heavy dispatches.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "S02",
+    "next_state": "WAITING FOR RUN",
+    "heavy_dispatches": 0
+  },
+  "supervisor_adopted_legacy_repair": {
+    "reason": "superagent selects superreplan/REPLANNER for the reconciled adopted legacy C8 repair; equal role pins do not couple roles, and this role's pins resolve from .superenv.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "P0",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_adopted_batch_repair": {
+    "reason": "superagent selects REPLANNER for the committed pending upfront Active replan record and persists PLANNING for the one replan dispatch; each REPLANNER pin resolves independently.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "process-env",
+    "target": "D-301",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_stale_hints": {
+    "reason": "superloop L2 crash recovery restores WAITING FOR PLAN, and superagent reconciliation makes tracked artifacts override stale planning hints; the committed active D-302 batch selects REPLANNER.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "D-302",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_post_leaf_refinement": {
+    "reason": "after verified leaf closeout the handler returns to WAITING FOR PLAN; superagent then selects the first eligible unprepared S02 for PLAN_REFINER, using harness defaults when neither role pin is supplied.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "S02",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_execution_replan_required": {
+    "reason": "superagent gives a superrun REPLAN-REQUIRED result priority and uses the decision ladder; when its rungs cannot resolve authority, it parks at WAITING FOR INPUT rather than selecting an independently prepared stage.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_legacy_incremental_planning": {
+    "reason": "supertraverse C6 preserves unmarked legacy roots regardless of an environment upfront default, so superagent selects ordinary superplan under PLANNER for the unplanned P1 leaf.",
+    "selected_role": "PLANNER",
+    "operation": "plan",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "P1",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_missing_native_definition": {
+    "reason": "superagent requires the generated native role definition for this pinned Claude PLAN_REFINER dispatch; its absence is a hard failed dispatch with no authorized fallback and enters the decision ladder.",
+    "selected_role": "PLAN_REFINER",
+    "operation": "refine",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "S02",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  },
+  "supervisor_missing_bridge_cli": {
+    "reason": "superagent treats a missing bridged role CLI/relay as a clear failed REPLANNER dispatch, never substitutes another role, and routes the unresolved failure through the decision ladder.",
+    "selected_role": "REPLANNER",
+    "operation": "replan",
+    "model_source": "repo-superenv",
+    "effort_source": "repo-superenv",
+    "target": "D-303",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  }
+}

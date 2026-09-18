@@ -67,6 +67,10 @@ if [[ -z "$LOOP_FILE" || ! -f "$LOOP_FILE" ]]; then
   exit 1
 fi
 
+# Validate selected registration before touching either state or scheduler.
+REPO="$(superagent_registration_field "$ENV_FILE" REPO)"
+superagent_control_target "" "$SLUG"
+
 not_parked() {
   echo "answer: loop '$SLUG' is '${1:-<none>}', not WAITING FOR INPUT — nothing to answer" >&2
   exit 3
@@ -88,6 +92,12 @@ if [[ "$skip_write" != true ]]; then
     echo "answer: no '## Pending decision' heading in $LOOP_FILE — cannot place the answer" >&2
     exit 5
   }
+  if [[ "$SUPERVISOR" == supercode ]]; then
+    if ! superagent_acquire_gate_lock "$LOCK_DIR"; then
+      echo "answer: a tick holds the project lock ($LOCK_DIR)" >&2
+      exit 4
+    fi
+  else
   # Same lock discipline as a tick (superloop L3): mkdir is the atomic acquire.
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     # superloop L3: a lock whose recorded owner PID is dead belongs to a crashed
@@ -103,6 +113,7 @@ if [[ "$skip_write" != true ]]; then
       echo "answer: a tick holds the lock ($LOCK_DIR) — retry when it finishes (status.sh $SLUG); if no tick is running and the lock is old, force-stop.sh --slug $SLUG reaps it" >&2
       exit 4
     fi
+  fi
   fi
   # Arm the release traps BEFORE writing `owner`: a kill landing between the
   # mkdir and that write would otherwise strand an ownerless lock that superloop

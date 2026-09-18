@@ -51,8 +51,8 @@ scheduler (systemd/launchd/cron) ──> superagent-tick.sh ──> claude -p (O
 
 The tick **always passes `--model` explicitly**, so it uses the pinned model regardless of the
 CLI's own configured default. Resolution order: `TICK_MODEL` env var (if set) > `SUPER_MODEL_SUPERVISOR`
-(from the `.superenv` layer below) > `claude-opus-4-8`. A headless tick has no session to inherit from, so a
-`SUPER_MODEL_SUPERVISOR` value of `inherit` also resolves to `claude-opus-4-8` (the full ID; the `opus`
+(from the `.superenv` layer below) > `claude-opus-5`. A headless tick has no session to inherit from, so a
+`SUPER_MODEL_SUPERVISOR` value of `inherit` also resolves to `claude-opus-5` (the full ID; the `opus`
 alias floats with the CLI).
 Override with `--model <slug>` on `launch.sh` / `install-timer.sh`
 (stored per goal as `TICK_MODEL`) or the `TICK_MODEL` env var. The value passes verbatim to
@@ -62,10 +62,10 @@ line in the tick log records the model in use (`model=...`).
 
 `SUPER_MODEL_SUPERVISOR` (and `TICK_MODEL`) must be **native** to `SUPER_HARNESS`: the value's
 grammar is `[<harness>:]<model>` with the same `claude|codex|cursor|pi` prefix and inference rules
-as the thirteen subagent role keys (see the main [`README.md`](../README.md#configuration)'s
+as the fifteen dispatch role keys (see the main [`README.md`](../README.md#configuration)'s
 Configuration section), but a prefix — explicit or inferred — that names a harness other than the
 resolved `SUPER_HARNESS` is a hard error (exit 11; see Exit codes below) rather than a bridge: the
-supervisor itself can never be dispatched through `role-bridge.sh`, only the thirteen dispatch-hook
+supervisor itself can never be dispatched through `role-bridge.sh`, only the fifteen dispatch-hook
 role keys can.
 
 ## Effort
@@ -80,8 +80,8 @@ non-`inherit` `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` is logged as a warning and
 passed through.
 
 This domain applies to `SUPER_EFFORT_SUPERVISOR`/`TICK_EFFORT` specifically, since the supervisor
-is always native to `SUPER_HARNESS`. The thirteen subagent role keys (`SUPER_EFFORT_PLANNER`,
-`_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
+is always native to `SUPER_HARNESS`. The fifteen dispatch role keys (`SUPER_EFFORT_PLANNER`,
+`_PLAN_REFINER`, `_REPLANNER`, `_EXECUTOR`, `_PANEL`, `_IMPLEMENTER`, `_FIX_APPLIER`, `_TASK_REVIEWER`, `_RE_REVIEWER`,
 `_BRANCH_REVIEWER`, `_FIX_PLANNER`, `_PRD_REVIEWER`, `_META_PLANNER`, `_EVALUATOR`, `_DIAGNOSER`)
 are validated in **their own resolved harness's** domain
 instead — a bridged role's effort domain follows its own harness, not `SUPER_HARNESS`'s. That adds
@@ -108,7 +108,7 @@ environment.
 
 - **cursor:** auth is the CLI's stored login or `CURSOR_API_KEY` in the target repo's `.env`; model
   values are Cursor model names (`agent --list-models`), with `inherit` resolving to the CLI's own
-  default (`auto`) rather than `claude-opus-4-8`; the `cursor/` build must exist in the plugin repo
+  default (`auto`) rather than `claude-opus-5`; the `cursor/` build must exist in the plugin repo
   (`scripts/build-cursor-skills.sh`).
 - **codex:** skills load via the *installed* Codex plugin, not a `--plugin-dir` flag — install once
   with `codex plugin marketplace add <plugin-repo>/codex && codex plugin add
@@ -149,7 +149,8 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
   commands and Skill-tool semantics for a disable-model-invocation skill are unverified in headless print
   mode, so the tick's prompt `Read`s `${PLUGIN_ROOT}/skills/superagent/SKILL.md` directly (`PLUGIN_ROOT`
   derived from the wrapper script's own location) rather than invoking the skill by name — but the loop's
-  own internal `superagent:superplan` / `superagent:superrun` dispatches still go through the `Skill` tool
+  own internal `superagent:superplan` / `superagent:superrefine` / `superagent:superreplan` /
+  `superagent:superrun` dispatches still go through the `Skill` tool
   once the session is running, so the plugin must still be installed and enabled for that to resolve. This
   wrapper does **not** probe for plugin presence (no live check); if the plugin is missing or disabled,
   those in-session dispatches fail opaquely deep inside the tick, not as a wrapper-level preflight error.
@@ -167,9 +168,9 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
 - `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only; the wrapper
   sources `.env`) — **or** a `claude` CLI already logged in (subscription/OAuth hosts): when no key is
   set the tick logs a note and relies on the CLI's own stored login instead of aborting.
-- **In `github` mode, `gh` authenticated in the tick.** `superplan`/`superrun` use `gh` for CI/PR operations
-  (`gh pr create` / `gh run watch` / `gh pr merge --admin`). Local mode disables this preflight and
-  never probes credentials. The CLI runs each GitHub-mode tick in a tool sandbox
+- **In `github` mode, `gh` authenticated in the tick.** Planning operations and `superrun` use `gh`
+  for CI/PR operations (`gh pr create` / `gh run watch` / `gh pr merge --admin`). Local mode disables
+  this preflight and never probes credentials. The CLI runs each GitHub-mode tick in a tool sandbox
   that blocks `gh` from reading its own config/keyring, so `gh` authenticates only via **`GH_TOKEN` in
   the environment**. Put `GH_TOKEN=<token>` in `.env` (canonical, repo-policy path — the wrapper sources
   it and exports it so the CLI child inherits it). If it is absent, the wrapper falls back to the
@@ -557,6 +558,131 @@ SUPERAGENT_SCRIPTS=/home/<user>/.claude/plugins/cache/<marketplace-name>/superag
 Overlap is handled by the L3 lock regardless of scheduler, so a short interval is fine even if a tick
 runs long — the next fire no-ops until the lock releases.
 
+## Upfront plan-tree evidence validator
+
+`plan-tree-e2e.py` validates retained evidence; it never starts a model, scheduler, network call, or
+goal loop. A manifest is an index into isolated code and vault repositories. The validator reads the
+named Git objects and files, derives a verdict for every PT-01–PT-11 requirement, and prints JSON.
+
+```bash
+python3 scripts/plan-tree-e2e.py --manifest /absolute/path/run-manifest.json
+python3 scripts/plan-tree-e2e.py --self-test
+```
+
+Each result is `PASS`, `FAIL`, or `INCOMPLETE`. Missing files, logs, commits, or interrupted traces are
+`INCOMPLETE`; present evidence with conflicting identities, pins, digests, graph edges, or ancestry is
+`FAIL`. A top-level `claimed_results`, `pass`, or similar manifest value has no effect. The validator
+does not treat an empty dispatch list as evidence of zero operations. A complete trace needs a header,
+contiguous dispatch sequence, and trailer whose count matches the actual records.
+
+`fixture.kind` must be `live` before a PT result can pass. Use `synthetic-offline` for fixtures and
+self-tests; it forces every PT verdict to at least `INCOMPLETE`, even when individual artifact checks
+pass. `live` is an operator declaration plus artifact validation, not cryptographic proof of provider
+provenance. Record it only after the actual configured role calls have run. Prepared fixture files,
+forwarding wrappers, proposed schedules, scenario JSON, and fake CLI output are not live receipts.
+
+### Manifest schema
+
+Paths at the top level and under `evidence` are absolute or relative to the manifest directory.
+Stage, root, publication, and replan artifact paths are relative to `fixture.vault_repo`; package roots
+point directly at directories containing `<skill>/SKILL.md`.
+
+| Field | Contract |
+|---|---|
+| `schema_version` | Integer `1`. |
+| `fixture` | `kind`, isolated `code_repo`, isolated `vault_repo`, and root path. |
+| `expected.root_generation` | Generation published by the initial coherent tree. |
+| `expected.stages[]` | Stable `id`, `revision`, path, dependency IDs, preparation path, historical vault commit containing the prepared bytes and preparation receipt, delivery path and vault commit containing that receipt, delivered code commit, and integration commit. Actual `Depends on` metadata must match this inventory. The validator resolves the preparation receipt's independently named examined code baseline; it need not equal the later delivered code commit. |
+| `expected.role_pins` | Expected `harness`, `model`, and `effort` for PLAN_REFINER and REPLANNER. Both roles need successful logs, and the retained log inventory must exercise both `native` and `bridged` recipes. |
+| `expected.package_skills` | Skills that must be real copied files in canonical, Codex, Cursor, and Pi roots; defaults to `superstage`, `superrefine`, and `superreplan`. Symlink fallback fails. |
+| `evidence.initial_publication` | Vault commit, complete artifact set, and confirmation artifact. A `supermeta` artifact is required when supermeta performed the publication; standalone supergoal publication is proven by the atomic initial commit. Root/sub-master Progress Report Plan links are followed to derive active stage identities; goal-relative and extensionless links are resolved. Blank or `none` Plan cells on active rows are INCOMPLETE. Explicit `declined`, `deferred`, and `out-of-scope` terminal rows are excluded. |
+| `evidence.bounded_detail_assessment` | Later vault commit, report path, and `initial_publication_commit` for the bounded-detail/no-replan scenario. The later commit must descend from that initial run, and the tracked PASS report repeats the initial commit identity and records zero replan dispatches. PT-05 remains INCOMPLETE when this later witness is absent. |
+| `evidence.dispatch_logs[]` | Role, `native` or `bridged` recipe, and actual `role-bridge.sh` log path. Missing trailer means interrupted, not success. A recipe value is an operator declaration backed by the retained dispatch log, not cryptographic provider provenance. |
+| `evidence.traces` | JSONL paths for `normal`, `contract_break`, `batch_resume`, and `legacy`. All four are required for full acceptance. A value may instead be an object with `path`, `code_repo`, `vault_repo`, `root`, and `initial_publication_commit` so independent runs are checked in their own Git context. |
+| `evidence.replan` | Decision ID, record/report/`impact_review` paths, atomic publication commit/artifacts, generations, and revised/retained IDs. Optional `vault_repo` and `root` override the normal-run context for the contract-break repository. PT-06 remains INCOMPLETE without the tracked PASS impact assessment matching the decision and revised/retained sets. |
+| `evidence.legacy` | Repository, commit, and unmarked legacy root snapshot. |
+| `evidence.publications.external` | External-vault repository, commit, and artifact set. |
+| `evidence.packages` | Canonical/Codex/Cursor/Pi skill roots. |
+
+This complete five-stage shape shows the fields. The commit strings are illustrative object IDs; a
+real manifest names commits that exist in its isolated repositories.
+
+```json
+{
+  "schema_version": 1,
+  "fixture": {
+    "kind": "live",
+    "code_repo": "/tmp/pt-live-code",
+    "vault_repo": "/tmp/pt-live-vault",
+    "root": "goal/master-plans/root.md"
+  },
+  "expected": {
+    "root_generation": 1,
+    "stages": [
+      {"id":"S01","revision":1,"path":"goal/plans/s01.md","depends_on":[],"preparation":"goal/reports/prep-s01.md","prepared_vault_commit":"1111111111111111111111111111111111111111","delivery":"goal/reports/delivery-s01.md","delivery_vault_commit":"6161616161616161616161616161616161616161","code_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","integration_commit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      {"id":"S02","revision":2,"path":"goal/plans/s02.md","depends_on":["S01"],"preparation":"goal/reports/prep-s02.md","prepared_vault_commit":"2222222222222222222222222222222222222222","delivery":"goal/reports/delivery-s02.md","delivery_vault_commit":"6262626262626262626262626262626262626262","code_commit":"cccccccccccccccccccccccccccccccccccccccc","integration_commit":"dddddddddddddddddddddddddddddddddddddddd"},
+      {"id":"S03","revision":1,"path":"goal/plans/s03.md","depends_on":["S02"],"preparation":"goal/reports/prep-s03.md","prepared_vault_commit":"3333333333333333333333333333333333333333","delivery":"goal/reports/delivery-s03.md","delivery_vault_commit":"6363636363636363636363636363636363636363","code_commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","integration_commit":"ffffffffffffffffffffffffffffffffffffffff"},
+      {"id":"S04","revision":1,"path":"goal/plans/s04.md","depends_on":[],"preparation":"goal/reports/prep-s04.md","prepared_vault_commit":"4444444444444444444444444444444444444444","delivery":"goal/reports/delivery-s04.md","delivery_vault_commit":"6464646464646464646464646464646464646464","code_commit":"1212121212121212121212121212121212121212","integration_commit":"3434343434343434343434343434343434343434"},
+      {"id":"S05","revision":1,"path":"goal/plans/s05.md","depends_on":["S03"],"preparation":"goal/reports/prep-s05.md","prepared_vault_commit":"5555555555555555555555555555555555555555","delivery":"goal/reports/delivery-s05.md","delivery_vault_commit":"6565656565656565656565656565656565656565","code_commit":"5656565656565656565656565656565656565656","integration_commit":"7878787878787878787878787878787878787878"}
+    ],
+    "role_pins": {
+      "PLAN_REFINER":{"harness":"codex","model":"gpt-5.6-terra","effort":"medium"},
+      "REPLANNER":{"harness":"claude","model":"claude-opus-5","effort":"high"}
+    },
+    "package_skills":["superstage","superrefine","superreplan"]
+  },
+  "evidence": {
+    "initial_publication":{"commit":"1111111111111111111111111111111111111111","artifacts":["goal/master-plans/root.md","goal/plans/s01.md","goal/plans/s02.md","goal/plans/s03.md","goal/plans/s04.md","goal/plans/s05.md","goal/reports/tree-review.md"],"tree_review":"goal/reports/tree-review.md","confirmation":"goal/reports/confirmation.md","supermeta":"goal/reports/supermeta.md"},
+    "bounded_detail_assessment":{"commit":"2020202020202020202020202020202020202020","path":"goal/reports/bounded-detail.md","initial_publication_commit":"1111111111111111111111111111111111111111"},
+    "dispatch_logs":[{"role":"PLAN_REFINER","recipe":"native","path":"logs/refiner.log"},{"role":"REPLANNER","recipe":"bridged","path":"logs/replanner.log"}],
+    "traces":{"normal":"traces/normal.jsonl","contract_break":{"path":"traces/contract-break.jsonl","code_repo":"/tmp/pt-break-code","vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","initial_publication_commit":"7171717171717171717171717171717171717171"},"batch_resume":{"path":"traces/batch-resume.jsonl","code_repo":"/tmp/pt-break-code","vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","initial_publication_commit":"7171717171717171717171717171717171717171"},"legacy":"traces/legacy.jsonl"},
+    "replan":{"vault_repo":"/tmp/pt-break-vault","root":"goal/master-plans/root.md","decision_id":"D-PT-1","record":"goal/findings/D-PT-1.md","report":"goal/reports/replan-D-PT-1.md","impact_review":"goal/reports/impact-D-PT-1.md","publication_commit":"9999999999999999999999999999999999999999","published_generation":2,"revised_stages":["S02","S03"],"retained_stages":["S04","S05"],"artifacts":["goal/plans/s02-r2.md","goal/plans/s03-r2.md","goal/reports/tree-review-g2.md"]},
+    "legacy":{"vault_repo":"/tmp/pt-live-legacy-vault","commit":"abababababababababababababababababababab","root":"goal/master-plans/legacy.md"},
+    "publications":{"external":{"repo":"/tmp/pt-live-external-vault","commit":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","artifacts":["goal/master-plans/root.md","goal/reports/tree-review.md"]}},
+    "packages":{"canonical":"skills","codex":"codex/plugins/superagent/skills","cursor":"cursor/skills","pi":"pi/skills"}
+  }
+}
+```
+
+Normal, bounded/external, and contract-break acceptance runs may and normally do use different code
+and vault repositories. Keep the normal run in `fixture`; put trace context overrides on every trace
+from another run, put the contract-break vault/root on `evidence.replan`, and use the independent
+external repository under `evidence.publications.external`. The validator never resolves a break-run
+commit in the normal-run vault.
+
+For every stage, `prepared_vault_commit` must contain the stage, its linked preparation receipt, and
+the applicable root snapshot. The validator derives the applicable Plan generation from that
+historical root, requires a `PREPARED` receipt for the same root, stage, revision, digest, and
+Preparation link, and resolves the receipt's examined code baseline in `fixture.code_repo`.
+Preparation receipts may use the shipped `Plan generation`, `Prepared leaf SHA-256`, and
+`Examined code commit` labels or their older schema aliases. Delivery closeouts may carry identity
+metadata as list items and use `Stage: SNN revision N`, `Preparation receipt`, and
+`Prepared-plan digest`; when a squash-integrated closeout has no separate Code commit, its
+Integration commit is the delivered code identity. This also supports a later compatible-baseline
+revalidation: name the commit containing the new root generation and refreshed receipt.
+
+An operation trace is JSON Lines. The validator checks real line count, run identity, sequence,
+operation/role pairs, Git baselines, and trailer count. A normal trace must put refinement before
+execution for every delivered stage. For a consumer, the provider run and tracked delivery receipt
+must precede its execution-entry snapshot. It contains no post-publication `plan`/`replan`.
+Contract-break and batch-resume traces use `REPLANNER`; the legacy trace uses `PLANNER` on an unmarked
+root. Batch recovery requires two or more contiguous attempts for one decision, first outcome
+`interrupted`, final outcome `published`, and an `interruption_receipt` tracked in the final vault
+snapshot. That decision must match the replan publication.
+
+```json
+{"type":"trace-header","run_id":"normal-20260916","scenario":"normal","root":"goal/master-plans/root.md","initial_publication_commit":"1111111111111111111111111111111111111111"}
+{"type":"dispatch","run_id":"normal-20260916","sequence":1,"operation":"refine","role":"PLAN_REFINER","stage_id":"S01","vault_commit_before":"1111111111111111111111111111111111111111","log":"logs/refiner-s01.log"}
+{"type":"dispatch","run_id":"normal-20260916","sequence":2,"operation":"run","role":"EXECUTOR","stage_id":"S01","vault_commit_before":"1111111111111111111111111111111111111111"}
+{"type":"trace-trailer","run_id":"normal-20260916","dispatch_count":2,"final_vault_commit":"2222222222222222222222222222222222222222","outcome":"complete"}
+```
+
+The validator reports evidence sufficiency. It cannot prove that a whole-tree review was semantically
+good, that a provider truly generated a log, or that unrecorded operations never occurred. Preserve
+the isolated repositories, complete logs, trace writer, review artifacts, and integration history for
+human audit. Timing and token totals belong in the run report only when actual logs provide them;
+unknown remains unknown.
+
 ## Pi e2e testbench (`pi-e2e.sh`)
 
 `scripts/pi-e2e.sh` is the only thing that runs the whole framework on the Pi harness end to end,
@@ -745,3 +871,220 @@ chains and verified completion. Each answer must include its rule/evidence reaso
 These are interpreted-skill behavior probes; they do not execute a real scheduler/PR lifecycle.
 Saved answers document a particular probe run; validating them again is not a fresh agent test.
 See `docs/superpowers/reports/2026-09-07-lifecycle-verification.md` for baseline and repaired results.
+
+## Coding-loop Stage 3 (shipped in 0.9.0; live acceptance pending)
+
+`launch.sh PROJECT --supervisor supercode` uses the shared external driver. Project-only preflight
+requires Python 3.9+, READY PRD inputs and a positive `SUPER_CODE_MAX_ITERATIONS`. This limit counts
+created project rounds, not ticks/transport retries. A final-round PASS completes; FAIL may receive
+a diagnosis but parks before another round. Raising configuration alone does not resume: record
+`raise-limit N` with `answer.sh`. Legacy goal launch/control retains its Python-free path.
+
+`_coding_loop_state.py` validates project identity, locks, context, reserved operations, reconciliation
+and author-approved META entry. `_coding_loop_evidence.py` validates fingerprints and integrated
+worker receipts. Both helpers and `templates/coding-loop-diagnosis.md` ship in Codex/Cursor/Pi
+packages; scheduler scripts remain source-repository infrastructure. Run the shared launcher from
+this repository. Supervisors must be native to the selected harness; workers can use role bridges.
+
+`stop.sh PROJECT` stops only the outer registration and displays a still-running child's separate
+stop command. Outer and inner drain/hard stop are independent. Changed agreement requires an exact
+`adopt-agreement FINGERPRINT` answer; AUTHOR INPUT may resume with explicit `replan` under the
+unchanged agreement. The generated META worker independently validates the durable author receipt.
+
+`coding-loop-package-test.sh` runs isolated copied-package imports/CLIs and native marker checks.
+`coding-loop-driver-test.py` exercises real shell ticks/lifecycle and state/evidence APIs with fake
+native executables and disposable Git remotes. `coding-loop-fake-worker.py` is its explicit-action
+test fixture, never shipped or imported by production. These deterministic transport tests establish no
+live model obedience or scheduler acceptance. Independent live Claude, Codex, and Pi scheduler
+runs remain pending; Cursor requires generated compatibility only.
+
+### Bounded Stage 3 live acceptance driver
+
+```sh
+python3 scripts/coding-loop-stage3-live.py prepare --manifest FILE
+python3 scripts/coding-loop-stage3-live.py run --manifest FILE --harness claude
+python3 scripts/coding-loop-stage3-live.py collect --manifest FILE --harness claude
+python3 scripts/coding-loop-stage3-live.py cleanup --manifest FILE --harness claude
+python3 scripts/coding-loop-stage3-live-test.py -v
+```
+
+Use `codex` and `pi` independently for the other required runs. `prepare` creates a new,
+review-only evidence attempt and prints the exact manifest SHA256. It never creates approval,
+fixture Git state, a verdict, an inner DONE or a scheduler registration. `run` requires a
+concrete author-approved first-failure protocol and exact manifest bytes. Task 9 owns that
+protocol; this driver does not implement hidden baseline adoption. No Stage 3 live acceptance
+is established by the offline tests or by installing these helpers.
+
+The JSON result distinguishes `PASS` (exit 0), `FAIL` (1), `INVALID` (2) and `INCOMPLETE` (3).
+Only `acceptance_passed: true` establishes a live harness result. Preparation, successful
+cleanup and offline collector PASS results do not set that flag. An unexpected first PASS,
+wrong SHA or changed agreement is INVALID; an evaluated failing final allowed round is FAIL;
+authentication, missing native receipts, time/dispatch exhaustion or cleanup failure is
+INCOMPLETE. Failed attempts and denied dispatch events are retained, never overwritten.
+A malformed manifest cannot authorize writing an evidence directory; its error is returned on stdout.
+
+Manifest schema version 1 is strict: unknown fields and credential-like values are rejected.
+Paths are absolute physical paths, without symlink aliases. Git remotes include exact fetch
+and push URLs, including local bare remotes where the approved protocol permits them.
+The manifest must describe all three isolated harness fixtures.
+
+| Field | Required content |
+|---|---|
+| `protocol_version` | Integer `1` |
+| `protocol` | `{path, sha256}` of the reviewed first-failure protocol |
+| `approval` | `{receipt_path, author_ref}`; detached receipt described below |
+| `baseline_sha` | Exact 40-character selected failing code SHA, shared across harnesses |
+| `first_failure` | `{mechanism, required_ids}`; nonempty mechanism and failing C/J ID list |
+| `limits` | Positive integers `max_rounds`, `max_dispatches`, `dispatch_seconds`, `total_seconds`; nonnegative `retries`. At least two rounds; dispatch seconds cannot exceed total seconds |
+| `evidence_dir` | Dedicated directory outside every fixture code/vault root |
+| `harnesses` | Exactly `claude`, `codex`, `pi`, each with the fields below |
+
+Each harness entry contains:
+
+| Field | Required content |
+|---|---|
+| `code_root`, `vault_root`, `project` | Physical paths; project is within its vault; harnesses do not share roots |
+| `remotes` | `{code: {remote_name: URL}, vault: {remote_name: URL}}`; internal vault uses an empty vault map |
+| `agreement_revision` | Production acceptance-context SHA256 fingerprint |
+| `agreement` | Nonempty array of `{path, sha256, mode}` including prd.md, evaluation.md and knowledge-base.md and immutable bindings. Mode is `bytes`, or `prd-without-ledger` exclusively for the project's PRD |
+| `binding_captures` | Production acceptance-context capture array (empty when none) |
+| `slug_prefixes` | `{outer, inner}`; lowercase slug prefixes ending in `-` |
+| `roles` | Per-role `{model, effort}` with native `harness:model` pins and explicit effort. Required roles: SUPERVISOR, META_PLANNER, PLANNER, EVALUATOR, DIAGNOSER, IMPLEMENTER, TASK_REVIEWER, BRANCH_REVIEWER, EXECUTOR. Include every additional role the approved workflow may use |
+| `packages` | Nonempty array of `{path, sha256, version}`. Include installed package JSON version metadata, native CLI, driver/native helper, and scheduler helpers. Pi also binds the extension. Runtime preflight compares bytes and the package actually selected by the native runtime |
+| `auth_refs` | Nonempty array of `env:VARIABLE` or `profile:/absolute/auth/file`. No secret values |
+| `cleanup` | `{owner, registrations}`; unique owner and exact `{slug, supervisor}` entries for every allowed outer/inner registration. Supervisor is `supercode` or `superagent`; slugs must match their respective prefix |
+| `runtime` | Required to run; may be omitted in review-only material. Fields below |
+
+`runtime` contains absolute `cli`, `scripts_root`, `config_root`, `launchd_dir`, `outer_loop`,
+exact `cli_version` (the complete trimmed `--version` stdout), positive `interval_seconds`,
+and `package_selection: {root: "/absolute/reviewed/package"}`. Codex additionally requires
+`package_selection.plugin_id` (the installed marketplace-qualified ID). Pin the selected
+package manifest plus every file under its skills, scripts, templates, hooks and agents
+(excluding Python bytecode). Missing, ambiguous, disabled or mismatched selection fails before arming.
+Claude must support `--plugin-dir` and `--settings`: the wrapper disables the single installed
+superagent copy for this invocation and explicitly loads `root`; multiple enabled copies refuse.
+Codex has no plugin-dir loading flag. Its supported `plugin list --json` and read-only app-server
+`skills/list` must identify the enabled installed plugin/version and each exact selected skill
+path/plugin ID in the invocation's working-directory scope. The wrapper repeats selection checks
+before starting a CLI context and rejects caller profile/config loading overrides.
+Pi must support `--no-skills` plus explicit `--skill`; the wrapper loads only the selected skills
+and normalizes the scheduler's existing Pi skill argument to that approved directory.
+These checks do not install packages or edit installed caches.
+A CLI with an `env node` shebang also requires a pinned absolute `node` interpreter; the wrapper
+uses it directly so the detached scheduler does not depend on an interactive Node PATH.
+`scripts_root` is this source checkout's scripts directory. Pin the native helper, this driver,
+the native CLI, launch.sh, stop.sh, install-timer.sh, uninstall-timer.sh, superagent-tick.sh,
+_common.sh and role-bridge.sh in `packages`. The independent config and LaunchAgents locations
+must be disposable identities from the approved protocol. The outer-loop path must match the
+real launcher's project state location. Declared inner slugs must be carried into normal planning
+and launch; an unlisted identity is not silently adopted.
+
+The author supplies a detached receipt, never the driver:
+
+```json
+{
+  "manifest_sha256": "SHA256 of the exact raw manifest bytes",
+  "author_ref": "the manifest's author reference",
+  "decision": "APPROVED",
+  "record": {"path": "/absolute/author-record", "sha256": "SHA256 of author-record bytes"}
+}
+```
+
+The actual author record must name that manifest digest. This detached binding avoids a circular
+manifest/receipt hash. Formatting changes invalidate approval. A synthetic fixture receipt is
+only an offline test input and cannot establish live provenance. No prior dispatch budget or
+Stage 1/2 synthetic approval is reused. `prepare` outputs pending review material, not consent.
+
+`_coding_loop_live_native.py` owns the native runtime transport. Preflight checks exact CLI/package
+identity, authentication references, GitHub auth status, GNU timeout/gtimeout, process ownership
+inspection and the real user scheduler before arming. Codex additionally needs the documented
+hook-trust CLI interface. Missing requirements fail INCOMPLETE. A sandbox's denial of `ps` is an
+execution-environment constraint; it is not evidence that the host lacks process inspection.
+
+The shared admission state uses one persistent fcntl lock across CLI bridges and native hooks.
+Every supported child start or follow-up reserves budget before dispatch. Codex covers spawn,
+follow-up, send-input and resume aliases; Claude covers Agent/Task; Pi counts every member of a
+parallel subagent call. Pi chains and unknown dispatch aliases are refused. Native starts must
+carry `STAGE3 role=ROLE operation=IDENTITY round=N`; the SessionStart instructions supply this
+contract and native pins. Phase workers must name their actual reserved outer-operation ID.
+Role bridges expose their requested role through `SUPERAGENT_ROLE`; the wrapper consumes and
+clears it for descendants. It remains a requested label, separate from actual runtime identity.
+
+The wrapper applies CLI model/effort pins, installs Codex/Claude hooks or the Pi extension,
+and bounds its owned process group. Codex children use isolated contexts; Claude receives
+explicit per-role agent definitions. Pi's child executable override keeps native subprocesses
+on the same wrapper. A native Pi child can consume both a pre-tool permit and a CLI permit;
+this deliberately conservative accounting must be included in the reviewed dispatch ceiling.
+Supervisor starts alone are never presented as the number of child roles.
+
+The independent watchdog survives a controller process exit and enforces total and per-dispatch
+deadlines without paid polling. It disarms only declared outer/inner registrations and kills
+only recorded matching owned process groups. Registration identity is rechecked before stop;
+active jobs with missing ownership proof leave cleanup INCOMPLETE. Cleanup preserves state,
+registrations and committed artifacts. It uses no global scheduler disable or process-name kill.
+Standalone cleanup discovers every runtime archive for the exact approved manifest bytes and
+revalidates its approval and identities. It stops new admissions, reaps recorded detached native
+groups and watchdogs, and verifies their absence even after scheduler registrations disappear.
+Group termination requires the recorded leader start time, exact PGID and current user identity;
+an orphaned group without revalidatable ownership leaves cleanup INCOMPLETE.
+
+Runtime events retain requested pins separately from observed models/effort. Codex supplies its
+active model in hooks; Claude child model data comes from runtime transcript metadata; Pi supplies
+its active model/thinking context. Missing actual model evidence cannot authorize acceptance.
+Effort and usage are recorded only when exposed. Hook archives omit prompts and full private
+transcripts; subprocess evidence is scrubbed for credentials. The driver observes ordinary native
+fixture work, not adversarial shell/network evasion or arbitrary alternate model APIs.
+Claude tool actors prefer the documented child `agent_id` over the shared `session_id`; observed
+Claude effort objects are validated and normalized from `effort.level` before comparing pins.
+
+The final native supervisor receives exact instructions to produce
+`PROJECT/loop-status/stage3-evidence.json` before exiting DONE or WAITING FOR INPUT. The driver waits for those owned
+processes to finish before cleanup. The index supplies:
+
+- `operations`: exact production reservation objects (including phase, round, code/vault SHA,
+  agreement fingerprint, report, meta-plan and goal locators).
+- `dispatches`: `id`, `role`, `round`, `source_commit`, and `operation_id` for phase workers.
+- `changes`: `action` (`implement`, `review`, `integrate`), `dispatch_id`, `round`, `code_commit`,
+  the exact repair `plan` meta-plan locator, and `artifact: {path, sha256}` for the normal integrated delivery/review report.
+
+The index's actor labels, parent labels and synthetic flag are not authority. Collection matches
+its IDs to completed native permits and actual model receipts, derives the parent from the owned
+scheduler identity, and uses observed Git command revisions for implementation/review/integration
+provenance. Workers are instructed to expose their exact final reviewed/integrated revision with
+`git rev-parse HEAD`; the hook records only revision tokens. A missing or ambiguous runtime-to-Git
+mapping leaves the run INCOMPLETE/INVALID, never an inferred PASS. Each implementing, branch-reviewing
+and integrating worker also ends its actual response with `STAGE3_RESULT` followed by one JSON
+object containing `action`, `round`, `code_commit`, `plan`, `artifact: {path, sha256}` and `verdict`.
+The SessionStart instructions specify this producer contract. Native Stop/SubagentStop callbacks
+capture that structured result; the collector compares it to the index and requires PASS. The
+full relevant worker/reviewer final response is retained as a scrubbed, hashed artifact; private
+transcript contents are not copied. Codex turn-context metadata supplies observed effort when
+available. Pi's native `bash` results and Codex/Claude shell results carry exact Git revision
+observations into the same collector. The normal report must be Git-integrated and name the
+exact revision and verdict. The index cannot
+replace normal inner review or integration evidence.
+
+The collector reuses production evaluation, diagnosis and Git/ledger reconciliation validators.
+It requires the real round-one FAIL on the selected baseline, every required failed C/J ID,
+revision-matched diagnosis and repair meta-plan, worker/reviewer/integrator receipts, an unchanged
+agreement and a final passing integrated report. A repair supplied by the controller, a wrong
+review SHA, a missing J result or work after PASS cannot earn acceptance. Current runtime hooks
+and transcript formats remain version-sensitive; offline transport tests do not establish native
+model obedience, real scheduler operation or S3-AC8–11. Claude, Codex and Pi must still pass their
+separately approved live protocols before Stage 3 can be declared complete.
+
+The live collector retains each worker's actual `source_commit` and `code_commit`. Implementation
+and review name the reviewed branch head. Integration additionally supplies `reviewed_commit`,
+`merge_commit` and `pr_url` in both its normal `STAGE3_RESULT` and the evidence index. Its completion
+head may include subsequent vault bookkeeping. The native collector queries the approved remote's
+merged PR for head/base/merge provenance; offline collectors never confer live authority. Git must
+support `merge-tree --write-tree`: the squash tree must equal Git's merge of the reviewed head onto
+its actual main parent, and no code outside an internal vault may change from merge through the
+evaluated main revision. Do not rewrite old worker receipts to the evaluated SHA.
+
+Reconciliation refuses local agreement, report, diagnosis or binding bytes that differ from main,
+even on a clean feature branch. Synchronize the selected checkout before retrying. Initial launch
+may expose `PENDING` only in `WAITING FOR META-PLAN` with an empty operation: immutable manifest
+inputs and the original deadlines remain enforced, and every worker requires the complete approved
+agreement fingerprint before admission. Descendant master plans may share `master-plans/`; exactly
+one root must match the retained META operation identity.

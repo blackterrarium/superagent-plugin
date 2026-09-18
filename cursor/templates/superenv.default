@@ -2,7 +2,7 @@
 # Precedence: env var > repo-root .superenv > this plugin default.
 # Model values: "inherit", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi
 # and <model> is that harness's native model string — cursor: `agent --list-models`; claude: a
-# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); codex: a Codex model (gpt-5.6-sol);
+# tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5-1); codex: a Codex model (gpt-6-astra);
 # pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the
 # model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a "/" → pi).
 # A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same
@@ -17,20 +17,20 @@
 SUPER_GIT_MODE=github                    # github | none
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=inherit       # the superagent tick itself
-SUPER_MODEL_PLANNER=inherit          # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit         # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
-SUPER_MODEL_PANEL=inherit            # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_SUPERVISOR=inherit         # the superagent tick itself
+SUPER_MODEL_PLANNER=inherit         # superplan / supergoal dispatch subagent
+SUPER_MODEL_EXECUTOR=inherit           # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_PANEL=inherit              # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=inherit
 SUPER_MODEL_FIX_APPLIER=inherit
 SUPER_MODEL_TASK_REVIEWER=inherit
 SUPER_MODEL_RE_REVIEWER=inherit
-SUPER_MODEL_BRANCH_REVIEWER=inherit  # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=inherit      # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_MODEL_PRD_REVIEWER=inherit     # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=inherit     # supermeta: meta-plan author, drives supergoal (coding loop)
-SUPER_MODEL_EVALUATOR=inherit        # supereval: grades judged objectives (read-only; command checks use no model)
-SUPER_MODEL_DIAGNOSER=inherit        # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
+SUPER_MODEL_BRANCH_REVIEWER=inherit    # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=inherit        # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_PRD_REVIEWER=inherit       # superprd: zero-context sufficiency review of the drafted PRD (read-only)
+SUPER_MODEL_META_PLANNER=inherit       # supermeta: meta-plan author, drives supergoal (coding loop)
+SUPER_MODEL_EVALUATOR=inherit          # supereval: grades judged objectives (read-only; command checks use no model)
+SUPER_MODEL_DIAGNOSER=inherit          # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED roles; inherit = the CLI default subagent model
 
@@ -52,6 +52,18 @@ SUPER_EFFORT_META_PLANNER=inherit          # supermeta
 SUPER_EFFORT_EVALUATOR=inherit             # supereval judged objectives
 SUPER_EFFORT_DIAGNOSER=inherit            # superdiagnose RCA (Stage 3)
 
+# ── Upfront planning roles ─────────────────────────────────────────
+# PLANNER remains the initial plan author. Refinement preserves a stage's scope,
+# acceptance criteria and shared contracts; invalidated contracts go to REPLANNER.
+# Replanning covers the affected stage and affected dependents, not every later stage.
+# The supervisor resolves each pair independently (environment > repo config > harness default).
+# PLAN_REFINER prepares eligible upfront stages; REPLANNER publishes adopted legacy repairs and
+# upfront batches. Equal pins are intentional when configured and do not couple the roles.
+SUPER_MODEL_PLAN_REFINER=inherit
+SUPER_EFFORT_PLAN_REFINER=inherit
+SUPER_MODEL_REPLANNER=inherit
+SUPER_EFFORT_REPLANNER=inherit
+
 # ── Harness ───────────────────────────────────────────────────────
 SUPER_HARNESS=cursor                    # this is the Cursor build — the external driver fires the Cursor CLI (`agent`)
 SUPER_CODEX_SANDBOX=danger-full-access  # used by bridged codex roles: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write
@@ -59,6 +71,7 @@ SUPER_PI_SUBAGENTS=required             # Pi requires pi-subagents >= 0.58.0 and
 
 # ── Paths ─────────────────────────────────────────────────────────
 SUPER_GOAL_ROOT=vault                   # goal folders land at <SUPER_GOAL_ROOT>/<STAMP>-<slug>/. Relative: inside the checkout (default). Absolute or ~/…: EXTERNAL vault — its own git repo outside the checkout; vault docs are committed there, never here
+SUPER_PLANNING_MODE=upfront             # upfront (shipped default) or incremental; supergoal --planning-mode overrides for one new goal
 SUPER_LOOP_STATUS_DIRNAME=loop-status   # gitignored; sibling of the goal's master-plans/
 
 # ── Loop tuning ───────────────────────────────────────────────────
@@ -96,9 +109,10 @@ SUPER_GH_DISABLE_SANDBOX=false          # true on macOS hosts where gh needs key
 SUPER_REPO_NOTES=                       # optional path to a repo doc the executor reads pre-run
 
 # ── Coding loop (supercode) ───────────────────────────────────────
-# Stage 1 (0.7.0) ships the project inputs and superprd; the keys marked "reserved" are declared
-# now so a .superenv created today needs no edit when the loop lands, but nothing reads them yet.
+# Stage 3 ships in 0.9.0 with full multi-harness live scheduler acceptance still pending. These
+# keys are active; the round limit applies only to project loops, and author-only adoption/resume
+# never follows from a configuration edit.
 SUPER_PROJECT_DIRNAME=projects          # project folders land at <SUPER_GOAL_ROOT>/<SUPER_PROJECT_DIRNAME>/<STAMP>-<slug>/
 SUPER_GOAL_AUTOCONFIRM=false            # true + supergoal --autoconfirm skips supergoal's step-7 human confirmation (supermeta's dispatch); either alone does nothing
-SUPER_CODE_MAX_ITERATIONS=5             # reserved (Stage 3): supercode rounds before parking on WAITING FOR INPUT
+SUPER_CODE_MAX_ITERATIONS=5             # positive project-round limit, not ticks/retries; final-round PASS completes
 SUPER_EVAL_TIMEOUT_MIN=60               # ceiling for any evaluation.md check timeout (prd-lint.sh FAILs a larger value)

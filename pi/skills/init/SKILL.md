@@ -14,7 +14,8 @@ license: MIT
 >   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
 >   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
->   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
+>   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
@@ -66,6 +67,17 @@ Repo-specific values are `SUPER_*` keys. Resolve the project and all values with
 `.superenv` exists, offer **GitHub (recommended)** and **local (no git/GitHub)** before running any
 git command. The unattended equivalent is `SUPER_GIT_MODE=none superagent:init`. Accepted values
 are exactly `github` and `none`; write the chosen value to the new `.superenv`.
+
+## Project-only prerequisite
+
+Stage 3 ships in 0.9.0 with full multi-harness live scheduler acceptance still pending. Before
+launching a coding-loop **project**, verify
+`python3 -c 'import sys; assert sys.version_info >= (3, 9)'`. Missing/older Python blocks project
+launch; it does not block legacy goal initialization, launch or controls. `SUPER_CODE_MAX_ITERATIONS`
+must be a positive integer and limits created project rounds, not ticks/retries. The supervisor must
+be native to `SUPER_HARNESS`; bridged worker roles remain supported. Outer/inner registrations stop
+independently. Adoption of changed agreement and AUTHOR INPUT resume require the author's explicit
+answer; init or a configuration edit does not provide that authorization.
 
 ## Step 1 — Prerequisite checks
 
@@ -154,6 +166,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
    `SUPER_HARNESS` ∈ claude|cursor|codex|pi; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
+   `SUPER_PLANNING_MODE` ∈ upfront|incremental;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
    `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈ required.
@@ -212,9 +225,9 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
 
 ## Step 3 — Role agents (model/effort pins)
 
-Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
+Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
 which the external tick passes straight to `pi --model`. On Pi the supervisor's OWN dispatches
-(planner, executor, panel) are bridge processes that take the pins as CLI flags and need no
+(planner, plan-refiner, replanner, executor, panel) are bridge processes that take the pins as CLI flags and need no
 definition; only superrun's SDD roles (implementer, fix-applier, task-reviewer, re-reviewer,
 branch-reviewer, fix-planner) dispatch through the `pi-subagents` `subagent` tool, and THOSE ride
 generated `.pi/agents/super-<role>.md` definitions. Step 1 must have verified
@@ -223,7 +236,8 @@ this step runs. Missing prerequisites abort init; there is no sequential fallbac
 The four coding-loop roles (prd-reviewer, meta-planner, evaluator, diagnoser) get no `.pi/agents/`
 file. Coding-loop dispatches use fresh blocking bridge processes with model/effort CLI pins:
 `superprd` runs its reviewer through `role-bridge.sh --tools evaluator`, `supereval` uses the
-same read-only bridge profile, and `supermeta` dispatches its PLANNER through `--tools planner`.
+same read-only bridge profile, `supermeta` dispatches PLANNER through `--tools planner`, and
+superagent dispatches PLAN_REFINER / REPLANNER through `--tools planner --role plan-refiner|replanner`.
 The diagnoser's dispatch belongs to Stage 3.
 
 Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFORT_<ROLE>`), using the validated values from the validation step above:
@@ -231,6 +245,8 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | Model key | Effort key | Generated definition |
 |---|---|---|
 | SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_PLAN_REFINER | SUPER_EFFORT_PLAN_REFINER | `.claude/agents/super-plan-refiner.md` |
+| SUPER_MODEL_REPLANNER | SUPER_EFFORT_REPLANNER | `.claude/agents/super-replanner.md` |
 | SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.claude/agents/super-executor.md` |
 | SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.claude/agents/super-panel.md` |
 | SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.claude/agents/super-implementer.md` |
@@ -251,7 +267,7 @@ when that skill lands.
 They follow the harness-specific generate/skip/conflict rules below.
 
 On Pi the listed path is `.pi/agents/super-<role>.md` only for the six SDD roles, including
-roles whose pins both inherit. Planner/executor/panel and the four coding-loop roles never
+roles whose pins both inherit. Planner/plan-refiner/replanner/executor/panel and the four coding-loop roles never
 get a file. This Pi rule overrides the table's generated paths.
 
 (`super-executor.md` is generated for completeness, but the `superagent` loop does not dispatch

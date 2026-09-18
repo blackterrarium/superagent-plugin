@@ -1,0 +1,166 @@
+ok   - claude: exit 0
+ok   - claude: stdout is result
+ok   - claude: argv
+ok   - claude: prompt on stdin
+ok   - claude: log path on stderr
+ok   - claude: inherit omits flags
+ok   - claude: bg-wait ceiling lifted (0) when unset
+ok   - claude: operator bg-wait ceiling respected
+ok   - claude: --tools executor allowlist
+ok   - claude: --tools planner allowlist
+ok   - claude: plan-refiner uses planning allowlist
+ok   - claude: plan-refiner role is in bridge evidence
+ok   - claude: --tools explicit list
+ok   - claude: --tools role = default
+ok   - codex: --tools accepted and ignored
+ok   - usage error on empty --tools
+ok   - pi: evaluator has read-only inspection tools
+ok   - claude: bridged evaluator has read-only inspection tools
+ok   - codex: stdout is -o file content
+ok   - codex: default sandbox flag
+ok   - codex: model/effort/cwd flags
+ok   - codex: prompt via stdin (-)
+ok   - codex: workspace-write flags
+ok   - cursor: stdout
+ok   - cursor: argv
+ok   - pi: stdout
+ok   - pi: model with level suffix + role tools
+ok   - pi: prompt on stdin
+ok   - pi: no suffix when effort inherit
+ok   - pi: --tools planner = role set
+ok   - pi: replanner preserves its independent effort
+ok   - pi: replanner role is in bridge evidence
+ok   - pi: --tools executor = no --tools flag
+ok   - pi: --tools explicit list
+ok   - pi: SUPERAGENT_PI_SKILLS → --skill
+ok   - exit 3 when CLI fails
+ok   - exit 4 on empty result
+ok   - exit 2 when binary missing
+ok   - exit 2: no log= on stderr
+ok   - usage error on bad harness
+ok   - usage error on trailing flag with no value
+ok   - exit 64 on bad SUPER_CODEX_SANDBOX
+ok   - bad sandbox message
+ok   - role sanitised: log stays in logdir
+ok   - role sanitised: no path chars in name
+ok   - role sanitised: log file exists
+ok   - pi: --thinking when model inherit
+ok   - pi: no 'dropped' warning any more
+ok   - pi: no double suffix
+ok   - pi: WARN on already-pinned level
+ok   - fanout: exit 0 when all ok
+ok   - fanout: three framed results in order
+ok   - fanout: each block carries the bridge stdout
+sysmon request failed with error: sysmond service not found
+pgrep: Cannot get process list
+ok   - fanout: exit 0 with --timeout 600
+ok   - fanout: watchdog sleep reaped on success
+ok   - fanout: exit 3 on timeout
+ok   - fanout: timed-out panelist is BRIDGE-FAILED
+ok   - fanout: exit 3 when a bridge fails
+ok   - fanout: failed panelist framed with exit=3
+ok   - fanout: usage error without prompt files
+ok   - fanout: usage error on bad harness
+ok   - parse: tier → claude
+ok   - parse: claude- id → claude
+ok   - parse: gpt- → codex
+ok   - parse: o-series → codex
+ok   - parse: codex- → codex
+ok   - parse: slash → pi
+ok   - parse: prefix wins
+ok   - parse: cursor prefix
+ok   - parse: inherit
+ok   - parse: unknown
+ok   - parse: model strip
+ok   - parse: model no prefix
+ok   - effort: claude max ok
+ok   - effort: codex max rejected
+ok   - effort: pi off ok
+ok   - effort: cursor high rejected
+ok   - effort: inherit always ok
+ok   - effort: pi xhigh ok
+ok   - effort: pi max ok
+ok   - effort: pi ultra rejected
+ok   - harness: pi accepted
+ok   - harness: bad value rejected
+ok   - ensure_cli_bin: pi resolves
+ok   - ensure_pi_bin: missing → hint
+ok   - cli_path: SUPERAGENT_CLI_PATH dir searched under a minimal PATH
+ok   - cli_path: minimal PATH without it still fails (control)
+ok   - cli_path: augment is idempotent (dir appears once)
+ok   - cli_path_dirs: reports the dir of every resolvable CLI, deduped, standard dirs omitted
+ok   - ensure_pi_bin: missing → names SUPERAGENT_CLI_PATH
+ok   - e2e: sources as a library
+ok   - e2e: status_field picks the right slug
+ok   - e2e: status_field numeric field
+ok   - e2e: status_field absent slug → empty
+ok   - e2e: status_field empty array → empty
+ok   - e2e: superenv has harness, interval, single-quoted notify
+ok   - e2e: superenv appends extra lines
+ok   - e2e: superenv sources under set -u and notify appends the event
+ok   - e2e: count_ticks counts session headers
+ok   - e2e: count_ticks missing log → 0
+ok   - e2e: transition sets E2E_LINE only on change (no subshell)
+ok   - e2e: deliverables pass
+ok   - e2e: deliverables fail when hello.sh is wrong
+ok   - e2e: required subagents accepts minimum version
+ok   - e2e: required subagents accepts higher prerelease
+ok   - e2e: required subagents rejects 0.57.9
+ok   - e2e: required subagents rejects 0.58.0-beta.1
+ok   - e2e: required subagents rejects malformed
+ok   - e2e: required subagents rejects missing package
+ok   - e2e: clean host without package refuses before provisioning
+ok   - e2e: --dry-run exits 0 and prints the plan
+ok   - e2e: --dry-run writes no report
+ok   - e2e: bad flag → exit 2
+ok   - e2e: kill_tree kills a child and its grandchild
+ok   - e2e: SIGTERM mid-phase → cleanup, exit 143, within 10s
+ok   - launch: plan under a symlinked repo path accepted (--dry-run)
+ok   - superenv: harness=pi in .superenv → Pi template defaults
+ok   - superenv: no .superenv → Claude template defaults
+ok   - superenv: process env SUPER_HARNESS=pi wins and layers
+ok   - superenv: repo .superenv still overrides the harness template
+ok   - bridge: --harness inherit runs SUPER_HARNESS (pi)
+ok   - bridge: --harness inherit defaults to claude when SUPER_HARNESS unset
+ok   - bridge log: header is the first line
+ok   - bridge log: trailer is the last line
+ok   - bridge log: CLI chatter kept in between
+ok   - bridge log: stdout unchanged
+ok   - bridge log (pi): header records the pin as given, effort separate
+ok   - bridge log (pi): exactly header + trailer when the CLI is silent
+ok   - bridge log (claude): tools=executor recorded
+ok   - bridge log: trailer exit=3 when the CLI fails
+ok   - bridge log: trailer exit=4 on an empty result
+ok   - bridge log: inherit model/effort recorded literally
+ok   - bridge log: killed mid-run → header, no trailer
+ok   - mix: sources as a library (pulls in pi-e2e helpers + _common)
+ok   - mix: superenv pins claude supervisor, both pairs, single-quoted notify, extra last
+ok   - mix: superenv sources under set -u and notify appends the event
+ok   - mix: deliverables pass on a conforming kv.sh
+ok   - mix: deliverables leave no KV_FILE in the caller's env
+ok   - mix: deliverables fail when a missing key exits 0
+ok   - mix: deliverables fail when test.sh fails
+ok   - mix: evidence rows sorted by start, older-than-since and non-bridge logs excluded
+ok   - mix: evidence row fields role harness model effort exit secs
+ok   - mix: evidence killed row → exit=killed secs=-
+ok   - mix: evidence_has matches role+harness+model with exit 0
+ok   - mix: evidence_has rejects wrong harness/model and non-zero exit
+ok   - mix: evidence_count by role regex and harness
+ok   - mix: legacy codex log → legacy-codex row with banner model
+ok   - mix: legacy empty log → legacy row; older-than-since excluded
+ok   - mix: legacy rows are never proof
+ok   - mix: bridge_failed_count matches reports, not prose
+ok   - mix: bridge_failed_count = single 0 on a match-free file (grep -c prints 0 AND exits 1)
+ok   - mix: plugin_field reads the superagent block only
+ok   - mix: plugin_field empty when the plugin is absent
+ok   - mix: plugin_marketplace + installed_bridge path
+ok   - mix: --dry-run exits 0 and prints the mix
+ok   - mix: --dry-run writes no report
+ok   - mix: preflight refuses a pin outside claude+codex+pi
+ok   - mix: preflight refuses when pi lacks the reviewer's provider
+ok   - mix: preflight refuses when the plugin is disabled
+ok   - mix: preflight WARNs (not fails) on a plugin version mismatch
+ok   - mix: preflight refuses an installed bridge without the evidence header
+ok   - mix: preflight refuses when the installed bridge is missing
+ok   - mix: bad flag → exit 2
+bridge-test: 0 failure(s)

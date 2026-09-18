@@ -16,7 +16,8 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 >   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
 >   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
->   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
+>   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
@@ -35,12 +36,12 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 # Superagent
 
 The **autonomy supervisor** for the `super*` plan-tree lifecycle. Given a goal's **root** seed/master
-plan, superagent drives the whole arc — `superplan` writes the next step's plan, `superrun` executes
-the next ready leaf plan and closes it out — to completion **unattended**, one step per iteration,
-until every step is both planned and executed.
+plan, superagent selects legacy planning, upfront refinement, adopted replanning, or execution and
+drives the goal to verified completion **unattended**, one operation per iteration.
 
-superagent does **not** plan or execute work itself. Each iteration it dispatches **exactly one** of
-`superplan` / `superrun` (never both) **in its own subagent** (see **Subagent dispatch** below), reads
+superagent does **not** plan or execute work itself. Each iteration dispatches **at most one**
+selected planning operation or `superrun` (never both) in its required isolated dispatch form
+(see **Subagent dispatch** below), reads
 that skill's Final Report, **relays it verbatim to the caller** (see **Final Report — per tick**),
 advances a small state machine, and lets its **driver** fire the next iteration. Two drivers are supported (see **Drivers**): an
 **in-session `cron`** job (attended; context accumulates) or an **external scheduler** — a Desktop
@@ -53,27 +54,29 @@ the start of the run** and apply its clauses **L1–L7** throughout: the loop-st
 cron/external driver + guard/bootstrap/resume (L2), the overlap lock (L3), the context-handoff gate
 (L4), the sync gate (L5), the PR integration discipline (L6), and the decision-escalation ladder (L7).
 superloop owns the **chassis**; superagent supplies the **work model** below — the `WAITING FOR PLAN` /
-`WAITING FOR RUN` status vocabulary, the one-skill-per-tick `superplan` / `superrun` dispatch (Step 1),
+`WAITING FOR RUN` status vocabulary, the one-skill-per-tick selected-operation / executor dispatch (Step 1),
 and the verified-completion `DONE` condition. superagent's `<consumer>` value for L2's tick prompt is
 `superagent`; its `<bootstrap-input>` is the root `<PLAN.md>`; its status-role mapping is ready =
 `WAITING FOR PLAN` / `WAITING FOR RUN`, transient = `PLANNING` / `RUNNING`, plus `WAITING FOR INPUT`,
 `DONE`, and a superagent-specific **parked** state `WAITING FOR CI` (see **CI wait — monitor-parked**);
-its heavy step (L4) is one `superplan` or `superrun` invocation (dispatched in its own subagent)
+its heavy step (L4) is one selected planning operation or `superrun` invocation (each dispatched
+in its required isolated form)
 with threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6); its be-sure
-artifacts (L5) are the `superplan` / `superrun`-reported plan / closeout files plus PR squash commits;
+artifacts (L5) are the selected planning operation's plan/receipt/repair artifacts or superrun's
+closeout files plus PR squash commits;
 its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 
 | Thought | Reality |
 |---------|---------|
 | "I'll plan this step and then run it in the same tick while I'm here" | NO. **One skill per tick.** Set the next status and let the next cron tick run it. superplan and superrun contexts must never intermix. |
-| "I'll just invoke `superplan`/`superrun` via the Skill tool here — it's simpler" | NO. **Every `superplan`/`superrun` invocation runs in its own `general-purpose` subagent** (see **Subagent dispatch**). superagent's own context ingests only the returned Final Report (which it then relays verbatim to the caller), never the full skill execution — that is what keeps the supervisor lean and the per-session threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6) meaningful. |
-| "I'll detect the next step / execute the plan myself" | NO. superagent never independently traverses, plans, or executes. It dispatches `superplan` / `superrun` (each in its own subagent) and reacts to their Final Reports. |
+| "I'll just invoke the selected skill via the Skill tool here — it's simpler" | NO. **Every selected planning operation and `superrun` runs in its required isolated form** (see **Subagent dispatch**). superagent's own context ingests only the returned Final Report (which it then relays verbatim to the caller), never the full skill execution — that is what keeps the supervisor lean and the per-session threshold (`SUPER_HEAVY_STEP_LIMIT`, default 6) meaningful. |
+| "I'll detect the next step / execute the plan myself" | NO. superagent never independently authors or executes. It reconciles traversal/records, selects the role operation, and reacts to the delegated Final Report. |
 | "A fresh/empty context means I lost the loop state" | NO. All state is in the loop file. A `--tick` works identically in a clean context (external driver) or an accumulating one (cron). Acquire the lock, read the file, run one tick. |
 | "A skill raised a question — I'll just ask the user" | NO. First run the **subagent panel** (Decision-escalation ladder). Ask the user only if the panel cannot converge. |
 | "The work is blocked — terminate the loop" | NO. Run the panel on the blocker first (retry / re-plan / decline / escalate). Stop the driver only when DONE or an escalation pauses the loop. |
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
 | "I'll dispatch `superplan` with the `subagent` tool — it's right there" | NO. On Pi the supervisor NEVER uses a subagent tool. `superplan`, `superrun`, and every panelist are bridge processes started from your `bash` tool (see **Subagent dispatch**); `pi-subagents` is for `superrun`'s SDD children only. |
-| "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false` on the Agent call for `superplan`; a blocking Bash call for `superrun`): the blocked call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
+| "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false` for a selected planning-role agent; a blocking Bash call for `superrun`): the blocked call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
 | "I'll dispatch `superrun` as an Agent-tool subagent like `superplan`" | NO. **`superrun` runs in its own CLI process** (`role-bridge.sh --tools executor` from your Bash tool — see **Subagent dispatch**). `superrun` is the SDD controller and must dispatch its own implementer/reviewer subagents; a subagent cannot foreground-wait on its children (superloop L7's depth-1 constraint), so as an Agent-tool subagent it degrades into a `SendMessage`-nudge spiral and never converges (issue #25). |
 | "My dispatch was interrupted mid-flight (API lost, host slept) — I'll ask the operator whether to resume or pause" | NO. **A tick never ends with a question — not via a tool, not as the final chat message** (in an unattended session no one can answer; the questioning turn exits 0 and strands `status: PLANNING`/`RUNNING` + the held lock). Self-heal immediately per superloop L2's tick teardown invariant: log the interruption, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, `release_lock()`, end the tick with a normal report. The next scheduled tick retries the step. |
 
@@ -113,14 +116,18 @@ are **superloop L1**. superagent's `status:` values map to L1's generic roles as
 PLAN` / `WAITING FOR RUN`; transient = `PLANNING` / `RUNNING`; plus `WAITING FOR INPUT` and `DONE`.
 `WAITING FOR CI` is a superagent-specific **parked** role — durable like a ready state (a persisted
 `WAITING FOR CI` is normal, NOT a crash), but its tick branch dispatches nothing heavy. superagent adds
-the `plan_exhausted` frontmatter field (its queue-exhaustion hint, never completion proof) and, while parked, a `ci_wait:` block (see
+the `plan_exhausted` frontmatter field (its queue-exhaustion hint, never completion proof), optional
+recovery hints `planning_operation: refine|replan|none`, `planning_target`, `planning_generation`,
+and `planning_record`, and, while parked, a `ci_wait:` block (see
 **CI wait — monitor-parked**).
 
 ### Status vocabulary
 
-- `WAITING FOR PLAN` — ready to dispatch `superplan` (in its own subagent) for the next step.
-- `PLANNING` — `superplan` is running (transient within a tick; persisted ⇒ a crash).
-- `WAITING FOR RUN` — ready to dispatch `superrun` (in its own subagent) for the next ready leaf.
+- `WAITING FOR PLAN` — select one planning operation: legacy incremental authoring under PLANNER,
+  upfront preparation under PLAN_REFINER, or adopted repair under REPLANNER. A valid prepared upfront
+  target transitions to `WAITING FOR RUN` without dispatching a heavy skill.
+- `PLANNING` — the selected planning operation is running (transient within a tick; persisted ⇒ a crash).
+- `WAITING FOR RUN` — ready to dispatch `superrun` in its isolated executor CLI process for the next ready leaf.
 - `RUNNING` — `superrun` is running (transient within a tick; persisted ⇒ a crash).
 - `WAITING FOR CI` — a dispatched `superrun` pushed long CI and yielded a CI-PENDING report; the loop
   is **parked** on the run(s) behind a completion Monitor (cron) or a one-curl-per-tick check
@@ -155,7 +162,8 @@ runs in a fresh context. Go straight to **Step 1**.
 Run **superloop L5** (`sync_main()`, `sync_vault()` in external vault mode, + the Be-sure verification, STOP → `WAITING FOR INPUT`) around every
 skill dispatch — pre, so the delegated skill reads a fresh tree, and post, so a silently-skipped local
 pull never leaves the primary checkout stale. superagent's **be-sure artifacts** are the
-`superplan` / `superrun` Final-Report-named plan / closeout files plus the PR squash commits (see the
+selected planning operation's Final-Report-named plan/receipt/repair files or superrun's closeout
+files plus the PR squash commits (see the
 per-status Sync-gate steps in **Step 1**). If L5 STOPs, the loop pauses on `WAITING FOR INPUT` — do not
 advance.
 
@@ -166,26 +174,27 @@ is unchanged.
 
 ---
 
-## Subagent dispatch — `superplan`/`superrun` always run isolated
+## Subagent dispatch — selected planning operations and `superrun` run isolated
 
 **Every heavy-skill invocation runs isolated from superagent's own context — superagent NEVER
-invokes `superplan` or `superrun` inline.** The two skills are isolated differently, and the
-difference is load-bearing:
+invokes a selected planning operation or `superrun` inline.** Planning roles and the executor are
+isolated differently, and the executor distinction is load-bearing:
 
 - **`superplan` → an Agent-tool subagent.** `superplan` authors documents and dispatches no
   subagents of its own, so a depth-1 subagent is the right container. When Step 1 reaches the
   `WAITING FOR PLAN` branch, dispatch it with the **Agent tool** (`subagent_type: general-purpose` —
   full tool access: Bash, Edit/Write, git, `gh` — and `run_in_background: false`; see **Synchronous
   dispatch** below).
-- **On Pi, `superplan` is INSTEAD its own CLI process — this supersedes the Agent-tool bullet
-  above.** This harness has no in-process subagent tool
-  in the supervisor; every heavy dispatch is a blocking `bash` call to the bridge. Dispatch
-  `superplan` exactly like `superrun` below, with two differences: `--tools planner` and
-  `--role planner`, and the model/effort from `SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER`:
-  `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools planner --cwd "<primary root>" --prompt-file "$f" --role planner`
-  A native (`pi:`/inherit) planner runs with `--harness pi` — native and bridged are the same code
-  path on this harness. The child inherits `SUPERAGENT_PI_SKILLS` from the tick, so `superplan`
-  and the `superpowers:*` skills resolve inside it. Exit 0 → stdout is the Final Report; non-zero
+- **On Pi, every selected planning operation (`superplan`, `superrefine`, or `superreplan`) is
+  INSTEAD its own CLI process — this supersedes the Agent-tool bullet above.** This harness has no
+  in-process subagent tool in the supervisor; every heavy dispatch is a blocking `bash` call to the
+  bridge. Dispatch the selected planning skill exactly like `superrun` below, with two differences:
+  `--tools planner` and `--role planner|plan-refiner|replanner`, using the matching role's
+  `SUPER_MODEL_<ROLE>` / `SUPER_EFFORT_<ROLE>`:
+  `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools planner --cwd "<primary root>" --prompt-file "$f" --role <role>`
+  A native (`pi:`/inherit) planning role runs with `--harness pi` — native and bridged are the same
+  code path on this harness. The child inherits `SUPERAGENT_PI_SKILLS` from the tick, so the selected
+  planning skill and the `superpowers:*` skills resolve inside it. Exit 0 → stdout is the Final Report; non-zero
   → the crashed-dispatch path (retry once, then the crash-recovery mapping: restore the ready
   status, `release_lock()`, end the tick, quoting the `log=` path in `Findings & issues`).
 - **`superrun` → its own CLI process.** `superrun` is the `subagent-driven-development` controller:
@@ -226,19 +235,23 @@ difference is load-bearing:
   `superpowers:*` resolve there exactly as here; the `.claude/agents/super-<role>.md` definitions
   `superagent:init` generated resolve from the `--cwd` root as usual.
 
-Either way, instruct the executor/subagent to:
+Either way, instruct the selected child to:
 
-1. invoke the named skill (`superagent:superplan` or `superagent:superrun`) via its **Skill tool** with `<PLAN.md> =
-   master_plan` (and the per-branch arguments below), and
+1. invoke the named skill via its **Skill tool**: `superagent:superplan <root>` for ordinary
+   planning, `superagent:superrefine <root> <stage-id>` for refinement,
+   `superagent:superreplan <root> <record>` for repair, or `superagent:superrun <root>` for
+   execution (plus the per-branch CI-resume packet where applicable), and
 2. **return that skill's complete Final Report verbatim as its final message** — the subagent's final
    message is what superagent receives as the tool result, and the verbatim report is exactly what the
    per-branch step-5 parsing consumes. (One sanctioned exception: a `superrun` process that queued
    long CI returns a **CI-PENDING report** instead and exits — that is a valid yield, not a failure;
    a fresh process resumes it later; see **CI wait — monitor-parked**.)
 
-**Model resolution — every heavy-skill dispatch site passes a model per its `.superenv` role key**
-(`SUPER_MODEL_PLANNER` for `superplan`, `SUPER_MODEL_EXECUTOR` for `superrun` — including the
-ci-resume's fresh process and escalation-ladder retries).
+**Model resolution — every heavy-skill dispatch site passes its selected role's independent
+`.superenv` model and effort key.** `superplan` uses PLANNER, `superrefine` uses PLAN_REFINER,
+`superreplan` uses REPLANNER, and `superrun` uses EXECUTOR (including ci-resume and retries).
+Resolve each key environment > repo `.superenv` > harness default. Equal pins are allowed and do
+not couple roles.
 
 *`superrun` (process dispatch):* the bridge takes the CLI's native model string directly, so no
 agent definition is involved. In Bash, `. "${SUPER_PLUGIN_ROOT}/scripts/_common.sh"` and pass
@@ -250,29 +263,19 @@ foreign harness's model — all pass through unchanged; `inherit` omits the flag
 `.claude/agents/super-executor.md` definition, if `superagent:init` generated one, is unused by this
 path.
 
-*`superplan` (Agent-tool dispatch):*
+*Planning-role dispatch (`superplan`, `superrefine`, or `superreplan`):*
 
-- `inherit` → omit the `model:` parameter (the subagent runs on the session model).
-- A tier name (`sonnet` | `opus` | `haiku` | `fable`) → pass it as `model:`.
-- A **full model ID** (matches `^claude-`, e.g. `claude-fable-5`) → the Agent tool's `model:`
-  parameter is tier-enum-only and rejects it; instead dispatch with `subagent_type: super-planner`
-  — the per-role agent definition `superagent:init` generates in `.claude/agents/`,
-  whose `model:` frontmatter carries the pin — and omit `model:`. If that definition is missing,
-  that is a hard error: surface it (instruct a `superagent:init` re-run), never silently downgrade.
-- A **bridged** value (harness prefix or inference ≠ `SUPER_HARNESS`, e.g. `codex:gpt-5.6-sol`,
-  `openai/gpt-5`) → dispatch with `subagent_type: super-planner` and omit
-  `model:`; the generated definition is a relay to that harness's CLI. A Final Report that begins
-  `BRIDGE-FAILED` is a failed dispatch — route it through the escalation ladder like any other
-  crashed subagent, quoting its `log=` path.
 
-*`superplan` on Pi (process dispatch):* identical to the `superrun` rule above with
-`SUPER_MODEL_PLANNER` / `SUPER_EFFORT_PLANNER` and `--tools planner`. No agent definition is
-involved for planner, executor, or panel on this harness.
+
+
+*Planning roles on Pi (process dispatch):* identical to the `superrun` rule above with that role's
+model/effort key, `--tools planner`, and `--role planner|plan-refiner|replanner`. No agent definition
+is involved for those three planning/controller roles on this harness.
 
 **Synchronous dispatch — the supervisor WAITS on the tool call; it never polls a running subagent.**
 The harness runs Agent-tool subagents in the background by default, which hands back a task handle and
-invites `TaskOutput`/`TaskList` status checks while the work runs — for a long `superplan`/`superrun`
-that polling is pure supervisor-context waste. So every heavy-skill dispatch — the Step-1 `superplan`
+invites `TaskOutput`/`TaskList` status checks while the work runs — for a long selected planning operation or `superrun`
+that polling is pure supervisor-context waste. So every heavy-skill dispatch — a Step-1 planning-role
 Agent call passes **`run_in_background: false`**; the `superrun` bridge call (Step-1, the ci-resume's
 fresh process, an escalation-ladder retry) is a plain **foreground Bash call with `timeout: 7200000`**,
 never `run_in_background: true` — **blocks until the child's final message returns as the tool
@@ -320,7 +323,11 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    as an inline list of GitHub Actions run ids), `repo:` (the `owner/name` of the repository the
    runs live in — the PR's **base** repository, e.g. from `gh repo view --json nameWithOwner`; this is
    what lets the wrapper find the runs when the clone's remote is a fork), `branch:`, `pr:`, `leaf:`,
-   `worktree:`, and `since: <ISO-8601 UTC timestamp, e.g. 2026-08-28T14:05:00Z>`. Set
+   `worktree:`, the execution snapshot's `plan_generation:`, `stage_id:`, `stage_revision:`,
+   `preparation:`, `preparation_digest:`, `vault_commit:`, `reviewed_code_revision:`,
+   `source_revision:` and `consumed_deliveries:`, and `since: <ISO-8601 UTC timestamp, e.g.
+   2026-08-28T14:05:00Z>`. These are recovery hints copied from superrun's packet; the tracked
+   preparation, authoritative history, PR and C8 record remain the evidence. Set
    `status: WAITING FOR CI`. It must look exactly like this:
 
    ```yaml
@@ -331,6 +338,15 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
      pr: <number>
      leaf: <plan path>
      worktree: <path>
+     plan_generation: <N>
+     stage_id: <ID>
+     stage_revision: <N>
+     preparation: <report path>
+     preparation_digest: <sha256>
+     vault_commit: <sha>
+     reviewed_code_revision: <sha>
+     source_revision: <revision>
+     consumed_deliveries: <contract IDs and receipt paths>
      since: <ISO-8601 UTC timestamp>
    ```
 
@@ -354,18 +370,28 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
 1. Entry points: the **Monitor fired** (cron — harness re-invokes the session), or an **external
    `WAITING FOR CI` tick's one batched curl** found every run `completed`, or a **form-(B) RESUME**
    found `status: WAITING FOR CI` (see below). `acquire_lock()` if not already held this tick.
-2. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
+2. Run `sync_main()` / `sync_vault()` and reconcile C8 plus the execution snapshot against the
+   authoritative root **before** dispatching a resume process. A pending batch or an adopted request
+   being durably published pauses this PR even when all runs are green. Ensure its record preserves the
+   PR/branch/worktree/run ids and snapshot, set `status: WAITING FOR PLAN`, and do not resume a merge
+   while the stage disposition is unresolved. After a published batch, resume only through its explicit
+   disposition. An explicitly retained same execution identity may continue post-CI after its focused
+   new-generation validation. A mapped `resume-existing` successor is redirected through superrun's
+   normal prepared-stage execution on the reused branch/worktree, with a successor snapshot and its own
+   remaining tasks/reviews/tests; the old packet is historical and cannot authorize direct merge.
+   Otherwise preserve the old PR history and route to replanning/reconciliation.
+3. Verify the conclusions independently (one `gh run view <id>` per run — with the sandbox override if
    `SUPER_GH_DISABLE_SANDBOX=true` — or the same batched curl) — never advance on the Monitor's report
    alone.
-3. **Resume `superagent:superrun`:** the process that yielded has exited, so there is nothing to
+4. **Resume `superagent:superrun`:** the process that yielded has exited, so there is nothing to
    message — dispatch a **fresh** `superrun` process exactly as in `WAITING FOR RUN` step 3 (bridge,
    `--tools executor`, foreground Bash, `timeout: 7200000`; model per **Model resolution** under
    **Subagent dispatch**, from `SUPER_MODEL_EXECUTOR`), with a prompt that instructs it to invoke
    `superagent:superrun` with the full `ci_wait` packet + each run's conclusion via its
    **Resume entry — post-CI**. It returns the real Final Report.
-4. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
+5. Continue the normal `WAITING FOR RUN` steps 4–6 on that report (sync gate post + be-sure, parse →
    next state, iteration log). Clear the `ci_wait:` block.
-5. The heavy-skill count for this leaf was already incremented on the tick that dispatched
+6. The heavy-skill count for this leaf was already incremented on the tick that dispatched
    `superrun` (Step 2); the park and resume ticks increment `iteration` but **not**
    `session_skill_count` again.
 
@@ -411,9 +437,14 @@ next status — all in one turn). Ticks never overlap: in `cron` mode they fire 
 `external` mode the **lock** serializes them. So a **persisted** `PLANNING`/`RUNNING` means a crashed
 prior tick (which also left a stale lock that `acquire_lock()` steals immediately when its recorded
 owner PID is dead, else after `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log
-a recovery note, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, and fall through to
-that branch this tick. (`WAITING FOR CI` is **not** a crash — it is the durable parked state; see its
-own branch.)
+a recovery note, then reconcile authoritative artifacts before redispatch. `PLANNING` reconciliation
+uses the tracked root/record and may recover a published preparation/replan instead of repeating it.
+`RUNNING` reconciliation inspects the actual branch/PR/main history and execution snapshot: a merged
+delivery with missing closeout routes to superrun's closeout recovery, an existing delivery receipt is
+reused, and open/CI-pending work resumes its recorded integration path. Never rerun implementation
+solely because the final response was lost. After reconciliation, reset `PLANNING → WAITING FOR PLAN` /
+`RUNNING → WAITING FOR RUN` and fall through to that branch this tick. (`WAITING FOR CI` is **not** a
+crash — it is the durable parked state; see its own branch.)
 
 The same mapping applies **in-flight**: if this tick's own dispatch is interrupted and the step cannot
 be completed (superloop L2, tick teardown invariant), apply the reset **now** — log the interruption,
@@ -423,6 +454,11 @@ report so the next tick retries. Never end the tick asking what to do, and never
 
 ### `WAITING FOR CI` (parked — the cheap branch)
 The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-parked**).
+First synchronize authoritative code/vault state and reconcile C8 against the packet's execution
+snapshot. This request-recovery check precedes the driver-specific CI query. If an adopted batch is
+being committed or the root has a pending Active replan, preserve the packet's PR/worktree/run history
+in that record, move to `WAITING FOR PLAN`, and end without dispatching post-CI superrun. Green CI never
+bypasses the barrier. Missing/conflicting identity enters the existing decision ladder.
 - **external:** run **one batched `curl`** over all ids in `ci_wait.runs` (auth `gh auth token` — with
   the sandbox override if `SUPER_GH_DISABLE_SANDBOX=true`; this is the only network call this tick).
   - (Loops driven by the shipped `scripts/` wrapper normally never reach this branch while a run is
@@ -442,6 +478,9 @@ After the pre-sync gate in `WAITING FOR PLAN` or `WAITING FOR RUN`, reconcile ad
 Decisions with the authoritative tree using **supertraverse C8**. This also applies after crash
 recovery and a resumed user decision. Apply missing requests; reconcile partial publications;
 reuse already-published successors. Clear `plan_exhausted` when a repair is newly requested.
+Also inspect newly integrated delivery receipts/findings before selection: a verified contract or
+assumption contradiction invalidates affected unfinished preparation and enters the existing
+decision/adoption path; a routine finding that preserves commitments creates no planning operation.
 If reconciliation changes the ready state, run that state's dispatch instead. Never dispatch a
 normal traversal against a log-only repair decision. Ambiguous or uncommitted repair state goes
 to the decision ladder; no queue exhaustion or DONE transition is allowed from that state.
@@ -450,45 +489,64 @@ published decision by its stable Decision ID and existing Successor link; never 
 second successor after a crash.
 
 ### `WAITING FOR PLAN`
-1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superplan` reads a fresh tree. If it STOPs, pause and end
-   this tick.
-2. Set `status: PLANNING`, write the loop file.
-3. **Dispatch `superagent:superplan` in its own subagent** (Agent tool, `subagent_type: general-purpose`,
-   `run_in_background: false` — wait on the tool result, never poll; see **Subagent dispatch**).
-   On Pi: no Agent tool — dispatch it as a bridge process per **Subagent dispatch** below
-   (`role-bridge.sh --tools planner`).
-   Model per **Model resolution** (see **Subagent dispatch**), from `SUPER_MODEL_PLANNER`.
-   Instruct the subagent to invoke the `superagent:superplan` skill (Skill tool) with
-   `<PLAN.md> = master_plan`, **no `<TOPIC>`** — its `supertraverse` descent finds the next deepest
-   unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final
-   Report verbatim as its final message** (step 5 parses that report). superagent never invokes
-   `superplan` inline in its own context.
+1. **Sync and reconcile first.** In `github`, run `sync_main()` (then `sync_vault()` for an external
+   vault). In `none`, apply L5's local ownership and filesystem-evidence branch without any git or
+   GitHub operation. Reconcile C8 and any persisted `PLANNING` hints against authoritative durable
+   root/record artifacts, and clear
+   stale hints. Artifacts override hints. A missing/ambiguous graph or record enters the existing
+   decision ladder; never choose a role from state alone.
+2. **Select before dispatch.** A reconciled adopted C8 legacy repair has priority over ordinary
+   incremental descent and selects `superreplan <root> <record>` / REPLANNER. Otherwise, an
+   unmarked or explicit incremental root selects ordinary descent and `superplan` / PLANNER. For an
+   upfront root: a committed pending batch selects
+   `superreplan <root> <record>` / REPLANNER; the first dependency-eligible stage whose S5 result is
+   NEEDS-REFINEMENT selects `superrefine <root> <stage-id>` / PLAN_REFINER; a valid prepared target
+   sets `status: WAITING FOR RUN`, clears planning hints, records the target, and ends this branch
+   with **zero** heavy dispatches. If the upfront selector finds none of those three targets, run
+   **supertraverse C9 now** against the synchronized authoritative tree; do not dispatch PLANNER just
+   to manufacture an exhaustion result. C9 **complete** sets `plan_exhausted: true` and `status:
+   DONE`, records the audited integration/disposition evidence, and ends the branch with zero heavy
+   dispatches. C9 **incomplete** must name the still-active planning or execution obligation: clear
+   `plan_exhausted`, remain in `WAITING FOR PLAN`, and reselect that concrete refinement, repair, or
+   prepared execution target under this same selection contract. C9 **BLOCKED**, including the case
+   where every remaining obligation is dependency-blocked, enters the existing decision ladder and
+   never sets DONE or polls an empty loop. REPLAN-REQUIRED and BLOCKED take the decision ladder before
+   any generic `none`/success handling. A broken/missing upfront tree is BLOCKED, never incremental
+   gap filling.
+3. **Selected-role-only preflight.** Before writing `PLANNING`, resolve only the selected role's
+   harness, model, effort, and dispatch form. Check the prerequisite required by that harness's rule
+   in **Model resolution**: the native Claude definition selected by its predicate, the native Cursor
+   non-`inherit` definition, a bridged relay and foreign CLI, or the selected Pi bridge CLI. Codex
+   native roles have no definition prerequisite. Do not inspect or require unused role definitions.
+   On failure, keep/restore `WAITING FOR PLAN`, preserve no new planning hints, record zero heavy
+   dispatches and the selected role/target failure, then invoke the existing decision ladder as the
+   **next** controller action. This immediate preflight observation is not a replacement for the
+   ladder, and never substitutes PLANNER or EXECUTOR.
+4. Only after that preflight succeeds, set `status: PLANNING` and persist `planning_operation`
+   (`refine` or `replan`), target, current root generation, and C8 record when applicable. For legacy
+   PLANNER authoring persist `planning_operation: none`. Dispatch exactly that skill with exactly its
+   role's resolved model/effort; see **Subagent dispatch**. On Pi, use a blocking
+   `role-bridge.sh --tools planner --role planner|plan-refiner|replanner` process. On other
+   harnesses, native/bridged definitions or Codex spawn pins apply as documented there.
    In local mode, include the recorded git mode, physical project root, and inherited workspace
    identity in the prompt, and explicitly require local A7 publication with no git/GitHub stages.
-4. **Sync gate (post + be-sure).** Run `sync_main()` (then `sync_vault()` in external vault mode), then verify `superplan`'s reported plan file and
-   immediate-parent/ancestor progress-row edits are present and tracked — on local `main` (internal vault) or in the vault repo (external vault; L5's two-kind be-sure rule). If a reported
-   artifact is missing or the tree can't reconcile, escalate (STOP) — do not advance, and surface the
-   failure in this tick's `Findings & issues` line.
-5. **Retain `superplan`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
-   Report — per tick**) and **note any issue it surfaces** — a CRITICAL / ⚠️ finding, a plan error, a
-   seed contradiction, a `not-traversable` result — for the `Findings & issues` line, independent of
-   whether it triggers escalation. **A BLOCKED/inconsistent repair report takes precedence over
-   any `none` phrase**: run the decision ladder, not the exhaustion branch. Otherwise parse:
-
-   - **Plan type: implementation plan** → `status: WAITING FOR RUN`, `plan_exhausted: false`.
-   - **Plan type: seed/master plan** (a sub-master was written) → `status: WAITING FOR PLAN`,
-     `plan_exhausted: false` (next tick descends into it and plans deeper).
-   - **`No available task to plan …`** (superplan's "none") → `plan_exhausted: true`,
-     `status: WAITING FOR RUN`. Do **not** conclude DONE yet — planned-but-unexecuted leaves may
-     remain; let `superrun` check.
-   - **`not-traversable` / `I need to know the plan file`** → ERROR: report, `stop_driver()`,
-     `release_lock()`.
-6. Append an iteration-log entry (skill, result, plan path, and persistence evidence: local verified
-   artifact paths, PR URL, or external-vault commit SHA). Go to **Step 2**.
+5. **Post-dispatch.** Run the mode-selected post-sync/be-sure gate for the reported leaf, receipt/report, record,
+   parent rows, and any A7 artifacts, then relay the complete Final Report. PREPARED moves to
+   `WAITING FOR RUN`; a published/finished replan or a legacy repaired successor moves to
+   `WAITING FOR PLAN`; REPLAN-REQUIRED, BLOCKED, contradictory evidence, and bridge failure use the
+   existing decision ladder. For ordinary legacy superplan, parse and persist every successful result
+   explicitly: a published **implementation plan** sets `status: WAITING FOR RUN` and
+   `plan_exhausted: false`; a published **seed/master or sub-master plan** sets `status: WAITING FOR
+   PLAN` and `plan_exhausted: false`; `No available task to plan — every step is completed or already
+   has a plan` sets `status: WAITING FOR RUN` and `plan_exhausted: true`, so the executor's `none`
+   result reaches the C9 guard below. A `not-traversable` result or missing required plan input is a
+   hard error: record it, stop/tear down the driver per Step 2, and never invent a next target.
+   Append the iteration log and go to **Step 2**.
 
 ### `WAITING FOR RUN`
-1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superrun`'s traversal reads a fresh tree. If it STOPs,
-   pause and end this tick.
+1. **Sync gate (pre).** In `github`, run `sync_main()` (then `sync_vault()` in external vault mode).
+   In `none`, apply L5's local ownership and snapshot branch. The traversal must read authoritative
+   current bytes. If the selected gate STOPs, pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
 3. **Dispatch `superagent:superrun` in its own CLI process** — **not** an Agent-tool subagent: run
    `role-bridge.sh --tools executor` from your Bash tool, foreground, `timeout: 7200000`, after the
@@ -503,39 +561,50 @@ second successor after a crash.
    inherited workspace identity. The executor must capture before/result manifests and return a
    verified `completed-local` receipt; it must retain all local test, task-review, final-review, and
    acceptance gates while suppressing worktree/commit/PR/merge/finishing stages.
-4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
-   skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
-   `sync_main()` (then `sync_vault()` in external vault mode), then verify `superrun`'s reported merges landed:
-   the leaf's closeout report exists and is tracked (on local `main` for an internal vault; in the vault repo for an external one — L5's two-kind rule), and (if the code PR merged) its
-   squash commit is in `origin/main` history. A merged code PR but stale local `main` is the exact bug
-   this gate exists for — reconcile (ff-pull) or escalate. Do not advance on an unverified merge, and
-   surface the failure in this tick's `Findings & issues` line.
-   In local mode, replace merge/tracking proof with reopening the completed-local receipt, both
-   manifests, every reported command/review artifact, and the changed/deleted path evidence.
-5. **Retain `superrun`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
-   Report — per tick**) and **note any issue it surfaces** — a CRITICAL / ⚠️ finding, an implementation
-   inconsistency, a BLOCKED task, a CI-red code PR — for the `Findings & issues` line, independent of
-   whether it triggers escalation. **A BLOCKED/inconsistent repair report takes precedence over
-   any `none` phrase**: run the decision ladder, not the exhaustion branch. Otherwise parse:
+4. **Classify before delivery-specific be-sure.** Retain `superrun`'s verbatim report for relay (it is
+   reproduced in this tick's **Final Report — per tick**) and note every issue it surfaces. A
+   **CI-PENDING report** takes the Parking flow immediately; nothing merged, so the post-sync/be-sure
+   runs on the resume tick instead. For every other report, run the mode-selected L5 post gate,
+   classify the report, and reconcile any artifacts it actually names. Before
+   applying any delivery-specific be-sure requirement, route no-execution outcomes:
 
-   - **CI-PENDING report** (not a Final Report — `superrun` queued long CI and yielded) → **park**:
-     run the **Parking** flow (CI wait — monitor-parked): write `ci_wait:`, `status: WAITING FOR CI`,
-     arm the resume signal per driver, and end the tick there (skip step 4's be-sure — nothing merged
-     yet; the sync gate + be-sure run on the resume tick instead). Not a failure, not BLOCKED.
-   - **BLOCKED, unresolved code PR, CI-red, or contradictory report evidence** takes precedence
-     over `none` or a claimed completed leaf. Run the **Decision-escalation ladder** below.
-     Apply adopted re-plan through **supertraverse C8**, not just a loop-status edit. If the panel
-     cannot converge, use `WAITING FOR INPUT`. Never silently spin on an invisible blocked leaf.
-   - **Executed a leaf** (`github`: integration and closeout verified; `none`: completed-local
-     receipt and its command/review/acceptance evidence reopened and verified) → `status: WAITING FOR PLAN`,
+   - **NEEDS-REFINEMENT at execution entry** means superrun stopped before implementation because the
+     prepared receipt is missing or needs compatible-baseline revalidation. It legitimately has no
+     closeout or delivery evidence. Set `status: WAITING FOR PLAN`, `plan_exhausted: false`, and persist
+     `planning_operation: refine`, the reported root generation, and the reported stage as
+     `planning_target`; end result handling without requiring a closeout and without dispatching a
+     second heavy skill in this tick. The next tick selects PLAN_REFINER through the normal
+     `WAITING FOR PLAN` branch.
+   - **REPLAN-REQUIRED, BLOCKED, unresolved code PR, CI-red, contradictory evidence, or another
+     non-success report** follows its existing decision/recovery path after reconciling only artifacts
+     it actually reports. None may be rejected merely because a closeout that the outcome does not
+     claim is absent.
+   - **`none`** (no execution target, with no higher-priority blocker) claims no delivery and requires
+     no closeout. If `plan_exhausted` is false, set `status: WAITING FOR PLAN`. If true, invoke
+     **supertraverse C9** on the synchronized tree: **complete** sets `status: DONE` and records the
+     audited integration/disposition evidence; **incomplete** clears `plan_exhausted` and sets
+     `status: WAITING FOR PLAN`; **BLOCKED** enters the decision ladder with its concrete blockers.
+     An empty queue pair is only a reason to audit, never sufficient to set DONE.
+   - Only a report that claims complete delivery, partial execution, or evidence-only discovery
+     completion proceeds to the delivery be-sure gate in step 5.
+
+5. **Delivery be-sure, then successful-result routing.** For a delivery/partial-execution claim,
+   verify `superrun`'s reported artifacts landed. In `github`, the leaf's closeout record exists and is tracked (on
+   local `main` for an internal vault; in the vault repo for an external one — L5's two-kind rule) and
+   matches the execution snapshot. For partial execution, verify its open PR/head/CI identity and
+   explicit non-delivered/non-consumable result. For complete delivery, verify delivered contract
+   revisions and (if the code PR merged) its squash commit is in `origin/main` history. A merged code
+   PR but stale local `main` is the exact bug this gate exists for — reconcile (ff-pull) or escalate.
+   In `none`, replace merge/tracking proof with reopening the completed-local receipt, both manifests,
+   every reported command/review artifact, and the changed/deleted path evidence.
+   Do not advance on an unverified merge, and surface the failure in this tick's `Findings & issues`
+   line. **A BLOCKED/inconsistent repair report takes precedence over any `none` phrase**: run the
+   decision ladder, not the exhaustion branch. Otherwise parse the successful result:
+
+   - **Executed a leaf** (identity-bound complete delivery receipt or partial closeout verified; for
+     evidence-only discovery, required evidence/decision A7 publication verified without requiring a
+     code PR) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
-   - **`none`** (no execution target, with no higher-priority blocker):
-     - If `plan_exhausted` is false → `status: WAITING FOR PLAN`.
-     - If true → invoke **supertraverse C9 completion audit** on the synchronized tree.
-       **complete** → `status: DONE`, record audited integration/disposition evidence in this
-       iteration log. **incomplete** → clear `plan_exhausted`, `status: WAITING FOR PLAN`.
-       **BLOCKED** → decision ladder with the audit's concrete blockers. An empty queue pair
-       is only a reason to audit; it is never sufficient to set DONE.
 6. Append an iteration-log entry (skill, result, and `github` PR URLs or `none` receipt/snapshot
    paths). Go to **Step 2**.
 
@@ -543,7 +612,7 @@ second successor after a crash.
 
 ## Step 2 — Persist, then let the driver continue (or stop it)
 
-1. Increment `iteration`. **If a heavy skill (`superplan`/`superrun`) was invoked this tick, increment
+1. Increment `iteration`. **If a heavy skill (superplan, superrefine, superreplan, or superrun) was invoked this tick, increment
    `session_skill_count`** (the Step 0.5 handoff trigger; guard / escalation / handoff ticks that ran
    no heavy skill do **not** increment it). A parked leaf counts **once**: the tick that dispatched
    `superrun` (and then parked on its CI-PENDING yield) increments; the later ci-resume tick — even
@@ -562,8 +631,8 @@ second successor after a crash.
    decision`. The external tick wrapper enforces this: a `0`-exit session that leaves a transient
    status (with no live peer tick holding the lock) is re-flagged as a loud failed tick (exit 10).
 
-**One-skill-per-iteration is structurally guaranteed:** a `--tick` runs Step 1 → at most one of
-`superplan`/`superrun` → Step 2. Ticks never overlap — in `cron` mode they fire between turns; in
+**One-skill-per-iteration is structurally guaranteed:** a `--tick` runs Step 1 → at most one selected
+planning operation or `superrun` → Step 2. Ticks never overlap — in `cron` mode they fire between turns; in
 `external` mode the **lock** serializes fresh-session ticks (a long tick just makes the next fire
 no-op until the lock releases). Ticks are idempotent — a tick that finds nothing to do no-ops.
 
@@ -621,7 +690,8 @@ Rung-2 escalation additionally populates the `⚠️ Needs you` block.)
 
 After each tick, report to the caller and end the turn. The report has two jobs beyond the tick header:
 **(a) relay the delegated skill's verbatim Final Report** so the caller sees on the CLI exactly what
-`superplan` / `superrun` produced — the rich output (files created/modified, findings, PRs) that would
+the selected planning operation or `superrun` produced — the rich output (files created/modified,
+findings, PRs) that would
 otherwise stay buried in the subagent; and **(b) always surface issues** — every problem observed this
 tick, even one the loop already resolved itself.
 
@@ -629,7 +699,7 @@ tick, even one the loop already resolved itself.
 
     **Goal:** <master_plan path>
     **Loop file:** <loop-file path>
-    **This tick:** <superplan | superrun | park (CI wait) | ci-resume | guard | resume | escalation> — <one-line result>
+    **This tick:** <superplan | superrefine | superreplan | superrun | park (CI wait) | ci-resume | guard | resume | escalation> — <one-line result>
     **Status:** <new status>   (driver: <cron|external>, <scheduled / stopped / paused / parked on CI>)
 
     **PRs this tick:** <plan/code/closeout PR urls, or none>
@@ -640,7 +710,7 @@ tick, even one the loop already resolved itself.
     autonomously). Surface these even when the loop handled them itself. If genuinely none: none>
 
     ### Delegated skill report (verbatim)
-    <the complete `superplan` / `superrun` Final Report exactly as the subagent returned it. A park
+    <the complete selected planning operation / `superrun` Final Report exactly as the child returned it. A park
     tick relays the CI-PENDING report verbatim instead (with the armed Monitor / awaited run ids
     named in "This tick"). For a tick that dispatched no heavy skill — guard / resume /
     crash-recovery / escalation-only — write: none (no skill dispatched this tick)>

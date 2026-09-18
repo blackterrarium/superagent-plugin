@@ -1,0 +1,3 @@
+FAIL: late_predecessor_closeout.late_closeout_action: expected "preserve-history", got "reconcile-delivery"
+FAIL: replan_split_merge_mapping.outcome: expected "continue", got "PREPARED"
+FAIL: discovery_completion_without_code_pr.pr_cell: missing required field

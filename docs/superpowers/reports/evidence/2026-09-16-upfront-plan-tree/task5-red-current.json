@@ -1,0 +1,114 @@
+{
+  "supervisor_native_refinement": {
+    "reason": "supertraverse C6's current Task 1 transition gate returns BLOCKED for every valid upfront-v1 selection; PLAN_REFINER routing is a dormant post-Task-5 recipe.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_bridged_refinement": {
+    "reason": "supertraverse C6's current Task 1 transition gate blocks every upfront-v1 selection before the dormant bridged PLAN_REFINER route can be selected.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_prepared_target": {
+    "reason": "A valid preparation receipt does not bypass supertraverse C6's current upfront-v1 transition gate, which blocks all selection until caller routing is installed.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_adopted_legacy_repair": {
+    "reason": "For an unmarked legacy root, supertraverse C8 permits the current pre-Task-5 supervisor's transitional PLANNER/superplan single-leaf repair fallback; the supplied REPLANNER pins are not selected.",
+    "selected_role": "PLANNER",
+    "operation": "plan",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "P0",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_adopted_batch_repair": {
+    "reason": "supertraverse C8 says the pre-Task-5 transitional fallback never handles an upfront batch, while C6's active upfront transition gate remains BLOCKED even after artifact reconciliation.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_stale_hints": {
+    "reason": "Crash recovery restores WAITING FOR PLAN, but stale hints cannot activate the future REPLANNER path; the pending upfront batch remains subject to C6's current BLOCKED transition gate.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_post_leaf_refinement": {
+    "reason": "Verified closeout of S01 does not remove the current C6 upfront-v1 transition gate, so S02 cannot be selected for dormant PLAN_REFINER routing.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_execution_replan_required": {
+    "reason": "superagent's WAITING FOR RUN result handling sends a REPLAN-REQUIRED/BLOCKED execution finding through the decision ladder; with no adopted authority after the panel, it remains WAITING FOR INPUT.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0
+  },
+  "supervisor_legacy_incremental_planning": {
+    "reason": "superstage S1 resolves an unmarked root as legacy incremental regardless of SUPER_PLANNING_MODE, and superagent's WAITING FOR PLAN branch dispatches the normal PLANNER/superplan operation.",
+    "selected_role": "PLANNER",
+    "operation": "plan",
+    "model_source": "harness-default",
+    "effort_source": "harness-default",
+    "target": "P1",
+    "next_state": "PLANNING",
+    "heavy_dispatches": 1
+  },
+  "supervisor_missing_native_definition": {
+    "reason": "The native PLAN_REFINER definition is relevant only to the dormant future route; current supertraverse C6 blocks every upfront-v1 selection before any such dispatch or fallback.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  },
+  "supervisor_missing_bridge_cli": {
+    "reason": "The bridged REPLANNER CLI is a future controller route; C8 keeps the current supervisor from using its fallback for upfront batches and C6 remains BLOCKED.",
+    "selected_role": "none",
+    "operation": "none",
+    "model_source": "none",
+    "effort_source": "none",
+    "target": "none",
+    "next_state": "WAITING FOR INPUT",
+    "heavy_dispatches": 0,
+    "outcome": "BLOCKED"
+  }
+}

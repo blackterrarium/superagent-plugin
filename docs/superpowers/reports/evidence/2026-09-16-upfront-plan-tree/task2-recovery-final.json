@@ -1,0 +1,17 @@
+{
+  "resume_identical_source": {
+    "reason": "supergoal's resumable scratch interface says a matching draft reuses its folder, paths, IDs, and source snapshot and must not allocate another folder or stage ID; step 7's confirmation gate is reapplied and has not been satisfied.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "resume",
+    "duplicate_stage_ids": false,
+    "duplicate_goal_folder": false
+  },
+  "resume_changed_source": {
+    "reason": "supergoal's resumable scratch interface requires a changed source digest to have an explicitly revised scratch draft, preserves the old draft, and reports DRAFT-INCOMPLETE with Draft action revise; authoring never executes code under superauthor A1.",
+    "outcome": "DRAFT-INCOMPLETE",
+    "publication": "scratch",
+    "draft_action": "revise",
+    "code_execution": false
+  }
+}

@@ -177,17 +177,20 @@ LIFE_ENV=(PATH="$T/bin:/usr/bin:/bin" FORBIDDEN_LOG="$FORBIDDEN_LOG" \
 check "local launch dry-run works in an ordinary directory" env "${LIFE_ENV[@]}" \
   bash "$ROOT/scripts/launch.sh" "$PLAN" --dry-run --slug local
 
+check "local supercode launch refuses before git or GitHub access" env "${LIFE_ENV[@]}" \
+  bash -c 'out="$("$1/scripts/launch.sh" "$2" --supervisor supercode --dry-run 2>&1)"; rc=$?; test "$rc" -eq 2 && printf "%s" "$out" | grep -q "supercode requires SUPER_GIT_MODE=github" && test ! -s "$FORBIDDEN_LOG"' _ "$ROOT" "$LIFE"
+
 check "local bootstrap runs under owned workspace without GitHub auth" env "${LIFE_ENV[@]}" \
   bash -c 'before="$(test -f "$HARNESS_LOG" && wc -l <"$HARNESS_LOG" || echo 0)"; "$1/scripts/bootstrap.sh" "$2" >/dev/null; after="$(wc -l <"$HARNESS_LOG")"; test "$after" -gt "$before" && grep -q -- "--skip-git-repo-check" "$HARNESS_LOG" && test ! -d "$REPO/.superagent-runtime/workspace.lockd"' _ "$ROOT" "$PLAN"
 
 check "local launch registers project root and mode" env "${LIFE_ENV[@]}" \
-  bash -c '"$1/scripts/launch.sh" "$2" --slug local --interval 30m >/dev/null && envf="$XDG_CONFIG_HOME/superagent/local.env" && physical="$(cd "$REPO" && pwd -P)" && set -a && . "$envf" && set +a && test "$SUPERAGENT_GIT_MODE" = none && test "$SUPERAGENT_PROJECT_ROOT" = "$physical" && grep -q "^git_mode: none$" "$LOOP_FILE" && grep -q "^project_root: $physical$" "$LOOP_FILE"' _ "$ROOT" "$PLAN"
+  bash -c '"$1/scripts/launch.sh" "$2" --slug local --interval 30m >/dev/null && . "$1/scripts/_common.sh" && envf="$XDG_CONFIG_HOME/superagent/local.env" && physical="$(cd "$REPO" && pwd -P)" && mode="$(superagent_registry_value "$envf" SUPERAGENT_GIT_MODE)" && project="$(superagent_registry_value "$envf" SUPERAGENT_PROJECT_ROOT)" && loop="$(superagent_registry_value "$envf" LOOP_FILE)" && test "$mode" = none && test "$project" = "$physical" && grep -q "^git_mode: none$" "$loop" && grep -q "^project_root: $physical$" "$loop"' _ "$ROOT" "$PLAN"
 
 check "local tick uses owned workspace and Codex skip-repo flag" env "${LIFE_ENV[@]}" \
-  bash -c 'set -a; . "$XDG_CONFIG_HOME/superagent/local.env"; set +a; LOG_FILE="$3" "$1/scripts/superagent-tick.sh" && grep -q -- "--skip-git-repo-check" "$HARNESS_LOG" && test ! -d "$(cd "$2" && pwd -P)/.superagent-runtime/workspace.lockd"' _ "$ROOT" "$LIFE" "$T/tick.log"
+  bash -c '. "$1/scripts/_common.sh"; envf="$XDG_CONFIG_HOME/superagent/local.env"; export REPO="$(superagent_registry_value "$envf" REPO)" LOOP_FILE="$(superagent_registry_value "$envf" LOOP_FILE)" SUPERAGENT_GIT_MODE="$(superagent_registry_value "$envf" SUPERAGENT_GIT_MODE)" SUPERAGENT_PROJECT_ROOT="$(superagent_registry_value "$envf" SUPERAGENT_PROJECT_ROOT)" SUPERAGENT_SLUG="$(superagent_registry_value "$envf" SUPERAGENT_SLUG)" SUPERAGENT_SUPERVISOR="$(superagent_registry_value "$envf" SUPERAGENT_SUPERVISOR)"; LOG_FILE="$3" "$1/scripts/superagent-tick.sh" && grep -q -- "--skip-git-repo-check" "$HARNESS_LOG" && test ! -d "$(cd "$2" && pwd -P)/.superagent-runtime/workspace.lockd"' _ "$ROOT" "$LIFE" "$T/tick.log"
 
 check "busy local workspace makes a tick yield without dispatch" env "${LIFE_ENV[@]}" \
-  bash -c 'marker="$3"; python3 "$1/scripts/workspace-state.py" run --root "$2" -- /bin/sh -c '\''touch "$1"; sleep 2'\'' _ "$marker" >/dev/null 2>&1 & holder=$!; while test ! -f "$marker"; do sleep 0.02; done; before="$(wc -l <"$HARNESS_LOG")"; set -a; . "$XDG_CONFIG_HOME/superagent/local.env"; set +a; LOG_FILE="$4" "$1/scripts/superagent-tick.sh"; rc=$?; after="$(wc -l <"$HARNESS_LOG")"; wait "$holder"; test "$rc" -eq 0 && test "$before" -eq "$after"' _ "$ROOT" "$LIFE" "$T/busy.marker" "$T/busy-tick.log"
+  bash -c 'marker="$3"; python3 "$1/scripts/workspace-state.py" run --root "$2" -- /bin/sh -c '\''touch "$1"; sleep 2'\'' _ "$marker" >/dev/null 2>&1 & holder=$!; while test ! -f "$marker"; do sleep 0.02; done; before="$(wc -l <"$HARNESS_LOG")"; . "$1/scripts/_common.sh"; envf="$XDG_CONFIG_HOME/superagent/local.env"; export REPO="$(superagent_registry_value "$envf" REPO)" LOOP_FILE="$(superagent_registry_value "$envf" LOOP_FILE)" SUPERAGENT_GIT_MODE="$(superagent_registry_value "$envf" SUPERAGENT_GIT_MODE)" SUPERAGENT_PROJECT_ROOT="$(superagent_registry_value "$envf" SUPERAGENT_PROJECT_ROOT)" SUPERAGENT_SLUG="$(superagent_registry_value "$envf" SUPERAGENT_SLUG)" SUPERAGENT_SUPERVISOR="$(superagent_registry_value "$envf" SUPERAGENT_SUPERVISOR)"; LOG_FILE="$4" "$1/scripts/superagent-tick.sh"; rc=$?; after="$(wc -l <"$HARNESS_LOG")"; wait "$holder"; test "$rc" -eq 0 && test "$before" -eq "$after"' _ "$ROOT" "$LIFE" "$T/busy.marker" "$T/busy-tick.log"
 
 PEER="$T/peer project"
 PEER_GOAL="$LIFE/vault/2026-09-17-peer"
@@ -217,11 +220,11 @@ check "local status reports GitHub auth disabled" env "${LIFE_ENV[@]}" \
 MIXED_XDG="$T/mixed-xdg"
 MIXED_BIN="$T/mixed-bin"
 MIXED_GH_LOG="$T/mixed-gh.log"
-LOCAL_LOOP="$(bash -c 'set -a; . "$1"; printf "%s" "$LOOP_FILE"' _ "$T/xdg/superagent/local.env")"
+LOCAL_LOOP="$(sed -n 's/^LOOP_FILE=//p' "$T/xdg/superagent/local.env")"
 mkdir -p "$MIXED_XDG/superagent" "$MIXED_BIN"
 {
-  printf 'REPO=%q\n' "$LIFE"
-  printf 'LOOP_FILE=%q\n' "$LOCAL_LOOP"
+  printf 'REPO=%s\n' "$LIFE"
+  printf 'LOOP_FILE=%s\n' "$LOCAL_LOOP"
   printf '%s\n' 'SUPERAGENT_GIT_MODE=none' 'GH_TOKEN=must-not-leak'
 } >"$MIXED_XDG/superagent/a-local.env"
 {
@@ -245,7 +248,7 @@ check "mixed status isolates each registry row and probes only GitHub mode" env 
   bash -c 'out="$("$1/scripts/status.sh" --json)"; printf "%s" "$out" | grep -q '\''"slug":"a-local".*"gh_auth":"disabled"'\'' && printf "%s" "$out" | grep -q '\''"slug":"z-github".*"gh_auth":"ok:mixed-test"'\'' && test -s "$MIXED_GH_LOG" && ! grep -q must-not-leak "$MIXED_GH_LOG"' _ "$ROOT"
 
 check "local answer records input without git" env "${LIFE_ENV[@]}" \
-  bash -c 'envf="$XDG_CONFIG_HOME/superagent/local.env"; set -a; . "$envf"; set +a; loop="$LOOP_FILE"; sed -e "s/^status:.*/status: WAITING FOR INPUT/" "$loop" >"$loop.tmp"; mv "$loop.tmp" "$loop"; "$1/scripts/answer.sh" --no-kick local proceed >/dev/null; grep -q "^answer: proceed$" "$loop"' _ "$ROOT"
+  bash -c '. "$1/scripts/_common.sh"; envf="$XDG_CONFIG_HOME/superagent/local.env"; loop="$(superagent_registry_value "$envf" LOOP_FILE)"; sed -e "s/^status:.*/status: WAITING FOR INPUT/" "$loop" >"$loop.tmp"; mv "$loop.tmp" "$loop"; "$1/scripts/answer.sh" --no-kick local proceed >/dev/null; grep -q "^answer: proceed$" "$loop"' _ "$ROOT"
 
 check "local stop and force-stop inspection avoid worktree probes" env "${LIFE_ENV[@]}" \
   bash -c '"$1/scripts/stop.sh" "$2" --dry-run --slug local >/dev/null && "$1/scripts/force-stop.sh" --slug local >/dev/null' _ "$ROOT" "$PLAN"
@@ -260,7 +263,7 @@ check "local force-stop reaps only a provably dead workspace lock" env "${LIFE_E
   bash -c 'physical="$(cd "$REPO" && pwd -P)"; lock="$physical/.superagent-runtime/workspace.lockd"; mkdir -p "$lock"; printf "%s\n" '\''{"schema":1,"token":"dead-token","owner_pid":99999999,"process_group":null,"operation":"dead tick"}'\'' >"$lock/owner.json"; "$1/scripts/force-stop.sh" --slug local --apply --no-kick >/dev/null; test ! -d "$lock"' _ "$ROOT"
 
 check "recorded local mode mismatch stops before harness dispatch" env "${LIFE_ENV[@]}" \
-  bash -c 'printf "%s\n" "SUPER_GIT_MODE=github" "SUPER_HARNESS=codex" >"$REPO/.superenv"; before="$(wc -l <"$HARNESS_LOG")"; set -a; . "$XDG_CONFIG_HOME/superagent/local.env"; set +a; LOG_FILE="$2" "$1/scripts/superagent-tick.sh" >/dev/null 2>&1; rc=$?; after="$(wc -l <"$HARNESS_LOG")"; test "$rc" -eq 2 && test "$before" -eq "$after"' _ "$ROOT" "$T/mismatch.log"
+  bash -c 'printf "%s\n" "SUPER_GIT_MODE=github" "SUPER_HARNESS=codex" >"$REPO/.superenv"; before="$(wc -l <"$HARNESS_LOG")"; . "$1/scripts/_common.sh"; envf="$XDG_CONFIG_HOME/superagent/local.env"; export REPO="$(superagent_registry_value "$envf" REPO)" LOOP_FILE="$(superagent_registry_value "$envf" LOOP_FILE)" SUPERAGENT_PROJECT_ROOT="$(superagent_registry_value "$envf" SUPERAGENT_PROJECT_ROOT)" SUPERAGENT_SLUG="$(superagent_registry_value "$envf" SUPERAGENT_SLUG)" SUPERAGENT_SUPERVISOR="$(superagent_registry_value "$envf" SUPERAGENT_SUPERVISOR)"; unset SUPER_GIT_MODE; LOG_FILE="$2" "$1/scripts/superagent-tick.sh" >/dev/null 2>&1; rc=$?; after="$(wc -l <"$HARNESS_LOG")"; test "$rc" -eq 2 && test "$before" -eq "$after"' _ "$ROOT" "$T/mismatch.log"
 
 GIT_METADATA_AFTER="$(find "$LIFE/.git" -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}')"
 if [[ "$GIT_METADATA_BEFORE" == "$GIT_METADATA_AFTER" ]]; then

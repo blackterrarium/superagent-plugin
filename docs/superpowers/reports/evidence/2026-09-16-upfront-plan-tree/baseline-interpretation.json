@@ -1,0 +1,60 @@
+{
+  "root_output": {
+    "answer": "root_only",
+    "explanation": "supergoal publishes exactly one root seed/master plan and leaves every top-level row unplanned for later superplan descent; it does not publish all leaf stage plans.",
+    "citations": [
+      "skills/supergoal/SKILL.md:19-20 (superplan plans one step; supergoal creates the root)",
+      "skills/supergoal/SKILL.md:28-30 (supergoal produces exactly one root seed/master plan)"
+    ]
+  },
+  "bounded_unknown_allowed": {
+    "answer": false,
+    "explanation": "Exact requirements, contracts, and scenarios are insufficient for a written executable leaf when helper filenames and implementation code are still unknown. A2 requires exact touched file paths and actual code, and A3 rejects undefined references and prose-only implementation steps. Such a stage may be plannable from a seed, but it does not yet satisfy the implementation-plan standard.",
+    "citations": [
+      "skills/superauthor/SKILL.md:84-90 (name exact files, show actual code, and map file responsibilities first)",
+      "skills/superauthor/SKILL.md:166-176 (no placeholders, prose-only code steps, or undefined types/functions/methods)"
+    ]
+  },
+  "open_provider_execution": {
+    "answer": "S02_is_selected_for_execution",
+    "explanation": "Assuming S01 has already executed and is represented by the normal executed-PR-open/closeout evidence, traversal skips S01 as closed for descent and selects S02 because its written leaf has no closeout. The traversal contract does not gate a consumer leaf on its provider PR being merged; an open provider PR prevents ancestor completion, not descent to S02.",
+    "citations": [
+      "skills/supertraverse/SKILL.md:130-144 (executed — PR open or a Closeout link is closed for descent)",
+      "skills/supertraverse/SKILL.md:180-184 (execution mode selects the first written, unexecuted leaf)",
+      "skills/supertraverse/SKILL.md:208-225 (an incomplete leaf is the execution target; a closed/open-PR leaf is skipped)"
+    ]
+  },
+  "after_leaf": {
+    "answer": "WAITING_FOR_PLAN_then_superplan",
+    "explanation": "After one leaf is executed and its integration/closeout is verified, the supervisor resets plan_exhausted and moves to WAITING FOR PLAN. The next tick dispatches superplan; it does not immediately execute another leaf in the same tick.",
+    "citations": [
+      "skills/superagent/SKILL.md:576-577 (executed leaf transitions to WAITING FOR PLAN)",
+      "skills/superagent/SKILL.md:507-521 (WAITING FOR PLAN dispatches superplan)",
+      "skills/superrun/SKILL.md:33 (one leaf plan per invocation)"
+    ]
+  },
+  "repair_scope": {
+    "answer": "single_leaf_successor_only",
+    "explanation": "C8 specifies a repair request for one affected active leaf and publication of one successor for the selected repair row. It reopens that row's ancestor path while preserving unaffected siblings. It does not specify one atomic publication that invalidates and republishes B plus dependent C. C would require its own authorized repair/reconciliation if it is also invalidated; independent D remains preserved and eligible under ordinary DFS ordering.",
+    "citations": [
+      "skills/supertraverse/SKILL.md:309-323 (identify one affected active leaf and preserve unaffected siblings)",
+      "skills/supertraverse/SKILL.md:345-364 (publish one new implementation plan for the selected repair row and reject multiple successors)",
+      "skills/supertraverse/SKILL.md:189-213 (ordinary traversal is top-to-bottom pre-order DFS)"
+    ]
+  },
+  "roles": {
+    "answer": {
+      "repair_request_author": "superagent supervisor/controller",
+      "repair_successor_author": "SUPER_MODEL_PLANNER via superplan",
+      "ordinary_stage_plan_author": "SUPER_MODEL_PLANNER via superplan",
+      "stage_executor": "SUPER_MODEL_EXECUTOR via superrun"
+    },
+    "explanation": "The controller applies the durable C8 repair request, but superplan publishes the successor. Both repair successors and ordinary stage plans use the planner role; the current contracts define no separate stage-preparation author role. Execution is separately assigned to the executor role.",
+    "citations": [
+      "skills/supertraverse/SKILL.md:302-307 (superagent applies the decision; superplan publishes the successor)",
+      "skills/superagent/SKILL.md:510-520 (superplan dispatch uses SUPER_MODEL_PLANNER)",
+      "skills/superagent/SKILL.md:546-554 (superrun dispatch uses SUPER_MODEL_EXECUTOR)",
+      "skills/superagent/SKILL.md:254-256 (planner/executor role-key mapping)"
+    ]
+  }
+}

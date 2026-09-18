@@ -197,7 +197,9 @@ cp "$ROOT/templates/super-role-agent.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/super-role-bridge-agent.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/relay-preamble.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/vault-root.md" "$TMP/plugins/superagent/templates/"
+cp "$ROOT/templates/coding-loop-diagnosis.md" "$TMP/plugins/superagent/templates/"
 mkdir -p "$TMP/plugins/superagent/scripts"
+cp "$ROOT/scripts/_coding_loop_state.py" "$ROOT/scripts/_coding_loop_evidence.py" "$TMP/plugins/superagent/scripts/"
 cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" \
   "$ROOT/scripts/workspace-state.py" "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/plugins/superagent/scripts/"
 chmod +x "$TMP/plugins/superagent/scripts/role-bridge.sh"
@@ -208,8 +210,8 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   # "(SUPER_MODEL_SUPERVISOR ..." comment line) with the Codex wording.
   /^# Model values:/ { inhdr=1
     print "# Model values: \"inherit\", or [<harness>:]<model> where <harness> is claude | codex | cursor | pi"
-    print "# and <model> is that harness'"'"'s native model string — codex: a Codex model (gpt-5.6-sol); claude:"
-    print "# a tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5); cursor: `agent --list-models`;"
+    print "# and <model> is that harness'"'"'s native model string — codex: a Codex model (gpt-6-astra); claude:"
+    print "# a tier (sonnet|opus|haiku|fable) or full ID (claude-fable-5-1); cursor: `agent --list-models`;"
     print "# pi: <provider>/<model> (openai/gpt-5, anthropic/claude-opus-5). The prefix is optional when the"
     print "# model is recognizable (tiers/claude-* → claude, gpt-*/o<n>/codex* → codex, a \"/\" → pi)."
     print "# A role whose harness differs from SUPER_HARNESS is BRIDGED: dispatched through the same"
@@ -241,7 +243,9 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   { print }
 ' | sed \
   -e 's/^SUPER_MODEL_SUPERVISOR=claude:[^[:space:]]*/SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_PLANNER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_PLANNER=codex:gpt-6-astra/' \
+  -e 's/^SUPER_MODEL_PLAN_REFINER=claude:[^[:space:]]*/SUPER_MODEL_PLAN_REFINER=codex:gpt-5.6-terra/' \
+  -e 's/^SUPER_MODEL_REPLANNER=claude:[^[:space:]]*/SUPER_MODEL_REPLANNER=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_EXECUTOR=claude:[^[:space:]]*/SUPER_MODEL_EXECUTOR=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_PANEL=claude:[^[:space:]]*/SUPER_MODEL_PANEL=codex:gpt-5.6-sol/' \
   -e 's/^SUPER_MODEL_IMPLEMENTER=claude:[^[:space:]]*/SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra/' \

@@ -1,0 +1,3 @@
+FAIL: merged_lost_closeout_response.outcome: expected "continue", got "done"
+FAIL: replan_atomicity_violation.outcome: expected "BLOCKED", got "continue"
+FAIL: supervisor_execution_replan_required.target: expected "none", got "S02"

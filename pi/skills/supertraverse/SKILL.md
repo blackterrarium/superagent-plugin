@@ -13,7 +13,8 @@ license: MIT
 >   on Pi — treat any residual mention as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping in the SUPERVISOR (`superagent`, `superloop`): "Agent tool" / "dispatch a
 >   subagent" = a blocking `bash` call to `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh`
->   (`superplan`, `superrun`) or `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
+>   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
+>   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
 > - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
@@ -39,9 +40,10 @@ defines how to walk that tree — **down** (descent: find the next available tas
 depends on.
 
 **Consumers:** `superplan` invokes this for **descent** (to find the task to plan) and **ascent in
-planning mode** (to mark ancestors in-progress). `superfinish` invokes it for **ascent in completion
-mode** (to flip ancestors complete). This skill is the *only* place these mechanics are defined — the
-consumer skills must not restate or fork them.
+planning mode** (to mark ancestors in-progress). `superrun` invokes execution descent. `superfinish`
+invokes **ascent in completion mode** (to flip ancestors complete). Upfront consumers also invoke
+`superstage` and apply S1–S3 before acting on traversal. These skills are the only places these
+mechanics are defined — consumer skills must not restate or fork them.
 
 This skill **describes algorithms the calling agent carries out inline** with its file tools (Read /
 Edit). It does not itself write source code, run anything, or commit. The consumer skill owns reading
@@ -99,11 +101,14 @@ Use these exact spellings; both consumer skills depend on them:
 - `in progress (partially executed)` — at least one descendant row has reached a closed state
   (`completed-and-merged` / `done` / `completed-local` / `executed — PR open` / `deferred` /
   `declined` / `out-of-scope`),
-  at least one other is still `incomplete`, `PLAN WRITTEN — ready to execute`, or
+  at least one other is still `incomplete`, `PLAN WRITTEN — needs refinement`,
+  `PLAN WRITTEN — ready to execute`, or
   `in progress (planning underway)` (set by completion-mode ascent on partial ancestors). The
   parenthetical accurately describes the state: execution has started but is not finished.
+- `PLAN WRITTEN — needs refinement` — an upfront stage contract exists but has no current verified
+  preparation receipt. It is planned, unexecuted, and not an execution target.
 - `PLAN WRITTEN — ready to execute` — this step's *own* plan exists but is not executed (set by
-  superplan on the immediate-parent row).
+  legacy superplan or by successful upfront preparation on the immediate-parent row).
 - `executed — PR open` — this step's plan ran end-to-end and a closeout report exists, but the code
   PR has not yet been squash-merged to `main` (set by completion-mode ascent / superfinish when the
   code PR is still open). A follow-up superfinish (or manual update) flips this to
@@ -118,7 +123,8 @@ Use these exact spellings; both consumer skills depend on them:
 **State-progression invariant.** A row only ever moves "rightward" along the lifecycle:
 
 ```
-incomplete  →  in progress (planning underway)  →  PLAN WRITTEN — ready to execute
+incomplete  →  in progress (planning underway)  →  PLAN WRITTEN — needs refinement
+                                                →  PLAN WRITTEN — ready to execute
             →  in progress (partially executed)  (only at internal nodes — leaves skip this)
             →  executed — PR open  →  completed-and-merged
             →  completed-local                 (local mode only)
@@ -126,6 +132,11 @@ incomplete  →  in progress (planning underway)  →  PLAN WRITTEN — ready to
 
 `deferred` / `declined` / `out-of-scope` are terminal off-ramps available from any earlier state.
 Both ascents are forbidden from downgrading a row to a state earlier in this sequence.
+Superstage S5 invalidation is the one readiness correction: an **unstarted** upfront row whose receipt
+or relevant evidence no longer validates moves from `PLAN WRITTEN — ready to execute` back to
+`PLAN WRITTEN — needs refinement`, preserving the old receipt as history. Never apply that correction
+to a running or completed stage; those retain their execution/closeout history and use recovery or
+explicit corrective work.
 **Authorized repair is a separate transition (C8):** `repair requested` marks an adopted
 repair awaiting a successor plan. C8 alone may reopen the affected row and ancestors;
 ordinary ascent never does. `repair requested` is neither closed nor merged-on-main.
@@ -165,6 +176,10 @@ is open for planning regardless of old Plan/Closeout links or a predecessor bann
 A missing/invalid repair record is BLOCKED, never permission to execute the old plan.
 Status matching below means affirmative state in the Status cell, not substrings in
 comments (`not merged` is not `merged`). A closeout proves an attempt ended, not integration.
+These status predicates control navigation only. They never prove integration or satisfy an upfront
+dependency: superstage S3 and C9 require the underlying PR/commit, closeout, contract-delivery, and
+disposition evidence. In particular, an approved provider decline/defer is not evidence that its
+live consumer received the contract.
 
 - **Closed-for-descent row** (descent skip rule, C6): its **Status** text contains any of
   `completed-and-merged` / `done` / `merged` / `shipped` / `closed-out` / `executed — PR open` /
@@ -198,7 +213,35 @@ parent-seed references.
 
 ## C6. DESCENT — find the deepest target row (mode-parameterized)
 
-**Input:** a root plan file and a **mode** — `planning` (default) or `execution`. Descent is one
+**Input:** a root plan file and a **mode** — `planning` (default) or `execution`. First invoke
+`superstage` and apply S1 in **active** context:
+
+- For an explicit incremental or unmarked legacy root, preserve the C1–C9 algorithm below exactly;
+  current environment defaults do not change it.
+- For `upfront-v1`, apply S2 to the complete active graph before selecting anything. Invalid metadata,
+  links, stage IDs/contracts, dependency cycles, unreachable work, incomplete coverage, or a bad tree
+  review returns **BLOCKED**. A blank Plan cell in active upfront scope is a broken publication, never
+  an incremental planning target. An active replan also blocks selection.
+- **Upfront selection recipe:** after S1/S2 validate the active graph and no replan barrier exists,
+  walk active leaves in priority DFS order. Skip a
+  closed stage only with S3/C9 verified integration or authorized terminal-disposition evidence;
+  never trust a row label or closeout alone. Require S3 delivery evidence for every prerequisite.
+  An unsatisfied dependency makes that leaf ineligible, but does not stop the walk: continue to a
+  later independent eligible stage.
+
+  For each dependency-eligible unstarted leaf, apply S5 directly. A missing receipt returns
+  **`NEEDS-REFINEMENT`** with root, stage ID/path, and the missing evidence; neither `superplan` nor
+  `superrun` edits or executes it under the wrong role. A receipt whose only possible change is an
+  unrelated code baseline/HEAD advance returns **`NEEDS-REFINEMENT`** marked *bounded
+  revalidation*, so PLAN_REFINER records a fresh compatible validation receipt. A source, stage,
+  predecessor, contract, or finding mismatch is **`REPLAN-REQUIRED`** with its evidence and affected
+  stage; it must enter the decision/replanning path rather than being repaired during selection.
+  Missing or contradictory evidence is **BLOCKED**. The first valid prepared eligible leaf is an
+  execution target in execution mode; planning mode skips it. If no executable target exists while
+  active work still has unsatisfied dependencies, return **BLOCKED** with the incomplete dependency
+  evidence, never `none`/DONE.
+
+Descent is one
 pre-order DFS whose *target predicate* is selected by mode (symmetric with C7's `planning` /
 `completion` ascent modes); everything else — the DFS walk, C1 schema, C3 link inference, C4
 leaf/internal + completed-row tests, and `not-traversable` root handling — is shared.
@@ -214,8 +257,12 @@ leaf/internal + completed-row tests, and `not-traversable` root handling — is 
   planning-mode ascent; `superfinish` performs completion-mode ascent later via parent-seed
   chaining, C5/C7).
 
-Both modes return **`none`** when no node yields a target, **BLOCKED** for invalid repair state,
-and **`not-traversable`** when the root is not a progress-report tree.
+For upfront roots, both modes may return **`none`** only when all active obligations are resolved,
+**`NEEDS-REFINEMENT`** for the first
+dependency-eligible unprepared/stale stage, **`REPLAN-REQUIRED`** for a relevant broken assumption,
+**BLOCKED** for incomplete dependency evidence, or an eligible prepared execution target.
+Incremental traversal continues to return **BLOCKED** for invalid repair state, **`none`** when no
+target exists, and **`not-traversable`** when the root is not a progress-report tree.
 
 Pre-order DFS, honoring priority order (top-to-bottom = highest rank first):
 
@@ -224,14 +271,17 @@ Pre-order DFS, honoring priority order (top-to-bottom = highest rank first):
    matrices) and no step-tracking bullet list — it is **not traversable**: return
    **`not-traversable`** (distinct from "none") so the caller can report that the root is not
    maintained as a progress-report tree, rather than guess a stale target from an orchestration table.
-   (This `not-traversable` outcome only arises at the **root**: a child is only descended into when
+   For an upfront root this condition is BLOCKED under S2. For an incremental root, the
+   `not-traversable` outcome only arises at the **root**: a child is only descended into when
    C4's leaf/internal test already confirmed it carries a progress-report table; a node reached via a
-   `Plan` link that turns out to lack one is a **leaf**, skipped, not an error.)
+   `Plan` link that turns out to lack one is a **leaf**, skipped, not an error.
 1. Walk that progress-report table's rows top to bottom.
 2. For each row, first handle `repair requested` per C8: **planning → target this row**,
    **execution → skip** (the predecessor is not executable again). Validate its repair record;
-   if absent/inconsistent return BLOCKED with the row and reason. Otherwise **skip** if it is
-   a closed-for-descent row (C4); otherwise apply the mode's per-row rule:
+   if absent/inconsistent return BLOCKED with the row and reason. For an upfront root, apply S3 and
+   C9 evidence before skipping a leaf or subtree as completed; status text alone does not short-circuit
+   that check. For an incremental root, **skip** a closed-for-descent row (C4). Otherwise apply the
+   mode's per-row rule; the S3 upfront leaf rule above precedes the legacy completeness predicate:
    - **planning mode:** if the row has **no child-plan link** (C3) → **this is the target.** Stop.
      (The first not-done row with no child plan, in DFS order, is the highest-priority unplanned
      task.) If it links to a plan, apply the leaf/internal test (C4): **internal → recurse into
@@ -267,7 +317,8 @@ the root, not the root itself. (Execution mode returns only the target leaf path
 path.)
 
 **Return-and-continue.** Once descent has produced its result — a target (+ descent path in planning
-mode, or leaf path in execution mode), `none`, or `not-traversable` — return that result to the calling
+mode, or leaf path in execution mode), `NEEDS-REFINEMENT`, `REPLAN-REQUIRED`, BLOCKED, `none`, or
+`not-traversable` — return that result to the calling
 skill (`superplan` for planning mode, `superrun` for execution mode) and immediately continue
 executing the caller's next section. Do NOT end your turn after the descent. Do NOT print a
 "descent complete" summary as if it were a final answer; the caller's Final Report is the user's only
@@ -284,7 +335,10 @@ At each **ancestor** along the path, locate the row whose **active** child-plan 
 at the child you just came from. For completion ascent, a `repair requested` row or a row
 whose active Plan now points to a successor MUST NOT be advanced by the predecessor's
 closeout. Record historical evidence only and return without changing active rows or ancestors.
-Never match a row through its repair history. Otherwise apply the mode's update:
+Never match a row through its repair history. If the predecessor actually merged, first record its
+delivery/contracts and PR disposition in the C8 history; it stays completed history and any needed
+correction is fresh work. A late predecessor closeout never closes the successor. Otherwise apply the
+mode's update:
 
 - **Planning mode** (superplan, after a new plan is written): set that row's **Status** →
   `in progress (planning underway)` **only if** it was previously not-started / `incomplete`. **Never
@@ -300,21 +354,34 @@ Never match a row through its repair history. Otherwise apply the mode's update:
     authorized disposition and no unresolved repair. Otherwise retain/advance partial progress.
     Never fill a PR column or infer a merge. Then skip the GitHub leaf/ancestor rules below.
   - **Leaf-row update** (the row pointing at the executed implementation plan): set the row's
-    Status based on the leaf's code-PR merge state at superfinish time —
+    Status based on the leaf's authoritative closeout record at superfinish time. For upfront work,
+    first verify its execution snapshot (generation, Stage ID/revision, historical preparation
+    receipt/digest and reviewed revisions) and the claimed outcome. A partial record binds the verified
+    open PR/head/CI evidence but is non-delivered and non-consumable; a delivery receipt additionally
+    verifies delivered contract revisions and actual integration. The
+    S5 digest is checked against the recorded pre-execution vault blob, not the closeout-annotated
+    current plan. A completed stage is not reclassified by applying the unstarted-stage preparation
+    predicate to its annotated bytes. Then —
     - `executed — PR open` if the code PR is still open (closeout exists; main does not yet have
       the code).
     - `completed-and-merged` (or `done`) if the code PR has been squash-merged to `main`.
-    In either case, write a one-line rollup + `Closeout: [[…]]` link in Comments, and record the
-    PR number (`#NNN`) in the PR column. A later superfinish invocation flips `executed — PR open`
+    - For a discovery stage with no code PR, `completed-and-merged` / `done` only when its specified
+      evidence and documented decision are tracked and verified and its delivered discovery contracts
+      are identified.
+    In each case, write a one-line rollup + `Closeout: [[…]]` link in Comments. Record the code PR
+    number (`#NNN`) for code work. For evidence-only discovery, leave the PR cell blank (or explicit
+    `none`) and keep its A7 evidence/decision publication in the closeout Comments/report. A later
+    superfinish invocation flips `executed — PR open`
     to `completed-and-merged` once the PR merges (idempotent re-run).
   - **Ancestor-row update** (rows above the leaf, walked up via parent-seed references): read the
     child plan's progress-report table and apply the "all children merged-on-`main`" test (C4 —
     treating `deferred` / `declined` / `out-of-scope` as non-blocking; treating
     `executed — PR open` as NOT-yet-merged-on-`main`, i.e. blocking).
-    - If every row is merged-on-`main`, flip the ancestor's row → `completed-and-merged` (or
+    - If every row is delivery-verified under C9 (including no-PR discovery rows), flip the ancestor's row → `completed-and-merged` (or
       `done`) and write a one-line rollup + `Closeout: [[…]]` link in Comments.
     - Otherwise set the ancestor's row to `in progress (partially executed)` — but **only if the
-      row was previously `incomplete`, `PLAN WRITTEN — ready to execute`, or
+      row was previously `incomplete`, `PLAN WRITTEN — needs refinement`,
+      `PLAN WRITTEN — ready to execute`, or
       `in progress (planning underway)`**; never downgrade a row already at
       `in progress (partially executed)` / `executed — PR open` / `completed-and-merged` / `done`.
       Then **stop flipping completes** higher up (you may still walk to the root, but only flip
@@ -337,10 +404,118 @@ its next section without printing a separate report.**
 
 ## C8. Authorized repair — durable request and successor publication
 
-**Consumer:** superagent applies an adopted re-plan decision; superplan publishes its successor.
-This is an explicit repair transition, not a relaxation of ordinary C4/C7 idempotency.
+**Consumers:** superagent applies an adopted re-plan decision; superreplan authors and publishes the
+repair under REPLANNER. This is an explicit repair transition, not a relaxation of ordinary C4/C7
+idempotency. Resolve mode through superstage S1: unmarked/incremental roots use the legacy single-leaf
+form; `upfront-v1` roots use one generation-scoped batch. Do not convert one form into the other.
 
-### Request (superagent, before changing loop status)
+Superreplan is already the tick's one heavy skill. For a legacy repair it applies the single-leaf
+authoring clauses below directly; it does not invoke superplan, dispatch a child, or consume a second
+heavy operation. The supervisor routes every adopted legacy repair to it under REPLANNER; an upfront
+batch uses the same REPLANNER route.
+
+### Upfront batch request (superagent, before replanning dispatch)
+
+One pending batch is an execution barrier for the whole goal, including unaffected stages and direct
+superrun calls. Before any REPLANNER dispatch:
+
+1. Read the adopted panel/user decision, its triggering finding/evidence, authoritative source
+   agreement/revision, current root generation, S1 active map, S2 contracts, code/vault baselines, and
+   every originating stage. Use superstage S4 to derive the candidate transitive dependent closure.
+   Ambiguous authority, origin, generation, or evidence is **BLOCKED**.
+2. Create one durable `findings/<timestamp>-replan-<topic>.md` record with exactly one stable
+   **Decision ID**. Record at least: authority, rationale, source agreement revision; root path and
+   from-generation; code and vault baselines; origin stages and initial candidate dependency closure;
+   final semantic affected set and expansion reasons (both initially `pending`); every active
+   path/revision; an initially unassessed per-stage `retain` / `revise` / `completed-history` /
+   authorized disposition table with evidence slots; every predecessor PR/branch/worktree and
+   integration disposition; for an executing/CI-pending stage, its execution snapshot, run ids,
+   current PR/head and an initially unresolved merge disposition; draft paths, successor paths, and retired-ID replacement mapping
+   (initially `none` or `pending`);
+   **Resolution** (`pending`, later `published`, `superseded`, or `declined`); published generation;
+   publication decision marker; and resolved publication PR/commit evidence. Do not omit a field
+   because it is initially `none`. At this request boundary the final semantic set and expansion
+   reasons stay `pending`, and the disposition table stays unassessed. Superreplan, not the
+   controller, populates them during S4 assessment before candidate review/publication.
+3. In the same A7 change, set the root's sole `Active replan` field to this record. Preserve every
+   active Plan link, status, completed stage, closeout, PR reference, and preparation receipt at this
+   request boundary. For protected-main internal vaults the docs PR must be merged to authoritative
+   main; when A7 permits direct internal integration, or for an external vault, the complete change
+   must be committed on the configured authoritative branch. Only committed, synchronized
+   authoritative state counts. Then, and only then, may the controller persist `WAITING FOR PLAN`
+   and the Decision ID/record recovery hints.
+
+An adopted decision interrupted before step 3 is not discarded and does not authorize execution.
+Reconcile the persisted decision authority, create or finish this same request, and keep execution
+paused; a loop log alone does not authorize REPLANNER. Once the committed root points at the pending
+record, the next heavy operation is `superreplan <root> <record>` under REPLANNER.
+
+If the request catches a stage in CI wait, let the run finish or remain queued without treating it as
+authority: preserve the packet and actual PR/branch/worktree history in the record, stop post-CI merge,
+and require superreplan to assign `resume-existing`, `replace`, or another adopted disposition. Never
+discard that history and never merge obsolete work merely because it was queued first.
+
+There is at most one active upfront batch per goal. A later finding joins an unpublished batch only
+through an explicit adopted record revision that updates origins, closure, baselines, and authority;
+otherwise it waits for a subsequent batch after publication. Superseding or declining a pending batch
+requires recorded adopting authority. Clear the barrier with no generation increment only in one A7
+change that records the `superseded`/`declined` resolution and proves the still-active tree and every
+live consumer remain valid; otherwise the unresolved structural obligation stays paused/BLOCKED.
+
+### Upfront batch reconciliation and replay
+
+Always reconcile from the authoritative committed/integrated tree and Git history before trusting
+loop hints or working-tree contents:
+
+- **Pending request, no unique draft:** dispatch/resume superreplan with the same record.
+- **Pending request, one unique scratch batch referencing the Decision ID:** resume that batch. Draft
+  candidates never become active Plan links and are never executable.
+- **Published record and active root at its published generation, with `Active replan: none`:** locate
+  exactly one complete old-to-new A7 publication transition by its Decision ID marker and tracked
+  artifact changes, then resume the new tree. Request/checkpoint and later evidence-resolution commits
+  may repeat that ID; they are not publication transitions. Stale `PLANNING`/old-generation loop hints
+  are repaired without republishing.
+- **Relevant source, code, vault, path, stage, contract, PR, or worktree baseline changed before
+  publication:** reassess the affected set under S4 and update the pending record/drafts before any
+  activation. Do not bless stale candidates.
+- **Missing referenced record, duplicate live records claiming one Decision ID, multiple unretired
+  draft successor sets, divergent successors, mismatched generation, multiple matching publication
+  transitions, or mixed/partial publication:** **BLOCKED** until authoritative evidence uniquely
+  reconciles the state.
+
+For callers that report the artifact handler separately from C6 selection, use these exact results.
+`outcome: continue` means the adopted request can be durably created, resumed, reassessed, or
+reconciled; `outcome: BLOCKED` means contradictory/missing evidence prevents that handler. Report
+`publication: scratch` only for one unique resumable draft/checkpoint, `publication: vault` only for a
+verified authoritative published generation, and `publication: none` otherwise. A relevant baseline
+change with one unique draft is `continue` / `scratch` with replay action `reassess`, never permission
+to publish stale work. `dispatch: none` applies until the request commit and root barrier are
+authoritative; afterward a valid pending record names `dispatch: superreplan`.
+
+One unique complete internal publication candidate in an open, unmerged A7 docs PR is
+`outcome: continue` / `publication: none`: resume and reconcile that same PR while the committed
+pending barrier remains authoritative. It is not a published tree and never authorizes execution.
+Return **BLOCKED** instead when the PR candidate is partial, divergent, stale without a resolvable
+reassessment, or otherwise ambiguous.
+
+A7 writes files before it commits them, so a dirty root that appears to clear the barrier or expose a
+new generation is still the committed pending generation. An internal docs branch/open PR does not
+activate a code-root tree before merge to authoritative main; a configured direct-internal or
+external-vault edit does not activate until its complete batch is committed on the authoritative
+branch. Never validate selection against those uncommitted or unmerged candidate contents. Keep the
+pending barrier in force, resume the same Decision ID where unique, and block if the mixed state is
+ambiguous.
+
+Publication evidence is not self-referential. The atomic batch records its stable Decision ID as the
+publication marker and can leave resolved publication PR/commit evidence pending. After integration,
+find the unique commit from that marker plus its tracked artifact set; a later reconciliation/report
+may write the resolved SHA. Never require a commit to contain its own future hash.
+
+A late predecessor closeout after publication is historical evidence. If the active row now points to
+its successor, C7 must not update that row or ancestors from the predecessor closeout. Reconcile any
+real delivered work through the record and successor; never close the successor by inference.
+
+### Legacy single-leaf request (superagent, before replanning dispatch)
 
 1. Identify the affected active leaf, immediate-parent row and ancestor path. Read its finding,
    closeout, PR/branch/worktree and the adopted panel/user decision. If the target or authority
@@ -379,9 +554,11 @@ or disposition evidence; do not infer resolution from a status word alone. A par
 publication must be reconciled from files and commit evidence before dispatch; contradictory
 links or multiple successors are BLOCKED. Reuse the decision ID; do not duplicate records on retry.
 
-### Publish (superplan)
+### Legacy single-leaf publication (superreplan)
 
-For the selected repair row, read the C8 record, predecessor, finding and closeout. Write a
+For the selected repair row, superreplan applies superauthor A2/A3/A6/A7 and superplan's legacy
+self-review, routing, parent-row, and reporting clauses directly without invoking superplan. Read the
+C8 record, predecessor, finding and closeout. Write a
 **new implementation plan** in `plans/` with a fresh filename and parent reference to the same
 immediate parent. Include `Supersedes: [[predecessor]]`, `Repair: [[record]]`, explicit corrections,
 remaining work, regression checks and integration disposition. Preserve the predecessor unchanged.
@@ -410,6 +587,13 @@ the predecessor PR was resolved and the actual integration evidence; C9 checks t
 Return **complete**, **incomplete** (eligible planning/execution work), or **BLOCKED** with concrete
 rows, PRs and missing evidence. This audit is read-only; reconcile via the owning skills.
 
+Resolve mode with superstage S1. For `upfront-v1`, validate the complete active graph with S2 and
+include every active stage, dependency, contract delivery, preparation pointer, and active-replan
+barrier in the audit. Inspect the synchronized authoritative root, not loop hints or an unmerged docs
+candidate. A non-`none` barrier, missing/malformed record, or partial publication is BLOCKED/incomplete
+according to C8 and can never be DONE. An invalid graph is BLOCKED. Incremental and unmarked roots
+retain the legacy audit below.
+
 1. Read the synchronized authoritative tree from the root. Visit active child links recursively
    even when internal rows carry closed status or closeout banners. Track visited paths: cycles,
    unreadable/missing active plans, non-traversable roots and ambiguous links are BLOCKED. An
@@ -429,18 +613,42 @@ rows, PRs and missing evidence. This audit is read-only; reconcile via the ownin
    root/active-leaf identity, mode, before/result manifests, changed/deleted paths, command results,
    required reviews, acceptance coverage, outstanding obligations, and timestamp all validate.
    A label or report without those files is BLOCKED. In `github`, `completed-local` is not integrated.
-3. If the audit discovers unfinished work hidden by an ancestor's closed-for-descent status
+   An upfront implementation delivery receipt must bind its execution-entry root generation,
+   Stage ID/revision, historical preparation receipt/digest, reviewed code/source revisions, actual
+   merge/direct-integration identity, and every produced contract revision. Verify the preparation
+   digest against the recorded historical plan blob, not the closeout-annotated current file. For a
+   discovery stage, accept no-code completion only when its specified evidence and documented decision
+   are tracked and verified and its delivered discovery contracts are identified.
+   In upfront mode, verify that delivered evidence identifies every produced contract revision
+   consumed by active stages. A provider's approved decline/defer/out-of-scope disposition can close
+   its own obligation but cannot satisfy a consumer; that live consumer keeps the goal incomplete or
+   BLOCKED pending an adopted replan.
+3. Re-evaluate every dependency edge from delivery receipts. A closed ancestor cannot hide a live
+   consumer whose prerequisite delivery is absent, declined, at the wrong contract revision, or only
+   open/CI-pending; report that path BLOCKED. Revised stages after a generation publication require a
+   new preparation. A retained stage keeps preparation only with the focused new-generation
+   revalidation required by S4/S5. Old-generation preparation alone is an active obligation, not
+   completion evidence.
+4. Inspect findings, closeouts and C8 records that name active contract/assumption IDs. Routine verified
+   findings that preserve commitments create no planning obligation. A verified contradiction keeps
+   affected unfinished preparation non-executable and requires the decision/adoption path; an
+   unverified finding is never proof. Any adopted-but-unpublished request, unresolved batch/repair,
+   conflicting disposition, or unresolved affected consumer prevents completion.
+5. If the audit discovers unfinished work hidden by an ancestor's closed-for-descent status
    or closeout marker, return **BLOCKED** with that path for authorized reconciliation.
    Returning `incomplete` without restoring reachability would repeat the same empty queues.
    Otherwise, `executed — PR open`, closed-but-unmerged PR, pending CI, unresolved repair or BLOCKED finding,
    missing/unverifiable integration evidence, or inconsistent state => **BLOCKED**, even if a
    report also says `none`. Ordinary unplanned/ready work => **incomplete**. A valid pending C8
    request => **incomplete** with its repair planning target; invalid repair state => **BLOCKED**.
-4. For repair history, verify each predecessor PR's disposition: reused and now merged, or
+6. For repair history, verify each predecessor PR's disposition: reused and now merged, or
    explicitly replaced/closed with authority, or intentionally declined/deferred with reason.
    Historical closeout links never suppress active repair work. Supersession alone does not
    satisfy an unresolved predecessor PR. Do not execute or reopen finished predecessors.
-5. **complete** requires every active obligation to pass, no unresolved blocker/repair/CI wait,
-   and no conflicting report evidence. Report checked rows and integration/disposition evidence
-   to the caller. Unknown evidence => BLOCKED, never optimistic completion.
+7. **complete** requires the root barrier to be clear; the active graph valid; every active stage and
+   prerequisite delivery resolved; every implementation/discovery delivery receipt verified; all
+   predecessor PR/integration history accounted for; and no unresolved finding, repair, batch, CI wait,
+   or other active obligation. Report checked rows, contracts, receipts and integration/disposition
+   evidence to the caller. Empty traversal queues are only the trigger for this audit. Unknown evidence
+   => BLOCKED, never optimistic completion.
    Delayed predecessor closeouts remain historical and cannot complete or overwrite a successor.

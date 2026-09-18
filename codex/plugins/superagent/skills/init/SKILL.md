@@ -87,6 +87,17 @@ Repo-specific values are `SUPER_*` keys. Resolve the project and all values with
 git command. The unattended equivalent is `SUPER_GIT_MODE=none superagent:init`. Accepted values
 are exactly `github` and `none`; write the chosen value to the new `.superenv`.
 
+## Project-only prerequisite
+
+Stage 3 ships in 0.9.0 with full multi-harness live scheduler acceptance still pending. Before
+launching a coding-loop **project**, verify
+`python3 -c 'import sys; assert sys.version_info >= (3, 9)'`. Missing/older Python blocks project
+launch; it does not block legacy goal initialization, launch or controls. `SUPER_CODE_MAX_ITERATIONS`
+must be a positive integer and limits created project rounds, not ticks/retries. The supervisor must
+be native to `SUPER_HARNESS`; bridged worker roles remain supported. Outer/inner registrations stop
+independently. Adoption of changed agreement and AUTHOR INPUT resume require the author's explicit
+answer; init or a configuration edit does not provide that authorization.
+
 ## Step 1 — Prerequisite checks
 
 1. Resolve `SUPER_GIT_MODE` first. In `none`, derive `<repo-root>` as physical `$PWD`; do not run
@@ -164,6 +175,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
 2. **Enums** (out-of-domain → WARN, fall back to the template default):
    `SUPER_HARNESS` ∈ claude|cursor|codex|pi; `SUPER_CODEX_SANDBOX` ∈
    workspace-write|danger-full-access; `SUPER_TEST_EVIDENCE` ∈ local|ci;
+   `SUPER_PLANNING_MODE` ∈ upfront|incremental;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
    `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈ required.
@@ -219,7 +231,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
 
 ## Step 3 — Role agents (model/effort pins)
 
-Thirteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
+Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but
 `SUPER_MODEL_SUPERVISOR`, which the external tick passes straight to `codex exec -m`.
 On Codex there are **no generated agent-definition files at all**: role pins dispatch
 at runtime as `spawn_agent` parameters — `SUPER_MODEL_<ROLE>` → `model`,
@@ -233,6 +245,8 @@ Resolve each role's model key (`SUPER_MODEL_<ROLE>`) and effort key (`SUPER_EFFO
 | Model key | Effort key | Generated definition |
 |---|---|---|
 | SUPER_MODEL_PLANNER | SUPER_EFFORT_PLANNER | `.claude/agents/super-planner.md` |
+| SUPER_MODEL_PLAN_REFINER | SUPER_EFFORT_PLAN_REFINER | `.claude/agents/super-plan-refiner.md` |
+| SUPER_MODEL_REPLANNER | SUPER_EFFORT_REPLANNER | `.claude/agents/super-replanner.md` |
 | SUPER_MODEL_EXECUTOR | SUPER_EFFORT_EXECUTOR | `.claude/agents/super-executor.md` |
 | SUPER_MODEL_PANEL | SUPER_EFFORT_PANEL | `.claude/agents/super-panel.md` |
 | SUPER_MODEL_IMPLEMENTER | SUPER_EFFORT_IMPLEMENTER | `.claude/agents/super-implementer.md` |

@@ -1,0 +1,39 @@
+{
+  "legacy_default": {
+    "reason": "superstage S1 says a root with no Planning mode field is legacy incremental regardless of SUPER_PLANNING_MODE, and must not be rewritten or auto-converted.",
+    "mode": "incremental"
+  },
+  "bounded_unknown": {
+    "reason": "superstage S2 permits bounded predecessor-dependent internal filenames when their resolution method is stated; superstage S3 classifies a contract-valid stage with Preparation: none as needs refinement and not executable.",
+    "upfront_valid": true,
+    "executable": false
+  },
+  "missing_architecture": {
+    "reason": "superstage S2 forbids deferring architecture in an upfront stage, and superstage S4 says missing architecture at initial publication is invalid rather than routine refinement.",
+    "upfront_valid": false
+  },
+  "open_provider": {
+    "reason": "superstage S3 requires a provider code PR to be merged with its merge commit in authoritative main, a tracked closeout, and contract-delivery evidence; an open PR is unsatisfied, leaving S02 non-executable and the goal not done.",
+    "executable": false,
+    "done": false
+  },
+  "declined_provider": {
+    "reason": "superstage S3 says an authorized provider decline closes only that provider obligation, does not deliver to a live consumer, and leaves the consumer non-executable and the goal not done until an adopted replan removes or replaces the dependency.",
+    "executable": false,
+    "done": false
+  },
+  "dependency_cycle": {
+    "reason": "superstage S2 classifies dependency cycles in the active upfront graph as BLOCKED, and supertraverse C6 blocks selection for an invalid upfront graph.",
+    "outcome": "BLOCKED"
+  },
+  "local_detail": {
+    "reason": "superstage S4 assigns bounded predecessor-dependent file placement, helper names, and test setup to refinement when acceptance, scope, approach, dependency edges, and shared contract semantics remain unchanged.",
+    "operation": "refine",
+    "role": "PLAN_REFINER"
+  },
+  "contract_break": {
+    "reason": "superstage S4 requires structural replanning when verified evidence changes shared contract behavior or semantic revision, especially where downstream consumers rely on that contract.",
+    "operation": "replan",
+    "role": "REPLANNER"
+  }
+}

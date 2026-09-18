@@ -1,0 +1,11 @@
+FAIL: draft_interrupted_before_confirmation.outcome: expected "DRAFT-INCOMPLETE", got "BLOCKED"
+FAIL: resume_identical_source.outcome: expected "DRAFT-INCOMPLETE", got "BLOCKED"
+FAIL: resume_identical_source.publication: expected "scratch", got "none"
+FAIL: resume_identical_source.draft_action: expected "resume", got "none"
+FAIL: resume_changed_source.outcome: expected "DRAFT-INCOMPLETE", got "BLOCKED"
+FAIL: resume_changed_source.publication: expected "scratch", got "none"
+FAIL: resume_changed_source.draft_action: expected "revise", got "none"
+FAIL: confirmation_refused.outcome: expected "DRAFT-INCOMPLETE", got "BLOCKED"
+FAIL: supermeta_draft_incomplete.outcome: expected "DRAFT-INCOMPLETE", got "BLOCKED"
+
+exit=1
