@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 — 2026-09-18
+
+- **Use Sonnet for Claude task review and re-review by default.** The Claude Code build now matches
+  the proven `agent-netops` routing for `SUPER_MODEL_TASK_REVIEWER` and
+  `SUPER_MODEL_RE_REVIEWER`; other harness defaults, reviewer effort levels, and
+  `SUPER_GIT_MODE=github` remain unchanged.
+
 ## 0.10.0 — 2026-09-18
 
 - **Run the normal Superagent lifecycle without managed git or GitHub operations.** Set
