@@ -514,12 +514,12 @@ if [[ "${SUPER_AUTO_DISARM_ON_DONE:-true}" == true && \
   # is required — it is the guard against disarming a same-named entry that
   # drives a different loop.
   if [[ -n "${SUPERAGENT_SLUG:-}" && \
-        "$(sed -n 's/^LOOP_FILE=//p' "$CONF_DIR/${SUPERAGENT_SLUG}.env" 2>/dev/null | head -1)" == "$LOOP_FILE" ]]; then
+        "$(superagent_registry_value "$CONF_DIR/${SUPERAGENT_SLUG}.env" LOOP_FILE)" == "$LOOP_FILE" ]]; then
     DISARM_SLUG="$SUPERAGENT_SLUG"
   else
     for envf in "$CONF_DIR"/*.env; do
       [[ -f "$envf" ]] || continue
-      if [[ "$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)" == "$LOOP_FILE" ]]; then
+      if [[ "$(superagent_registry_value "$envf" LOOP_FILE)" == "$LOOP_FILE" ]]; then
         DISARM_SLUG="$(basename "$envf" .env)"
         break
       fi

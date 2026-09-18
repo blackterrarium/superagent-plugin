@@ -24,9 +24,10 @@ license: MIT
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
-> - `EnterWorktree` = not available; use `git worktree` via `bash`.
+> - `EnterWorktree` = not available; in `github` mode use `git worktree` via `bash`. In `none`
+>   mode the canonical local-workspace override applies and no git command is allowed.
 
 # Superauthor
 
@@ -78,12 +79,7 @@ source code, never execution output.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -91,7 +87,7 @@ Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **
 `<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
 (`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
 repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
-(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+(`primary_root` = the physical `REPO` exported by `superagent_load_context`). Every goal
 folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
 `SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
 `vault_is_external` in `scripts/_common.sh`.
@@ -234,6 +230,10 @@ re-enabled by auto-accept / `bypassPermissions` mode; it is the default behavior
 Do not print the full draft to chat up front. The user's single checkpoint is the **Final Report** (A8),
 which clearly enumerates every file written this run.
 
+In `SUPER_GIT_MODE=none`, the same standing authorization covers durable local publication under
+the inherited workspace lock. It does not authorize git/GitHub operations; proceed through A6 and
+the local A7 branch without pausing.
+
 ## A6 — Capture findings
 
 After self-review, identify any **findings** or new insights uncovered during the authoring phase —
@@ -253,6 +253,15 @@ it** — false findings are harmful to the goal. Only record what you have verif
 findings, record none.
 
 ## A7 — Commit and merge via PR (caller-parameterized)
+
+**Local persistence (`SUPER_GIT_MODE=none`) overrides every commit recipe in this skill and every
+caller.** Write only the caller's explicit artifact list, reopen each file and verify its expected
+identity/content, and report the physical paths. Do not inspect tracking state or run git, gh,
+credential, branch, worktree, commit, push, PR, merge, sync, or CI operations. For completion work,
+also write and verify the `completed-local` receipt defined by superloop L6. Persistence is the
+durable file plus its verified receipt; A7 then returns directly to A8. This override applies equally
+to internal and external vaults and to duplicated commit sections in superplan, superfinish,
+supergoal, superprd, and supermeta.
 
 After the artifact(s) and any `findings/` docs are written into the goal folder, commit those planning
 artifacts. **Never pause before writing, committing, or merging** — the user has granted standing
@@ -362,6 +371,7 @@ skill):
 **<primary artifact>:** <full path>      ← the most important line; always include it
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)  (local mode — print this line instead)
 
 **Other files created/modified:**
 - <path> — <what changed>     (or: none)

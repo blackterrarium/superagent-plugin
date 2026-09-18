@@ -83,9 +83,10 @@ cat >"$banner_file" <<'EOF'
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
-> - `EnterWorktree` = not available; use `git worktree` via `bash`.
+> - `EnterWorktree` = not available; in `github` mode use `git worktree` via `bash`. In `none`
+>   mode the canonical local-workspace override applies and no git command is allowed.
 EOF
 
 insert_banner() {
@@ -142,7 +143,7 @@ EOF
 
 mkdir -p "$TMP/templates" "$TMP/scripts"
 cp "$ROOT/templates/super-role-pi-agent.md" "$ROOT/templates/super-role-pi-bridge-agent.md" "$ROOT/templates/vault-root.md" "$TMP/templates/"
-cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/bridge-fanout.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/scripts/"
+cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/bridge-fanout.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/workspace-state.py" "$ROOT/scripts/_evalspec.sh" "$TMP/scripts/"
 chmod +x "$TMP/scripts/role-bridge.sh" "$TMP/scripts/bridge-fanout.sh"
 
 substitute <"$ROOT/templates/superenv.default" | awk '

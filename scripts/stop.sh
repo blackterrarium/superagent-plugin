@@ -20,7 +20,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-superagent_load_context "$PWD" run || exit $?
 
 usage() { echo "usage: stop.sh <PLAN.md> [--hard] [--purge] [--slug <goal-slug>] [--dry-run]" >&2; exit 2; }
 
@@ -40,7 +39,6 @@ done
 
 [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; exit 2; }
 PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
-case "$PLAN_ABS" in "$REPO"/*) PLAN_REL="${PLAN_ABS#"$REPO"/}" ;; *) PLAN_REL="$PLAN_ABS" ;; esac
 GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd -P)"
 
 # Prefer the registered loop whose LOOP_FILE records this master plan (robust to a
@@ -48,12 +46,15 @@ GOAL_FOLDER="$(cd "$(dirname "$PLAN_ABS")/.." && pwd -P)"
 # file's master_plan regardless of which checkout the env file points at.
 find_slug_by_plan() {
   shopt -s nullglob
-  local envf lf mp
+  local envf lf mp registered_root candidate
   for envf in "$CONF_DIR"/*.env; do
-    lf="$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)"
+    lf="$(superagent_registry_value "$envf" LOOP_FILE)"
     [[ -n "$lf" && -f "$lf" ]] || continue
     mp="$(sed -n 's/^master_plan:[[:space:]]*//p' "$lf" | head -1)"
-    if [[ "$mp" == "$PLAN_REL" ]]; then basename "$envf" .env; return 0; fi
+    registered_root="$(superagent_registry_value "$envf" SUPERAGENT_PROJECT_ROOT)"
+    [[ -n "$registered_root" ]] || registered_root="$(superagent_registry_value "$envf" REPO)"
+    if [[ "$mp" == /* ]]; then candidate="$mp"; else candidate="${registered_root%/}/$mp"; fi
+    if [[ "$candidate" == "$PLAN_ABS" ]]; then basename "$envf" .env; return 0; fi
   done
   return 1
 }
@@ -65,7 +66,18 @@ if [[ -z "$SLUG" ]]; then
   SLUG="$(basename "$GOAL_FOLDER" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9]{2}-//')"
 fi
 
-have_env=0; [[ -f "$CONF_DIR/$SLUG.env" ]] && have_env=1
+ENV_FILE="$CONF_DIR/$SLUG.env"
+have_env=0; [[ -f "$ENV_FILE" ]] && have_env=1
+if [[ $have_env -eq 1 ]]; then
+  registered_root="$(superagent_registry_value "$ENV_FILE" SUPERAGENT_PROJECT_ROOT)"
+  [[ -n "$registered_root" ]] || registered_root="$(superagent_registry_value "$ENV_FILE" REPO)"
+  registered_mode="$(superagent_registry_value "$ENV_FILE" SUPERAGENT_GIT_MODE)"
+  REPO="$registered_root"
+  SUPER_GIT_MODE="${registered_mode:-github}"
+  export REPO SUPER_GIT_MODE
+fi
+superagent_load_context "${REPO:-$PWD}" run || exit $?
+case "$PLAN_ABS" in "$REPO"/*) PLAN_REL="${PLAN_ABS#"$REPO"/}" ;; *) PLAN_REL="$PLAN_ABS" ;; esac
 SCHEDULER="$(superagent_scheduler)"
 if [[ "$SCHEDULER" == launchd ]]; then
   # One launchd job is both timer and service: an installed plist ~ enabled,

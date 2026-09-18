@@ -1,6 +1,6 @@
 ---
 name: init
-description: Bootstrap a repository for the superagent plugin — verify prerequisites, create the .superenv config, create and seed the goal vault if absent (an external vault becomes its own git repo), and add the loop-status gitignore entry. `--local-only` routes every ignore entry to .git/info/exclude so a dogfooded checkout with an external vault has nothing to commit. Idempotent; safe to re-run. Run this once per repo before supergoal/superagent.
+description: Bootstrap a project for the superagent plugin — choose GitHub or git-free operation, create .superenv, role assets, and the goal vault, then configure persistence for that mode. Idempotent; safe to re-run. Run this once per project before supergoal/superagent.
 argument-hint: "[--local-only]"
 license: MIT
 ---
@@ -26,8 +26,9 @@ license: MIT
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -36,7 +37,7 @@ license: MIT
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -61,6 +62,9 @@ files. Finish with a summary table of step → done/skipped.
   its own checkout, or any repo whose maintainers did not opt in. Re-running later without the
   flag never removes the exclude lines (init never deletes).
 
+When `SUPER_GIT_MODE=none`, `--local-only` is redundant: report that fact and continue. Local mode
+never creates or edits git metadata, `.gitignore`, or `.git/info/exclude`.
+
 Invoke this skill explicitly as `superagent:init` — a built-in `init` skill (CLAUDE.md
 authoring) ships unscoped in most sessions, so the bare name `init` is ambiguous the
 moment both are available.
@@ -76,18 +80,19 @@ two builds' inits collide.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults —
-which is exactly the case Step 2 below fixes by creating one.
+Repo-specific values are `SUPER_*` keys. Resolve the project and all values with
+`scripts/_common.sh`'s `superagent_load_context "$PWD" init`, preserving environment > project
+`.superenv` > packaged-default precedence. If neither an environment selection nor an ancestor
+`.superenv` exists, offer **GitHub (recommended)** and **local (no git/GitHub)** before running any
+git command. The unattended equivalent is `SUPER_GIT_MODE=none superagent:init`. Accepted values
+are exactly `github` and `none`; write the chosen value to the new `.superenv`.
 
 ## Step 1 — Prerequisite checks
 
-1. `git rev-parse --path-format=absolute --git-common-dir` succeeds — else ABORT: "init
-   must run inside a git repository." Derive `<repo-root>` as the `dirname` of that path
+1. Resolve `SUPER_GIT_MODE` first. In `none`, derive `<repo-root>` as physical `$PWD`; do not run
+   git, gh, token discovery, or repository checks, even when a `.git` directory happens to exist.
+   In `github`, `git rev-parse --path-format=absolute --git-common-dir` must succeed — else ABORT:
+   "GitHub mode requires a git repository." Derive `<repo-root>` as the `dirname` of that path
    — the same `primary_root()` formula `skills/superloop/SKILL.md`'s L1 clause uses:
    `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`. In the primary
    checkout, `--git-dir` == `--git-common-dir` (both `.git`); in a linked worktree they
@@ -108,13 +113,14 @@ which is exactly the case Step 2 below fixes by creating one.
    (`/plugin marketplace add obra/superpowers-marketplace`, `/plugin install superpowers`)
    — planning skills (`supergoal`, `superplan`) work without it, but `superrun` requires
    `superpowers:subagent-driven-development` to execute a plan and will refuse.
-3. `gh auth status` succeeds — else WARN (PR-based flows need it; planning artifacts are
+3. In `github`, `gh auth status` succeeds — else WARN (PR-based flows need it; planning artifacts are
    drafted either way, but `superauthor`'s A7 commit-and-merge step and every CI/PR
    operation in `superplan`/`superrun` need it). On a macOS host, a sandboxed `gh auth
    status` can fail even when `gh` is actually authenticated, because `gh` needs keychain
    access the tool sandbox blocks — see `SUPER_GH_DISABLE_SANDBOX` in
    `${SUPER_PLUGIN_ROOT}/templates/superenv.default`. If the check fails on macOS, note
-   that possibility rather than reporting a bare WARN.
+   that possibility rather than reporting a bare WARN. In `none`, skip this item without reading
+   credentials and report `GitHub auth: disabled (SUPER_GIT_MODE=none)`.
 4. Informational: external (unattended) mode runs on Linux (systemd user timers) and
    macOS (launchd LaunchAgents — logged-in + awake only; crontab fallback documented in
    [scripts/README.md](../../scripts/README.md#cron-fallback-instead-of-systemd)). Run
@@ -304,7 +310,12 @@ Report which of the three happened in the summary table — `created` / `seeded 
 into existing goal root` / `already present` — rather than collapsing the middle case
 into either of the other two rows.
 
-**External vault only — make it a git repository.** Vault docs in external mode are committed
+**Local mode.** Create the internal or external vault, `root.md`, standard folders, and
+`<vault_root>/.superagent-runtime/`. Keep the existing containment refusals for `$HOME`, `/`, and
+unsafe nesting. Do not create `.git`, `.gitignore`, or exclude entries. An external local vault is
+ordinary durable storage; its scheduler registration carries the physical project root.
+
+**GitHub external vault only — make it a git repository.** Vault docs in external mode are committed
 into the vault itself (superauthor A7's external target), so it must be a repo:
 
 1. **"Already a git repo" test.** `git -C "<vault_root>" rev-parse --show-toplevel` succeeds AND
@@ -332,6 +343,9 @@ A vault repo with a remote is the operator's choice (`git -C "<vault_root>" remo
 A7 pushes only when one exists. init never adds one.
 
 ## Step 5 — Gitignore
+
+When `SUPER_GIT_MODE=none`, skip this step completely and report `Ignore target: N/A (local
+mode)`. Do not inspect or change existing git metadata.
 
 **Target file.** Without `--local-only` the target is `<repo-root>/.gitignore`. With
 `--local-only` it is `<git-common-dir>/info/exclude` (create `info/` if absent) and
@@ -364,6 +378,10 @@ Report the target file and each line as `added` / `already present` in the summa
 (`Ignore target: .gitignore` or `Ignore target: .git/info/exclude`).
 
 ## Step 6 — Landing
+
+When `SUPER_GIT_MODE=none`, reopen and verify every created/updated file, report its physical path,
+and finish without commit, push, PR, merge, or tracked-file checks. Persistence means durable local
+files. Existing `.git` metadata remains byte-for-byte outside Superagent's responsibility.
 
 init only prepares files — it never commits to the user's repository (the one exception is the
 external vault repo's own first commit in Step 4, which is plugin-owned). What to tell the user

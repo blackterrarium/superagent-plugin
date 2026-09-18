@@ -16,7 +16,7 @@ instead of waiting out the `SUPER_LOCK_STEAL_MIN`-minute (default 90) lock-steal
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## When to use this (vs superagent-stop)
 
@@ -50,12 +50,12 @@ with the human, then re-run with `--apply`.
 
 ## Steps
 
-1. **Resolve the repo root** (run from the primary checkout): see **Repo
-   configuration (.superenv)** above.
+1. Resolve the target through its per-goal registry row. `force-stop.sh --slug` loads the recorded
+   physical project root/mode before project configuration, so it may run outside the project.
 2. **Diagnose first with the `superagent:superagent-monitor` skill.** Confirm the
    loop is actually stuck (transient status + held lock + no progress). If it is
    healthy or a tick is doing real work, STOP — force-stop is the wrong tool.
-3. **Preview (dry-run).** From `primary_root`:
+3. **Preview (dry-run).**
 
    ```
    $SUPERAGENT_SCRIPTS/force-stop.sh (<PLAN.md> | --slug <slug>) [--drain] [--no-kick]

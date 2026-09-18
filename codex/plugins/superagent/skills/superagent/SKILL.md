@@ -28,8 +28,9 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -38,7 +39,7 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -105,12 +106,7 @@ and **exit**. Do not guess a plan from the working directory.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -118,7 +114,7 @@ Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **
 `<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
 (`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
 repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
-(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+(`primary_root` = the physical `REPO` exported by `superagent_load_context`). Every goal
 folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
 `SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
 `vault_is_external` in `scripts/_common.sh`.
@@ -177,6 +173,11 @@ pull never leaves the primary checkout stale. superagent's **be-sure artifacts**
 `superplan` / `superrun` Final-Report-named plan / closeout files plus the PR squash commits (see the
 per-status Sync-gate steps in **Step 1**). If L5 STOPs, the loop pauses on `WAITING FOR INPUT` — do not
 advance.
+
+Every `sync_main()` / `sync_vault()` reference below is mode-dispatched through L5. In
+`SUPER_GIT_MODE=none`, it means validate the inherited workspace owner, capture/compare snapshots,
+and reopen durable artifacts; it never calls git or GitHub. In `github`, the existing sync behavior
+is unchanged.
 
 ---
 
@@ -447,6 +448,9 @@ reuse already-published successors. Clear `plan_exhausted` when a repair is newl
 If reconciliation changes the ready state, run that state's dispatch instead. Never dispatch a
 normal traversal against a log-only repair decision. Ambiguous or uncommitted repair state goes
 to the decision ladder; no queue exhaustion or DONE transition is allowed from that state.
+In local mode, "committed" in this paragraph means durably written and reopened per C8/A7. Replay a
+published decision by its stable Decision ID and existing Successor link; never reset it or create a
+second successor after a crash.
 
 ### `WAITING FOR PLAN`
 1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superplan` reads a fresh tree. If it STOPs, pause and end
@@ -460,6 +464,8 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
    unplanned step across all levels (including sub-masters) — and to **return superplan's complete Final
    Report verbatim as its final message** (step 5 parses that report). superagent never invokes
    `superplan` inline in its own context.
+   In local mode, include the recorded git mode, physical project root, and inherited workspace
+   identity in the prompt, and explicitly require local A7 publication with no git/GitHub stages.
 4. **Sync gate (post + be-sure).** Run `sync_main()` (then `sync_vault()` in external vault mode), then verify `superplan`'s reported plan file and
    immediate-parent/ancestor progress-row edits are present and tracked — on local `main` (internal vault) or in the vault repo (external vault; L5's two-kind be-sure rule). If a reported
    artifact is missing or the tree can't reconcile, escalate (STOP) — do not advance, and surface the
@@ -478,7 +484,8 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
      remain; let `superrun` check.
    - **`not-traversable` / `I need to know the plan file`** → ERROR: report, `stop_driver()`,
      `release_lock()`.
-6. Append an iteration-log entry (skill, result, plan path, PR URL — or the vault commit SHA in external mode). Go to **Step 2**.
+6. Append an iteration-log entry (skill, result, plan path, and persistence evidence: local verified
+   artifact paths, PR URL, or external-vault commit SHA). Go to **Step 2**.
 
 ### `WAITING FOR RUN`
 1. **Sync gate (pre).** Run `sync_main()` (then `sync_vault()` in external vault mode) so `superrun`'s traversal reads a fresh tree. If it STOPs,
@@ -493,6 +500,10 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
    (step 5's park case; a fresh process resumes it). superagent never invokes `superrun` inline in its
    own context, and never as a subagent (issue #25).
+   In local mode, prepend superrun's exact local SDD override, the physical project root, and the
+   inherited workspace identity. The executor must capture before/result manifests and return a
+   verified `completed-local` receipt; it must retain all local test, task-review, final-review, and
+   acceptance gates while suppressing worktree/commit/PR/merge/finishing stages.
 4. **Sync gate (post + be-sure).** If `superrun` returned a **CI-PENDING report** (see step 5),
    skip this step — nothing merged yet; it runs on the resume tick instead. Otherwise run
    `sync_main()` (then `sync_vault()` in external vault mode), then verify `superrun`'s reported merges landed:
@@ -500,6 +511,8 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
    squash commit is in `origin/main` history. A merged code PR but stale local `main` is the exact bug
    this gate exists for — reconcile (ff-pull) or escalate. Do not advance on an unverified merge, and
    surface the failure in this tick's `Findings & issues` line.
+   In local mode, replace merge/tracking proof with reopening the completed-local receipt, both
+   manifests, every reported command/review artifact, and the changed/deleted path evidence.
 5. **Retain `superrun`'s verbatim Final Report for relay** (it is reproduced in this tick's **Final
    Report — per tick**) and **note any issue it surfaces** — a CRITICAL / ⚠️ finding, an implementation
    inconsistency, a BLOCKED task, a CI-red code PR — for the `Findings & issues` line, independent of
@@ -514,7 +527,8 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
      over `none` or a claimed completed leaf. Run the **Decision-escalation ladder** below.
      Apply adopted re-plan through **supertraverse C8**, not just a loop-status edit. If the panel
      cannot converge, use `WAITING FOR INPUT`. Never silently spin on an invisible blocked leaf.
-   - **Executed a leaf** (integration and closeout verified) → `status: WAITING FOR PLAN`,
+   - **Executed a leaf** (`github`: integration and closeout verified; `none`: completed-local
+     receipt and its command/review/acceptance evidence reopened and verified) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
    - **`none`** (no execution target, with no higher-priority blocker):
      - If `plan_exhausted` is false → `status: WAITING FOR PLAN`.
@@ -523,7 +537,8 @@ to the decision ladder; no queue exhaustion or DONE transition is allowed from t
        iteration log. **incomplete** → clear `plan_exhausted`, `status: WAITING FOR PLAN`.
        **BLOCKED** → decision ladder with the audit's concrete blockers. An empty queue pair
        is only a reason to audit; it is never sufficient to set DONE.
-6. Append an iteration-log entry (skill, result, code PR + closeout PR URLs). Go to **Step 2**.
+6. Append an iteration-log entry (skill, result, and `github` PR URLs or `none` receipt/snapshot
+   paths). Go to **Step 2**.
 
 ---
 
@@ -638,7 +653,9 @@ tick, even one the loop already resolved itself.
     ⚠️ **Needs you:** <only when status == WAITING FOR INPUT — the pending question + how to answer
     (interactive prompt, or `answer.sh <slug> "<option>"` for a scheduled loop)>
 
-On **DONE**, replace the body with the C9 completion evidence: active steps integrated, PRs merged,
+On **DONE**, replace the body with the C9 completion evidence: active steps integrated (`github`) or
+validated completed-local receipts with snapshot/command/review/acceptance evidence (`none`), PRs
+merged where applicable,
 intentional declined/deferred dispositions (distinct from delivered work),
 and confirmation the driver was stopped — shipped-script loops: note that the tick wrapper
 self-disarms the scheduler entry when this session ends (`SUPER_AUTO_DISARM_ON_DONE`); otherwise

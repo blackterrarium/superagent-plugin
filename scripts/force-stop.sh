@@ -25,7 +25,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-superagent_load_context "$PWD" run || exit $?
 
 usage() { echo "usage: force-stop.sh (<PLAN.md> | --slug <goal-slug>) [--apply] [--drain] [--no-kick]" >&2; exit 2; }
 
@@ -46,16 +45,18 @@ done
 # Resolve the slug: prefer an explicit --slug; else match the plan against the
 # registered env files (like stop.sh — robust to a custom --slug used at launch).
 find_slug_by_plan() {
-  local plan_abs plan_rel envf lf mp
+  local plan_abs envf lf mp registered_root candidate
   [[ -f "$PLAN" ]] || { echo "plan file not found: $PLAN" >&2; return 2; }
   plan_abs="$(cd "$(dirname "$PLAN")" && pwd -P)/$(basename "$PLAN")"
-  case "$plan_abs" in "$REPO"/*) plan_rel="${plan_abs#"$REPO"/}" ;; *) plan_rel="$plan_abs" ;; esac
   shopt -s nullglob
   for envf in "$CONF_DIR"/*.env; do
-    lf="$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)"
+    lf="$(superagent_registry_value "$envf" LOOP_FILE)"
     [[ -n "$lf" && -f "$lf" ]] || continue
     mp="$(sed -n 's/^master_plan:[[:space:]]*//p' "$lf" | head -1)"
-    if [[ "$mp" == "$plan_rel" ]]; then basename "$envf" .env; return 0; fi
+    registered_root="$(superagent_registry_value "$envf" SUPERAGENT_PROJECT_ROOT)"
+    [[ -n "$registered_root" ]] || registered_root="$(superagent_registry_value "$envf" REPO)"
+    if [[ "$mp" == /* ]]; then candidate="$mp"; else candidate="${registered_root%/}/$mp"; fi
+    if [[ "$candidate" == "$plan_abs" ]]; then basename "$envf" .env; return 0; fi
   done
   return 1
 }
@@ -67,7 +68,14 @@ fi
 
 ENVF="$CONF_DIR/$SLUG.env"
 [[ -f "$ENVF" ]] || { echo "no such loop: $SLUG (looked in $ENVF)" >&2; exit 1; }
-LOOP_FILE="$(sed -n 's/^LOOP_FILE=//p' "$ENVF" | head -1)"
+registered_root="$(superagent_registry_value "$ENVF" SUPERAGENT_PROJECT_ROOT)"
+[[ -n "$registered_root" ]] || registered_root="$(superagent_registry_value "$ENVF" REPO)"
+registered_mode="$(superagent_registry_value "$ENVF" SUPERAGENT_GIT_MODE)"
+REPO="$registered_root"
+SUPER_GIT_MODE="${registered_mode:-github}"
+export REPO SUPER_GIT_MODE
+superagent_load_context "${REPO:-$PWD}" run || exit $?
+LOOP_FILE="$(superagent_registry_value "$ENVF" LOOP_FILE)"
 [[ -n "$LOOP_FILE" ]] || { echo "env file $ENVF has no LOOP_FILE" >&2; exit 1; }
 
 # Observe current state.

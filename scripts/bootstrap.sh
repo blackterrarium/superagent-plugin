@@ -69,11 +69,11 @@ if [[ "$HARNESS" == cursor ]]; then
     exit 7
   fi
 elif [[ "$HARNESS" == codex ]]; then
-  codex_args=(exec "$PROMPT" --skip-git-repo-check -C "$REPO")
-  [[ "${SUPER_CODEX_SANDBOX:-danger-full-access}" == workspace-write ]] && \
-    codex_args+=(--sandbox workspace-write -c sandbox_workspace_write.network_access=true) || \
-    codex_args+=(--dangerously-bypass-approvals-and-sandbox)
-  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" codex "${codex_args[@]}" </dev/null )
+  SKILLS_ROOT="$PLUGIN_ROOT/codex/plugins/superagent"
+  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+    echo "bootstrap: Codex build missing at $SKILLS_ROOT (run scripts/build-codex-skills.sh)" >&2
+    exit 7
+  fi
 elif [[ "$HARNESS" == pi ]]; then
   SKILLS_ROOT="$PLUGIN_ROOT/pi"
   if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
@@ -101,6 +101,12 @@ if [[ "$HARNESS" == cursor ]]; then
   fi
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" "$SUPERAGENT_CURSOR_BIN" -p "$PROMPT" \
       --trust --force --plugin-dir "$SKILLS_ROOT" --output-format text )
+elif [[ "$HARNESS" == codex ]]; then
+  codex_args=(exec "$PROMPT" --skip-git-repo-check -C "$REPO")
+  [[ "${SUPER_CODEX_SANDBOX:-danger-full-access}" == workspace-write ]] && \
+    codex_args+=(--sandbox workspace-write -c sandbox_workspace_write.network_access=true) || \
+    codex_args+=(--dangerously-bypass-approvals-and-sandbox)
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" codex "${codex_args[@]}" </dev/null )
 elif [[ "$HARNESS" == pi ]]; then
   export SUPERAGENT_BRIDGE="$PLUGIN_ROOT/scripts/role-bridge.sh" SUPERAGENT_FANOUT="$PLUGIN_ROOT/scripts/bridge-fanout.sh" SUPERAGENT_PI_SKILLS="$SKILLS_ROOT/skills"
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" pi -p --approve --skill "$SKILLS_ROOT/skills" <<<"$PROMPT" )

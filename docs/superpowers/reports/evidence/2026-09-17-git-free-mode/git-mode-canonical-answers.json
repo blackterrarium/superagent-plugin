@@ -1,0 +1,56 @@
+{
+  "local_complete": {
+    "done": true,
+    "reason": "Supertraverse C9 permits completion only when every active local obligation passes with no unresolved blocker, repair, CI wait, or conflicting evidence.",
+    "evidence": "The fixture supplies passing commands, task and final reviews, a valid completed-local receipt, and no open acceptance or repair obligations."
+  },
+  "label_without_evidence": {
+    "done": false,
+    "reason": "Supertraverse C9 states that a completed-local label or report is not proof without the required receipt and evidence files.",
+    "evidence": "The fixture says the closeout receipt or required test evidence is missing."
+  },
+  "failed_descendant": {
+    "done": false,
+    "reason": "Supertraverse C7 allows an ancestor to become completed-local only when every active descendant has valid local evidence or an authorized disposition.",
+    "evidence": "The fixture has an active failed descendant with no authorized disposition."
+  },
+  "failed_review": {
+    "done": false,
+    "reason": "Superloop L6 and superrun Steps 3 and 3a retain required task-review and final-review gates in local mode.",
+    "evidence": "The fixture says implementation and tests passed, but a required review failed."
+  },
+  "late_predecessor": {
+    "overwrite_successor": false,
+    "reason": "Supertraverse C7 and C8 prohibit a predecessor closeout from advancing or replacing a row whose active Plan points to a repair successor.",
+    "evidence": "The fixture identifies the closeout as delayed predecessor evidence while the active row points to the successor."
+  },
+  "repair_replay": {
+    "duplicate_successor": false,
+    "reset_repair": false,
+    "reason": "Supertraverse C8 replay and superagent repair reconciliation reuse the stable Decision ID and existing Successor link idempotently.",
+    "evidence": "The fixture says the repair and successor were durably published before the crash."
+  },
+  "legacy_to_local": {
+    "mode_mismatch": true,
+    "git_operations": false,
+    "reason": "Superloop L2 and supertraverse C9 define an unmarked legacy goal as github and stop on a mismatch before git or GitHub actions.",
+    "evidence": "The fixture evaluates an unmarked legacy goal with effective mode none."
+  },
+  "local_to_github": {
+    "mode_mismatch": true,
+    "merge_claim": false,
+    "reason": "Superloop L2 treats the recorded git mode as immutable and forbids integration claims when it differs from the effective mode.",
+    "evidence": "The fixture has recorded mode none but effective mode github."
+  },
+  "local_receipt_in_github": {
+    "done": false,
+    "reason": "Supertraverse C2, C4, and C9 state that completed-local evidence is not merged or integrated evidence in github mode.",
+    "evidence": "The fixture provides only a local receipt and no verified GitHub integration evidence."
+  },
+  "local_sdd": {
+    "suppress_git_stages": true,
+    "retain_test_review_gates": true,
+    "reason": "Superrun Steps 2, 3, 3a, and 5 override SDD in mode none by suppressing worktree, commit, PR, merge, finishing, and cleanup stages while retaining verification gates.",
+    "evidence": "The fixture sends a local execution instruction into SDD defaults that would otherwise perform those git stages."
+  }
+}

@@ -108,12 +108,14 @@ fi
 if [[ "$JSON" == 1 ]]; then
   out="["; first=1
   for slug in "${slugs[@]}"; do
-    _collect "$slug"
     [[ $first == 1 ]] && first=0 || out+=","
-    out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
-      "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
-      "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
-      "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$row_gh_state")")
+    out+="$(
+      _collect "$slug"
+      printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s"}' \
+        "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
+        "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
+        "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$row_gh_state")"
+    )"
   done
   out+="]"
   echo "$out"
@@ -122,33 +124,35 @@ fi
 
 # ---- Single-slug drill-in ----
 if [[ -n "$ONE" ]]; then
-  _collect "$ONE"
-  echo "Loop:        $ONE"
-  echo "Repo:        ${REPO:-?}"
-  echo "Loop file:   ${LOOP_FILE:-?}  (exists=$([[ $exists == 1 ]] && echo yes || echo no))"
-  echo "Status:      ${status:-<none>}   iteration=${iteration:-?}"
-  echo "Timer:       ${timer_active:-unknown}   next-fire=${next_fire}"
-  echo "Tick now:    ${tick_running:-unknown}   lock-held=$([[ $lock_held == 1 ]] && echo yes || echo no)"
-  echo "gh auth:     $row_gh_state"
-  if [[ $pending != 0 && $exists == 1 ]]; then
-    echo
-    echo "=== ## Pending decision ==="
-    awk '/^## Pending decision/{f=1; print; next} f && /^## /{exit} f' "$LOOP_FILE"
-    if [[ $pending == 2 ]]; then
-      echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
+  (
+    _collect "$ONE"
+    echo "Loop:        $ONE"
+    echo "Repo:        ${REPO:-?}"
+    echo "Loop file:   ${LOOP_FILE:-?}  (exists=$([[ $exists == 1 ]] && echo yes || echo no))"
+    echo "Status:      ${status:-<none>}   iteration=${iteration:-?}"
+    echo "Timer:       ${timer_active:-unknown}   next-fire=${next_fire}"
+    echo "Tick now:    ${tick_running:-unknown}   lock-held=$([[ $lock_held == 1 ]] && echo yes || echo no)"
+    echo "gh auth:     $row_gh_state"
+    if [[ $pending != 0 && $exists == 1 ]]; then
+      echo
+      echo "=== ## Pending decision ==="
+      awk '/^## Pending decision/{f=1; print; next} f && /^## /{exit} f' "$LOOP_FILE"
+      if [[ $pending == 2 ]]; then
+        echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
+      fi
     fi
-  fi
-  if [[ $exists == 1 ]]; then
-    echo
-    echo "=== last iteration-log lines ==="
-    awk '/^## Iteration log/{f=1;next} f' "$LOOP_FILE" | grep -v '^[[:space:]]*$' | tail -5 || true
-  fi
-  log="/tmp/superagent-$(basename "${LOOP_FILE:-x}" .md).log"
-  if [[ -f "$log" ]]; then
-    echo
-    echo "=== tail $log ==="
-    tail -8 "$log"
-  fi
+    if [[ $exists == 1 ]]; then
+      echo
+      echo "=== last iteration-log lines ==="
+      awk '/^## Iteration log/{f=1;next} f' "$LOOP_FILE" | grep -v '^[[:space:]]*$' | tail -5 || true
+    fi
+    log="/tmp/superagent-$(basename "${LOOP_FILE:-x}" .md).log"
+    if [[ -f "$log" ]]; then
+      echo
+      echo "=== tail $log ==="
+      tail -8 "$log"
+    fi
+  )
   exit 0
 fi
 
@@ -156,19 +160,16 @@ fi
 printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' SLUG STATUS ITER TIMER TICK LOCK INPUT GH-AUTH
 printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' ------------------------ ------------------ ----- -------- ------ ------ ----- ------------
 for slug in "${slugs[@]}"; do
-  _collect "$slug"
-  # A `case` embedded inside `$(...)` mis-parses on bash 3.2 (macOS's shipped
-  # bash) when the script is read from a file rather than typed interactively —
-  # its command-substitution parser counts parens naively and the `1)`/`2)`
-  # pattern terminators are read as closing the subshell. Assign in a plain
-  # statement instead.
-  input_col=-
-  case $pending in 1) input_col=YES ;; 2) input_col=ans ;; esac
-  printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' \
-    "$slug" "${status:-<none>}" "${iteration:-?}" \
-    "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
-    "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
-    "$input_col" "$row_gh_state"
+  (
+    _collect "$slug"
+    input_col=-
+    case $pending in 1) input_col=YES ;; 2) input_col=ans ;; esac
+    printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' \
+      "$slug" "${status:-<none>}" "${iteration:-?}" \
+      "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
+      "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
+      "$input_col" "$row_gh_state"
+  )
 done
 echo
 echo "Drill in: $SCRIPT_DIR/status.sh <slug>   |   JSON: $SCRIPT_DIR/status.sh --json"

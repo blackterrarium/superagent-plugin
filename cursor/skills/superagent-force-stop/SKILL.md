@@ -15,8 +15,9 @@ related skills: superagent-monitor, superagent-stop, superagent-external, supera
 >   any residual mention of them as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
->   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode,
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed. "Desktop routine" = a Claude Desktop feature,
 >   not available — use an OS scheduler. A role whose `.superenv` value names another harness
 >   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
 >   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
@@ -41,27 +42,7 @@ instead of waiting out the `SUPER_LOCK_STEAL_MIN`-minute (default 90) lock-steal
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
-
-Everything here runs on the **host that runs the loops** (the vault root — the primary checkout for
-an internal vault, the vault repo for an external one — holding the gitignored
-`<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating repo:
-`SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks). Resolve `primary_root`
-first if invoked from a worktree, set
-`$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory (see
-[scripts/README.md](../../scripts/README.md) for the convention), and run the script
-from `primary_root`:
-
-```
-primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-SUPERAGENT_SCRIPTS="${SUPER_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
-# for cron/systemd use the absolute install path — see scripts/README.md
-```
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## When to use this (vs superagent-stop)
 
@@ -95,12 +76,12 @@ with the human, then re-run with `--apply`.
 
 ## Steps
 
-1. **Resolve the repo root** (run from the primary checkout): see **Repo
-   configuration (.superenv)** above.
+1. Resolve the target through its per-goal registry row. `force-stop.sh --slug` loads the recorded
+   physical project root/mode before project configuration, so it may run outside the project.
 2. **Diagnose first with the `superagent:superagent-monitor` skill.** Confirm the
    loop is actually stuck (transient status + held lock + no progress). If it is
    healthy or a tick is doing real work, STOP — force-stop is the wrong tool.
-3. **Preview (dry-run).** From `primary_root`:
+3. **Preview (dry-run).**
 
    ```
    $SUPERAGENT_SCRIPTS/force-stop.sh (<PLAN.md> | --slug <slug>) [--drain] [--no-kick]

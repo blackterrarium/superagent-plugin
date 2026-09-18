@@ -1,0 +1,57 @@
+{
+  "harness": "pi",
+  "vault": "internal",
+  "result": "PASS",
+  "evidence_kind": "real harness execution",
+  "project": "/private/tmp/git-free-smoke-pi-internal/project",
+  "root_plan": "/private/tmp/git-free-smoke-pi-internal/project/vault/2026-09-17-23_32-git-free-smoke/master-plans/2026-09-17-23_32-git-free-smoke.md",
+  "loop": "/private/tmp/git-free-smoke-pi-internal/project/vault/2026-09-17-23_32-git-free-smoke/loop-status/git-free-smoke.md",
+  "receipts": [
+    "/private/tmp/git-free-smoke-pi-internal/project/vault/2026-09-17-23_32-git-free-smoke/reports/2026-09-17-23_51-restore-default-greeting-completed-local.md",
+    "/private/tmp/git-free-smoke-pi-internal/project/vault/2026-09-17-23_32-git-free-smoke/reports/2026-09-18-00_15-add-named-greeting-support-completed-local.md"
+  ],
+  "evaluation": "/private/tmp/git-free-smoke-pi-internal/project/vault/projects/smoke-evaluation/eval-reports/2026-09-18-00_26-r1.md",
+  "snapshot": {
+    "manifest": "/private/tmp/git-free-smoke-pi-internal/snapshot-evidence/superagent-snapshot-u9w8r2p0.manifest.json",
+    "source_id": "snapshot:9ea5d9f9a80f52941ec5b2eb3461d9a3d35237e5716d3bb3bb17e2af794ad970",
+    "token": "a2fbe214319c43fd856084886186be5c",
+    "workspace": "/private/tmp/git-free-smoke-pi-internal/snapshot-evidence/superagent-snapshot-u9w8r2p0"
+  },
+  "forbidden_tool_calls": 0,
+  "prohibited_sentinel_calls": 0,
+  "harness_runtime_git_probes": [
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "status --short"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "status --short"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    }
+  ],
+  "git_metadata": null
+}

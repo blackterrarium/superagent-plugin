@@ -19,7 +19,7 @@ covers all concurrent loops. Pass a `<slug>` to scope to one.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `/scripts/_common.sh` and calling `superagent_load_context "" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Step 1 — Enumerate (always safe, read-only)
 
@@ -31,12 +31,14 @@ $SUPERAGENT_SCRIPTS/status.sh <slug>   # drill into one (pending decision + tail
 $SUPERAGENT_SCRIPTS/status.sh --json    # machine-readable, for your own parsing
 ```
 
-The output opens with a host-wide `gh auth:` line, then columns `SLUG STATUS ITER TIMER TICK
-LOCK INPUT`. Read them, then **interpret** for the user:
+The table columns are `SLUG STATUS ITER TIMER TICK LOCK INPUT GH-AUTH`. Each registry row is
+resolved in its own subshell, so one project's values cannot become another project's overrides.
+Read them, then **interpret** for the user:
 
-- **`gh auth: unauth`** (or `no-gh`) — a **host-wide blocker**: `superplan`/`superrun` cannot do CI/PR
-  operations, and every tick's preflight aborts loudly, so no loop can make progress. Flag this first;
-  fix by setting `GH_TOKEN` in `.env` (see [scripts/README.md](../../scripts/README.md#prerequisites)).
+- **`GH-AUTH=disabled`** — the row records `SUPER_GIT_MODE=none`; status did not load a token or
+  contact `gh`. **`unauth`** (or `no-gh`) on a GitHub row blocks that row's CI/PR operations and its
+  tick preflight aborts loudly. Fix the affected project's `GH_TOKEN`/authentication as described in
+  [scripts/README.md](../../scripts/README.md#prerequisites).
 - **`INPUT=YES`** (status `WAITING FOR INPUT`) — the loop is parked on a decision the L7 panel could not
   resolve. Offer to answer it (Step 2). The operator was notified once when it parked (SUPER_NOTIFY_CMD /
   desktop), and scheduled fires are free until answered (SUPER_INPUT_GATE). `INPUT=ans` means an answer is

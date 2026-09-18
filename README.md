@@ -227,6 +227,34 @@ Every `SUPER_*` key is resolved at point of use. Highest wins:
 A repo with no `.superenv` runs entirely on the defaults. `superagent:init` creates one by copying
 the template so you can edit knobs in place.
 
+### Git integration mode
+
+`SUPER_GIT_MODE=github` is the default and recommended mode. It preserves the established worktree,
+commit, PR, merge, sync, CI, and GitHub evidence lifecycle.
+
+Set one key to run in an ordinary folder with no Superagent-managed git or GitHub operations:
+
+```bash
+printf 'SUPER_GIT_MODE=none\n' > .superenv
+superagent:init
+```
+
+Local mode edits the recorded physical project in place under a Superagent writer lock. It keeps the
+normal plan/run/review/closeout lifecycle, local tests, and acceptance gates. Completion is recorded
+as `completed-local` with before/result manifests, changed and deleted paths, command results, review
+outcomes, and acceptance evidence. Reports say local files were verified; they contain no PR or commit
+claim. An absolute or `~/...` `SUPER_GOAL_ROOT` remains an external vault, but it is also plain local
+storage in this mode and is locked with the project.
+
+Snapshots exclude `.git`, `.env*`, Superagent runtime state, and an internal vault. Unsafe or missing
+inputs fail explicitly; symlinks must resolve inside the captured project. The lock serializes
+Superagent writers, while unrelated editors can still change files, so capture verifies the source
+before and after and refuses inconsistent evidence. CI-only evidence is incompatible with local mode.
+
+New goals record their mode and physical project root. Changing either for an in-flight goal parks the
+loop before credentials or integration work; restore the recorded configuration or start a new goal.
+An unmarked legacy goal is treated as `github`.
+
 ### Roles
 
 Fourteen role keys control which model and effort each part of the plugin uses. The supervisor is

@@ -64,17 +64,17 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 mkdir -p "$CONF_DIR"
 
 {
-  echo "REPO=$REPO"
-  echo "SUPERAGENT_PROJECT_ROOT=$REPO"
-  echo "SUPERAGENT_GIT_MODE=$SUPER_GIT_MODE"
+  printf 'REPO=%q\n' "$REPO"
+  printf 'SUPERAGENT_PROJECT_ROOT=%q\n' "$REPO"
+  printf 'SUPERAGENT_GIT_MODE=%q\n' "$SUPER_GIT_MODE"
   # The plugin's own scripts/ dir — recorded at install time because the systemd
   # unit runs detached from any Claude Code session (no $CLAUDE_PLUGIN_ROOT in its
   # environment), and superagent-tick.sh lives in the plugin, not in $REPO.
-  echo "SUPERAGENT_SCRIPT_DIR=$SCRIPT_DIR"
-  echo "LOOP_FILE=$LOOP_FILE"
+  printf 'SUPERAGENT_SCRIPT_DIR=%q\n' "$SCRIPT_DIR"
+  printf 'LOOP_FILE=%q\n' "$LOOP_FILE"
   # The goal slug, so a tick can find its own scheduler entry for the DONE
   # self-disarm (superagent-tick.sh; SUPER_AUTO_DISARM_ON_DONE).
-  echo "SUPERAGENT_SLUG=$SLUG"
+  printf 'SUPERAGENT_SLUG=%q\n' "$SLUG"
   # Only pin TICK_TIMEOUT when a cap is explicitly given; otherwise omit it so the
   # wrapper runs uncapped (no systemd/script wall-clock ceiling).
   [[ -n "$TICK_TIMEOUT" ]] && echo "TICK_TIMEOUT=$TICK_TIMEOUT"
