@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.0 — 2026-09-18
+
+- **Run the normal Superagent lifecycle without managed git or GitHub operations.** Set
+  `SUPER_GIT_MODE=none` to plan, execute, review, repair, close out, supervise, and evaluate work
+  in an ordinary directory. The default remains `github`, preserving existing behavior.
+- **Protect local work with owned locks and reproducible snapshots.** The new workspace-state
+  helper coordinates project and vault writers, survives interrupted owners, captures filesystem
+  state with explicit exclusions and symlink handling, and compares before/after manifests without
+  requiring a repository.
+- **Record local completion and evaluation evidence.** Git-free runs use snapshot identities,
+  retained receipts, source-preservation checks, and local evaluation reports in place of commits,
+  pull requests, merges, and CI evidence. GitHub-mode proof rules remain unchanged.
+- **Ship the mode across every supported package.** Canonical, Codex, Cursor, and Pi builds include
+  the setting, runtime helpers, and lifecycle instructions. Deterministic integration suites pass;
+  real Codex and Pi internal/external-vault runs reached `DONE`. Claude was logged out and Cursor
+  was unavailable for equivalent live harness runs.
+
 ## 0.9.0 — 2026-09-17
 
 - **Publish a complete plan tree before execution.** `supergoal` now authors and reviews every
