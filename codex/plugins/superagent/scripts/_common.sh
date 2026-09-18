@@ -35,6 +35,7 @@ _superagent_load_gh_token() {
 # Returns non-zero when gh cannot authenticate — callers should abort the tick so
 # a misconfigured host fails LOUDLY rather than silently breaking every PR/CI step.
 ensure_gh_auth() {
+  if ! superagent_uses_git; then return 0; fi
   _superagent_load_gh_token
   if ! command -v gh >/dev/null 2>&1; then
     echo "superagent: gh CLI not found on PATH. superrun's CI/PR steps require it; aborting." >&2
@@ -215,6 +216,7 @@ ensure_cli_bin() {
 # Non-fatal report: echoes "ok:<account>" (or "ok" if the account can't be parsed)
 # when gh is authenticated, else "unauth". Used by status.sh.
 gh_auth_state() {
+  if ! superagent_uses_git; then echo "disabled"; return 0; fi
   _superagent_load_gh_token
   command -v gh >/dev/null 2>&1 || { echo "no-gh"; return 0; }
   if gh auth status >/dev/null 2>&1; then
@@ -301,6 +303,183 @@ load_superenv() {
   rm -f "$snapshot"
 }
 
+# Validate the effective workflow integration mode. Missing means the shipped,
+# backward-compatible GitHub workflow; an explicitly empty value is invalid.
+superagent_validate_git_mode() {
+  if [[ -z "${SUPER_GIT_MODE+x}" ]]; then
+    SUPER_GIT_MODE=github
+    export SUPER_GIT_MODE
+  fi
+  case "$SUPER_GIT_MODE" in
+    github|none) ;;
+    *) echo 'superagent: SUPER_GIT_MODE must be github|none' >&2; return 2 ;;
+  esac
+  if [[ "$SUPER_GIT_MODE" == none && "${SUPER_TEST_EVIDENCE:-local}" == ci ]]; then
+    echo 'superagent: SUPER_GIT_MODE=none requires local test evidence' >&2
+    return 2
+  fi
+  return 0
+}
+
+# Predicate only: callers must load and validate configuration first.
+superagent_uses_git() { [[ "${SUPER_GIT_MODE-}" == github ]]; }
+
+_superagent_physical_dir() {
+  local dir="${1:-}"
+  [[ -n "$dir" && -d "$dir" ]] || {
+    echo "superagent: project directory does not exist: ${dir:-<empty>}" >&2
+    return 2
+  }
+  (cd "$dir" && pwd -P)
+}
+
+_superagent_clear_loaded_config() {
+  local name
+  while IFS= read -r name; do unset "$name"; done < <(compgen -A variable | grep -E '^(SUPER_|TICK_)' || true)
+}
+
+# Resolve the physical project root and configuration before any caller performs
+# git, GitHub, credential, or CI work. Explicit REPO wins. Otherwise an ancestor
+# .superenv can select local mode; only the GitHub branch may fall back to git.
+# Usage: superagent_load_context START_DIR run|init
+superagent_load_context() {
+  local start="${1:-}" purpose="${2:-}" explicit_repo="${REPO-}"
+  local caller_snapshot candidate="" cursor primary common name rc
+  case "$purpose" in run|init) ;; *) echo 'superagent: context purpose must be run|init' >&2; return 2 ;; esac
+  start="$(_superagent_physical_dir "$start")" || return $?
+
+  caller_snapshot="$(mktemp)"
+  { compgen -A variable | grep -E '^(SUPER_|TICK_)' | while IFS= read -r name; do
+      printf '%s=%q\n' "$name" "${!name}"
+    done; } >"$caller_snapshot" || true
+
+  if [[ -n "$explicit_repo" ]]; then
+    REPO="$(_superagent_physical_dir "$explicit_repo")" || { rm -f "$caller_snapshot"; return 2; }
+    export REPO
+    load_superenv "$REPO"
+    superagent_validate_git_mode
+    rc=$?
+    rm -f "$caller_snapshot"
+    return "$rc"
+  fi
+
+  cursor="$start"
+  while :; do
+    if [[ -f "$cursor/.superenv" ]]; then candidate="$cursor"; break; fi
+    [[ "$cursor" == / ]] && break
+    cursor="${cursor%/*}"; [[ -n "$cursor" ]] || cursor=/
+  done
+
+  if [[ -n "$candidate" ]]; then load_superenv "$candidate"; else load_superenv "$start"; fi
+  superagent_validate_git_mode || { rc=$?; rm -f "$caller_snapshot"; return "$rc"; }
+
+  if [[ "$SUPER_GIT_MODE" == none ]]; then
+    if [[ -n "$candidate" ]]; then REPO="$candidate"
+    elif [[ "$purpose" == init ]]; then REPO="$start"
+    else
+      echo 'superagent: SUPER_GIT_MODE=none requires explicit REPO or an ancestor .superenv' >&2
+      rm -f "$caller_snapshot"
+      return 2
+    fi
+    export REPO
+    rm -f "$caller_snapshot"
+    return 0
+  fi
+
+  # GitHub mode preserves primary-checkout configuration for linked worktrees.
+  common="$(git -C "$start" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || {
+    echo 'superagent: GitHub mode requires a git repository; set REPO or initialize with SUPER_GIT_MODE=none' >&2
+    rm -f "$caller_snapshot"
+    return 2
+  }
+  primary="$(_superagent_physical_dir "$(dirname "$common")")" || { rm -f "$caller_snapshot"; return 2; }
+
+  # Discovery-loaded values must not shadow the primary checkout. Restore only
+  # the true caller overrides before loading the authoritative configuration.
+  _superagent_clear_loaded_config
+  # shellcheck disable=SC1090
+  . "$caller_snapshot"
+  rm -f "$caller_snapshot"
+  REPO="$primary"
+  export REPO
+  load_superenv "$REPO"
+  superagent_validate_git_mode
+}
+
+superagent_workspace_state_helper() {
+  local helper
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/workspace-state.py"
+  [[ -f "$helper" ]] || { echo "superagent: workspace helper not found: $helper" >&2; return 2; }
+  printf '%s\n' "$helper"
+}
+
+# superagent_workspace_run ROOT [ROOT ...] -- COMMAND [ARG ...]
+# Canonical sorting and inherited-owner validation are delegated to the Python
+# helper so every lifecycle entry point uses the same locking rules.
+superagent_workspace_run() {
+  local helper root_args=() command=()
+  helper="$(superagent_workspace_state_helper)" || return $?
+  while [[ $# -gt 0 && "$1" != -- ]]; do
+    root_args+=(--root "$1")
+    shift
+  done
+  [[ $# -gt 0 && "$1" == -- ]] || { echo 'superagent: workspace_run requires -- before the command' >&2; return 2; }
+  shift
+  command=("$@")
+  [[ ${#root_args[@]} -gt 0 && ${#command[@]} -gt 0 ]] || {
+    echo 'superagent: workspace_run requires at least one root and a command' >&2
+    return 2
+  }
+  python3 "$helper" run "${root_args[@]}" -- "${command[@]}"
+}
+
+superagent_loop_field() {
+  local file="${1:-}" key="${2:-}"
+  [[ -n "$file" && -n "$key" ]] || return 0
+  sed -n "s/^${key}:[[:space:]]*//p" "$file" 2>/dev/null | head -1
+}
+
+# Existing unmarked loops are GitHub-mode contracts. A mismatch is reported and
+# parked before authentication, CI, git, or model dispatch can run.
+superagent_validate_mode_contract() {
+  local loop="${1:-}" recorded="${SUPERAGENT_GIT_MODE-}" recorded_root="${SUPERAGENT_PROJECT_ROOT-}"
+  [[ -n "$recorded" ]] || recorded="$(superagent_loop_field "$loop" git_mode)"
+  [[ -n "$recorded" ]] || recorded=github
+  [[ -n "$recorded_root" ]] || recorded_root="$(superagent_loop_field "$loop" project_root)"
+  if [[ "$recorded" == "$SUPER_GIT_MODE" && ( -z "$recorded_root" || "$recorded_root" == "$REPO" ) ]]; then
+    return 0
+  fi
+  local detail="recorded mode/root=${recorded}/${recorded_root:-<legacy>} effective=${SUPER_GIT_MODE}/${REPO}"
+  echo "superagent: goal execution contract mismatch: $detail" >&2
+  if [[ -n "$loop" && -f "$loop" && -w "$loop" ]]; then
+    local tmp; tmp="$(mktemp)"
+    DETAIL="$detail" awk '
+      /^status:[[:space:]]*/ { print "status: WAITING FOR INPUT"; next }
+      /^## Pending decision/ {
+        print
+        print "reason: git-mode-mismatch"
+        print "detail: " ENVIRON["DETAIL"]
+        print "Restore the recorded SUPER_GIT_MODE to continue, or start a new goal with an explicit predecessor disposition."
+        in_pending=1; found=1; next
+      }
+      in_pending && /^## / { in_pending=0 }
+      in_pending { next }
+      { print }
+      END {
+        if (!found) {
+          print ""
+          print "## Pending decision"
+          print "reason: git-mode-mismatch"
+          print "detail: " ENVIRON["DETAIL"]
+          print "Restore the recorded SUPER_GIT_MODE to continue, or start a new goal with an explicit predecessor disposition."
+        }
+      }
+    ' "$loop" >"$tmp" && cat "$tmp" >"$loop"
+    rm -f "$tmp"
+  fi
+  return 2
+}
+
 # ---------------------------------------------------------------------------
 # Goal-vault location. SUPER_GOAL_ROOT is repo-relative by default (`vault`) — the
 # vault lives inside the checkout and its docs are committed there via PR. An
@@ -342,6 +521,15 @@ superagent_loop_status() {
   local f="${1:-}"
   [[ -n "$f" ]] || return 0
   { sed -n 's/^status:[[:space:]]*//p' "$f" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//'; } || true
+}
+
+# superagent_registry_value <env-file> <variable> — read one literal registry value.
+# Registration files are data, never shell input. Keep this compatibility name for
+# older lifecycle callers while using the Stage 3 literal reader.
+superagent_registry_value() {
+  local file="${1:-}" key="${2:-}"
+  [[ -f "$file" && "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] || return 0
+  superagent_registration_field "$file" "$key"
 }
 
 # superagent_pending_section <loop-file> — body of `## Pending decision`
@@ -590,7 +778,7 @@ superagent_systemd_path() {
 # Outputs globals SLUG, LOOP_FILE, REPO, SUPERVISOR, TARGET_LOCATOR.
 superagent_control_target() {
   local target="${1:-}" selected="${2:-}" conf="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
-  local envf lf rr kind locator physical wanted="" found="" candidate regslug requested_repo="${REPO:-}"
+  local envf lf rr kind locator physical wanted="" found="" candidate regslug requested_repo="${REPO:-}" registered_mode
   if [[ -n "$selected" && ! "$selected" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then echo 'invalid slug' >&2; return 2; fi
   if [[ -n "$target" ]]; then
     [[ -e "$target" ]] || { echo "target does not exist: $target" >&2; return 2; }
@@ -598,8 +786,7 @@ superagent_control_target() {
     else wanted="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"; fi
   fi
   if [[ -n "$requested_repo" ]]; then
-    requested_repo="$(git -C "$requested_repo" rev-parse --path-format=absolute --git-common-dir)" || return 2
-    requested_repo="$(cd "$(dirname "$requested_repo")" && pwd -P)"
+    requested_repo="$(_superagent_physical_dir "$requested_repo")" || return 2
   fi
   for envf in "$conf"/*.env; do
     [[ -f "$envf" ]] || continue
@@ -609,6 +796,12 @@ superagent_control_target() {
     rr="$(superagent_registration_field "$envf" REPO)" || return 2
     [[ -f "$lf" && -d "$rr" ]] || { [[ -z "$selected" ]] && continue; echo 'registration state/repo missing' >&2; return 2; }
     rr="$(cd "$rr" && pwd -P)"
+    registered_mode="$(superagent_registration_field "$envf" SUPERAGENT_GIT_MODE)" || return 2
+    registered_mode="${registered_mode:-github}"
+    if [[ -n "$requested_repo" && "$requested_repo" != "$rr" && "$registered_mode" == github ]]; then
+      requested_repo="$(git -C "$requested_repo" rev-parse --path-format=absolute --git-common-dir)" || return 2
+      requested_repo="$(cd "$(dirname "$requested_repo")" && pwd -P)"
+    fi
     kind="$(superagent_registration_field "$envf" SUPERAGENT_SUPERVISOR)" || return 2
     kind="${kind:-superagent}"
     locator="$(awk -v k="$([[ "$kind" == supercode ]] && echo project || echo master_plan)" 'NR==1{next} /^---$/{exit} index($0,k ":")==1 {sub(/^[^:]*:[ \t]*/, ""); print}' "$lf")"

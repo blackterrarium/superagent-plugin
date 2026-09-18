@@ -16,11 +16,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-load_superenv "$REPO"
+superagent_load_context "$PWD" run || exit $?
 
 usage() {
   echo "usage: install-timer.sh <goal-slug> <LOOP_FILE> [--supervisor superagent|supercode] [--interval 30m] [--timeout <secs>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi]" >&2
@@ -70,18 +68,20 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 mkdir -p "$CONF_DIR"
 
 {
-  echo "REPO=$REPO"
+  printf 'REPO=%s\n' "$REPO"
+  printf 'SUPERAGENT_PROJECT_ROOT=%s\n' "$REPO"
+  printf 'SUPERAGENT_GIT_MODE=%s\n' "$SUPER_GIT_MODE"
   # Detached ticks must discover inner/outer registrations in the same root.
-  echo "XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}"
+  printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}"
   # The plugin's own scripts/ dir — recorded at install time because the systemd
   # unit runs detached from any Claude Code session (no $CLAUDE_PLUGIN_ROOT in its
   # environment), and superagent-tick.sh lives in the plugin, not in $REPO.
-  echo "SUPERAGENT_SCRIPT_DIR=$SCRIPT_DIR"
-  echo "LOOP_FILE=$LOOP_FILE"
+  printf 'SUPERAGENT_SCRIPT_DIR=%s\n' "$SCRIPT_DIR"
+  printf 'LOOP_FILE=%s\n' "$LOOP_FILE"
   # The goal slug, so a tick can find its own scheduler entry for the DONE
   # self-disarm (superagent-tick.sh; SUPER_AUTO_DISARM_ON_DONE).
-  echo "SUPERAGENT_SLUG=$SLUG"
-  echo "SUPERAGENT_SUPERVISOR=$SUPERVISOR"
+  printf 'SUPERAGENT_SLUG=%s\n' "$SLUG"
+  printf 'SUPERAGENT_SUPERVISOR=%s\n' "$SUPERVISOR"
   # Only pin TICK_TIMEOUT when a cap is explicitly given; otherwise omit it so the
   # wrapper runs uncapped (no systemd/script wall-clock ceiling).
   [[ -n "$TICK_TIMEOUT" ]] && echo "TICK_TIMEOUT=$TICK_TIMEOUT"

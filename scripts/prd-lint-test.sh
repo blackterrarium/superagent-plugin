@@ -88,6 +88,10 @@ EOF
 # ── Task 2: files, headers, prd.md sections, ledger ───────────────────────────
 valid_project "$T/valid"
 expect "valid project exits 0"                0 'PASS prd.md:sections' "$T/valid"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's/| Inner loop | Eval report |/| Inner loop | Source | Eval report |/; s/|---|---|---|---|---|---|/|---|---|---|---|---|---|---|/' "$T/p/prd.md"
+expect "new Source ledger header is accepted" 0 'PASS prd.md:Iteration ledger' "$T/p"
+rm -rf "$T/p"; valid_project "$T/p"; sed -i.bak 's/| Inner loop | Eval report |/| Inner loop | Commit | Eval report |/; s/|---|---|---|---|---|---|/|---|---|---|---|---|---|---|/' "$T/p/prd.md"
+expect "legacy Commit ledger header is accepted" 0 'PASS prd.md:Iteration ledger' "$T/p"
 expect "usage error without a dir"            2 'usage' ""
 rm -rf "$T/p"; valid_project "$T/p"; rm "$T/p/evaluation.md"
 expect "missing evaluation.md is a FAIL"      1 'FAIL evaluation.md:file' "$T/p"
@@ -203,6 +207,24 @@ if [[ "$(wc -l <"$T/coverage-records" | tr -d ' ')" == 2 ]] &&
   ok "acceptance and suggestion tables do not become executable checks"
 else
   fail "acceptance prose contaminated parsed C/J checks"
+fi
+
+# Shared implicit-root resolution must work in a local-mode ordinary directory without probing git.
+printf 'SUPER_GIT_MODE=none\nSUPER_GOAL_ROOT=vault\n' >"$T/repo/.superenv"
+valid_project "$T/repo/vault/implicit-project"
+mkdir -p "$T/no-git"
+cat >"$T/no-git/git" <<EOF
+#!/usr/bin/env bash
+echo called >>"$T/implicit-git-calls"
+exit 99
+EOF
+chmod +x "$T/no-git/git"
+implicit_out="$(env -u PRD_LINT_REPO_ROOT PATH="$T/no-git:$PATH" "$LINT" "$T/repo/vault/implicit-project" 2>&1)"
+implicit_rc=$?
+if [[ "$implicit_rc" -eq 0 && ! -s "$T/implicit-git-calls" ]] && grep -q 'PASS prd.md:sections' <<<"$implicit_out"; then
+  ok "local implicit root resolves without git"
+else
+  fail "local implicit root (rc=$implicit_rc git_calls=$([ -s "$T/implicit-git-calls" ] && echo y || echo n))"
 fi
 
 echo "prd-lint-test: $FAILS failure(s)"

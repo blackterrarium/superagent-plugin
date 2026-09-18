@@ -26,8 +26,9 @@ related skills: superstage, superauthor, supertraverse, superplan
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -36,7 +37,7 @@ related skills: superstage, superauthor, supertraverse, superplan
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md

@@ -5,8 +5,15 @@ Run the superagent:superagent autonomy loop skill (built on the
 scheduler. This is the **`external` driver** (superloop L2, Driver B): each tick fires in a fresh
 headless CLI session, so context never accumulates and the loop runs straight to `DONE` with no restart.
 
-No loop logic lives here — these scripts only *launch* ticks. All loop state lives in the gitignored
-loop-status file the skills own.
+No loop logic lives here — these scripts only *launch* ticks. All loop state lives in the runtime
+loop-status file the skills own (gitignored in GitHub mode, plain local state in local mode).
+
+`SUPER_GIT_MODE=github` is the backward-compatible default and recommended operating mode. With
+`SUPER_GIT_MODE=none`, the same scheduler lifecycle works in an ordinary directory: the wrappers skip
+git/GitHub/auth/CI gates, serialize Superagent writers with `.superagent-runtime/workspace.lockd`, and
+the skills publish filesystem snapshots and completed-local receipts instead of commits and PRs.
+External vaults are locked separately. Mode/root markers are immutable for an active goal; a mismatch
+parks it on `WAITING FOR INPUT` before dispatch.
 
 **Finding this plugin's `scripts/` dir.** Every runnable example below uses `$SUPERAGENT_SCRIPTS` for the
 absolute path to this installed plugin's `scripts/` directory — set it once per shell before pasting any
@@ -161,8 +168,9 @@ section, lives there; it is the reference). `superagent-tick.sh`, `launch.sh`, a
 - `ANTHROPIC_API_KEY=...` in the repo `.env` (repo policy — keys live in `.env` only; the wrapper
   sources `.env`) — **or** a `claude` CLI already logged in (subscription/OAuth hosts): when no key is
   set the tick logs a note and relies on the CLI's own stored login instead of aborting.
-- **`gh` authenticated in the tick.** Planning operations and `superrun` use `gh` for CI/PR operations
-  (`gh pr create` / `gh run watch` / `gh pr merge --admin`). The CLI runs each tick in a tool sandbox
+- **In `github` mode, `gh` authenticated in the tick.** Planning operations and `superrun` use `gh`
+  for CI/PR operations (`gh pr create` / `gh run watch` / `gh pr merge --admin`). Local mode disables
+  this preflight and never probes credentials. The CLI runs each GitHub-mode tick in a tool sandbox
   that blocks `gh` from reading its own config/keyring, so `gh` authenticates only via **`GH_TOKEN` in
   the environment**. Put `GH_TOKEN=<token>` in `.env` (canonical, repo-policy path — the wrapper sources
   it and exports it so the CLI child inherits it). If it is absent, the wrapper falls back to the
@@ -204,6 +212,12 @@ $SUPERAGENT_SCRIPTS/launch.sh vault/<STAMP>-<slug>/master-plans/<seed>.md
 # external vault: pass the plan by its absolute path, e.g. $SUPERAGENT_SCRIPTS/launch.sh ~/superagent-vaults/myrepo/<STAMP>-<slug>/master-plans/<seed>.md
 # optional: --interval 10m (default, SUPER_TICK_INTERVAL)
 ```
+
+For an ordinary non-git project, create `.superenv` with `SUPER_GIT_MODE=none`, run
+`superagent:init`, create the root goal plan, and launch it with the same command. Local evaluation
+uses `supereval.sh <project-dir> --repo <root> --out <results> --keep-workspace`; it records a
+`snapshot:<digest>` source, input/result manifests, setup outcome, command writes, and a cleanup token.
+`--commit`, `--worktree`, and `--keep-worktree` are rejected in this mode.
 
 It derives the goal slug + loop file, fails fast if the `claude` binary or `gh` auth is missing (arming
 nothing), is idempotent (re-invoking re-arms / resumes), and kicks the first tick immediately. The
@@ -351,20 +365,31 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   2 on usage. `PRD_LINT_REPO_ROOT` overrides repo-root detection. Bash 3.2, no network.
 - `prd-lint-test.sh` — offline fixture tests for `prd-lint.sh` (a valid project plus one mutation
   per FAIL and WARN class); exit 1 on any failure.
-- `supereval.sh <project-dir> --repo <repo> --commit <sha> --out <file> [--worktree <dir>] [--keep-worktree] [--max-timeout-min <n>]`
-  — offline command-check runner. Adds a detached git worktree of `<sha>`, runs `evaluation.md`'s
+- `supereval.sh <project-dir> --repo <repo> [--commit <sha>] --out <file> [--worktree <dir>] [--keep-worktree|--keep-workspace] [--max-timeout-min <n>]`
+  — offline command-check runner. GitHub mode adds a detached git worktree of `<sha>`; local mode
+  captures an owned filesystem snapshot and requires no commit. It runs `evaluation.md`'s
   `## Command checks` rows against it under a `timeout`/`gtimeout`/uncapped wrapper
   (`min(row, --max-timeout-min | SUPER_EVAL_TIMEOUT_MIN)` minutes each), and writes a markdown
   results file (Environment line, `| Id | Result | Exit | Seconds | Evidence |` table, one output
   block per non-PASS check). Result is `PASS`/`FAIL`/`TIMEOUT`/`ERROR`; a failed setup marks every
   row `ERROR setup failed`. Exit 0 when every command row is `PASS`, 1 otherwise, 2 on usage /
-  script-setup errors. Judged (`J`) rows are listed but not run here (the `supereval` skill grades
+  script-setup errors. Local results include source/workspace/manifest/change/cleanup evidence and
+  verify the original source stayed unchanged. Judged (`J`) rows are listed but not run here (the `supereval` skill grades
   them). Sources `_common.sh` + `_evalspec.sh`; bash 3.2, no network.
-- `supereval-test.sh` — offline tests for the `_evalspec.sh` parser and the `supereval.sh` runner
-  (the spec's eight command-check cases against a one-commit fixture repo in a temp dir). Bash 3.2,
+- `supereval-test.sh` — offline tests for the `_evalspec.sh` parser and both `supereval.sh` workspace
+  kinds (commit/worktree compatibility plus local isolation, failures, timeouts, retention, deletion,
+  exclusion, and zero-git assertions). Bash 3.2,
   no network; exit 1 on any failure.
 - `vault-external-test.sh` — tests for the external-vault resolver, launch.sh
   external-plan acceptance, stop/force-stop absolute matching, init ignore routing; offline, bash 3.2.
+- `git-mode-smoke.py --harness claude|codex|cursor|pi --vault internal|external --run-dir <new-dir>`
+  — live `SUPER_GIT_MODE=none` acceptance against a copied package in an ordinary directory. It
+  drives init, a two-leaf goal, successive fresh-session ticks through `DONE`, local tests, a real
+  filesystem snapshot, and judged `supereval`; preserves every prompt/transcript/receipt; and rejects
+  emitted git/GitHub/credential operations or newly created `.git` metadata. Use `--resume` with the
+  same arguments after an interrupted phase to continue from the retained loop and project. This is
+  an authenticated, model-billed test; a missing CLI or unavailable authentication is a coverage gap,
+  not a passing result.
 - `bridge-smoke.sh` — live probes for `role-bridge.sh` against whatever real CLIs are installed on
   the host (T1–T7: each harness native, plus Claude↔Codex relay round trips); missing CLIs are
   reported as SKIP, not FAIL. Always exits 0 and writes `bridge-smoke-report.md` at the repo root —

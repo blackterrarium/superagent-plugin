@@ -15,8 +15,9 @@ related skills: superloop, supercode-external, supermeta, supereval, superdiagno
 >   any residual mention of them as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
->   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode,
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed. "Desktop routine" = a Claude Desktop feature,
 >   not available — use an OS scheduler. A role whose `.superenv` value names another harness
 >   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
 >   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a

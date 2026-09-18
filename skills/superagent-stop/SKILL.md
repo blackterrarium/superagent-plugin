@@ -34,12 +34,7 @@ explicit recorded answers per supercode; a rearm alone is not an answer.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Parameters
 
@@ -55,17 +50,17 @@ When these are absent, DO NOT pass them — default graceful drain, env kept.
 
 ## Steps
 
-1. **Resolve the repo root** (run from the primary checkout; if invoked from a
-   worktree, resolve `primary_root`), and set `$SUPERAGENT_SCRIPTS` to this plugin's
-   installed `scripts/` directory — see [scripts/README.md](../../scripts/README.md)
-   for the convention:
+1. Set `$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory. The
+   stopper matches the plan against the per-goal registry first and loads that row's recorded
+   physical project root/mode before project configuration, so it may be invoked outside the
+   project — see [scripts/README.md](../../scripts/README.md) for the convention:
 
    ```
-   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   primary_root="$REPO"
    SUPERAGENT_SCRIPTS="${CLAUDE_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
    # for cron/systemd use the absolute install path — see scripts/README.md
    ```
-2. **Invoke the stopper** with the parsed arguments, from `primary_root`:
+2. **Invoke the stopper** with the parsed arguments:
 
    ```
    $SUPERAGENT_SCRIPTS/stop.sh <PLAN.md> [--hard] [--purge]

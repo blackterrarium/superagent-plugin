@@ -7,7 +7,7 @@
 # Prints one finding per line — `PASS|WARN|FAIL <file>:<loc> <message>` — or, with --json, one
 # JSON array of {"level","file","loc","message"}. Exit 0 when there is no FAIL, 1 when there is,
 # 2 on a usage error. WARNs never change the exit code.
-# Repo root: PRD_LINT_REPO_ROOT, else `git rev-parse --show-toplevel` from the project dir.
+# Project root: PRD_LINT_REPO_ROOT, else shared mode-aware context resolution from the project dir.
 # SUPER_EVAL_TIMEOUT_MIN resolves env > <repo>/.superenv > templates/superenv.default (load_superenv).
 # A literal | inside a table cell must be written \| (standard markdown); an unescaped | splits the row.
 set -u
@@ -26,9 +26,11 @@ done
 if [[ -z "$PROJECT" ]]; then echo "usage: prd-lint.sh <project-dir> [--json]" >&2; exit 2; fi
 if [[ ! -d "$PROJECT" ]]; then echo "prd-lint: not a directory: $PROJECT" >&2; exit 2; fi
 PROJECT="$(cd "$PROJECT" && pwd)"
-REPO="${PRD_LINT_REPO_ROOT:-$(git -C "$PROJECT" rev-parse --show-toplevel 2>/dev/null || true)}"
-if [[ -z "$REPO" ]]; then echo "prd-lint: cannot find the repo root (set PRD_LINT_REPO_ROOT)" >&2; exit 2; fi
-load_superenv "$REPO"
+if [[ -n "${PRD_LINT_REPO_ROOT:-}" ]]; then REPO="$PRD_LINT_REPO_ROOT"; export REPO; fi
+if ! superagent_load_context "$PROJECT" run; then
+  echo "prd-lint: cannot resolve the project root (set PRD_LINT_REPO_ROOT)" >&2
+  exit 2
+fi
 MAX_TIMEOUT="${SUPER_EVAL_TIMEOUT_MIN:-60}"
 
 # ── findings ─────────────────────────────────────────────────────────────────
@@ -73,10 +75,11 @@ lint_prd() {
     prev=$n
   done
   $ok && finding PASS prd.md sections "the five sections are present and in order"
-  if grep -q '^| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |' "$f"; then
+  if grep -qE '^\| Round \| Meta-plan \| Goal folder \| Inner loop \| (Source|Commit) \| Eval report \| Verdict \|' "$f" \
+     || grep -q '^| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |' "$f"; then
     finding PASS prd.md "Iteration ledger" "ledger header row present"
   else
-    finding FAIL prd.md "Iteration ledger" "ledger header row must be '| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |'"
+    finding FAIL prd.md "Iteration ledger" "ledger header must use Source (legacy Commit/no-source ledgers are also accepted)"
   fi
   SC_ROWS="$(section_body "$f" "Success criteria" | table_rows)"
   [[ -z "$SC_ROWS" ]] && finding FAIL prd.md "Success criteria" "no success-criteria rows"

@@ -1,0 +1,197 @@
+{
+  "harness": "codex",
+  "vault": "external",
+  "result": "PASS",
+  "evidence_kind": "real harness execution",
+  "project": "/private/tmp/git-free-smoke-codex-external-r2/project",
+  "root_plan": "/private/tmp/git-free-smoke-codex-external-r2/external vault/2026-09-17-23_44-git-free-smoke/master-plans/2026-09-17-23_44-git-free-smoke.md",
+  "loop": "/private/tmp/git-free-smoke-codex-external-r2/external vault/2026-09-17-23_44-git-free-smoke/loop-status/git-free-smoke.md",
+  "receipts": [
+    "/private/tmp/git-free-smoke-codex-external-r2/external vault/2026-09-17-23_44-git-free-smoke/reports/2026-09-18-00_49-named-greetings-completed-local.md",
+    "/private/tmp/git-free-smoke-codex-external-r2/external vault/2026-09-17-23_44-git-free-smoke/reports/2026-09-18-00_14-default-greeting-completed-local.md"
+  ],
+  "evaluation": "/private/tmp/git-free-smoke-codex-external-r2/external vault/projects/smoke-evaluation/eval-reports/2026-09-18-01_23-r1.md",
+  "snapshot": {
+    "manifest": "/private/tmp/git-free-smoke-codex-external-r2/snapshot-evidence/superagent-snapshot-y5k_seyr.manifest.json",
+    "source_id": "snapshot:6d7c9fd4c32461ec70f5febf7dd6f56cf79c33f723f0802b11ac31e572c0016e",
+    "token": "1485d050ed9f46bca4795454eabadb15",
+    "workspace": "/private/tmp/git-free-smoke-codex-external-r2/snapshot-evidence/superagent-snapshot-y5k_seyr"
+  },
+  "forbidden_tool_calls": 0,
+  "prohibited_sentinel_calls": 0,
+  "harness_runtime_git_probes": [
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false remote -v"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit ls-remote https://github.com/anthropics/claude-plugins-official.git HEAD"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    },
+    {
+      "program": "git",
+      "argv": "-c safe.bareRepository=explicit -c core.hooksPath=/dev/null -c core.fsmonitor=false rev-parse --git-dir"
+    }
+  ],
+  "git_metadata": null
+}

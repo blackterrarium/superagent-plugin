@@ -1,0 +1,77 @@
+{
+  "harness": "pi",
+  "vault": "external",
+  "result": "PASS",
+  "evidence_kind": "real harness execution",
+  "project": "/private/tmp/git-free-smoke-pi-external-r2/project",
+  "root_plan": "/private/tmp/git-free-smoke-pi-external-r2/external vault/2026-09-17-23_44-git-free-smoke/master-plans/2026-09-17-23_44-git-free-smoke.md",
+  "loop": "/private/tmp/git-free-smoke-pi-external-r2/external vault/2026-09-17-23_44-git-free-smoke/loop-status/git-free-smoke.md",
+  "receipts": [
+    "/private/tmp/git-free-smoke-pi-external-r2/external vault/2026-09-17-23_44-git-free-smoke/reports/add-personalized-greeting-preserving-default-completed-local.md",
+    "/private/tmp/git-free-smoke-pi-external-r2/external vault/2026-09-17-23_44-git-free-smoke/reports/correct-default-greeting-contract-completed-local.md"
+  ],
+  "evaluation": "/private/tmp/git-free-smoke-pi-external-r2/external vault/projects/smoke-evaluation/eval-reports/2026-09-18-00_51-r1.md",
+  "snapshot": {
+    "manifest": "/private/tmp/git-free-smoke-pi-external-r2/snapshot-evidence/superagent-snapshot-p15pj8co.manifest.json",
+    "source_id": "snapshot:281391585e67045446658649de75d5c288fdd970b984715be32faffb2ed53b1b",
+    "token": "c7ac63a2800c4b35a71c5c971d064d82",
+    "workspace": "/private/tmp/git-free-smoke-pi-external-r2/snapshot-evidence/superagent-snapshot-p15pj8co"
+  },
+  "forbidden_tool_calls": 0,
+  "prohibited_sentinel_calls": 0,
+  "harness_runtime_git_probes": [
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "status --short"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "status --short"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "status --short"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    },
+    {
+      "program": "git",
+      "argv": "-c core.fsmonitor=false diff --no-ext-diff --name-only -z HEAD --"
+    }
+  ],
+  "git_metadata": null
+}

@@ -27,9 +27,10 @@ related skills: superagent, superloop, superagent-monitor
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
-> - `EnterWorktree` = not available; use `git worktree` via `bash`.
+> - `EnterWorktree` = not available; in `github` mode use `git worktree` via `bash`. In `none`
+>   mode the canonical local-workspace override applies and no git command is allowed.
 
 # Superagent external launcher
 
@@ -42,12 +43,7 @@ afterward, use the `superagent:superagent-monitor` skill.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Parameters
 
@@ -80,7 +76,7 @@ the flag — let `launch.sh` apply its defaults.
    host):
 
    ```
-   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   primary_root="$REPO"
    SUPERAGENT_SCRIPTS="${SUPER_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
    # for cron/systemd use the absolute install path — see scripts/README.md
    ```

@@ -26,8 +26,9 @@ related skills: supertraverse, superfinish, superplan
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -36,7 +37,7 @@ related skills: supertraverse, superfinish, superplan
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -53,12 +54,7 @@ to `superfinish`.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Prerequisite — superpowers
 
@@ -83,7 +79,7 @@ its evidence/decision docs through A7 without changing source; it is the sole no
 | "I'll just detect the target plan myself by reading the tree" | NO. Invoke `superagent:supertraverse` DESCENT in **execution mode** — it is the only place tree navigation is defined. |
 | "I'll implement the plan's tasks directly / dispatch my own subagents" | NO. You **MUST** use `superpowers:subagent-driven-development` to execute the plan. |
 | "I'll write the findings/closeout report and update the tree myself" | NO. You **MUST** use `superagent:superfinish` for closeout. |
-| "No worktree needed — I'll edit in the primary checkout" | NO. Enter a git worktree first — required by `superpowers:subagent-driven-development`'s own precondition. |
+| "No worktree needed — I'll edit in the primary checkout" | In `github`, NO: enter a worktree. In `none`, the recorded project plus inherited writer lock is the required workspace; suppress SDD's git/worktree stage. |
 | "I'll pause before each CI push to confirm" | NO. Run fully autonomously — let subagent-driven-development run end-to-end per its no-check-in-between-tasks rule. |
 | "I found the target, I'll execute the next one too while I'm here" | NO. One leaf per invocation. After closeout, report and exit. |
 | "A long CI push is queued — I'll wait for it to finish before pushing the next one" | NO. If `SUPER_CI_RUNNERS > 1`, queue every independent long push back-to-back (**CI scheduling**, Step 3) — the next free runner picks up the next job; serialize only across a named procedural gate. If `SUPER_CI_RUNNERS=1`, there is no runner contention to exploit, but a shardable batch's pushes still queue together and wait together. |
@@ -194,6 +190,12 @@ integration instructions are BLOCKED. Supersession alone authorizes neither merg
 
 ## Step 2 — Isolate the workspace (enter a worktree)
 
+If `SUPER_GIT_MODE=none`, do not invoke EnterWorktree or any git fallback. Work in the recorded
+physical `REPO` under the inherited project/vault workspace ownership. Validate the token and live
+owner, then capture the pre-task manifest with `workspace-state.py snapshot`. Continue to Step 3.
+
+If `SUPER_GIT_MODE=github`, use the worktree procedure below unchanged.
+
 Before any code work, enter a git worktree via the native `EnterWorktree` tool. This is a
 precondition of `subagent-driven-development`, required regardless of any host-repo policy on the
 question. Keep multi-batch execution isolated from the primary checkout. The native tool can be
@@ -207,6 +209,14 @@ preserves the same isolation in substance.
 `superpowers:subagent-driven-development` to execute the target leaf plan. Do not execute code work any
 other way.** Invoke it via the Skill tool and follow it exactly, **subject to the
 repo profile below**.
+
+In `SUPER_GIT_MODE=none`, prepend this binding override to the SDD controller and every implementer,
+reviewer, fix, and final-review prompt:
+
+> Git mode: none. Work in the recorded project under inherited workspace ownership. Do not invoke
+> worktree, commit, PR, merge, or finishing-branch operations. Use before/after manifests and file
+> content diffs for review context. Retain task reviews, final review, local tests, and acceptance
+> verification. Publish local closeout only after those gates pass.
 
 > **You must be the top-level agent of your process.** SDD's task loop dispatches subagents and
 > foreground-waits on each one; a subagent cannot foreground-wait on its own children (superloop
@@ -345,6 +355,12 @@ concurrently anyway and note the deviation in the Final Report.
 
 ## Step 3a — Autonomous code-PR integration (keyed by `SUPER_SKIP_FINISHING_HANDOFF`)
 
+If `SUPER_GIT_MODE=none`, suppress this entire integration stage and
+`superpowers:finishing-a-development-branch`. Capture the resulting snapshot, compare it to the
+pre-task manifest, rerun final workspace acceptance checks, and retain the exact command results,
+review outcomes, and evidence paths for Step 4. Do not reinterpret CI-only acceptance; the resolver
+has already rejected `SUPER_TEST_EVIDENCE=ci`. Continue directly to Step 4.
+
 If `SUPER_SKIP_FINISHING_HANDOFF=true`, or the caller is unattended (a `superagent` loop), Step 3a
 owns integration end-to-end with no interactive prompt. If `false` and a human is driving,
 `superpowers:finishing-a-development-branch`'s menu may take over integration; Step 3a governs only
@@ -358,7 +374,7 @@ governs whether to wait for CI **first**, in both branches; only the merge mecha
 item 1, so it is defined for every use in either branch:
 
 ```bash
-primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+primary_root="$REPO"
 ```
 
 1. The leaf plan's own task steps already pushed to CI with the flag `SUPER_CI_FLAG_TEMPLATE`
@@ -510,6 +526,9 @@ In both cases pass the evidence, documented decision, and delivered discovery-co
 superfinish. Absence of source-code work is not a waiver of the stage's evidence contract.
 
 ## Step 5 — Worktree lifecycle
+
+In `SUPER_GIT_MODE=none`, there is no worktree lifecycle. Reopen the completed-local receipt and
+reported artifacts, then return the Final Report without git cleanup.
 
 After `superfinish` reports the work merged, exit the worktree via `ExitWorktree`
 (worktree is kept only while a PR stays open). When that tool is unavailable (a headless process

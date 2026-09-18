@@ -17,7 +17,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
@@ -39,7 +38,17 @@ done
 superagent_control_target "$PLAN" "$SLUG"
 PLAN_REL="$TARGET_LOCATOR"
 
-have_env=0; [[ -f "$CONF_DIR/$SLUG.env" ]] && have_env=1
+ENV_FILE="$CONF_DIR/$SLUG.env"
+have_env=0; [[ -f "$ENV_FILE" ]] && have_env=1
+if [[ $have_env -eq 1 ]]; then
+  registered_root="$(superagent_registry_value "$ENV_FILE" SUPERAGENT_PROJECT_ROOT)"
+  [[ -n "$registered_root" ]] || registered_root="$(superagent_registry_value "$ENV_FILE" REPO)"
+  registered_mode="$(superagent_registry_value "$ENV_FILE" SUPERAGENT_GIT_MODE)"
+  REPO="$registered_root"
+  SUPER_GIT_MODE="${registered_mode:-github}"
+  export REPO SUPER_GIT_MODE
+fi
+superagent_load_context "${REPO:-$PWD}" run || exit $?
 SCHEDULER="$(superagent_scheduler)"
 if [[ "$SCHEDULER" == launchd ]]; then
   # One launchd job is both timer and service: an installed plist ~ enabled,

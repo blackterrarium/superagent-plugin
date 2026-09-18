@@ -17,27 +17,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
-# Project launch from a linked checkout uses the primary checkout's config.
-previous_arg=""
-for launch_arg in "$@"; do
-  if [[ "$previous_arg" == --supervisor && "$launch_arg" == supercode ]]; then
-    primary_git="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)"
-    REPO="$(cd "$primary_git/.." && pwd -P)"
-    break
-  fi
-  previous_arg="$launch_arg"
-done
-load_superenv "$REPO"
+superagent_load_context "$PWD" run || exit $?
 
 usage() {
   echo "usage: launch.sh <PLAN.md|PROJECT> [--supervisor superagent|supercode] [--interval 30m] [--timeout <secs>] [--slug <goal-slug>] [--output stream|text] [--model <slug>] [--harness claude|cursor|codex|pi] [--dry-run]" >&2
   exit 2
 }
 
+ORIGINAL_ARGS=("$@")
 PLAN="${1:-}"
 [[ -z "$PLAN" || "$PLAN" == -* ]] && usage
 shift
@@ -64,6 +53,7 @@ case "$SUPERVISOR" in superagent|supercode) ;; *) echo "invalid supervisor: $SUP
 export SUPER_HARNESS="$HARNESS"
 if [[ "$SUPERVISOR" == supercode ]]; then
   command -v python3 >/dev/null || { echo "supercode requires python3" >&2; exit 2; }
+  superagent_uses_git || { echo "supercode requires SUPER_GIT_MODE=github" >&2; exit 2; }
   # Internal vault resolution is anchored to the physical primary checkout.
   REPO="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)"
   REPO="$(cd "$REPO/.." && pwd -P)"
@@ -176,6 +166,17 @@ if [[ "$DRY" == 1 ]]; then
   exit 0
 fi
 
+if [[ "$SUPER_GIT_MODE" == none && "${SUPERAGENT_WORKSPACE_WRAPPED:-}" != 1 ]]; then
+  workspace_roots=("$REPO")
+  if vault_is_external && [[ -d "$VAULT" && "$VAULT" != "$REPO" ]]; then workspace_roots+=("$VAULT"); fi
+  set +e
+  superagent_workspace_run "${workspace_roots[@]}" -- env SUPERAGENT_WORKSPACE_WRAPPED=1 "$0" "${ORIGINAL_ARGS[@]}"
+  workspace_rc=$?
+  set -e
+  [[ $workspace_rc -eq 3 ]] && { echo 'superagent: local workspace is busy; launch made no changes' >&2; exit 3; }
+  exit "$workspace_rc"
+fi
+
 if [[ -n "$LOOP_FILE" ]]; then
   echo "Reusing existing loop file: $LOOP_FILE"
 else
@@ -186,6 +187,8 @@ else
 ---
 supervisor: superagent
 master_plan: $PLAN_REL
+git_mode: $SUPER_GIT_MODE
+project_root: $REPO
 status: WAITING FOR PLAN
 plan_exhausted: false
 prior_status:

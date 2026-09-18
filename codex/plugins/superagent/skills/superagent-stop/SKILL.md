@@ -27,8 +27,9 @@ related skills: superagent-external, superagent-monitor, superagent-force-stop, 
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -37,7 +38,7 @@ related skills: superagent-external, superagent-monitor, superagent-force-stop, 
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -71,12 +72,7 @@ explicit recorded answers per supercode; a rearm alone is not an answer.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Parameters
 
@@ -92,17 +88,17 @@ When these are absent, DO NOT pass them — default graceful drain, env kept.
 
 ## Steps
 
-1. **Resolve the repo root** (run from the primary checkout; if invoked from a
-   worktree, resolve `primary_root`), and set `$SUPERAGENT_SCRIPTS` to this plugin's
-   installed `scripts/` directory — see [scripts/README.md](../../scripts/README.md)
-   for the convention:
+1. Set `$SUPERAGENT_SCRIPTS` to this plugin's installed `scripts/` directory. The
+   stopper matches the plan against the per-goal registry first and loads that row's recorded
+   physical project root/mode before project configuration, so it may be invoked outside the
+   project — see [scripts/README.md](../../scripts/README.md) for the convention:
 
    ```
-   primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   primary_root="$REPO"
    SUPERAGENT_SCRIPTS="${SUPER_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
    # for cron/systemd use the absolute install path — see scripts/README.md
    ```
-2. **Invoke the stopper** with the parsed arguments, from `primary_root`:
+2. **Invoke the stopper** with the parsed arguments:
 
    ```
    $SUPERAGENT_SCRIPTS/stop.sh <PLAN.md> [--hard] [--purge]

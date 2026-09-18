@@ -22,7 +22,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
 # shellcheck source=_common.sh
 . "$SCRIPT_DIR/_common.sh"
@@ -45,6 +44,10 @@ done
 
 superagent_control_target "$PLAN" "$SLUG"
 ENVF="$CONF_DIR/$SLUG.env"
+registered_mode="$(superagent_registry_value "$ENVF" SUPERAGENT_GIT_MODE)"
+SUPER_GIT_MODE="${registered_mode:-github}"
+export REPO SUPER_GIT_MODE
+superagent_load_context "$REPO" run || exit $?
 
 # Observe current state.
 status=""; iteration=""
@@ -76,7 +79,10 @@ fi
 
 # Any orphaned worktrees (reported only — never auto-removed; they may hold
 # uncommitted work and superrun reconciles/recreates its own on re-dispatch).
-orphan_wts="$(git -C "$REPO" worktree list 2>/dev/null | awk 'NR>1{print $1}' || true)"
+orphan_wts=""
+if superagent_uses_git; then
+  orphan_wts="$(git -C "$REPO" worktree list 2>/dev/null | awk 'NR>1{print $1}' || true)"
+fi
 
 if [[ "$DRAIN" == 1 ]]; then
   post_desc="DRAIN — disable timer (loop stopped)"
@@ -153,6 +159,26 @@ if [[ "$SUPERVISOR" == supercode ]]; then
     DIAGNOSING) recovery_ready="WAITING FOR DIAGNOSIS" ;;
     *) recovery_ready="$status" ;;
   esac
+fi
+
+# In local mode the outer project/vault lock is separate from L3. Re-enter it
+# through workspace-state: this reaps only a dead owner whose supervised process
+# group is also gone, while a live or ambiguous peer returns busy and is kept.
+if [[ "$SUPER_GIT_MODE" == none ]]; then
+  workspace_roots=("$REPO")
+  _vault="$(vault_root "$REPO")"
+  if vault_is_external && [[ -d "$_vault" && "$_vault" != "$REPO" ]]; then workspace_roots+=("$_vault"); fi
+  set +e
+  superagent_workspace_run "${workspace_roots[@]}" -- /usr/bin/true
+  workspace_rc=$?
+  set -e
+  if [[ $workspace_rc -eq 3 ]]; then
+    echo "Local workspace lock remains held by a live or ambiguous owner; it was not removed." >&2
+  elif [[ $workspace_rc -ne 0 ]]; then
+    echo "Local workspace lock recovery failed (rc=$workspace_rc); lock was not removed." >&2
+  else
+    echo "Local project/vault ownership lock verified or recovered."
+  fi
 fi
 
 # 3) Timer disposition.

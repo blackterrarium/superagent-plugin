@@ -19,14 +19,18 @@ ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
 
 LOOP_FILE="${LOOP_FILE:-${1:-}}"
 if [[ -z "$LOOP_FILE" ]]; then
   echo "superagent-tick: LOOP_FILE not set (pass as \$1 or env)" >&2
   exit 2
 fi
+
+# Resolve mode/root before any git, GitHub, credential, or CI operation.
+# shellcheck source=_common.sh
+. "$SCRIPT_DIR/_common.sh"
+superagent_load_context "$PWD" run || exit $?
+superagent_validate_mode_contract "$LOOP_FILE" || exit $?
 
 # Optional per-tick wall-clock cap. When TICK_TIMEOUT is a positive integer, wrap
 # the CLI in `timeout`; otherwise (unset/empty/0/none) run with NO cap so long
@@ -57,10 +61,6 @@ fi
 # Ensure gh is authenticated and export GH_TOKEN so the CLI child inherits it
 # (the tick's sandbox blocks gh from reading its own config). Fail LOUDLY if not,
 # so a misconfigured host does not silently break every superrun CI/PR step.
-# shellcheck source=_common.sh
-. "$SCRIPT_DIR/_common.sh"
-load_superenv "$REPO"
-
 SUPERVISOR="$(superagent_supervisor "$LOOP_FILE" "${SUPERAGENT_SUPERVISOR:-superagent}")" || exit 2
 if [[ -n "${SUPERAGENT_SLUG:-}" ]]; then
   superagent_check_registration "$SUPERAGENT_SLUG" "$LOOP_FILE" "$SUPERVISOR" || exit 2
@@ -145,6 +145,24 @@ if [[ "${SUPER_INPUT_GATE:-true}" == true && \
   exit 0
 fi
 
+# Local execution edits the project in place. Acquire project/external-vault
+# ownership before starting the harness; an already-busy workspace is a clean
+# scheduler yield and does not advance loop state.
+if [[ "$SUPER_GIT_MODE" == none && "${SUPERAGENT_WORKSPACE_WRAPPED:-}" != 1 ]]; then
+  workspace_roots=("$REPO")
+  _vault="$(vault_root "$REPO")"
+  if vault_is_external && [[ -d "$_vault" && "$_vault" != "$REPO" ]]; then workspace_roots+=("$_vault"); fi
+  set +e
+  superagent_workspace_run "${workspace_roots[@]}" -- env SUPERAGENT_WORKSPACE_WRAPPED=1 "$0" "$@"
+  workspace_rc=$?
+  set -e
+  if [[ $workspace_rc -eq 3 ]]; then
+    echo "=== $(ts) superagent-tick: local workspace busy — yielding without state advancement ===" >>"$LOG_FILE"
+    exit 0
+  fi
+  exit "$workspace_rc"
+fi
+
 # Which agent CLI drives the tick: SUPER_HARNESS=claude (default) | cursor | codex | pi.
 # Put the right binary on PATH (systemd/cron use a minimal PATH without
 # ~/.local/bin) and fail fast if it's still missing, then verify gh auth.
@@ -167,7 +185,7 @@ ensure_gh_auth || exit 4
 # loop silently forever. When `ci_wait.since` is older than SUPER_CI_MAX_WAIT_MIN
 # (default 180; 0 disables) the gate notifies once per `since` (ci-stale) and
 # falls open so the session can inspect/re-park. Opt out with SUPER_CI_GATE=false.
-if [[ "${SUPER_CI_GATE:-true}" == true && \
+if superagent_uses_git && [[ "${SUPER_CI_GATE:-true}" == true && \
       "$(superagent_loop_status "$LOOP_FILE")" == "WAITING FOR CI" ]]; then
   ci_runs="$(superagent_ci_runs "$LOOP_FILE")"
   if [[ -z "$ci_runs" ]]; then
@@ -355,6 +373,7 @@ else
   [[ "$HARNESS" == codex ]] && SUPERVISOR_SKILL="$SKILLS_ROOT/plugins/superagent/skills/${SUPERVISOR}/SKILL.md"
   PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING, RUNNING, META-PLANNING, EVALUATING or DIAGNOSING at exit. Then stop."
 fi
+PROMPT="Git mode: ${SUPER_GIT_MODE}. Recorded project root: ${REPO}. Workspace ownership token: ${SUPER_WORKSPACE_TOKEN:-N/A}. ${PROMPT}"
 
 
 echo "=== $(ts) superagent-tick harness=${HARNESS} model=${TICK_MODEL:-default} effort=${TICK_EFFORT:-default} sandbox=${SUPER_CODEX_SANDBOX:-n/a} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
@@ -396,6 +415,7 @@ log_bytes_before="$(wc -c <"$LOG_FILE" 2>/dev/null || echo 0)"
 rc=0
 if [[ "$HARNESS" == codex ]]; then
   codex_args=(exec "$PROMPT")
+  [[ "$SUPER_GIT_MODE" == none ]] && codex_args+=(--skip-git-repo-check)
   if [[ "$SUPER_CODEX_SANDBOX" == workspace-write ]]; then
     codex_args+=(--sandbox workspace-write -c sandbox_workspace_write.network_access=true)
   else
@@ -538,12 +558,12 @@ if [[ "${SUPER_AUTO_DISARM_ON_DONE:-true}" == true && \
   # is required — it is the guard against disarming a same-named entry that
   # drives a different loop.
   if [[ -n "${SUPERAGENT_SLUG:-}" && \
-        "$(sed -n 's/^LOOP_FILE=//p' "$CONF_DIR/${SUPERAGENT_SLUG}.env" 2>/dev/null | head -1)" == "$LOOP_FILE" ]]; then
+        "$(superagent_registry_value "$CONF_DIR/${SUPERAGENT_SLUG}.env" LOOP_FILE)" == "$LOOP_FILE" ]]; then
     DISARM_SLUG="$SUPERAGENT_SLUG"
   else
     for envf in "$CONF_DIR"/*.env; do
       [[ -f "$envf" ]] || continue
-      if [[ "$(sed -n 's/^LOOP_FILE=//p' "$envf" | head -1)" == "$LOOP_FILE" ]]; then
+      if [[ "$(superagent_registry_value "$envf" LOOP_FILE)" == "$LOOP_FILE" ]]; then
         DISARM_SLUG="$(basename "$envf" .env)"
         break
       fi

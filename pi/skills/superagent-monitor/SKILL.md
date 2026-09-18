@@ -27,9 +27,10 @@ related skills: superagent, superloop
 >   installed `superpowers` package — reference them by name.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
-> - `EnterWorktree` = not available; use `git worktree` via `bash`.
+> - `EnterWorktree` = not available; in `github` mode use `git worktree` via `bash`. In `none`
+>   mode the canonical local-workspace override applies and no git command is allowed.
 
 # Superagent monitor
 
@@ -63,30 +64,7 @@ explicit recorded answers per supercode; a rearm alone is not an answer.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
-
-Everything here runs on the **host that runs the loops** (the primary checkout — or, for an external vault, the vault repo — holding
-the gitignored `<SUPER_LOOP_STATUS_DIRNAME>/` files — worked example from the originating
-repo: `SUPER_LOOP_STATUS_DIRNAME=loop-status` — and the `.<loop>.lockd` locks). Resolve
-`primary_root` first if invoked from a worktree, and locate this plugin's installed
-`scripts/` directory via `$SUPERAGENT_SCRIPTS` (see
-[scripts/README.md](../../scripts/README.md) for the convention):
-
-```
-primary_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-cd "$primary_root"
-SUPERAGENT_SCRIPTS="${SUPER_PLUGIN_ROOT}/scripts"   # CLAUDE_PLUGIN_ROOT is set in Claude Code sessions;
-# for cron/systemd use the absolute install path — see scripts/README.md
-```
-
-Run every `$SUPERAGENT_SCRIPTS/*.sh` helper from `primary_root` (so each script's own
-`REPO` auto-detection targets the right checkout) and every `git` command against
-`primary_root`.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Step 1 — Enumerate (always safe, read-only)
 
@@ -98,12 +76,14 @@ $SUPERAGENT_SCRIPTS/status.sh <slug>   # drill into one (pending decision + tail
 $SUPERAGENT_SCRIPTS/status.sh --json    # machine-readable, for your own parsing
 ```
 
-The output opens with a host-wide `gh auth:` line, then columns `SLUG STATUS ITER TIMER TICK
-LOCK INPUT`. Read them, then **interpret** for the user:
+The table columns are `SLUG STATUS ITER TIMER TICK LOCK INPUT GH-AUTH`. Each registry row is
+resolved in its own subshell, so one project's values cannot become another project's overrides.
+Read them, then **interpret** for the user:
 
-- **`gh auth: unauth`** (or `no-gh`) — a **host-wide blocker**: `superplan`/`superrun` cannot do CI/PR
-  operations, and every tick's preflight aborts loudly, so no loop can make progress. Flag this first;
-  fix by setting `GH_TOKEN` in `.env` (see [scripts/README.md](../../scripts/README.md#prerequisites)).
+- **`GH-AUTH=disabled`** — the row records `SUPER_GIT_MODE=none`; status did not load a token or
+  contact `gh`. **`unauth`** (or `no-gh`) on a GitHub row blocks that row's CI/PR operations and its
+  tick preflight aborts loudly. Fix the affected project's `GH_TOKEN`/authentication as described in
+  [scripts/README.md](../../scripts/README.md#prerequisites).
 - **`INPUT=YES`** (status `WAITING FOR INPUT`) — the loop is parked on a decision the L7 panel could not
   resolve. Offer to answer it (Step 2). The operator was notified once when it parked (SUPER_NOTIFY_CMD /
   desktop), and scheduled fires are free until answered (SUPER_INPUT_GATE). `INPUT=ans` means an answer is

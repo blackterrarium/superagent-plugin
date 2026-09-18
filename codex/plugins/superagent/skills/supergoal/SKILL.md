@@ -27,8 +27,9 @@ related skills: superauthor, superplan, supertraverse
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -37,7 +38,7 @@ related skills: superauthor, superplan, supertraverse
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -102,12 +103,7 @@ instead:
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -115,7 +111,7 @@ Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **
 `<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
 (`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
 repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
-(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+(`primary_root` = the physical `REPO` exported by `superagent_load_context`). Every goal
 folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
 `SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
 `vault_is_external` in `scripts/_common.sh`.
@@ -227,6 +223,9 @@ Author the root plan yourself per superauthor's A2 authoring standard, drafting 
 outside the goal folder. In `incremental` mode, the root plan MUST:
 
 - be a **seed/master plan**, routed to `master-plans/<STAMP>-<slug>.md`;
+- record `**Git mode:** <SUPER_GIT_MODE>` and `**Project root:** <physical REPO>` in its opening
+  metadata. These are immutable execution-contract markers; missing markers on legacy roots mean
+  `github`;
 - carry `**Planning mode:** incremental` immediately below the title, before the progress table. This
   persists the selected new-goal mode; unmarked roots remain legacy incremental and are not rewritten;
 - in operation mode only, add one header line immediately after the planning-mode line:
@@ -427,6 +426,10 @@ root, or create another folder.
 
 ### 9. Commit & merge via PR (superauthor A7)
 
+When `SUPER_GIT_MODE=none`, apply A7's local persistence branch: reopen the root plan,
+`goal-directives.md`, `.gitkeep` files, and findings; verify their paths/content; run no git/GitHub
+operation; and report local persistence.
+
 Apply A7 with these caller parameters:
 
 - **branch prefix:** `goal/<slug>`  → branch `goal/<slug>-<DATE>`
@@ -469,6 +472,7 @@ the merged PR URL (external vault: the vault commit SHA):
 - <absolute artifact path> — <what changed>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)  (local mode — instead of PR/Commit)
 
 **Subfolders created:**
 - master-plans/, plans/, findings/, reports/, handoff/, todo/

@@ -20,17 +20,16 @@ worktrees, and **never** begins the planned work. Executing the plan is a separa
 invokes explicitly (e.g. `superrun`) — it is **not** part of
 this skill.
 
-The one thing superplan *does* commit is **the plan documents themselves**. Once the plan and `findings/`
-docs are written to the vault, superplan commits **only those planning artifacts** and merges them to
-`main` via a pull request as its final action — **automatically, under the user's standing authorization,
-without pausing to ask** (see **Commit and merge the plan — via PR** below). That is the sole commit
-superplan makes — never source code, never execution output.
+The only artifacts superplan publishes are **the plan documents themselves**. In `github` mode it
+commits only those planning artifacts and merges them via PR. In `none` mode it writes, reopens, and
+verifies the same explicit files under workspace ownership with no git/GitHub operation. Publication
+is automatic under the user's standing authorization (see the publication section below).
 
 | Thought | Reality |
 |---------|---------|
 | "Auto mode is on, so I'm cleared to start coding" | NO. Auto mode governs tool permissions, not scope. The deliverable is the plan. |
 | "The first task is trivial, I'll just knock it out" | NO. Zero implementation steps. Hand the plan over and stop. |
-| "I'll set up the worktree / branch for the planned work" | NO worktree and no branch for the *planned work*, and no source-code commits. (The plan documents are committed and merged via PR as the final step — that is the only commit.) |
+| "I'll set up the worktree / branch for the planned work" | NO worktree and no branch for the *planned work*, and no source-code commits. The plan documents use the mode-selected A7 publication path. |
 | "The user will obviously want this run, I'll get a head start" | NO. Produce and commit the plan, report, exit. Wait to be asked before executing. |
 
 ## Input
@@ -88,12 +87,7 @@ Gates, in order:
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -101,7 +95,7 @@ Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **
 `<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
 (`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
 repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
-(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+(`primary_root` = the physical `REPO` exported by `superagent_load_context`). Every goal
 folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
 `SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
 `vault_is_external` in `scripts/_common.sh`.
@@ -363,6 +357,11 @@ the explicit `git add` below** alongside the immediate parent.
 
 ## Commit and merge the plan — via PR (REQUIRED)
 
+If `SUPER_GIT_MODE=none`, this heading means local publication under superauthor A7. Reopen and
+verify the plan, findings, immediate-parent file, and every touched ancestor by physical path; verify
+the recorded root identity; report those paths and run no git/GitHub operation. Then continue to the
+Final Report. The GitHub recipes below do not apply.
+
 After the plan file, any `findings/` docs, the immediate-parent progress-report update (see **Update the
 Immediate Parent's Progress-Report Table** above), and any ancestor rows the ascent touched (see
 **Ascend the Tree** above) are written into
@@ -439,8 +438,8 @@ Report the following, in order:
    immediate parent's updated progress-report row (give its path and which step), **and each ancestor
    plan up to the root `<PLAN.md>` whose status the ascent set to `in progress`** (path + which row).
    Give the path and a one-line note of what changed. If none, write "none".
-4. **PR** — the URL of the pull request that committed and merged the plan documents, and its state
-   (merged) — external vault: the vault commit SHA. *Always include it.*
+4. **Persistence** — `github`: the merged PR URL, or external-vault commit SHA; `none`: `local files
+   verified (SUPER_GIT_MODE=none)` plus their physical paths. *Always include it.*
 5. **Findings** — one line per new finding captured during planning. **Call out any CRITICAL finding** (a
    contradiction in the seed, a mechanism that does not work as the seed assumed, a blocking constraint)
    under its own bold ⚠️ line so it cannot be missed. If there were none, write "none".

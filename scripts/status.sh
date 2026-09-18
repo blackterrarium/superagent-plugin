@@ -37,15 +37,22 @@ _field() { # <loop-file> <key>  -> first "key: value" match
 _json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 # Populate globals for one slug.
-REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""
+REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""; SUPERAGENT_GIT_MODE=""; SUPERAGENT_PROJECT_ROOT=""
 _collect() {
   local slug="$1" envf="$CONF_DIR/$1.env"
-  REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""
+  REPO=""; LOOP_FILE=""; TICK_TIMEOUT=""; SUPERAGENT_GIT_MODE=""; SUPERAGENT_PROJECT_ROOT=""
   if [[ -f "$envf" ]]; then
     REPO="$(superagent_registration_field "$envf" REPO)"
     LOOP_FILE="$(superagent_registration_field "$envf" LOOP_FILE)"
     TICK_TIMEOUT="$(superagent_registration_field "$envf" TICK_TIMEOUT)"
-
+    SUPERAGENT_GIT_MODE="$(superagent_registration_field "$envf" SUPERAGENT_GIT_MODE)"
+    SUPERAGENT_PROJECT_ROOT="$(superagent_registration_field "$envf" SUPERAGENT_PROJECT_ROOT)"
+  fi
+  local recorded_mode="${SUPERAGENT_GIT_MODE:-github}"
+  if [[ "$recorded_mode" == none ]]; then
+    row_gh_state=disabled
+  else
+    row_gh_state="$(SUPER_GIT_MODE=github gh_auth_state)"
   fi
   status=""; iteration=""; pending=0; done_=0; exists=0; answer_recorded=false
   if [[ -n "$LOOP_FILE" && -f "$LOOP_FILE" ]]; then
@@ -130,19 +137,20 @@ if [[ ${#slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Host-wide gh auth state (superrun's CI/PR steps depend on it).
-GH_STATE="$(gh_auth_state)"
-
 # ---- JSON output ----
 if [[ "$JSON" == 1 ]]; then
   out="["; first=1
   for slug in "${slugs[@]}"; do
-    _collect "$slug"
     [[ $first == 1 ]] && first=0 || out+=","
-    out+=$(printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s","supervisor":"%s","project":"%s","round":"%s","inner_slug":"%s","inner_status":"%s","last_verdict":"%s","pending_owner":"%s"}' \
-      "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
-      "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
-      "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$GH_STATE")" "$(_json_escape "$supervisor")" "$(_json_escape "$project")" "$(_json_escape "$round")" "$(_json_escape "$inner_slug")" "$(_json_escape "$inner_status")" "$(_json_escape "$last_verdict")" "$(_json_escape "$pending_owner")")
+    out+="$(
+      _collect "$slug"
+      printf '{"slug":"%s","status":"%s","iteration":"%s","timer_active":"%s","tick_running":"%s","lock_held":%s,"pending_input":%s,"answer_recorded":%s,"done":%s,"loop_file":"%s","loop_file_exists":%s,"next_fire":"%s","gh_auth":"%s","supervisor":"%s","project":"%s","round":"%s","inner_slug":"%s","inner_status":"%s","last_verdict":"%s","pending_owner":"%s"}' \
+        "$(_json_escape "$slug")" "$(_json_escape "$status")" "$(_json_escape "$iteration")" \
+        "$(_json_escape "$timer_active")" "$(_json_escape "$tick_running")" "$lock_held" "$(( pending == 1 ))" "$answer_recorded" "$done_" \
+        "$(_json_escape "$LOOP_FILE")" "$exists" "$(_json_escape "$next_fire")" "$(_json_escape "$row_gh_state")" \
+        "$(_json_escape "$supervisor")" "$(_json_escape "$project")" "$(_json_escape "$round")" \
+        "$(_json_escape "$inner_slug")" "$(_json_escape "$inner_status")" "$(_json_escape "$last_verdict")" "$(_json_escape "$pending_owner")"
+    )"
   done
   out+="]"
   echo "$out"
@@ -151,57 +159,56 @@ fi
 
 # ---- Single-slug drill-in ----
 if [[ -n "$ONE" ]]; then
-  _collect "$ONE"
-  echo "Loop:        $ONE"
-  echo "Supervisor:  $supervisor   project=$project   round=$round"
-  echo "Inner:       $inner_slug   status=$inner_status   last-verdict=$last_verdict   pending-owner=$pending_owner"
-  echo "Repo:        ${REPO:-?}"
-  echo "Loop file:   ${LOOP_FILE:-?}  (exists=$([[ $exists == 1 ]] && echo yes || echo no))"
-  echo "Status:      ${status:-<none>}   iteration=${iteration:-?}"
-  echo "Timer:       ${timer_active:-unknown}   next-fire=${next_fire}"
-  echo "Tick now:    ${tick_running:-unknown}   lock-held=$([[ $lock_held == 1 ]] && echo yes || echo no)"
-  echo "gh auth:     $GH_STATE"
-  if [[ $pending != 0 && $exists == 1 ]]; then
-    echo
-    echo "=== ## Pending decision ==="
-    awk '/^## Pending decision/{f=1; print; next} f && /^## /{exit} f' "$LOOP_FILE"
-    if [[ $pending == 2 ]]; then
-      echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
+  (
+    _collect "$ONE"
+    echo "Loop:        $ONE"
+    echo "Supervisor:  $supervisor   project=$project   round=$round"
+    echo "Inner:       $inner_slug   status=$inner_status   last-verdict=$last_verdict   pending-owner=$pending_owner"
+    echo "Repo:        ${REPO:-?}"
+    echo "Loop file:   ${LOOP_FILE:-?}  (exists=$([[ $exists == 1 ]] && echo yes || echo no))"
+    echo "Status:      ${status:-<none>}   iteration=${iteration:-?}"
+    echo "Timer:       ${timer_active:-unknown}   next-fire=${next_fire}"
+    echo "Tick now:    ${tick_running:-unknown}   lock-held=$([[ $lock_held == 1 ]] && echo yes || echo no)"
+    echo "gh auth:     $row_gh_state"
+    if [[ $pending != 0 && $exists == 1 ]]; then
+      echo
+      echo "=== ## Pending decision ==="
+      awk '/^## Pending decision/{f=1; print; next} f && /^## /{exit} f' "$LOOP_FILE"
+      if [[ $pending == 2 ]]; then
+        echo "Answer recorded: $(superagent_pending_answer "$LOOP_FILE")  (next fire resumes; to kick now: $SCRIPT_DIR/answer.sh \"$ONE\" \"<same answer>\")"
+      fi
     fi
-  fi
-  if [[ $exists == 1 ]]; then
-    echo
-    echo "=== last iteration-log lines ==="
-    awk '/^## Iteration log/{f=1;next} f' "$LOOP_FILE" | grep -v '^[[:space:]]*$' | tail -5 || true
-  fi
-  log="/tmp/superagent-$(basename "${LOOP_FILE:-x}" .md).log"
-  if [[ -f "$log" ]]; then
-    echo
-    echo "=== tail $log ==="
-    tail -8 "$log"
-  fi
+    if [[ $exists == 1 ]]; then
+      echo
+      echo "=== last iteration-log lines ==="
+      awk '/^## Iteration log/{f=1;next} f' "$LOOP_FILE" | grep -v '^[[:space:]]*$' | tail -5 || true
+    fi
+    log="/tmp/superagent-$(basename "${LOOP_FILE:-x}" .md).log"
+    if [[ -f "$log" ]]; then
+      echo
+      echo "=== tail $log ==="
+      tail -8 "$log"
+    fi
+  )
   exit 0
 fi
 
 # ---- Multi-loop table ----
-printf 'gh auth: %s\n\n' "$GH_STATE"
-printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' SLUG STATUS ITER TIMER TICK LOCK INPUT
-printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' ------------------------ ------------------ ----- -------- ------ ------ -----
+printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' SLUG STATUS ITER TIMER TICK LOCK INPUT GH-AUTH
+printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' ------------------------ ------------------ ----- -------- ------ ------ ----- ------------
 for slug in "${slugs[@]}"; do
-  _collect "$slug"
-  # A `case` embedded inside `$(...)` mis-parses on bash 3.2 (macOS's shipped
-  # bash) when the script is read from a file rather than typed interactively —
-  # its command-substitution parser counts parens naively and the `1)`/`2)`
-  # pattern terminators are read as closing the subshell. Assign in a plain
-  # statement instead.
-  input_col=-
-  case $pending in 1) input_col=YES ;; 2) input_col=ans ;; esac
-  printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s\n' \
-    "$slug" "${status:-<none>}" "${iteration:-?}" \
-    "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
-    "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
-    "$input_col"
-  [[ "$supervisor" != supercode ]] || printf '  supercode project=%s round=%s inner=%s (%s) verdict=%s pending=%s\n' "$project" "$round" "$inner_slug" "$inner_status" "$last_verdict" "$pending_owner"
+  (
+    _collect "$slug"
+    input_col=-
+    case $pending in 1) input_col=YES ;; 2) input_col=ans ;; esac
+    printf '%-24s %-18s %-5s %-8s %-6s %-6s %-6s %-12s\n' \
+      "$slug" "${status:-<none>}" "${iteration:-?}" \
+      "${timer_active:-?}" "$([[ "$tick_running" == active ]] && echo yes || echo no)" \
+      "$([[ $lock_held == 1 ]] && echo yes || echo no)" \
+      "$input_col" "$row_gh_state"
+    [[ "$supervisor" != supercode ]] || printf '  supercode project=%s round=%s inner=%s (%s) verdict=%s pending=%s\n' \
+      "$project" "$round" "$inner_slug" "$inner_status" "$last_verdict" "$pending_owner"
+  )
 done
 echo
 echo "Drill in: $SCRIPT_DIR/status.sh <slug>   |   JSON: $SCRIPT_DIR/status.sh --json"

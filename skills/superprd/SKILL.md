@@ -21,15 +21,7 @@ fills the gaps with you, and only then writes the folder.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${CLAUDE_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${CLAUDE_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
-
-Keys used here: `SUPER_GOAL_ROOT`, `SUPER_PROJECT_DIRNAME`, `SUPER_MODEL_PRD_REVIEWER`,
-`SUPER_EFFORT_PRD_REVIEWER`, `SUPER_EVAL_TIMEOUT_MIN` (read by `prd-lint.sh`).
+Resolve project context before any workflow action by sourcing `${CLAUDE_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -37,7 +29,7 @@ Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **
 `<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
 (`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
 repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
-(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+(`primary_root` = the physical `REPO` exported by `superagent_load_context`). Every goal
 folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
 `SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
 `vault_is_external` in `scripts/_common.sh`.
@@ -172,8 +164,8 @@ All three open with the header block:
 - <decision> — rejected: <alternative>, because <why>
 
 ## Iteration ledger
-| Round | Meta-plan | Goal folder | Inner loop | Eval report | Verdict |
-|---|---|---|---|---|---|
+| Round | Meta-plan | Goal folder | Inner loop | Source | Eval report | Verdict |
+|---|---|---|---|---|---|---|
 ```
 
 **`knowledge-base.md`** — one table, kinds `instructions`, `repo-file`, `repo-glob`,
@@ -190,7 +182,7 @@ All three open with the header block:
 
 ```
 ## Environment
-- setup: `<command run once in a fresh worktree; may be empty>`
+- setup: `<command run once in the frozen evaluation workspace; may be empty>`
 - cwd: `<repo-relative dir every check runs in unless its row overrides>`
 
 ## Command checks
@@ -286,6 +278,9 @@ success. For an already approved identical revision, carry its existing approval
 Create the project folder; write the three files with `**Status:** READY`; create
 `meta-plans/`, `eval-reports/`, `diagnoses/` each with a `.gitkeep`. Then A7 with:
 
+- **Local mode:** when `SUPER_GIT_MODE=none`, reopen and verify these six explicit artifacts under
+  inherited workspace ownership, report their physical paths, and skip every branch/commit/PR step.
+
 - **branch prefix:** `project/<slug>` → branch `project/<slug>-<DATE>`
 - **commit subject:** `docs(project): <slug> — superprd output`
 - **PR title:** `docs(project): <slug>`
@@ -305,6 +300,7 @@ Create the project folder; write the three files with `**Status:** READY`; creat
 **PRD:** <path>   **Knowledge base:** <path>   **Evaluation:** <path>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line, verbatim form)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)   (local mode instead)
 **Readiness:** R1–R8 all PASS
 **Warnings:** <prd-lint WARNs and open reviewer findings, or none>
 **Next:** superagent:supermeta <project-dir>   (Stage 2 of the coding loop)

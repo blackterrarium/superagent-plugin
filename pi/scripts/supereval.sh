@@ -1,54 +1,96 @@
 #!/usr/bin/env bash
 # supereval.sh — offline command-check runner for a coding-loop project's evaluation.md.
-# Builds a git worktree of <commit>, runs the `## Command checks` rows against it, and writes a
-# markdown results file the `supereval` skill embeds verbatim. Judged (`J`) rows are listed by
-# _evalspec.sh but NOT run here — the skill dispatches an evaluator for those. Bash 3.2, no network,
-# no LLM.
+# Freezes either a git commit (`github`) or an owned filesystem snapshot (`none`), runs the command
+# checks in that isolated workspace, and writes the results consumed by the supereval skill.
 #
 # Usage:
 #   supereval.sh <project-dir> --repo <primary_root> --commit <sha> --out <results-file> \
-#                [--worktree <dir>] [--keep-worktree] [--max-timeout-min <n>]
+#                [--worktree <dir>] [--keep-worktree] [--keep-workspace]
+#                [--max-timeout-min <n>]
 #
 # Exit: 0 every command check PASS · 1 any not PASS (incl. setup failed) · 2 usage / script-setup.
 set -u
+ORIGINAL_ARGS=("$@")
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-. "$ROOT/scripts/_common.sh"     # load_superenv
+. "$ROOT/scripts/_common.sh"     # shared project/mode/vault resolver
 . "$ROOT/scripts/_evalspec.sh"   # US/RS + evalspec_env/evalspec_checks
 
 die2() { echo "supereval: $1" >&2; exit 2; }
 
 # ── args ──────────────────────────────────────────────────────────────────────
-PROJECT="" ; REPO="" ; COMMIT="" ; OUT="" ; WORKTREE="" ; KEEP=0 ; MAXTO=""
+PROJECT="" ; REPO="" ; COMMIT="" ; OUT="" ; WORKTREE="" ; KEEP_WORKTREE=0
+KEEP_WORKSPACE=0 ; MAXTO=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo)            REPO="${2:-}"; shift 2 ;;
     --commit)          COMMIT="${2:-}"; shift 2 ;;
     --out)             OUT="${2:-}"; shift 2 ;;
     --worktree)        WORKTREE="${2:-}"; shift 2 ;;
-    --keep-worktree)   KEEP=1; shift ;;
+    --keep-worktree)   KEEP_WORKTREE=1; shift ;;
+    --keep-workspace)  KEEP_WORKSPACE=1; shift ;;
     --max-timeout-min) MAXTO="${2:-}"; shift 2 ;;
     -* )               die2 "unknown flag: $1" ;;
     * )                if [ -z "$PROJECT" ]; then PROJECT="$1"; else die2 "unexpected argument: $1"; fi; shift ;;
   esac
 done
 
-[ -n "$PROJECT" ] || die2 "usage: supereval.sh <project-dir> --repo <repo> --commit <sha> --out <file> [--worktree <dir>] [--keep-worktree] [--max-timeout-min <n>]"
+[ -n "$PROJECT" ] || die2 "usage: supereval.sh <project-dir> --repo <repo> [--commit <sha>] --out <file> [--worktree <dir>] [--keep-worktree|--keep-workspace] [--max-timeout-min <n>]"
 [ -d "$PROJECT" ] || die2 "not a directory: $PROJECT"
 [ -n "$REPO" ]    || die2 "missing --repo"
-[ -n "$COMMIT" ]  || die2 "missing --commit"
 [ -n "$OUT" ]     || die2 "missing --out"
 EVALFILE="$PROJECT/evaluation.md"
 [ -f "$EVALFILE" ] || die2 "missing evaluation.md in $PROJECT"
 
-load_superenv "$REPO"
+REPO="$(cd "$REPO" 2>/dev/null && pwd -P)" || die2 "not a directory: $REPO"
+export REPO
+superagent_load_context "$REPO" run || exit $?
+case "$SUPER_GIT_MODE" in
+  github)
+    [ -n "$COMMIT" ] || die2 "missing --commit in SUPER_GIT_MODE=github"
+    [ "$KEEP_WORKSPACE" -eq 0 ] || die2 "--keep-workspace requires SUPER_GIT_MODE=none"
+    ;;
+  none)
+    [ -z "$COMMIT" ] || die2 "--commit is not valid in SUPER_GIT_MODE=none"
+    [ -z "$WORKTREE" ] || die2 "--worktree is not valid in SUPER_GIT_MODE=none"
+    [ "$KEEP_WORKTREE" -eq 0 ] || die2 "--keep-worktree is not valid in SUPER_GIT_MODE=none"
+    ;;
+esac
 CEIL_MIN="${MAXTO:-${SUPER_EVAL_TIMEOUT_MIN:-60}}"
 case "$CEIL_MIN" in ''|*[!0-9]*) die2 "--max-timeout-min must be a whole number of minutes" ;; esac
 
 mkdir -p "$(dirname "$OUT")" || die2 "cannot create output directory for $OUT"
 
+# A local evaluator owns both mutable roots for its full lifetime. Nested invocations borrow the
+# scheduler's token; direct invocations acquire/release their own lock through the helper supervisor.
+HELPER=""; VAULT=""
+if [ "$SUPER_GIT_MODE" = none ]; then
+  HELPER="$(superagent_workspace_state_helper)" || die2 "workspace helper is unavailable"
+  VAULT="$(vault_root "$REPO")" || die2 "cannot resolve vault root"
+  [ -d "$VAULT" ] || die2 "vault root is not a directory: $VAULT"
+  if [ "${SUPER_EVAL_OWNED:-}" != 1 ]; then
+    exec python3 "$HELPER" run --root "$REPO" --root "$VAULT" -- \
+      env SUPER_EVAL_OWNED=1 "$0" "${ORIGINAL_ARGS[@]}"
+  fi
+fi
+
 # ── worktree ──────────────────────────────────────────────────────────────────
 OWN_WORKTREE=0
-if [ -z "$WORKTREE" ]; then
+LOCAL_WORKSPACE=""; LOCAL_TOKEN=""; LOCAL_SOURCE_ID=""; LOCAL_INPUT_MANIFEST=""
+LOCAL_PARENT=""; RESULT_COPY=""; RESULT_TOKEN=""; SOURCE_AFTER_COPY=""; SOURCE_AFTER_TOKEN=""
+EVID_INPUT="${OUT}.input-manifest.json"
+EVID_RESULT="${OUT}.result-manifest.json"
+EVID_CHANGES="${OUT}.changes.json"
+WORK="$(mktemp -d)"
+if [ -z "$HELPER" ]; then HELPER="$(superagent_workspace_state_helper)" || die2 "workspace helper is unavailable"; fi
+
+json_field() { python3 -c 'import json,sys; print(json.loads(sys.argv[1])[sys.argv[2]])' "$1" "$2"; }
+snapshot_into() { python3 "$HELPER" snapshot --root "$1" --vault "$2" --out-parent "$3"; }
+cleanup_snapshot() {
+  [ -n "$1" ] || return 0
+  python3 "$HELPER" cleanup --workspace "$1" --token "$2" >/dev/null 2>&1
+}
+
+if [ "$SUPER_GIT_MODE" = github ] && [ -z "$WORKTREE" ]; then
   WORKTREE="$(mktemp -d)"
   if ! git -C "$REPO" worktree add --detach "$WORKTREE" "$COMMIT" >/dev/null 2>&1; then
     rmdir "$WORKTREE" 2>/dev/null || true
@@ -57,16 +99,32 @@ if [ -z "$WORKTREE" ]; then
   OWN_WORKTREE=1
 fi
 
-WORK="$(mktemp -d)"
 cleanup() {
   local rc=$?
-  if [ "$OWN_WORKTREE" -eq 1 ] && [ "$KEEP" -eq 0 ]; then
+  if [ "$OWN_WORKTREE" -eq 1 ] && [ "$KEEP_WORKTREE" -eq 0 ]; then
     git -C "$REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
+  fi
+  cleanup_snapshot "$RESULT_COPY" "$RESULT_TOKEN" || true
+  cleanup_snapshot "$SOURCE_AFTER_COPY" "$SOURCE_AFTER_TOKEN" || true
+  if [ "$KEEP_WORKSPACE" -eq 0 ]; then
+    cleanup_snapshot "$LOCAL_WORKSPACE" "$LOCAL_TOKEN" || true
+    [ -z "$LOCAL_PARENT" ] || rmdir "$LOCAL_PARENT" 2>/dev/null || true
   fi
   rm -rf "$WORK" 2>/dev/null || true
   exit "$rc"
 }
 trap cleanup EXIT
+
+if [ "$SUPER_GIT_MODE" = none ]; then
+  LOCAL_PARENT="$(mktemp -d)"
+  snap="$(snapshot_into "$REPO" "$VAULT" "$LOCAL_PARENT")" || die2 "cannot capture source snapshot"
+  LOCAL_WORKSPACE="$(json_field "$snap" workspace)"
+  LOCAL_INPUT_MANIFEST="$(json_field "$snap" manifest)"
+  LOCAL_SOURCE_ID="$(json_field "$snap" source_id)"
+  LOCAL_TOKEN="$(json_field "$snap" token)"
+  WORKTREE="$LOCAL_WORKSPACE"
+  cp "$LOCAL_INPUT_MANIFEST" "$EVID_INPUT" || die2 "cannot preserve input manifest"
+fi
 
 # ── timeout wrapper (mirrors superagent-tick.sh) ──────────────────────────────
 TIMEOUT_BIN=""
@@ -80,7 +138,9 @@ TMP_OUT="$WORK/out" ; TMP_ERR="$WORK/err"
 run_cmd() {
   local cmd="$1" dir="$2" secs="$3" start end
   start="$(date +%s)"
-  if [ -n "$TIMEOUT_BIN" ]; then
+  if [ "$secs" -eq 0 ] && [ -n "$TIMEOUT_BIN" ]; then
+    : >"$TMP_OUT"; : >"$TMP_ERR"; RC=124
+  elif [ -n "$TIMEOUT_BIN" ]; then
     ( cd "$dir" 2>/dev/null && "$TIMEOUT_BIN" "$secs" bash -c "$cmd" ) >"$TMP_OUT" 2>"$TMP_ERR"
     RC=$?
   else
@@ -191,5 +251,40 @@ EOF
   cat "$ROWS"
   if [ -s "$BLOCKS" ]; then printf '\n'; cat "$BLOCKS"; fi
 } >"$OUT"
+
+# Local mode records command writes separately from the frozen source and verifies that execution
+# never changed the original project. Evidence manifests survive helper-owned workspace cleanup.
+if [ "$SUPER_GIT_MODE" = none ]; then
+  result_snap="$(snapshot_into "$WORKTREE" "$VAULT" "$LOCAL_PARENT")" || die2 "cannot capture result snapshot"
+  RESULT_COPY="$(json_field "$result_snap" workspace)"
+  result_manifest="$(json_field "$result_snap" manifest)"
+  RESULT_TOKEN="$(json_field "$result_snap" token)"
+  cp "$result_manifest" "$EVID_RESULT" || die2 "cannot preserve result manifest"
+  changes="$(python3 "$HELPER" compare --before "$EVID_INPUT" --after "$EVID_RESULT")" || die2 "cannot compare result snapshot"
+  printf '%s\n' "$changes" >"$EVID_CHANGES" || die2 "cannot preserve snapshot comparison"
+
+  source_after="$(snapshot_into "$REPO" "$VAULT" "$LOCAL_PARENT")" || die2 "cannot verify original source"
+  SOURCE_AFTER_COPY="$(json_field "$source_after" workspace)"
+  source_after_manifest="$(json_field "$source_after" manifest)"
+  SOURCE_AFTER_TOKEN="$(json_field "$source_after" token)"
+  source_delta="$(python3 "$HELPER" compare --before "$EVID_INPUT" --after "$source_after_manifest")" || die2 "cannot compare original source"
+  if ! python3 -c 'import json,sys; d=json.loads(sys.argv[1]); raise SystemExit(0 if not any(d.values()) else 1)' "$source_delta"; then
+    ALL_PASS=0
+    printf '### source isolation error\n```\noriginal source changed during evaluation: %s\n```\n' "$source_delta" >>"$BLOCKS"
+  fi
+
+  {
+    printf '## Environment\n'
+    printf -- '- source: `%s` · workspace: `%s` · manifest: `%s` · setup: `%s` → %s\n' \
+      "$LOCAL_SOURCE_ID" "$WORKTREE" "$EVID_INPUT" "$SETUP_CMD" "$SETUP_STATE"
+    printf -- '- result-manifest: `%s` · changes: `%s`\n' "$EVID_RESULT" "$EVID_CHANGES"
+    printf -- '- cleanup-token: `%s` · retained: `%s`\n\n' "$LOCAL_TOKEN" "$KEEP_WORKSPACE"
+    printf '## Command checks\n'
+    printf '| Id | Result | Exit | Seconds | Evidence |\n'
+    printf '|---|---|---|---|---|\n'
+    cat "$ROWS"
+    if [ -s "$BLOCKS" ]; then printf '\n'; cat "$BLOCKS"; fi
+  } >"$OUT"
+fi
 
 [ "$ALL_PASS" -eq 1 ] && exit 0 || exit 1

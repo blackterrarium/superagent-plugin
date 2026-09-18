@@ -15,8 +15,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO="${REPO:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[[ -n "$REPO" ]] || { echo "superagent: set REPO or run from inside the target repo" >&2; exit 1; }
+# shellcheck source=_common.sh
+. "$SCRIPT_DIR/_common.sh"
+superagent_load_context "$PWD" run || exit $?
 
 PLAN="${1:-}"
 if [[ -z "$PLAN" ]]; then
@@ -36,6 +37,18 @@ if [[ "$TICK_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
   fi
 fi
 
+if [[ "$SUPER_GIT_MODE" == none && "${SUPERAGENT_WORKSPACE_WRAPPED:-}" != 1 ]]; then
+  workspace_roots=("$REPO")
+  _vault="$(vault_root "$REPO")"
+  if vault_is_external && [[ -d "$_vault" && "$_vault" != "$REPO" ]]; then workspace_roots+=("$_vault"); fi
+  set +e
+  superagent_workspace_run "${workspace_roots[@]}" -- env SUPERAGENT_WORKSPACE_WRAPPED=1 "$0" "$PLAN"
+  workspace_rc=$?
+  set -e
+  [[ $workspace_rc -eq 3 ]] && { echo 'superagent: local workspace is busy; bootstrap made no changes' >&2; exit 3; }
+  exit "$workspace_rc"
+fi
+
 if [[ -f "$REPO/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -45,9 +58,6 @@ fi
 
 # Ensure gh is authenticated (exported so the CLI child inherits GH_TOKEN); the
 # first tick opens/merges a PR, so abort loudly if gh cannot authenticate.
-# shellcheck source=_common.sh
-. "$SCRIPT_DIR/_common.sh"
-load_superenv "$REPO"
 HARNESS="$(superagent_harness)" || exit 6
 ensure_cli_bin || exit 5
 ensure_gh_auth || exit 4
@@ -56,6 +66,12 @@ if [[ "$HARNESS" == cursor ]]; then
   SKILLS_ROOT="$PLUGIN_ROOT/cursor"
   if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
     echo "bootstrap: Cursor build missing at $SKILLS_ROOT (run scripts/build-cursor-skills.sh)" >&2
+    exit 7
+  fi
+elif [[ "$HARNESS" == codex ]]; then
+  SKILLS_ROOT="$PLUGIN_ROOT/codex/plugins/superagent"
+  if [[ ! -f "$SKILLS_ROOT/skills/superagent/SKILL.md" ]]; then
+    echo "bootstrap: Codex build missing at $SKILLS_ROOT (run scripts/build-codex-skills.sh)" >&2
     exit 7
   fi
 elif [[ "$HARNESS" == pi ]]; then
@@ -85,6 +101,12 @@ if [[ "$HARNESS" == cursor ]]; then
   fi
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" "$SUPERAGENT_CURSOR_BIN" -p "$PROMPT" \
       --trust --force --plugin-dir "$SKILLS_ROOT" --output-format text )
+elif [[ "$HARNESS" == codex ]]; then
+  codex_args=(exec "$PROMPT" --skip-git-repo-check -C "$REPO")
+  [[ "${SUPER_CODEX_SANDBOX:-danger-full-access}" == workspace-write ]] && \
+    codex_args+=(--sandbox workspace-write -c sandbox_workspace_write.network_access=true) || \
+    codex_args+=(--dangerously-bypass-approvals-and-sandbox)
+  ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" codex "${codex_args[@]}" </dev/null )
 elif [[ "$HARNESS" == pi ]]; then
   export SUPERAGENT_BRIDGE="$PLUGIN_ROOT/scripts/role-bridge.sh" SUPERAGENT_FANOUT="$PLUGIN_ROOT/scripts/bridge-fanout.sh" SUPERAGENT_PI_SKILLS="$SKILLS_ROOT/skills"
   ( cd "$REPO" && "${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"}" pi -p --approve --skill "$SKILLS_ROOT/skills" <<<"$PROMPT" )

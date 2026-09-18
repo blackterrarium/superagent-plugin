@@ -93,8 +93,9 @@ cat >"$banner_file" <<'EOF'
 >   any residual mention of them as inapplicable and NEVER attempt those tool calls.
 > - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
 >   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; where a skill
->   manages worktrees, use `git worktree` via shell. "Desktop routine" = a Claude Desktop feature,
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode,
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed. "Desktop routine" = a Claude Desktop feature,
 >   not available — use an OS scheduler. A role whose `.superenv` value names another harness
 >   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
 >   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
@@ -178,8 +179,8 @@ cp "$ROOT/templates/vault-root.md" "$TMP/templates/"
 cp "$ROOT/templates/coding-loop-diagnosis.md" "$TMP/templates/"
 mkdir -p "$TMP/scripts"
 cp "$ROOT/scripts/_coding_loop_state.py" "$ROOT/scripts/_coding_loop_evidence.py" "$TMP/scripts/"
-cp "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/scripts/"
-cp "$ROOT/scripts/role-bridge.sh" "$TMP/scripts/"
+cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" \
+  "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/workspace-state.py" "$TMP/scripts/"
 chmod +x "$TMP/scripts/role-bridge.sh"
 
 # superenv.default: same seds as skills, then Cursor-specific header + model defaults.

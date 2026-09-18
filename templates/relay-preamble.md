@@ -20,6 +20,9 @@ yourself is wrong by definition, because it did not come from `<harness>`.
    unique terminator instead.
 2. **Shell.** Run, from your current working directory:
    `"<bridge-path>" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$f" --role <role>`
+   Preserve the inherited `SUPER_GIT_MODE`, `REPO`, `SUPER_WORKSPACE_TOKEN`, and
+   `SUPER_WORKSPACE_OWNER_PID` environment exactly. In local mode these values identify the
+   in-place project and prove that this nested role borrows the outer writer lock.
    Pass an explicit long timeout on the shell tool call (its `timeout_ms` parameter if it has one,
    set to 7200000 ms, otherwise the largest value the tool allows) — the bridge may run for many
    minutes and the tool's default cap would kill it mid-run. Wait for it to finish. Never modify

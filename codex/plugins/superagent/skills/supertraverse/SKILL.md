@@ -25,8 +25,9 @@ license: MIT
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -35,7 +36,7 @@ license: MIT
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -110,7 +111,8 @@ Use these exact spellings; both consumer skills depend on them:
 - `incomplete` — not started.
 - `in progress (planning underway)` — a descendant of this step now has a plan, but **no descendant has executed yet** (set by planning-mode ascent).
 - `in progress (partially executed)` — at least one descendant row has reached a closed state
-  (`completed-and-merged` / `done` / `executed — PR open` / `deferred` / `declined` / `out-of-scope`),
+  (`completed-and-merged` / `done` / `completed-local` / `executed — PR open` / `deferred` /
+  `declined` / `out-of-scope`),
   at least one other is still `incomplete`, `PLAN WRITTEN — needs refinement`,
   `PLAN WRITTEN — ready to execute`, or
   `in progress (planning underway)` (set by completion-mode ascent on partial ancestors). The
@@ -127,6 +129,8 @@ Use these exact spellings; both consumer skills depend on them:
   "all children merged-on-main" check in completion-mode ascent.
 - `completed-and-merged` / `done` — closed, code on `main` (set by completion-mode ascent /
   superfinish when the code PR has been merged).
+- `completed-local` — closed only for a `SUPER_GIT_MODE=none` goal after a validated local receipt;
+  it is never merge evidence in `github`.
 
 **State-progression invariant.** A row only ever moves "rightward" along the lifecycle:
 
@@ -135,6 +139,7 @@ incomplete  →  in progress (planning underway)  →  PLAN WRITTEN — needs re
                                                 →  PLAN WRITTEN — ready to execute
             →  in progress (partially executed)  (only at internal nodes — leaves skip this)
             →  executed — PR open  →  completed-and-merged
+            →  completed-local                 (local mode only)
 ```
 
 `deferred` / `declined` / `out-of-scope` are terminal off-ramps available from any earlier state.
@@ -193,6 +198,8 @@ live consumer received the contract.
   `deferred` / `declined` / `out-of-scope`, **or** the row carries a `Closeout: [[…reports/…]]`
   link. Skip these rows during descent — the work is past consideration for both planning and
   execution targets. (Shipped seed rows commonly carry both signals.)
+  In effective mode `none`, a `completed-local` row is closed only after validating its receipt.
+  In effective mode `github`, it is neither closed nor integrated and must be reported BLOCKED.
 - **Merged-on-`main` row** (completion-mode "all children done" check, C7): its **Status** text
   contains `completed-and-merged` / `done` / `merged` / `shipped` / `closed-out` (i.e. the code is
   on `main`). `deferred` / `declined` / `out-of-scope` rows count as merged-on-`main` for this
@@ -353,6 +360,11 @@ mode's update:
 
 - **Completion mode** (superfinish, after a leaf is executed): the leaf row itself and ancestors
   are updated separately because they answer different questions.
+  - **Local mode (`SUPER_GIT_MODE=none`):** set the active leaf to `completed-local` only after
+    reopening its receipt and required command/review/acceptance evidence. Roll an ancestor to
+    `completed-local` only when every active descendant has valid local completion evidence or an
+    authorized disposition and no unresolved repair. Otherwise retain/advance partial progress.
+    Never fill a PR column or infer a merge. Then skip the GitHub leaf/ancestor rules below.
   - **Leaf-row update** (the row pointing at the executed implementation plan): set the row's
     Status based on the leaf's authoritative closeout record at superfinish time. For upfront work,
     first verify its execution snapshot (generation, Stage ID/revision, historical preparation
@@ -532,8 +544,9 @@ real delivered work through the record and successor; never close the successor 
    ancestors along this path to `in progress (partially executed)`; move stale ancestor Closeout
    links/banners into the repair record so they cannot hide the path. This is the only authorized
    backward transition; preserve unaffected siblings and the original leaf/closeout files.
-4. Commit the repair record and tree edits under superauthor A7 (external vault: vault commit;
-   internal: docs PR), sync and verify all are present in the authoritative tree. Only then set
+4. Persist the repair record and tree edits under superauthor A7 (`none`: write/reopen/verify local
+   files; `github`: external-vault commit or internal docs PR), then verify all are present in the
+   authoritative tree. Only then set
    `plan_exhausted: false`, `status: WAITING FOR PLAN`. Persist the decision ID and record link
    in the loop's Decisions entry. A log-only decision is not an applied repair.
 
@@ -573,7 +586,8 @@ row's active **Plan** link to successor and Status `PLAN WRITTEN — ready to ex
 row's predecessor Plan/Closeout markers into the repair record; retain only `Repair: [[record]]`
 as historical navigation in Comments. Preserve PR provenance in the record; the row's PR column
 identifies the PR being reused or is blank pending replacement. Apply the same rules to bullet rows.
-Commit/sync/verify before returning success. On interruption, reuse the record's named successor
+Persist/verify before returning success (`none`: reopen local artifacts under inherited ownership;
+`github`: commit/sync under A7). On interruption, reuse the record's named successor
 or the unique draft referencing this Decision ID; never generate a second one blindly.
 
 A successor is now an ordinary active leaf for execution and closeout. Its closeout records how
@@ -595,6 +609,9 @@ retain the legacy audit below.
 1. Read the synchronized authoritative tree from the root. Visit active child links recursively
    even when internal rows carry closed status or closeout banners. Track visited paths: cycles,
    unreadable/missing active plans, non-traversable roots and ambiguous links are BLOCKED. An
+   unmarked legacy root means `github`; if that disagrees with the effective mode, return BLOCKED
+   for mode mismatch before any git/GitHub action. A marked root whose mode or physical project root
+   differs from the loop/effective context is likewise BLOCKED and cannot claim integration. An
    intentionally declined/deferred/out-of-scope subtree with recorded authority and disposition
    need not be descended into. A root banner alone never proves completion.
 2. At each active leaf/step, accept only (a) completed-and-merged/done or affirmative legacy
@@ -604,6 +621,10 @@ retain the legacy audit below.
    work, verify the recorded integration commit on main (local main when no remote) and closeout.
    Documentation-only work uses its tracked committed deliverable on the authoritative main/vault
    branch. A docs closeout commit alone never substitutes for the code integration evidence.
+   In `SUPER_GIT_MODE=none`, instead accept `completed-local` only with a valid receipt whose
+   root/active-leaf identity, mode, before/result manifests, changed/deleted paths, command results,
+   required reviews, acceptance coverage, outstanding obligations, and timestamp all validate.
+   A label or report without those files is BLOCKED. In `github`, `completed-local` is not integrated.
    An upfront implementation delivery receipt must bind its execution-entry root generation,
    Stage ID/revision, historical preparation receipt/digest, reviewed code/source revisions, actual
    merge/direct-integration identity, and every produced contract revision. Verify the preparation
@@ -642,3 +663,4 @@ retain the legacy audit below.
    or other active obligation. Report checked rows, contracts, receipts and integration/disposition
    evidence to the caller. Empty traversal queues are only the trigger for this audit. Unknown evidence
    => BLOCKED, never optimistic completion.
+   Delayed predecessor closeouts remain historical and cannot complete or overwrite a successor.

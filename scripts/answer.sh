@@ -61,7 +61,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "answer: no registered loop '$SLUG' ($ENV_FILE missing) — see status.sh for registered slugs" >&2
   exit 1
 fi
-LOOP_FILE="$(sed -n 's/^LOOP_FILE=//p' "$ENV_FILE" | head -1)"
+LOOP_FILE="$(superagent_registry_value "$ENV_FILE" LOOP_FILE)"
 if [[ -z "$LOOP_FILE" || ! -f "$LOOP_FILE" ]]; then
   echo "answer: loop file missing for '$SLUG': ${LOOP_FILE:-<unset>}" >&2
   exit 1

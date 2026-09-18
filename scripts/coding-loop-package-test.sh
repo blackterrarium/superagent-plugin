@@ -4,13 +4,23 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
-for harness in codex cursor pi; do
+for harness in claude codex cursor pi; do
   source="$ROOT/$harness"
   [[ "$harness" != codex ]] || source="$source/plugins/superagent"
   package="$T/$harness"
-  cp -R "$source" "$package"
-  # Isolated import must resolve only shipped production files, even from a neutral cwd.
-  (cd "$T" && python3 -I - "$package" "$harness" <<'CHECK'
+  if [[ "$harness" == claude ]]; then
+    mkdir -p "$package/scripts" "$package/templates" "$package/skills"
+    cp "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" "$ROOT/scripts/prd-lint.sh" \
+      "$ROOT/scripts/supereval.sh" "$ROOT/scripts/workspace-state.py" \
+      "$ROOT/scripts/_coding_loop_state.py" "$ROOT/scripts/_coding_loop_evidence.py" "$package/scripts/"
+    cp "$ROOT/templates/superenv.default" "$ROOT/templates/coding-loop-diagnosis.md" "$package/templates/"
+    cp -R "$ROOT/skills/"* "$package/skills/"
+  else
+    cp -R "$source" "$package"
+  fi
+  if [[ "$harness" != claude ]]; then
+    # Isolated import must resolve only shipped production files, even from a neutral cwd.
+    (cd "$T" && python3 -I - "$package" "$harness" <<'CHECK'
 import importlib, pathlib, subprocess, sys
 package = pathlib.Path(sys.argv[1]).resolve()
 harness = sys.argv[2]
@@ -40,10 +50,17 @@ assert 'SUPERAGENT_SCRIPT_DIR' in external and 'SUPERAGENT_SCRIPT_DIR' in superc
 assert 'never fall back to helpers from a source' in supercode
 assert 'Invoke the installed `scripts/launch.sh' not in external
 CHECK
-  )
+    )
+  fi
   # Test entry points are copied separately; all production dependencies must ship already.
   cp "$ROOT/scripts/prd-lint-test.sh" "$ROOT/scripts/supereval-test.sh" "$package/scripts/"
-  bash "$package/scripts/prd-lint-test.sh"
-  bash "$package/scripts/supereval-test.sh"
+  [[ -x "$package/scripts/workspace-state.py" ]] || { echo "FAIL: $harness lacks executable workspace-state.py"; exit 1; }
+  (
+    cd /
+    bash "$package/scripts/prd-lint-test.sh"
+    bash "$package/scripts/supereval-test.sh"
+    SUPER_GIT_MODE=none REPO="$T" bash -c '. "$1"; superagent_load_context "$2" run; test "$REPO" = "$(cd "$2" && pwd -P)"' \
+      _ "$package/scripts/_common.sh" "$T"
+  )
   echo "PASS: $harness copied-package Stage 1–3 helpers"
 done

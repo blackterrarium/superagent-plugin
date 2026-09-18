@@ -27,8 +27,9 @@ related skills: superauthor, supergoal, superprd, supereval
 >   prompt; the relay runs `${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh` and returns the foreign
 >   CLI's result verbatim. "Skill tool" = reference the skill by
 >   name in the conversation. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
->   sessions only — never in a headless tick). `EnterWorktree` = not available; use
->   `git worktree` via shell.
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed.
 > - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root (the directory
 >   containing `skills/` and `templates/`, two levels above each SKILL.md — for a marketplace
 >   install that is the plugin cache copy; in the source repository it is
@@ -37,7 +38,7 @@ related skills: superauthor, supergoal, superprd, supereval
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -77,15 +78,7 @@ receives the current two-factor confirmation invocation.
 
 ## Repo configuration (.superenv)
 
-Repo-specific values in this skill are named `SUPER_*` keys. Resolve each at point of
-use, highest wins: (1) a process environment variable of the same name, (2) the
-repo-root `.superenv` file, (3) the plugin default
-`${SUPER_PLUGIN_ROOT}/templates/superenv.default`. Read a key with:
-`grep -hs '^KEY=' "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.superenv" "${SUPER_PLUGIN_ROOT}/templates/superenv.default" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'`
-(checking the env var first, and anchoring at the primary checkout so worktrees resolve the same config). A repo with no `.superenv` runs on the shipped defaults.
-
-Keys used here: `SUPER_GOAL_ROOT`, `SUPER_PROJECT_DIRNAME`, `SUPER_MODEL_PLANNER`,
-`SUPER_EFFORT_PLANNER`, `SUPER_GOAL_AUTOCONFIRM`, `SUPER_EVAL_TIMEOUT_MIN` (read by `prd-lint.sh`).
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -93,7 +86,7 @@ Resolve `SUPER_GOAL_ROOT` (above). If it starts with `/` or `~`, the vault is **
 `<vault_root>` is that path (`~` expanded to `$HOME`, one trailing `/` stripped), resolved physically
 (`cd "<path>" && pwd -P`) so it matches the paths `launch.sh` stores, and the vault is its own git
 repository outside the checkout. Otherwise `<vault_root>` is `<primary_root>/<SUPER_GOAL_ROOT>`
-(`primary_root` = `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`). Every goal
+(`primary_root` = the physical `REPO` exported by `superagent_load_context`). Every goal
 folder, project folder, loop-status file and lock derives from `<vault_root>`; **never join
 `SUPER_GOAL_ROOT` onto the checkout root by hand.** The same rule is `vault_root` /
 `vault_is_external` in `scripts/_common.sh`.
@@ -118,7 +111,7 @@ description, not an implementation plan.
 
 ### 2. Inputs
 
-Resolve `<primary_root>` (the code checkout: `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`) and `<vault_root>` (see **Vault root**).
+Resolve `<primary_root>` (the code checkout: the physical `REPO` exported by `superagent_load_context`) and `<vault_root>` (see **Vault root**).
 
 1. `<project-dir>` must exist and contain `prd.md`, `knowledge-base.md`, `evaluation.md`, each with
    `**Status:** READY` in its header block. Otherwise print
@@ -258,7 +251,8 @@ Round N>1: the objective restated plus the repair scope from the diagnosis.>
 <every SC row from prd.md verbatim, then every C/J row from evaluation.md verbatim, including the
 Environment setup/cwd lines, the full Acceptance checklist with its approval record, and all
 binding contract notes. Preserve source references and identify the source project revision
-(commit plus file paths). Carry optional suggestions separately as nonbinding context.
+(`commit:<sha>` in GitHub mode or the recorded local mode/root plus file paths before evaluation).
+Carry optional suggestions separately as nonbinding context.
 These are the approved conditions the plan must satisfy; do not derive a new coverage inventory.>
 
 ## Knowledge base
@@ -352,8 +346,12 @@ Append this row to `prd.md`'s `## Iteration ledger` table (the goal-folder path 
 `**Goal folder:**` from step 6 made relative to `<vault_root>`):
 
 ```
-| <N> | [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/meta-plans/<STAMP>-r<N>]] | [[<goal-folder-path-from-vault-root>]] | - | - | - |
+| <N> | [[<SUPER_PROJECT_DIRNAME>/<project-folder-basename>/meta-plans/<STAMP>-r<N>]] | [[<goal-folder-path-from-vault-root>]] | - | - | - | - |
 ```
+
+This is the new `Source` ledger shape. When appending to a legacy ledger with a `Commit` identity
+column, preserve that header and use `-` in the identity cell. When appending to the older six-column
+shape with no identity column, omit one `-`; do not silently change existing row widths.
 
 In operation mode, inspect `main` for round `N` first. Reuse its one row only when it exactly links
 the recorded meta-plan and goal. If absent, append it once. A duplicate or different identity is a
@@ -361,6 +359,9 @@ conflict. Commit or resume the exact pending A7 work; do not create another bran
 or goal.
 
 Then apply **A7** with:
+
+- **Local mode:** when `SUPER_GIT_MODE=none`, reopen and verify the meta-plan, updated `prd.md`, and
+  returned goal/root paths under inherited workspace ownership. Do not run git/GitHub operations.
 
 - **branch prefix:** `project/<project-slug>-r<N>-meta`
 - **commit subject:** `docs(project): <project-slug> round <N> meta-plan`
@@ -387,6 +388,7 @@ completion.
 **Goal folder:** <path>   **Root plan:** <path to master-plans/…>
 **PR:** <url> (merged)
 **Commit:** <short-sha> in <vault_root>   (external vault — print this line INSTEAD of the PR line)
+**Persistence:** local files verified (SUPER_GIT_MODE=none)   (local mode instead)
 **Repair guidance:** none — first round | <diagnosis path> | author-approved planning (<decision id>)
 **Next:** superagent:superagent-external <root plan>   (then superagent:supereval <project-dir> when the loop is DONE)
 ```
