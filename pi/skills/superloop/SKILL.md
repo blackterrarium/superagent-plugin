@@ -306,8 +306,8 @@ The transient/running role (L1) is transient *within* a tick: the loop sets it, 
 synchronously, then sets the next status — all in one turn. Ticks never overlap: in `cron` mode they
 fire between turns; in `external` mode the **lock (L3)** serializes them. So a **persisted** transient
 state means a crashed prior tick (which also left a stale lock that `acquire_lock()` steals
-immediately when its recorded owner PID is dead, else after
-`SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log a recovery note and reconcile the
+immediately when its recorded owner PID is dead, or after
+`SUPER_LOCK_STEAL_MIN` minutes (default 90) only when no valid owner PID was recorded). **Self-heal:** log a recovery note and reconcile the
 caller-owned authoritative artifacts before retrying. A published docs operation, merged code delivery,
 open/CI-pending PR, or integrated closeout may have succeeded after the response was lost; actual
 tracked commits/PRs and identity-bound partial-closeout/delivery records override the stale transient hint. Then **map the
@@ -412,10 +412,10 @@ loop-status dir so two ticks never run concurrently:
   ticks fall back to `$PPID`, the CLI process) — to `…lockd/owner`, then proceed. On **failure**
   (held): read `…lockd/owner`; if it names a PID that is **no longer alive** (`kill -0 <pid>`
   fails), the owning tick is dead — `rm -rf` the lock dir, re-acquire, and log a recovery note.
-  If the owner is alive (or there is no `owner` file — an older or hand-made lock), fall back to
-  `…lockd/acquired` age: older than **`SUPER_LOCK_STEAL_MIN` minutes (default 90)** (a crashed
-  tick) → `rm -rf`, re-acquire, log a recovery note; otherwise **exit the tick immediately** —
-  another tick is in flight, and the next scheduled fire retries.
+  If the owner PID is alive, **exit the tick immediately regardless of lock age** — another tick
+  is in flight. Only when no valid owner PID was recorded (an older or interrupted lock), fall
+  back to `…lockd/acquired` age: older than **`SUPER_LOCK_STEAL_MIN` minutes (default 90)** →
+  `rm -rf`, re-acquire, log a recovery note; otherwise exit and let the next scheduled fire retry.
 - **`release_lock()`** — `rm -rf` the lock dir on **every** exit path of a tick (normal end, early
   no-op, escalation/STOP). In `cron` mode ticks already never overlap, so the lock is a harmless no-op;
   in `external` mode it is load-bearing (it is what replaces `CronList`'s implicit single-session

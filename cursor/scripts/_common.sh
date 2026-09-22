@@ -303,6 +303,22 @@ load_superenv() {
   rm -f "$snapshot"
 }
 
+# Executor Bash-tool timeout in milliseconds. The same value is used by the
+# supervisor's foreground superrun call and by bridged-role relay calls.
+superagent_executor_timeout_ms() {
+  local minutes="${SUPER_EXECUTOR_TIMEOUT_MIN:-120}"
+  if [[ ! "$minutes" =~ ^[1-9][0-9]*$ ]] || (( ${#minutes} > 10 )); then
+    echo "superagent: SUPER_EXECUTOR_TIMEOUT_MIN must be a positive whole number of minutes" >&2
+    return 2
+  fi
+  local ms=$(( minutes * 60000 ))
+  if (( ms / 60000 != minutes )); then
+    echo "superagent: SUPER_EXECUTOR_TIMEOUT_MIN is too large" >&2
+    return 2
+  fi
+  printf '%s\n' "$ms"
+}
+
 # Validate the effective workflow integration mode. Missing means the shipped,
 # backward-compatible GitHub workflow; an explicitly empty value is invalid.
 superagent_validate_git_mode() {

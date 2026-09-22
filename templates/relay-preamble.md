@@ -24,7 +24,7 @@ yourself is wrong by definition, because it did not come from `<harness>`.
    `SUPER_WORKSPACE_OWNER_PID` environment exactly. In local mode these values identify the
    in-place project and prove that this nested role borrows the outer writer lock.
    Pass an explicit long timeout on the shell tool call (its `timeout_ms` parameter if it has one,
-   set to 7200000 ms, otherwise the largest value the tool allows) — the bridge may run for many
+   set to `60000 * ${SUPER_EXECUTOR_TIMEOUT_MIN:-120}` ms, otherwise the largest value the tool allows) — the bridge may run for many
    minutes and the tool's default cap would kill it mid-run. Wait for it to finish. Never modify
    files yourself.
 3. If it exited 0: reply with its stdout **verbatim** as your final message — nothing else.

@@ -31,8 +31,8 @@ produced yourself is wrong by definition, because it did not come from `<harness
    verify that it stays inside the worktree" — measured to cost every relay 1–3 wasted turns.
 2. **Bash.** Run, from your current working directory (the same checkout/worktree the prompt refers to):
    `"${SUPERAGENT_BRIDGE:-<bridge-path>}" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$PWD/.superpowers/relay/<role>.prompt" --role <role>`
-   Pass an explicit long timeout on the Bash tool call (`timeout: 7200000` ms, or the largest the
-   tool accepts) — the bridge may run for many minutes and the tool's default cap would kill it
+   Pass an explicit long timeout on the Bash tool call (`timeout` in ms =
+   `60000 * ${SUPER_EXECUTOR_TIMEOUT_MIN:-120}`, or the largest the tool accepts) — the bridge may run for many minutes and the tool's default cap would kill it
    mid-run. Wait for it to finish. Never modify files yourself. Then `rm -f .superpowers/relay/<role>.prompt`
    (one more Bash call) so the scratch file is never swept into a commit.
 3. If it exited 0: reply with its stdout **verbatim** as your final message — no preamble, no
