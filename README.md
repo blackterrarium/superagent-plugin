@@ -427,8 +427,8 @@ A relay blocks on the foreign CLI for as long as the real task takes. Claude Cod
 that at 120 s by default and refuses anything above 600 s unless `BASH_DEFAULT_TIMEOUT_MS` and
 `BASH_MAX_TIMEOUT_MS` are set in the process environment.
 
-- `scripts/superagent-tick.sh` exports both (1 h / 2 h defaults; operator-set values win) for
-  every unattended tick.
+- `scripts/superagent-tick.sh` exports both for every unattended tick. The default Bash timeout
+  is 1 h; the maximum follows `SUPER_EXECUTOR_TIMEOUT_MIN` in `.superenv` (120 min by default).
 - An **attended session must set them itself** before dispatching a bridged role, or the bridge is
   killed mid-run and the role comes back `BRIDGE-FAILED`. This includes the in-session cron driver,
   because the executor is always a bridge call. Launch the session as:
@@ -437,7 +437,10 @@ that at 120 s by default and refuses anything above 600 s unless `BASH_DEFAULT_T
   BASH_DEFAULT_TIMEOUT_MS=3600000 BASH_MAX_TIMEOUT_MS=7200000 claude
   ```
 
-  The supervisor refuses to dispatch `superrun` when `BASH_MAX_TIMEOUT_MS` is below 2 h.
+  For a longer run, set `SUPER_EXECUTOR_TIMEOUT_MIN=180` (for example) in the repo's `.superenv`.
+  For an attended run, launch
+  Claude with `BASH_MAX_TIMEOUT_MS` at least that many minutes in milliseconds. The supervisor
+  refuses to dispatch `superrun` when that maximum is below the configured timeout.
 
 **Cursor is unverified as a bridge target and as a supervisor for bridged roles.** The `agent` CLI
 is absent on the build host, so bridge smoke T3 skips. The relay definition's `tools:` key and tool

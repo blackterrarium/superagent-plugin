@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.2 — 2026-09-22
+
+- **Make executor and bridged-role timeouts configurable.** Set
+  `SUPER_EXECUTOR_TIMEOUT_MIN` in the repo's `.superenv` to extend the foreground
+  `superrun` call and bridged role calls beyond the 120-minute default. Unattended
+  ticks set the Bash maximum from this value; attended Claude sessions must set
+  `BASH_MAX_TIMEOUT_MS` high enough before starting.
+- **Keep long-running goal ticks locked.** The legacy goal-loop instructions now
+  preserve a lock while its recorded owner PID is alive. The 90-minute stale-lock
+  threshold applies only when no valid owner was recorded.
+
 ## 0.10.1 — 2026-09-18
 
 - **Use Sonnet for Claude task review and re-review by default.** The Claude Code build now matches

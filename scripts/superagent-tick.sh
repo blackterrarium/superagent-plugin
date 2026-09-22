@@ -321,8 +321,11 @@ if [[ "$HARNESS" == pi ]]; then export SUPERAGENT_PI_SKILLS="$SKILLS_ROOT/skills
 # timeout and refuses anything above 600s unless these are set in the process env, so a
 # bridged role would be killed mid-run. Exported unconditionally (harmless on harnesses that
 # ignore them); an operator-set value is respected, and TICK_TIMEOUT still bounds the whole tick.
-export BASH_DEFAULT_TIMEOUT_MS="${BASH_DEFAULT_TIMEOUT_MS:-3600000}"
-export BASH_MAX_TIMEOUT_MS="${BASH_MAX_TIMEOUT_MS:-7200000}"
+EXECUTOR_TIMEOUT_MS="$(superagent_executor_timeout_ms)" || exit $?
+DEFAULT_BASH_TIMEOUT_MS=3600000
+if (( EXECUTOR_TIMEOUT_MS < DEFAULT_BASH_TIMEOUT_MS )); then DEFAULT_BASH_TIMEOUT_MS="$EXECUTOR_TIMEOUT_MS"; fi
+export BASH_DEFAULT_TIMEOUT_MS="${BASH_DEFAULT_TIMEOUT_MS:-$DEFAULT_BASH_TIMEOUT_MS}"
+export BASH_MAX_TIMEOUT_MS="${BASH_MAX_TIMEOUT_MS:-$EXECUTOR_TIMEOUT_MS}"
 
 # Supervisor reasoning effort: TICK_EFFORT > SUPER_EFFORT_SUPERVISOR > inherit.
 # Harness-native names (claude: low..max; codex: none..xhigh; pi: off..max); inherit -> pass nothing.

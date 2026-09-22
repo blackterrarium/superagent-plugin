@@ -200,7 +200,8 @@ isolated differently, and the executor distinction is load-bearing:
      for a resume, the `ci_wait` packet + conclusions) to a temp file with a quoted heredoc:
      `f="$(mktemp "${TMPDIR:-/tmp}/super-executor.XXXXXX")"; cat >"$f" <<'__SUPERAGENT_PROMPT_END__' … __SUPERAGENT_PROMPT_END__`.
   2. Resolve the executor's harness / model / effort (see **Model resolution** below), then run —
-     from the **primary checkout root** (`superrun` makes its own worktree), with `timeout: 7200000`
+     from the **primary checkout root** (`superrun` makes its own worktree), with Bash-tool
+     `timeout` set to `$(superagent_executor_timeout_ms)` milliseconds
      on the Bash call:
      `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools executor --cwd "<primary root>" --prompt-file "$f" --role executor`
      `--tools executor` gives the child the tick's own allowlist (`Read,Edit,Write,Bash,Grep,Glob,Task,Skill`),
@@ -211,11 +212,14 @@ isolated differently, and the executor distinction is load-bearing:
      relay it exactly as before. Non-zero → the bridge prints `role-bridge: log=<path>` on stderr;
      treat it as a crashed dispatch (escalation ladder, quoting the log path) — never retry blindly.
 
-  **Preflight (once per tick, before the first `superrun` dispatch):** `superrun` runs 20–60 min and
-  the Bash tool kills anything past its cap. `scripts/superagent-tick.sh` exports
-  `BASH_MAX_TIMEOUT_MS=7200000` for every external tick; an attended `cron` session must be launched
-  with `BASH_DEFAULT_TIMEOUT_MS=3600000 BASH_MAX_TIMEOUT_MS=7200000 claude …`. Check
-  `[ "${BASH_MAX_TIMEOUT_MS:-0}" -ge 7200000 ]` in Bash; if it fails, do **not** dispatch — reset
+  **Preflight (once per tick, before the first `superrun` dispatch):** calculate
+  `executor_timeout_ms="$(superagent_executor_timeout_ms)"` after loading `.superenv`;
+  invalid `SUPER_EXECUTOR_TIMEOUT_MIN` is a configuration error. `superrun` runs 20–60 min and
+  the Bash tool kills anything past its cap. `scripts/superagent-tick.sh` defaults
+  `BASH_MAX_TIMEOUT_MS` to the configured timeout for every external tick; an attended `cron`
+  session must be launched with `BASH_DEFAULT_TIMEOUT_MS=3600000` and
+  `BASH_MAX_TIMEOUT_MS` at least the configured timeout. Check
+  `[ "${BASH_MAX_TIMEOUT_MS:-0}" -ge "$executor_timeout_ms" ]` in Bash; if it fails, do **not** dispatch — reset
   `RUNNING → WAITING FOR RUN`, `stop_driver()`, `release_lock()`, and report the missing env var in
   `Findings & issues` (a dispatch that gets guillotined at 600 s strands a half-done worktree).
 
@@ -272,7 +276,7 @@ The harness runs Agent-tool subagents in the background by default, which hands 
 invites `TaskOutput`/`TaskList` status checks while the work runs — for a long selected planning operation or `superrun`
 that polling is pure supervisor-context waste. So every heavy-skill dispatch — a Step-1 planning-role
 Agent call passes **`run_in_background: false`**; the `superrun` bridge call (Step-1, the ci-resume's
-fresh process, an escalation-ladder retry) is a plain **foreground Bash call with `timeout: 7200000`**,
+fresh process, an escalation-ladder retry) is a plain **foreground Bash call with `timeout` set to the configured `executor_timeout_ms`**,
 never `run_in_background: true` — **blocks until the child's final message returns as the tool
 result**. The blocked wait costs zero
 context; there is nothing to check on and nothing to do until the report arrives. No `TaskOutput` /
@@ -380,7 +384,7 @@ tick) may be spent watching a 60–120 min run. One wait = one resume signal.
    alone.
 4. **Resume `superagent:superrun`:** the process that yielded has exited, so there is nothing to
    message — dispatch a **fresh** `superrun` process exactly as in `WAITING FOR RUN` step 3 (bridge,
-   `--tools executor`, foreground Bash, `timeout: 7200000`; model per **Model resolution** under
+   `--tools executor`, foreground Bash, `timeout: "$executor_timeout_ms"`; model per **Model resolution** under
    **Subagent dispatch**, from `SUPER_MODEL_EXECUTOR`), with a prompt that instructs it to invoke
    `superagent:superrun` with the full `ci_wait` packet + each run's conclusion via its
    **Resume entry — post-CI**. It returns the real Final Report.
@@ -435,7 +439,7 @@ These are transient *within* a tick (superagent sets them, runs the skill synchr
 next status — all in one turn). Ticks never overlap: in `cron` mode they fire between turns; in
 `external` mode the **lock** serializes them. So a **persisted** `PLANNING`/`RUNNING` means a crashed
 prior tick (which also left a stale lock that `acquire_lock()` steals immediately when its recorded
-owner PID is dead, else after `SUPER_LOCK_STEAL_MIN` minutes (default 90)). **Self-heal:** log
+owner PID is dead, or after `SUPER_LOCK_STEAL_MIN` minutes (default 90) only when no valid owner PID was recorded)). **Self-heal:** log
 a recovery note, then reconcile authoritative artifacts before redispatch. `PLANNING` reconciliation
 uses the tracked root/record and may recover a published preparation/replan instead of repeating it.
 `RUNNING` reconciliation inspects the actual branch/PR/main history and execution snapshot: a merged
@@ -548,7 +552,7 @@ second successor after a crash.
    current bytes. If the selected gate STOPs, pause and end this tick.
 2. Set `status: RUNNING`, write the loop file.
 3. **Dispatch `superagent:superrun` in its own CLI process** — **not** an Agent-tool subagent: run
-   `role-bridge.sh --tools executor` from your Bash tool, foreground, `timeout: 7200000`, after the
+   `role-bridge.sh --tools executor` from your Bash tool, foreground, `timeout: "$executor_timeout_ms"`, after the
    `BASH_MAX_TIMEOUT_MS` preflight (all in **Subagent dispatch**). Model per **Model resolution**
    (see **Subagent dispatch**), from `SUPER_MODEL_EXECUTOR`.
    The prompt instructs it to invoke the `superagent:superrun` skill (Skill tool) with

@@ -33,7 +33,7 @@ produced yourself is wrong by definition, because it did not come from `<harness
    unique terminator instead.
 2. **bash.** Run, from your current working directory (the same checkout/worktree the prompt refers to):
    `"${SUPERAGENT_BRIDGE:-<bridge-path>}" --harness <harness> --model "<model>" --effort "<effort>" --cwd "$PWD" --prompt-file "$f" --role <role>`
-   Pass the largest timeout the `bash` tool accepts (its `timeout` parameter, 7200000 ms if allowed)
+   Pass the largest timeout the `bash` tool accepts (its `timeout` parameter, `60000 * ${SUPER_EXECUTOR_TIMEOUT_MIN:-120}` ms if allowed)
    — the bridge may run for many minutes and the tool's default cap would kill it mid-run. Wait
    for it to finish. Never modify files yourself.
 3. If it exited 0: reply with its stdout **verbatim** as your final message — no preamble, no
