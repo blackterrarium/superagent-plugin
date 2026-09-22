@@ -417,7 +417,7 @@ cursor-only:end -->
   column names the Claude Code artifact and is inapplicable in this build. For each
   role, resolve both keys (using the validated values above) and record the effective
   pair in the summary using the row shape mandated below — e.g.
-  `planner · codex · gpt-5.6-sol · inherit · native`. At runtime the loop passes these
+  `planner · codex · gpt-6-astra · high · native`. At runtime the loop passes these
   as the `spawn_agent` call's `model` / `reasoning_effort` parameters; `inherit` = omit
   the parameter. For a
   **bridged** role, the loop instead spawns a relay: `model` = `SUPER_BRIDGE_RELAY_MODEL`

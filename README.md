@@ -295,7 +295,7 @@ must hand off contract-breaking changes to replanning instead of expanding its o
 | Build | `PLANNER` model / effort | `PLAN_REFINER` model / effort | `REPLANNER` model / effort |
 |---|---|---|---|
 | Claude | `claude:claude-fable-5-1` / `high` | `claude:sonnet` / `medium` | `claude:claude-opus-5` / `high` |
-| Codex | `codex:gpt-6-astra` / `high` | `codex:gpt-5.6-terra` / `medium` | `codex:gpt-5.6-sol` / `high` |
+| Codex | `codex:gpt-6-astra` / `high` | `codex:gpt-6-sol` / `medium` | `codex:gpt-6-astra` / `high` |
 | Cursor | `inherit` / `inherit` | `inherit` / `inherit` | `inherit` / `inherit` |
 | Pi | `pi:openai-codex/gpt-6-astra` / `high` | `pi:openai-codex/gpt-5.6-terra` / `medium` | `pi:openai-codex/gpt-5.6-sol` / `high` |
 
@@ -485,7 +485,7 @@ coding-loop skills, never by the tick.
 | SUPER_MODEL_META_PLANNER | `claude:claude-opus-5` | The `supermeta` subagent: reads the PRD and the latest diagnosis, writes the round's meta-plan, drives `supergoal`. It remains separate from the Fable-backed plan-tree author. |
 | SUPER_MODEL_EVALUATOR | `claude:claude-opus-5` | The read-only grader `supereval` dispatches for judged objectives. Command checks run in bash and use no model. |
 | SUPER_MODEL_DIAGNOSER | `claude:claude-opus-5` | The `superdiagnose` subagent (Stage 3): root-cause analysis of a failed evaluation report. |
-| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-5.6-terra`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by planning roles, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since planner, plan-refiner, replanner, and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins the sonnet-tier peer rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
+| SUPER_BRIDGE_RELAY_MODEL | `sonnet` (Codex build: `gpt-6-sol`; Pi build: `openai-codex/gpt-5.6-terra`; Cursor build: `inherit`) | The relay subagent for a **bridged** role (one whose model key names a harness other than `SUPER_HARNESS`). Used by planning roles, the panel, and the six SDD roles; never by the supervisor (native-only) or the executor, which the tick starts through `role-bridge.sh` directly. On Pi only the SDD roles use it, since planner, plan-refiner, replanner, and panel are direct bridge processes there. It runs on `SUPER_HARNESS`, so the value is a bare native model name with no prefix. It only copies the prompt to `role-bridge.sh` and returns the foreign CLI's result, so keep it cheap, but do not weaken it to `haiku`: measured to answer the prompt itself instead of relaying. Every build with a model choice pins a reliable model rather than `inherit`, so the relay does not float with the CLI's default subagent model. |
 | SUPER_PANEL_AGENT_TYPE | `general-purpose` | Claude Code subagent type for each L7 panelist: `general-purpose` (all tools) or `Explore` (read-only search). Only used when the panel is dispatched with a tier name; a full ID, a non-`inherit` effort, or a bridged panel uses the generated `super-panel` definition instead, and Pi ignores the key. |
 | SUPER_EFFORT_SUPERVISOR | `medium` | Reasoning effort of the tick, passed on the tick's command line (`--effort`, `-c model_reasoning_effort=`, or `--thinking` by harness). Ticks fire on an interval, so per-tick cost compounds; `medium` covers the routing work. |
 | SUPER_EFFORT_PLANNER | `high` | Effort for `supergoal` / `superplan`. Plans are the highest-leverage artifact, so this is the one dispatch-side role above `medium`. |
@@ -643,12 +643,15 @@ no per-invocation `--plugin-dir`. Bootstrap each target repo by asking a Codex s
 **Auth and sandbox.** `OPENAI_API_KEY` in the target repo's `.env`, else the CLI's stored login
 (`codex login`). Sandbox posture is `SUPER_CODEX_SANDBOX` (see the key table).
 
-**Models and effort.** Native roles take Codex model names (e.g. `gpt-5.6-sol`) or `inherit`.
+**Models and effort.** Native roles take Codex model names (e.g. `gpt-6-sol`) or `inherit`.
 Effort is `none | minimal | low | medium | high | xhigh | inherit`. A native pin rides
 `spawn_agent`'s `model` / `reasoning_effort` parameters; there is no agent-definition file. A
-bridged role spawns a relay agent from `templates/relay-preamble.md`. The planner defaults to
-`gpt-6-astra`; other high-capability roles use `gpt-5.6-sol`, and implementer/fix-applier use
-`gpt-5.6-terra`, with the same efforts.
+bridged role spawns a relay agent from `templates/relay-preamble.md`. Astra handles the initial
+plan, structural replanning, final branch review, difficult fix planning, meta-planning, and
+failed-evaluation diagnosis. Sol handles recurring supervision, execution, implementation,
+refinement, task review, evaluation, and relay dispatch. Existing effort pins are retained.
+Luna is suited to narrower, high-volume tasks, but these roles require sustained tool use or
+careful judgment; the relay also has a measured failure mode on a smaller model.
 
 **Status: smoke-validated 8/8** (2026-08-12, codex CLI 0.147.0 on macOS): headless `codex exec`,
 the marketplace install path, skill enumeration and model invocation from a neutral workspace,
