@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.3 — 2026-09-22
+
+- **Refresh Codex role defaults for GPT-6.** Use Astra for initial and structural planning,
+  final branch review, fix planning, meta-planning, and failed-evaluation diagnosis. Use Sol for
+  recurring orchestration, coding, scoped review, evaluation, and bridge relay work. Keep the
+  existing reasoning-effort pins. Existing repository `.superenv` overrides are unchanged.
+
 ## 0.10.2 — 2026-09-22
 
 - **Make executor and bridged-role timeouts configurable.** Set

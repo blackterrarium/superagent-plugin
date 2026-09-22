@@ -11,7 +11,7 @@ This build differs from the Claude Code plugin:
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
 - **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Codex model name
-  (e.g. `gpt-5.6-sol`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  (e.g. `gpt-6-sol`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
   `pi:openai/gpt-5`, …) is valid too but BRIDGED — dispatched through a relay that runs the shipped
   `scripts/role-bridge.sh`.
 - **Effort keys** (`SUPER_EFFORT_*`) take Codex effort names (`none | minimal | low | medium |
@@ -20,7 +20,7 @@ This build differs from the Claude Code plugin:
   roles spawn a relay from `templates/relay-preamble.md`.
 - **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
   (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
-  (default `gpt-5.6-terra`, the sonnet-tier peer) sets the relay subagent's model.
+  (default `gpt-6-sol`) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone
@@ -54,7 +54,7 @@ fetch/commit fail and the sync gate parks the loop).
   `"AVAILABLE"` / `"ON_INSTALL"`.
 - Codex CLI defaults observed: `codex exec` runs sandbox `read-only`, approval `never`, and the
   configured default model at reasoning effort `low` — which is why this build's shipped
-  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
+  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=codex:gpt-6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
   instead of leaving them `inherit`.
 
 ## Known gaps

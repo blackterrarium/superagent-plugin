@@ -242,24 +242,24 @@ substitute <"$ROOT/templates/superenv.default" | awk '
   { inefh=0 }
   { print }
 ' | sed \
-  -e 's/^SUPER_MODEL_SUPERVISOR=claude:[^[:space:]]*/SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_SUPERVISOR=claude:[^[:space:]]*/SUPER_MODEL_SUPERVISOR=codex:gpt-6-sol/' \
   -e 's/^SUPER_MODEL_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_PLANNER=codex:gpt-6-astra/' \
-  -e 's/^SUPER_MODEL_PLAN_REFINER=claude:[^[:space:]]*/SUPER_MODEL_PLAN_REFINER=codex:gpt-5.6-terra/' \
-  -e 's/^SUPER_MODEL_REPLANNER=claude:[^[:space:]]*/SUPER_MODEL_REPLANNER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_EXECUTOR=claude:[^[:space:]]*/SUPER_MODEL_EXECUTOR=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_PANEL=claude:[^[:space:]]*/SUPER_MODEL_PANEL=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_IMPLEMENTER=claude:[^[:space:]]*/SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra/' \
-  -e 's/^SUPER_MODEL_FIX_APPLIER=claude:[^[:space:]]*/SUPER_MODEL_FIX_APPLIER=codex:gpt-5.6-terra/' \
-  -e 's/^SUPER_MODEL_TASK_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_RE_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_FIX_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_PRD_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_PRD_REVIEWER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_META_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_EVALUATOR=claude:[^[:space:]]*/SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol/' \
-  -e 's/^SUPER_MODEL_DIAGNOSER=claude:[^[:space:]]*/SUPER_MODEL_DIAGNOSER=codex:gpt-5.6-sol/' \
+  -e 's/^SUPER_MODEL_PLAN_REFINER=claude:[^[:space:]]*/SUPER_MODEL_PLAN_REFINER=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_REPLANNER=claude:[^[:space:]]*/SUPER_MODEL_REPLANNER=codex:gpt-6-astra/' \
+  -e 's/^SUPER_MODEL_EXECUTOR=claude:[^[:space:]]*/SUPER_MODEL_EXECUTOR=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_PANEL=claude:[^[:space:]]*/SUPER_MODEL_PANEL=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_IMPLEMENTER=claude:[^[:space:]]*/SUPER_MODEL_IMPLEMENTER=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_FIX_APPLIER=claude:[^[:space:]]*/SUPER_MODEL_FIX_APPLIER=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_TASK_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_TASK_REVIEWER=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_RE_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_RE_REVIEWER=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_BRANCH_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-6-astra/' \
+  -e 's/^SUPER_MODEL_FIX_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_FIX_PLANNER=codex:gpt-6-astra/' \
+  -e 's/^SUPER_MODEL_PRD_REVIEWER=claude:[^[:space:]]*/SUPER_MODEL_PRD_REVIEWER=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_META_PLANNER=claude:[^[:space:]]*/SUPER_MODEL_META_PLANNER=codex:gpt-6-astra/' \
+  -e 's/^SUPER_MODEL_EVALUATOR=claude:[^[:space:]]*/SUPER_MODEL_EVALUATOR=codex:gpt-6-sol/' \
+  -e 's/^SUPER_MODEL_DIAGNOSER=claude:[^[:space:]]*/SUPER_MODEL_DIAGNOSER=codex:gpt-6-astra/' \
   -e 's/^SUPER_HARNESS=claude\([[:space:]]*\)#.*/SUPER_HARNESS=codex\1# this is the Codex build — the external driver fires the Codex CLI (codex exec)/' \
-  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra\1# relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer\/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)/' \
+  -e 's/^SUPER_BRIDGE_RELAY_MODEL=sonnet\([[:space:]]*\)#.*/SUPER_BRIDGE_RELAY_MODEL=gpt-6-sol\1# relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); keep a reliable instruction-following model because a smaller relay answered the prompt itself instead of forwarding it; do not leave it inherit (the CLI default subagent model is unpinned)/' \
   >"$TMP/plugins/superagent/templates/superenv.default"
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
@@ -314,7 +314,7 @@ This build differs from the Claude Code plugin:
 - **`WAITING FOR INPUT` is always answered via the loop file** (`answer: <option>`), or in chat in
   an attended session.
 - **Model keys** (`SUPER_MODEL_*` in `.superenv`) take `[<harness>:]<model>` — a Codex model name
-  (e.g. `gpt-5.6-sol`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
+  (e.g. `gpt-6-sol`) or `inherit` natively; a value naming another harness (`claude:sonnet`,
   `pi:openai/gpt-5`, …) is valid too but BRIDGED — dispatched through a relay that runs the shipped
   `scripts/role-bridge.sh`.
 - **Effort keys** (`SUPER_EFFORT_*`) take Codex effort names (`none | minimal | low | medium |
@@ -323,7 +323,7 @@ This build differs from the Claude Code plugin:
   roles spawn a relay from `templates/relay-preamble.md`.
 - **Ships the bridge.** This package includes `scripts/role-bridge.sh` and the two relay templates
   (`templates/super-role-bridge-agent.md`, `templates/relay-preamble.md`); `SUPER_BRIDGE_RELAY_MODEL`
-  (default `gpt-5.6-terra`, the sonnet-tier peer) sets the relay subagent's model.
+  (default `gpt-6-sol`) sets the relay subagent's model.
 
 Install: `codex plugin marketplace add blackterrarium/superagent-plugin` (the plugin repository's
 root `.agents/plugins/marketplace.json` makes the repo itself the marketplace root; a local clone
@@ -357,7 +357,7 @@ fetch/commit fail and the sync gate parks the loop).
   `"AVAILABLE"` / `"ON_INSTALL"`.
 - Codex CLI defaults observed: `codex exec` runs sandbox `read-only`, approval `never`, and the
   configured default model at reasoning effort `low` — which is why this build's shipped
-  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
+  `superenv.default` pins `SUPER_MODEL_SUPERVISOR=codex:gpt-6-sol` / `SUPER_EFFORT_SUPERVISOR=medium`
   instead of leaving them `inherit`.
 
 ## Known gaps

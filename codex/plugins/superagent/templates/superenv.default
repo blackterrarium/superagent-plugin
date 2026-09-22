@@ -17,22 +17,22 @@
 SUPER_GIT_MODE=github                    # github | none
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=codex:gpt-5.6-sol         # the superagent tick itself
+SUPER_MODEL_SUPERVISOR=codex:gpt-6-sol         # the superagent tick itself
 SUPER_MODEL_PLANNER=codex:gpt-6-astra         # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=codex:gpt-5.6-sol           # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
-SUPER_MODEL_PANEL=codex:gpt-5.6-sol              # L7 escalation panel (3 read-only agents)
-SUPER_MODEL_IMPLEMENTER=codex:gpt-5.6-terra
-SUPER_MODEL_FIX_APPLIER=codex:gpt-5.6-terra
-SUPER_MODEL_TASK_REVIEWER=codex:gpt-5.6-sol
-SUPER_MODEL_RE_REVIEWER=codex:gpt-5.6-sol
-SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-5.6-sol    # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=codex:gpt-5.6-sol        # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_MODEL_PRD_REVIEWER=codex:gpt-5.6-sol       # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=codex:gpt-5.6-sol       # supermeta: meta-plan author, drives supergoal (coding loop)
-SUPER_MODEL_EVALUATOR=codex:gpt-5.6-sol          # supereval: grades judged objectives (read-only; command checks use no model)
-SUPER_MODEL_DIAGNOSER=codex:gpt-5.6-sol          # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
+SUPER_MODEL_EXECUTOR=codex:gpt-6-sol           # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_PANEL=codex:gpt-6-sol              # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_IMPLEMENTER=codex:gpt-6-sol
+SUPER_MODEL_FIX_APPLIER=codex:gpt-6-sol
+SUPER_MODEL_TASK_REVIEWER=codex:gpt-6-sol
+SUPER_MODEL_RE_REVIEWER=codex:gpt-6-sol
+SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-6-astra    # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=codex:gpt-6-astra        # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_PRD_REVIEWER=codex:gpt-6-sol       # superprd: zero-context sufficiency review of the drafted PRD (read-only)
+SUPER_MODEL_META_PLANNER=codex:gpt-6-astra       # supermeta: meta-plan author, drives supergoal (coding loop)
+SUPER_MODEL_EVALUATOR=codex:gpt-6-sol          # supereval: grades judged objectives (read-only; command checks use no model)
+SUPER_MODEL_DIAGNOSER=codex:gpt-6-astra          # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
-SUPER_BRIDGE_RELAY_MODEL=gpt-5.6-terra         # relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); the sonnet-tier peer, same as implementer/fix-applier — do not weaken to a small model (it answers the prompt itself instead of relaying) and do not leave it inherit (the CLI default subagent model is unpinned)
+SUPER_BRIDGE_RELAY_MODEL=gpt-6-sol         # relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); keep a reliable instruction-following model because a smaller relay answered the prompt itself instead of forwarding it; do not leave it inherit (the CLI default subagent model is unpinned)
 
 # ── Reasoning effort per agent role ───────────────────────────────
 # Values are Codex effort names, or "inherit" (= the CLI/model default).
@@ -62,9 +62,9 @@ SUPER_EFFORT_DIAGNOSER=xhigh            # superdiagnose RCA (Stage 3)
 # The supervisor resolves each pair independently (environment > repo config > harness default).
 # PLAN_REFINER prepares eligible upfront stages; REPLANNER publishes adopted legacy repairs and
 # upfront batches. Equal pins are intentional when configured and do not couple the roles.
-SUPER_MODEL_PLAN_REFINER=codex:gpt-5.6-terra
+SUPER_MODEL_PLAN_REFINER=codex:gpt-6-sol
 SUPER_EFFORT_PLAN_REFINER=medium
-SUPER_MODEL_REPLANNER=codex:gpt-5.6-sol
+SUPER_MODEL_REPLANNER=codex:gpt-6-astra
 SUPER_EFFORT_REPLANNER=high
 
 # ── Harness ───────────────────────────────────────────────────────

@@ -107,8 +107,8 @@ check "harness defaults: Claude replanner" grep -qx 'replanner|claude|claude-opu
 
 echo 'SUPER_HARNESS=codex' >"$T/repo/.superenv"
 run_pair codex_default "$T/repo"
-check "harness defaults: Codex refiner" grep -qx 'plan-refiner|codex|gpt-5.6-terra|medium' "$T/codex_default.out"
-check "harness defaults: Codex replanner" grep -qx 'replanner|codex|gpt-5.6-sol|high' "$T/codex_default.out"
+check "harness defaults: Codex refiner" grep -qx 'plan-refiner|codex|gpt-6-sol|medium' "$T/codex_default.out"
+check "harness defaults: Codex replanner" grep -qx 'replanner|codex|gpt-6-astra|high' "$T/codex_default.out"
 
 echo 'SUPER_HARNESS=cursor' >"$T/repo/.superenv"
 run_pair cursor_default "$T/repo"
