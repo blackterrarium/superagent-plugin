@@ -7,7 +7,7 @@ related skills: superstage, superauthor, supertraverse, superreplan
 
 # Superrefine
 
-`superrefine <root> <stage-id>` is the docs-only author for one unstarted upfront stage. It turns
+`superrefine <root> <stage-id>` is the docs-only author for one unstarted upfront stage identity. It turns
 an approved stage contract into an executable prepared plan only when current evidence supports its
 existing commitments. It is not a general planner, executor, or repair tool.
 
@@ -30,9 +30,15 @@ predicates without recursively calling S3's receipt classification.
 
 Before drafting, require all of the following:
 
-- The stage is active, unstarted, and has no closeout, execution report, code PR, CI recovery packet,
-  or `executed — PR open` / partial-execution state. Existing execution always continues through the
-  established SDD and CI recovery path; never overwrite task history in place.
+- The active stage identity is unstarted and has no closeout, execution report, code PR, CI recovery
+  packet, or `executed — PR open` / partial-execution state of its own. For a published C8 successor,
+  distinguish its generation, plan path and revision from the predecessor execution identity. A
+  predecessor's open PR and partial closeout do not block preparation when the published C8 record
+  explicitly maps that predecessor to this successor with `resume-existing`, preserves the old
+  PR/branch/worktree and task history, and leaves the successor without its own execution attempt.
+  Verify the mapping and identities from tracked evidence; a row label alone is insufficient.
+  Existing execution of the active identity continues through SDD/CI recovery instead of
+  preparation. Never overwrite predecessor task history or treat its CI as successor evidence.
 - Each declared prerequisite has S3's verified delivery evidence for the contract revision consumed:
   integrated code/delivery receipt and tracked closeout, or the stated verified non-code discovery
   evidence. An open, closed-unmerged, declined, missing, or contradictory provider does not qualify.

@@ -282,6 +282,21 @@ CASES = (
      'records that disposition; it grants no authority to merge or close PR 93.',
      {'pr_disposition': 'resume-existing', 'predecessor_evidence_preserved': True,
       'old_pr_closed': False, 'successor_needs_refinement': True}),
+    ('successor_preparation_after_partial_attempt',
+     'A published C8 batch has cleared the root barrier and maps S03 revision 4, whose code PR is '
+     'open and whose partial closeout is tracked, to active S03 revision 5 with `resume-existing`. '
+     'The record preserves the predecessor PR, branch, worktree, task history and closeout. The '
+     'active successor has no execution snapshot or preparation receipt of its own; its dependencies '
+     'are delivered and its commitments are unchanged. Classify the next operation and whether the '
+     'predecessor PR may merge before successor preparation, review, tests and CI.',
+     {'operation': 'refine', 'outcome': 'NEEDS-REFINEMENT',
+      'preparation_valid': False, 'pr_evidence_preserved': True,
+      'merge_allowed': False}),
+    ('unmapped_partial_attempt',
+     'An active stage row names an open code PR and a partial closeout, but no tracked C8 record '
+     'maps a distinct predecessor execution identity to an unstarted active successor. The row '
+     'claims needs refinement. Classify preparation eligibility from authoritative evidence.',
+     {'outcome': 'BLOCKED', 'preparation_valid': False}),
     ('replan_split_merge_mapping',
      'An upfront-v1 root is at Plan generation 7 with pending D-214. S01 revision 3 is delivered; S02 '
      'revision 2, S03 revision 4, S04 revision 1, and S05 revision 2 are unfinished. The authorized '

@@ -179,9 +179,13 @@ Use evidence, not a row label, to classify each active stage:
   the evidence preparation needs; otherwise it remains dependency-blocked.
 - **prepared:** S2 passes and S5 verifies the preparation pointer, report, identity, and evidence.
   The parent row may be `PLAN WRITTEN — ready to execute`.
-- **executed / integration pending:** verified closeout and an open or CI-pending code PR prove the
-  execution attempt already occurred, so do not prepare or execute it again. It is not done and does
-  not satisfy consumers; retain the existing integration/CI recovery path.
+- **executed / integration pending:** verified closeout and an open or CI-pending code PR bound to
+  the active stage identity prove that execution attempt already occurred, so do not prepare or
+  execute it again. It is not done and does not satisfy consumers; retain its integration/CI
+  recovery path. A published C8 successor with a different generation, plan path or revision and
+  an explicit `resume-existing` mapping is a separate unstarted identity. Preserve its predecessor's
+  PR, closeout and task history as non-delivered evidence while classifying the successor for fresh
+  refinement. Do not infer the mapping from an open PR or row label alone.
 - **executed/done:** C9 verifies integrated delivery or the authorized terminal disposition. Status
   text or a closeout alone is never integration proof.
 
@@ -197,8 +201,10 @@ For discovery, explicit verified non-code evidence may satisfy the dependency wh
 so. Unknown, missing, or contradictory evidence is unsatisfied.
 
 An upfront stage is executable only when all of these are true: S1/S2 pass; no active replan exists;
-all dependencies are satisfied; S5 verifies a current `PREPARED` receipt; and the stage is active,
-unstarted, and ready. Failing any gate returns `executable: false` with the failed evidence. In
+all dependencies are satisfied; S5 verifies a current `PREPARED` receipt; and the active stage
+identity is unstarted and ready. A C8 `resume-existing` successor remains unstarted until its own
+execution snapshot is captured, even when its predecessor has an open PR and partial closeout.
+Failing any gate returns `executable: false` with the failed evidence. In
 particular, a written leaf without a valid preparation receipt returns needs-refinement/BLOCKED to the
 calling entry point; it never falls through to the legacy "written but incomplete" predicate.
 Incremental and unmarked legacy roots continue to use their existing authoring, traversal, C8 repair,
@@ -313,8 +319,11 @@ and report through S1's explicit intended-vault-path-to-scratch-path map; candid
 can authorize the atomic publication only and never execution. After publication, revalidate in active
 context before marking or selecting the stage as ready. Recompute the digest and match root generation, stage ID/revision, source revision,
 consumed contract revisions, provider receipts, code baseline, findings, and amendments against current
-evidence. Reapply S1/S2 plus S3's active-replan, dependency-delivery, active/unstarted, and evidence
-predicates; do not recursively invoke S3's preparation-receipt classification. A row's readiness text,
+evidence. Reapply S1/S2 plus S3's active-replan, dependency-delivery, active-identity/unstarted, and
+evidence predicates; do not recursively invoke S3's preparation-receipt classification. For a C8
+`resume-existing` successor, verify its published predecessor mapping and distinct identity, keep
+the predecessor PR/closeout historical, and require this successor's own generation-bound receipt;
+the predecessor's receipt, reviews and CI do not transfer. A row's readiness text,
 an approved disposition, or the existence of a report without these matches is insufficient. Any
 mismatch makes the stage unprepared; missing or contradictory evidence is **BLOCKED** rather than
 guessed.
