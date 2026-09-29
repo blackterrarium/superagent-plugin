@@ -18,9 +18,9 @@ check "shipped planning mode defaults to upfront" grep -q \
 check "Claude planner defaults to Fable 5.1" grep -q \
   '^SUPER_MODEL_PLANNER=claude:claude-fable-5-1[[:space:]]' "$ROOT/templates/superenv.default"
 check "Claude Opus defaults use Opus 5" bash -c \
-  "grep -q '^SUPER_MODEL_SUPERVISOR=claude:claude-opus-5[[:space:]]' '$ROOT/templates/superenv.default' && ! grep -q 'claude-opus-4-8' '$ROOT/templates/superenv.default'"
+  "grep -q '^SUPER_MODEL_SUPERVISOR=claude:claude-opus-5-5[[:space:]]' '$ROOT/templates/superenv.default' && ! grep -q 'claude-opus-4-8' '$ROOT/templates/superenv.default'"
 check "Claude headless fallback uses Opus 5" bash -c \
-  "grep -q 'SUPER_MODEL_SUPERVISOR:-claude-opus-5' '$ROOT/scripts/superagent-tick.sh' && ! grep -q 'claude-opus-4-8' '$ROOT/scripts/superagent-tick.sh'"
+  "grep -q 'SUPER_MODEL_SUPERVISOR:-claude-opus-5-5' '$ROOT/scripts/superagent-tick.sh' && ! grep -q 'claude-opus-4-8' '$ROOT/scripts/superagent-tick.sh'"
 check "Codex planner defaults to Astra 6" grep -q \
   '^SUPER_MODEL_PLANNER=codex:gpt-6-astra[[:space:]]' "$ROOT/codex/plugins/superagent/templates/superenv.default"
 check "Pi planner defaults to Astra 6" grep -q \
@@ -102,8 +102,8 @@ check "repo: equal pins dispatch both named roles" bash -c "grep -qx 'plan-refin
 # defaults over the canonical template. Exercise every shipped harness layer.
 rm -f "$T/repo/.superenv"
 run_pair claude_default "$T/repo"
-check "harness defaults: Claude refiner" grep -qx 'plan-refiner|claude|sonnet|medium' "$T/claude_default.out"
-check "harness defaults: Claude replanner" grep -qx 'replanner|claude|claude-opus-5|high' "$T/claude_default.out"
+check "harness defaults: Claude refiner" grep -qx 'plan-refiner|claude|claude-sonnet-5-5|medium' "$T/claude_default.out"
+check "harness defaults: Claude replanner" grep -qx 'replanner|claude|claude-opus-5-5|high' "$T/claude_default.out"
 
 echo 'SUPER_HARNESS=codex' >"$T/repo/.superenv"
 run_pair codex_default "$T/repo"
