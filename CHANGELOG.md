@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.4 — 2026-09-29
+
+- **Refresh Claude role defaults to Opus 5.5 and Sonnet 5.5.** Opus roles (supervisor, executor,
+  panel, branch reviewer, fix planner, PRD reviewer, meta-planner, evaluator, diagnoser, replanner)
+  now pin `claude:claude-opus-5-5`; implementer, fix-applier, task/re-reviewer and plan refiner pin
+  `claude:claude-sonnet-5-5` instead of the floating `sonnet` alias. The tick's fallback model is
+  `claude-opus-5-5`. Existing repository `.superenv` overrides are unchanged.
+
 ## 0.10.3 — 2026-09-22
 
 - **Refresh Codex role defaults for GPT-6.** Use Astra for initial and structural planning,

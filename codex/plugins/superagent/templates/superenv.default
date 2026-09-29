@@ -17,20 +17,20 @@
 SUPER_GIT_MODE=github                    # github | none
 
 # ── Model per agent role ──────────────────────────────────────────
-SUPER_MODEL_SUPERVISOR=codex:gpt-6-sol         # the superagent tick itself
+SUPER_MODEL_SUPERVISOR=codex:gpt-6-sol        # the superagent tick itself
 SUPER_MODEL_PLANNER=codex:gpt-6-astra         # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=codex:gpt-6-sol           # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
-SUPER_MODEL_PANEL=codex:gpt-6-sol              # L7 escalation panel (3 read-only agents)
+SUPER_MODEL_EXECUTOR=codex:gpt-6-sol          # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_PANEL=codex:gpt-6-sol             # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=codex:gpt-6-sol
 SUPER_MODEL_FIX_APPLIER=codex:gpt-6-sol
 SUPER_MODEL_TASK_REVIEWER=codex:gpt-6-sol
 SUPER_MODEL_RE_REVIEWER=codex:gpt-6-sol
-SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-6-astra    # final whole-branch reviewer
-SUPER_MODEL_FIX_PLANNER=codex:gpt-6-astra        # fix rounds 4-5: diagnose, then hand to fix-applier
-SUPER_MODEL_PRD_REVIEWER=codex:gpt-6-sol       # superprd: zero-context sufficiency review of the drafted PRD (read-only)
-SUPER_MODEL_META_PLANNER=codex:gpt-6-astra       # supermeta: meta-plan author, drives supergoal (coding loop)
-SUPER_MODEL_EVALUATOR=codex:gpt-6-sol          # supereval: grades judged objectives (read-only; command checks use no model)
-SUPER_MODEL_DIAGNOSER=codex:gpt-6-astra          # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
+SUPER_MODEL_BRANCH_REVIEWER=codex:gpt-6-astra   # final whole-branch reviewer
+SUPER_MODEL_FIX_PLANNER=codex:gpt-6-astra       # fix rounds 4-5: diagnose, then hand to fix-applier
+SUPER_MODEL_PRD_REVIEWER=codex:gpt-6-sol      # superprd: zero-context sufficiency review of the drafted PRD (read-only)
+SUPER_MODEL_META_PLANNER=codex:gpt-6-astra      # supermeta: meta-plan author, drives supergoal (coding loop)
+SUPER_MODEL_EVALUATOR=codex:gpt-6-sol         # supereval: grades judged objectives (read-only; command checks use no model)
+SUPER_MODEL_DIAGNOSER=codex:gpt-6-astra         # superdiagnose: root-cause analysis of a failed evaluation (Stage 3)
 SUPER_PANEL_AGENT_TYPE=general-purpose  # or: Explore
 SUPER_BRIDGE_RELAY_MODEL=gpt-6-sol         # relay subagent model for BRIDGED roles (bare Codex model name, no harness prefix); keep a reliable instruction-following model because a smaller relay answered the prompt itself instead of forwarding it; do not leave it inherit (the CLI default subagent model is unpinned)
 

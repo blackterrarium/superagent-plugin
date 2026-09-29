@@ -275,7 +275,7 @@ check "launch: plan under a symlinked repo path accepted (--dry-run)" bash -c "c
 # the Claude template's claude:claude-opus-5 — which the pi tick refuses with exit 11 (found by pi-e2e.sh run 4).
 mkdir -p "$T/se-pi" "$T/se-none"; printf 'SUPER_HARNESS=pi\n' >"$T/se-pi/.superenv"
 check "superenv: harness=pi in .superenv → Pi template defaults" bash -c ". '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ] && [ \"\$SUPER_HARNESS\" = pi ]"
-check "superenv: no .superenv → Claude template defaults"       bash -c "unset SUPER_HARNESS; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = claude:claude-opus-5 ]"
+check "superenv: no .superenv → Claude template defaults"       bash -c "unset SUPER_HARNESS; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = claude:claude-opus-5-5 ]"
 check "superenv: process env SUPER_HARNESS=pi wins and layers"  bash -c "export SUPER_HARNESS=pi; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-none'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ]"
 check "superenv: repo .superenv still overrides the harness template" bash -c "printf 'SUPER_HARNESS=pi\nSUPER_MODEL_SUPERVISOR=pi:openai-codex/gpt-5.6-sol\n' >'$T/se-pi/.superenv'; . '$ROOT/scripts/_common.sh'; load_superenv '$T/se-pi'; [ \"\$SUPER_MODEL_SUPERVISOR\" = pi:openai-codex/gpt-5.6-sol ]"
 
