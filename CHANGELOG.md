@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.5 — 2026-10-02
+
+- **Codex Sol roles move to GPT-6.1 Sol.** Every role and the bridge relay that pinned
+  `codex:gpt-6-sol` now pins `codex:gpt-6.1-sol`; Astra roles are unchanged. Existing repository
+  `.superenv` overrides are unchanged.
+
 ## 0.10.4 — 2026-09-29
 
 - **Refresh Claude role defaults to Opus 5.5 and Sonnet 5.5.** Opus roles (supervisor, executor,
