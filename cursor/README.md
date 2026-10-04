@@ -34,8 +34,8 @@ marketplace (the root `.cursor-plugin/marketplace.json` points at this directory
   generated banner maps this. `disable-model-invocation` skills (the `superagent` supervisor) are
   invisible to model-driven lookup, which is fine: the external tick drives it by a file-read
   prompt, never by name.
-- The superpowers plugin's skills load under Cursor (unprefixed, e.g.
-  `subagent-driven-development`) on a host with it configured — `superrun`'s dependency resolves.
+- No other plugin is required: `superrun` executes plans with this build's own `superbuild`
+  task loop.
 
 ## Driving a loop with the Cursor CLI
 

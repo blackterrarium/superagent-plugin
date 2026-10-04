@@ -24,7 +24,7 @@ license: MIT
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
 > - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
->   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
+>   from this plugin, `superagent:superbuild` means `superbuild`,
 >   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
 >   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
 >   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
@@ -230,8 +230,8 @@ knows:
    batch when `SUPER_CI_RUNNERS > 1` (see **CI Scheduling in Authored Plans** above), any serial push
    ordering names its procedural gate, commit flags follow `SUPER_CI_FLAG_TEMPLATE` /
    `SUPER_CI_ONE_FLAG_PER_PUSH`, and every CI wait is monitor-parked (no `gh run watch` / sleep /
-   re-poll loops in plan text); if `local` (default), steps use the normal local test cycle per
-   `superpowers:writing-plans` instead of CI pushes. Fix violations inline.
+   re-poll loops in plan text); if `local` (default), steps use the local test-first cycle
+   (superauthor A2) instead of CI pushes. Fix violations inline.
 
 If you find issues, fix them inline — no need to re-review the whole plan.
 

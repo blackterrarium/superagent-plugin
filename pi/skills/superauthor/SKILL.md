@@ -16,16 +16,15 @@ license: MIT
 >   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
 >   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
-> - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
+> - Tool mapping in `superrun` / `superbuild` (the task-loop controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
 >   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
 >   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
->   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
->   installed `superpowers` package — reference them by name.
+>   (`/skill:` commands are interactive-only). No other skill package is required.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; in `github` mode use `git worktree` via `bash`. In `none`
 >   mode the canonical local-workspace override applies and no git command is allowed.
@@ -95,11 +94,9 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 ## A2 — Authoring standard (REQUIRED)
 
-**Author the plan yourself, directly, to the standard below.** This standard is the distilled
-replacement for delegating *authorship* to `superpowers:writing-plans` — that skill is **no longer
-invoked to produce the plan document itself** by any superauthor-driven caller; its
-`docs/superpowers/plans/` save location and its "Execution Handoff" section do not apply here. Whether
-the produced plan's own verification steps follow that skill's local-test TDD cycle or specify CI
+**Author the plan yourself, directly, to the standard below.** This standard is self-contained:
+no other plugin's planning skill is invoked to produce the plan document. Whether
+the produced plan's own verification steps follow the local test-first cycle or specify CI
 pushes instead is governed by `SUPER_TEST_EVIDENCE` (see the **Verification-steps mode** bullet below).
 
 Write for a skilled engineer with **zero context for this codebase**. First classify the artifact's
@@ -137,8 +134,8 @@ a plan failure at every maturity.
   ```markdown
   # [Feature Name] Implementation Plan
 
-  > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development
-  > (normally reached via `superagent:superrun`) to implement this plan task-by-task. Steps use
+  > **For agentic workers:** REQUIRED: execute this plan with `superagent:superrun` (its
+  > `superagent:superbuild` task loop implements it task-by-task). Steps use
   > checkbox (`- [ ]`) syntax for tracking.
 
   **Goal:** [one sentence describing what this builds]
@@ -163,8 +160,10 @@ a plan failure at every maturity.
   and the run id + conclusion as the pass criterion — following the CI-scheduling rules the caller
   supplies (queue-all batches, monitor-parked waits); never write `pytest` / `./run.sh` / build
   commands to execute on the host, and never instruct poll-loop CI waits in plan text. If
-  `SUPER_TEST_EVIDENCE=local` (the shipped default): plan steps use the normal local test cycle per
-  `superpowers:writing-plans`.
+  `SUPER_TEST_EVIDENCE=local` (the shipped default): plan steps use the local test-first cycle —
+  for each behavior, a step that writes the failing test (real test code), a step that runs it with
+  the exact command and the expected failure, a step with the minimal implementation, a step that
+  re-runs the command with the expected pass, then a commit step.
 - **A mechanical gate belongs in a committed test, never in an unrun shell block.** If a plan step
   says "verify X before proceeding" and X is checkable by code, the plan's deliverable is **the test
   that checks X**, cited by name — not a snippet the executor is told to run and trust. A committed

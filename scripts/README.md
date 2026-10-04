@@ -335,7 +335,7 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
   `…,Task,Skill` — the tick's own set; pi = no `--tools` flag, so extension tools such as
   `pi-subagents`' `subagent` stay available) for a controller that dispatches subagents itself — this
   is how `superagent` runs `superrun` as the top-level agent of its own process, native or bridged,
-  so the SDD controller's children can be foreground-waited on (issue #25). For claude the print-mode
+  so the task-loop controller's children can be foreground-waited on (issue #25). For claude the print-mode
   background-wait ceiling is lifted (`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS` defaults to 0) like the
   tick does. Pi children always run with `--approve --no-session`, plus `--skill` from
   `SUPERAGENT_PI_SKILLS` when set.
@@ -749,8 +749,8 @@ The mix (every other key is the Claude build's default):
 | role | harness / model | why |
 |---|---|---|
 | supervisor, planner, executor (`superrun`), branch-reviewer, fix-planner, panel | claude (native) | the supervisor cannot be bridged; controller roles stay on the full-feature harness |
-| implementer, fix-applier | `MIX_E2E_IMPLEMENTER` = `codex:gpt-5.6-terra` | runs on every SDD task |
-| task-reviewer, re-reviewer | `MIX_E2E_REVIEWER` = `pi:openai-codex/gpt-5.6-sol` | runs on every SDD task; Pi on the build host authenticates through the OpenAI Codex subscription, so its model strings are `openai-codex/<id>` |
+| implementer, fix-applier | `MIX_E2E_IMPLEMENTER` = `codex:gpt-5.6-terra` | runs on every task-loop task |
+| task-reviewer, re-reviewer | `MIX_E2E_REVIEWER` = `pi:openai-codex/gpt-5.6-sol` | runs on every task-loop task; Pi on the build host authenticates through the OpenAI Codex subscription, so its model strings are `openai-codex/<id>` |
 
 So every task is controlled by Claude, written by Codex and judged by Pi. The plugin routes per
 **role**, not per task — that is the feature under test.

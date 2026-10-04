@@ -25,7 +25,7 @@ related skills: superstage, superauthor, supertraverse, superreplan
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
 > - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
->   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
+>   from this plugin, `superagent:superbuild` means `superbuild`,
 >   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
 >   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
 >   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
@@ -63,7 +63,7 @@ Before drafting, require all of the following:
   explicitly maps that predecessor to this successor with `resume-existing`, preserves the old
   PR/branch/worktree and task history, and leaves the successor without its own execution attempt.
   Verify the mapping and identities from tracked evidence; a row label alone is insufficient.
-  Existing execution of the active identity continues through SDD/CI recovery instead of
+  Existing execution of the active identity continues through task-loop/CI recovery instead of
   preparation. Never overwrite predecessor task history or treat its CI as successor evidence.
 - Each declared prerequisite has S3's verified delivery evidence for the contract revision consumed:
   integrated code/delivery receipt and tracked closeout, or the stated verified non-code discovery

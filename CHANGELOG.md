@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.0 — 2026-10-04
+
+- **The superpowers plugin is no longer required.** `superrun` now executes leaf plans with the
+  plugin's own task loop, the new `superbuild` skill: a fresh implementer per task, a spec + quality
+  review of each task, a five-round fix loop, one whole-branch review, and a progress ledger that
+  survives compaction and CI-PENDING resumes. It ships its own prompt templates
+  (`templates/build-*.md`) and helper (`scripts/superbuild.sh`), adapted from superpowers'
+  `subagent-driven-development` (MIT). Scratch files move from `.superpowers/sdd/` to the
+  git-ignored `.superagent-runtime/build/`. `init`, the README and the Pi/Cursor builds drop the
+  install prerequisite; Pi still needs `pi-subagents`.
+- **Plan conflicts are split by consequence.** A load-bearing conflict — a later task or stage
+  builds on it, it would change acceptance or constraints, it shows the plan is wrong, or it cannot
+  be classified — stops the leaf with a BLOCKED report for the escalation ladder. Anything else is
+  ruled on by the executor, written to the ledger, and listed under **Rulings** in superrun's
+  Final Report.
+- **`superrun` always integrates the code PR itself.** `SUPER_SKIP_FINISHING_HANDOFF` is retired:
+  the key is accepted and ignored, and there is no interactive completion menu for attended runs.
+- **Plan authoring is self-contained.** The local test-first step shape is spelled out in
+  `superauthor` A2, and new plan headers name `superagent:superrun` as the executor. Plans written
+  with the old header still execute.
+
 ## 0.10.5 — 2026-10-02
 
 - **Codex Sol roles move to GPT-6.1 Sol.** Every role and the bridge relay that pinned

@@ -19,16 +19,15 @@ related skills: superloop, superplan, superrun, supertraverse, superfinish
 >   (`superplan`, `superrefine`, `superreplan`, `superrun`) or
 >   `${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh` (the L7 panel),
 >   per the Pi-specific guidance embedded in those skills. The supervisor never uses a subagent tool.
-> - Tool mapping in `superrun` (the SDD controller): "dispatch a subagent" = the `subagent` tool
+> - Tool mapping in `superrun` / `superbuild` (the task-loop controller): "dispatch a subagent" = the `subagent` tool
 >   from the `pi-subagents` package with `async: false`, one child per call; role pins ride the
 >   `.pi/agents/super-<role>.md` definitions `init` generates. `pi-subagents` ≥ 0.58.0 is required;
 >   if the tool is absent, stop and report the missing prerequisite. No sequential fallback.
 > - "Skill tool / invoke skill X" = `read` `${SUPER_PLUGIN_ROOT}/skills/X/SKILL.md` and follow it
->   (`/skill:` commands are interactive-only). Superpowers skills are listed by Pi from the
->   installed `superpowers` package — reference them by name.
+>   (`/skill:` commands are interactive-only). No other skill package is required.
 > - `${SUPER_PLUGIN_ROOT}` = the plugin repository's `pi/` directory (two levels above each
 >   SKILL.md). It contains `skills/`, `templates/`, and `scripts/` (`role-bridge.sh`,
->   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
+>   `bridge-fanout.sh`, `_common.sh`, `prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`). The external-driver wrappers (`superagent-tick.sh`,
 >   `launch.sh`, …) live in the repository's top-level `scripts/` — one directory up.
 > - `EnterWorktree` = not available; in `github` mode use `git worktree` via `bash`. In `none`
 >   mode the canonical local-workspace override applies and no git command is allowed.
@@ -75,9 +74,9 @@ its escalation option-set (L7) is {retry `superrun` / re-plan / decline}.
 | "A skill raised a question — I'll just ask the user" | NO. First run the **subagent panel** (Decision-escalation ladder). Ask the user only if the panel cannot converge. |
 | "The work is blocked — terminate the loop" | NO. Run the panel on the blocker first (retry / re-plan / decline / escalate). Stop the driver only when DONE or an escalation pauses the loop. |
 | "superplan/superrun already did `git checkout main && pull`, so local is synced" | NO. That pull can silently fail or be skipped (worktree checkout error after a remote `--admin` merge; propagation race). Run the **Sync gate** before AND after every skill, and verify the merged artifacts are present locally — never advance on a stale tree. |
-| "I'll dispatch `superplan` with the `subagent` tool — it's right there" | NO. On Pi the supervisor NEVER uses a subagent tool. `superplan`, `superrun`, and every panelist are bridge processes started from your `bash` tool (see **Subagent dispatch**); `pi-subagents` is for `superrun`'s SDD children only. |
+| "I'll dispatch `superplan` with the `subagent` tool — it's right there" | NO. On Pi the supervisor NEVER uses a subagent tool. `superplan`, `superrun`, and every panelist are bridge processes started from your `bash` tool (see **Subagent dispatch**); `pi-subagents` is for `superrun`'s task-loop children only. |
 | "The dispatched subagent will run a long time — I'll run it in the background and check on it while I wait" | NO. **Wait, never poll.** Every heavy-skill dispatch is synchronous (`run_in_background: false` for a selected planning-role agent; a blocking Bash call for `superrun`): the blocked call waits at zero context cost and the Final Report arrives as the tool result. A background dispatch + `TaskOutput`/`TaskList` checks spends supervisor context on "still running" snapshots the synchronous return delivers for free. |
-| "I'll dispatch `superrun` as an Agent-tool subagent like `superplan`" | NO. **`superrun` runs in its own CLI process** (`role-bridge.sh --tools executor` from your Bash tool — see **Subagent dispatch**). `superrun` is the SDD controller and must dispatch its own implementer/reviewer subagents; a subagent cannot foreground-wait on its children (superloop L7's depth-1 constraint), so as an Agent-tool subagent it degrades into a `SendMessage`-nudge spiral and never converges (issue #25). |
+| "I'll dispatch `superrun` as an Agent-tool subagent like `superplan`" | NO. **`superrun` runs in its own CLI process** (`role-bridge.sh --tools executor` from your Bash tool — see **Subagent dispatch**). `superrun` is the task-loop controller and must dispatch its own implementer/reviewer subagents; a subagent cannot foreground-wait on its children (superloop L7's depth-1 constraint), so as an Agent-tool subagent it degrades into a `SendMessage`-nudge spiral and never converges (issue #25). |
 | "My dispatch was interrupted mid-flight (API lost, host slept) — I'll ask the operator whether to resume or pause" | NO. **A tick never ends with a question — not via a tool, not as the final chat message** (in an unattended session no one can answer; the questioning turn exits 0 and strands `status: PLANNING`/`RUNNING` + the held lock). Self-heal immediately per superloop L2's tick teardown invariant: log the interruption, reset `PLANNING → WAITING FOR PLAN` / `RUNNING → WAITING FOR RUN`, `release_lock()`, end the tick with a normal report. The next scheduled tick retries the step. |
 
 ## Hard gate — `<PLAN.md>` is required
@@ -194,10 +193,10 @@ isolated differently, and the executor distinction is load-bearing:
   `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools planner --cwd "<primary root>" --prompt-file "$f" --role <role>`
   A native (`pi:`/inherit) planning role runs with `--harness pi` — native and bridged are the same
   code path on this harness. The child inherits `SUPERAGENT_PI_SKILLS` from the tick, so the selected
-  planning skill and the `superpowers:*` skills resolve inside it. Exit 0 → stdout is the Final Report; non-zero
+  planning skill resolves inside it. Exit 0 → stdout is the Final Report; non-zero
   → the crashed-dispatch path (retry once, then the crash-recovery mapping: restore the ready
   status, `release_lock()`, end the tick, quoting the `log=` path in `Findings & issues`).
-- **`superrun` → its own CLI process.** `superrun` is the `subagent-driven-development` controller:
+- **`superrun` → its own CLI process.** `superrun` is the task-loop (`superagent:superbuild`) controller:
   it dispatches implementer / reviewer / fix-applier subagents and foreground-waits on each. **A
   subagent cannot foreground-wait on its own children** (superloop L7's depth-1 constraint): run as
   an Agent-tool subagent, `superrun`'s children background and yield control back after every turn,
@@ -215,7 +214,7 @@ isolated differently, and the executor distinction is load-bearing:
      on the Bash call:
      `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools executor --cwd "<primary root>" --prompt-file "$f" --role executor`
      `--tools executor` gives the child the tick's own allowlist (`Read,Edit,Write,Bash,Grep,Glob,Task,Skill`),
-     so inside that process `superrun`'s SDD subagents are depth 1 and the synchronous wait holds —
+     so inside that process `superrun`'s task-loop subagents are depth 1 and the synchronous wait holds —
      exactly as it does for this tick's own dispatches. The bridge also lifts the print-mode
      background-wait ceiling (issue #15) for the child.
   3. Exit 0 → stdout **is** `superrun`'s final message (Final Report or CI-PENDING report); parse and
@@ -236,7 +235,7 @@ isolated differently, and the executor distinction is load-bearing:
   the call itself and skip the env check.
 
   The child process shares this host's CLI login and plugin set, so `superagent:superrun` and
-  `superpowers:*` resolve there exactly as here; the `.claude/agents/super-<role>.md` definitions
+  `superagent:superbuild` resolve there exactly as here; the `.claude/agents/super-<role>.md` definitions
   `superagent:init` generated resolve from the `--cwd` root as usual.
 
 Either way, instruct the selected child to:
@@ -561,7 +560,7 @@ second successor after a crash.
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
    (step 5's park case; a fresh process resumes it). superagent never invokes `superrun` inline in its
    own context, and never as a subagent (issue #25).
-   In local mode, prepend superrun's exact local SDD override, the physical project root, and the
+   In local mode, prepend superrun's exact local-mode override, the physical project root, and the
    inherited workspace identity. The executor must capture before/result manifests and return a
    verified `completed-local` receipt; it must retain all local test, task-review, final-review, and
    acceptance gates while suppressing worktree/commit/PR/merge/finishing stages.
@@ -652,8 +651,7 @@ The two drivers (Driver A `cron`, Driver B `external`), the context model, the o
 per interval; the scheduler drives it by asking the CLI to *read `pi/skills/superagent/SKILL.md`
 directly (in the plugin repository's generated Pi build) and run exactly one `--tick`* (superloop
 L2, Driver B). The plugin's skills are delivered per run with `--skill <plugin-repo>/pi/skills` —
-no install step; superpowers must be installed as a Pi package (`pi install
-git:github.com/obra/superpowers`). The shipped `scripts/` wrappers are harness-aware:
+no install step and no other skill package. The shipped `scripts/` wrappers are harness-aware:
 `SUPER_HARNESS=pi` makes `superagent-tick.sh` fire `pi -p --approve --skill … [--model] [--thinking]`
 and export `SUPERAGENT_BRIDGE`, `SUPERAGENT_FANOUT`, and `SUPERAGENT_PI_SKILLS` for the bridge
 children. The driver must never resume a prior session (fresh context per tick — L4 is a no-op in

@@ -24,7 +24,7 @@ license: MIT
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
 > - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
->   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
+>   from this plugin, `superagent:superbuild` means `superbuild`,
 >   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
 >   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
 >   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
@@ -619,7 +619,7 @@ instead.
 > subagent cannot foreground-wait on children it spawns; they background and yield instead. The
 > read-only 3-subagent panel fits within this limit; the supervisor that runs the panel **cannot
 > itself be a subagent** — it must be the top-level loop agent. The same constraint is why
-> `superagent` runs `superrun` (the SDD controller, which must wait on its own implementer/reviewer
+> `superagent` runs `superrun` (the task-loop controller, which must wait on its own implementer/reviewer
 > subagents) as the top-level agent of a separate CLI process rather than as a subagent (issue #25;
 > see superagent **Subagent dispatch**).
 

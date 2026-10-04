@@ -19,7 +19,7 @@ SUPER_GIT_MODE=github                    # github | none
 # ── Model per agent role ──────────────────────────────────────────
 SUPER_MODEL_SUPERVISOR=inherit        # the superagent tick itself
 SUPER_MODEL_PLANNER=inherit         # superplan / supergoal dispatch subagent
-SUPER_MODEL_EXECUTOR=inherit          # superrun (the SDD controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
+SUPER_MODEL_EXECUTOR=inherit          # superrun (the task-loop controller) — runs as its own CLI process via role-bridge.sh --tools executor, never as a subagent (issue #25)
 SUPER_MODEL_PANEL=inherit             # L7 escalation panel (3 read-only agents)
 SUPER_MODEL_IMPLEMENTER=inherit
 SUPER_MODEL_FIX_APPLIER=inherit
@@ -39,7 +39,7 @@ SUPER_BRIDGE_RELAY_MODEL=inherit         # relay subagent model for BRIDGED role
 # .superenv portability; any non-inherit value is warned and treated as inherit.
 SUPER_EFFORT_SUPERVISOR=inherit          # the superagent tick itself
 SUPER_EFFORT_PLANNER=inherit               # superplan / supergoal dispatch subagent
-SUPER_EFFORT_EXECUTOR=inherit            # superrun (the SDD controller), passed to its CLI process
+SUPER_EFFORT_EXECUTOR=inherit            # superrun (the task-loop controller), passed to its CLI process
 SUPER_EFFORT_PANEL=inherit                # L7 escalation panel (3 read-only agents)
 SUPER_EFFORT_IMPLEMENTER=inherit
 SUPER_EFFORT_FIX_APPLIER=inherit
@@ -88,7 +88,7 @@ SUPER_NOTIFY_CMD=                       # external driver: shell snippet run whe
 #   SUPERAGENT_BODY carries the loop's `## Pending decision` text, so the question itself reaches whatever endpoint the snippet targets (phone, Slack, pager).
 
 # ── CI / test-evidence policy ─────────────────────────────────────
-SUPER_TEST_EVIDENCE=local               # local = SDD's native TDD contract; ci = evidence is CI run ids only
+SUPER_TEST_EVIDENCE=local               # local = local RED/GREEN test evidence; ci = evidence is CI run ids only
 SUPER_CI_FLAG_TEMPLATE=                 # commit-message flag grammar, e.g. "[test:%s]"; empty = none
 SUPER_CI_ONE_FLAG_PER_PUSH=true
 SUPER_CI_RUNNERS=1                      # >1 = queue independent long pushes back-to-back
@@ -103,7 +103,7 @@ SUPER_REVIEW_CONFIDENCE_FILTER=controller  # reviewers report ALL findings with 
 SUPER_MERGE_METHOD=squash
 SUPER_PROTECTED_MAIN=true               # all changes via PR from a feature branch
 SUPER_ADMIN_MERGE=false                 # true only with session-scoped authorization
-SUPER_SKIP_FINISHING_HANDOFF=false      # true = bypass superpowers:finishing-a-development-branch
+SUPER_SKIP_FINISHING_HANDOFF=false      # RETIRED (accepted, ignored): superrun Step 3a always owns integration
 SUPER_GH_DISABLE_SANDBOX=false          # true on macOS hosts where gh needs keychain access
 
 # ── Escape hatch ──────────────────────────────────────────────────

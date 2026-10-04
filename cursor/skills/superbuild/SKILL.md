@@ -1,0 +1,291 @@
+---
+name: superbuild
+description: Use when superrun must execute a leaf implementation plan's tasks — the native task loop: a fresh implementer per task, a spec + quality review of each task, a capped fix loop, one whole-branch review, and a progress ledger that survives compaction. Invoked by superrun Step 3; not a standalone entry point.
+license: MIT
+related skills: superrun, superloop
+---
+
+<!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
+     in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
+
+> **Cursor build notes.**
+> - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
+>   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat
+>   any residual mention of them as inapplicable and NEVER attempt those tool calls.
+> - Tool mapping: "Agent tool" = spawn a subagent (synchronously — wait for its result). "Skill
+>   tool" = invoke a skill. `AskUserQuestion` / `AskQuestion` = ask the user in chat (attended
+>   sessions only — never in a headless tick). `EnterWorktree` = not available; in `github` mode,
+>   use `git worktree` via shell. In `none` mode the canonical local-workspace override applies and
+>   no git command is allowed. "Desktop routine" = a Claude Desktop feature,
+>   not available — use an OS scheduler. A role whose `.superenv` value names another harness
+>   (`codex:gpt-5.6-sol`, `pi:openai/gpt-5`, …) is BRIDGED: dispatch it with
+>   `subagent_type: super-<role>` — the relay definition `superagent:init` generates — and treat a
+>   reply beginning `BRIDGE-FAILED` as a failed subagent.
+> - `${SUPER_PLUGIN_ROOT}` in commands and paths = this plugin's installed root directory (the one
+>   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
+>   path wherever it appears.
+> - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
+>   from this plugin, `superagent:superbuild` means `superbuild`,
+>   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
+>   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
+>   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
+>   invoked by name.
+
+# Superbuild
+
+The task loop `superrun` Step 3 runs to turn a leaf plan into reviewed code. You are the
+**controller**: you dispatch one subagent per role, hand each its inputs as files, and keep a
+ledger. You write no source code and fix no finding yourself — controller edits skip review and
+fill the context you need for coordination.
+
+superbuild owns B1–B7 below and nothing else. The caller (`superrun`) owns target selection, the
+workspace (Step 2), the execution profile (role models and efforts, test-evidence mode, CI
+scheduling, repo notes, the acceptance agreement), integration (Step 3a), and closeout. Where a
+clause says *per the profile*, read it from superrun's **Execution profile**.
+
+**You must be the top-level agent of your process.** Every dispatch is a foreground, synchronous
+call: you wait for the child's final message. One implementing subagent at a time — never two
+writers in one workspace, never a background or parallel run.
+
+**Run to the end.** Do not pause between tasks, ask "should I continue?", or post progress
+summaries. Exactly two things end the loop early: a **BLOCKED** outcome under B5, or a role
+dispatch that cannot be made (missing definition, missing subagent tool — a hard error per the
+profile).
+
+## B1 — Workspace and ledger
+
+Conversation memory does not survive compaction; a controller that lost its place re-dispatches
+whole completed task sequences. The ledger, not your recollection, is the record.
+
+1. Resolve this plan's scratch directory:
+   `bash "${SUPER_PLUGIN_ROOT}/scripts/superbuild.sh" workspace <leaf plan>`, run from the
+   execution workspace. It prints `<workspace>/.superagent-runtime/build/<plan-slug>/` (git-ignored;
+   one directory per plan — another plan's directory is never yours to read or write). In
+   `SUPER_GIT_MODE=none`, set `SUPERBUILD_ROOT` to the recorded physical `REPO` on every
+   `superbuild.sh` call so it runs no git command.
+2. The ledger is `<dir>/progress.md`, first line `# superbuild ledger — plan: <leaf plan path>`.
+   Create it if absent. If it exists and names this plan, **resume**: a task with a
+   `Task <N>: complete` line is DONE — never re-dispatch it; a task whose last line is a fix round
+   resumes at the next round; `Final review: dispatched` means resume B6; a `Final review: clean` or
+   `Final review: <K> parked` line means the loop already finished — go straight to B7.
+   After compaction, trust the ledger and (in `github`) `git log` over your memory.
+3. Read the leaf plan once. Note its Global Constraints, its approved acceptance rows and their
+   source, and track one todo per task. If the plan names a spec or source agreement, read that
+   too — it is the authority the plan argues from.
+
+## B2 — Pre-flight scan
+
+Before dispatching Task 1 (skip on resume if the ledger already holds the table), scan the plan
+once and write the result to the ledger as a table, not a verdict:
+
+- one row per pair of tasks that share a file or an interface — what one produces against what the
+  other consumes, and what you found;
+- one row per task — whether its own text agrees with itself (its tests against its code, the files
+  it creates against the files it later touches) and with the Global Constraints.
+
+Route every conflict the scan finds through **B5** before execution begins. A clean scan proceeds
+without comment. The review loop remains the net for conflicts that only emerge in implementation.
+
+## B3 — Roles and dispatch
+
+| Role | Does | Prompt |
+|---|---|---|
+| IMPLEMENTER | implements one task, tests it, writes the report | `templates/build-implementer.md` |
+| TASK_REVIEWER | spec + quality verdicts on one task's diff | `templates/build-task-reviewer.md` |
+| FIX_APPLIER | applies a given list of findings or a fix plan | `templates/build-implementer.md` + findings |
+| RE_REVIEWER | verdicts the findings against the fix diff | `templates/build-re-reviewer.md` |
+| FIX_PLANNER | fix rounds 4–5: diagnoses why the fixes are not landing; read-only | inline, B4.4 |
+| BRANCH_REVIEWER | the one whole-branch review | `templates/build-branch-reviewer.md` |
+
+Templates live under `${SUPER_PLUGIN_ROOT}/templates/`. Read each once, on first use. Dispatch
+every role on the model and effort the profile assigns it — never on an unpinned default, and never
+on a substitute tier when a pin cannot be honored.
+
+**Hand artifacts over as files.** Everything you paste into a dispatch, and everything a child
+prints back, stays in your context for the rest of the run. A dispatch describes one task, not the
+session's history: the task, the interfaces it touches, the constraints that bind it. Never paste
+accumulated prior-task summaries, and never make a child read the whole plan.
+
+Two blocks are substituted into every prompt, chosen by the profile:
+
+- `[WORKSPACE_RULES]`
+  - `SUPER_GIT_MODE=github`: *"Work only inside the directory above (a git worktree on its feature
+    branch). Commit your work there. Do not push, open or merge a PR, switch branches, or touch any
+    other checkout."* — reviewers get only the directory sentence.
+  - `SUPER_GIT_MODE=none`: *"Git mode: none. Work in the recorded project under inherited workspace
+    ownership. Run no git, gh, worktree, commit, push, PR, or merge operation, even if a `.git`
+    directory exists. Report the files you changed instead of commits."*
+- `[TEST_EVIDENCE_RULES]`
+  - `SUPER_TEST_EVIDENCE=local`: *"Test evidence is local. Where the task specifies a test-first
+    cycle, report RED (the command, the failing output before implementation, why that failure was
+    expected) and GREEN (the command and passing output after). Run the focused test while
+    iterating and the full suite once before you finish."* Reviewers: *"The implementer ran the
+    tests; run one only for a specific doubt no existing run answers, and then a focused test."*
+  - `SUPER_TEST_EVIDENCE=ci`: *"Test evidence is CI. Run no test runner and no build locally. Push
+    exactly as your task step specifies and report each run id and its conclusion."* Reviewers:
+    *"Judge the code and the reported CI results; execute nothing."*
+
+**Batch small same-shape work.** When several tasks are each the same small independent edit
+repeated across files, send them as ONE brief listing every file and its change to one implementer
+and review the result as one unit.
+
+## B4 — The task loop
+
+For each task without a completion line, in plan order:
+
+### B4.1 Dispatch the implementer
+
+1. Record the review base: in `github`, `BASE=$(git rev-parse HEAD)`; in `none`, a fresh
+   `workspace-state.py snapshot` manifest.
+2. `bash "${SUPER_PLUGIN_ROOT}/scripts/superbuild.sh" brief <leaf plan> <N>` writes
+   `<dir>/task-<N>-brief.md`. Exact values appear only in the brief.
+3. Fill `build-implementer.md`: the brief path, the Global Constraints verbatim, the task's
+   approved acceptance rows verbatim, the context only you hold, the report path
+   `<dir>/task-<N>-report.md`, and the two blocks. Dispatch as IMPLEMENTER and keep the child's
+   identity for the fix loop.
+
+### B4.2 Handle the report
+
+- **DONE** → B4.3.
+- **DONE_WITH_CONCERNS** → read the concerns. Correctness or scope concerns are resolved before
+  review (route a plan problem through B5); observations are ledgered and you proceed to B4.3.
+- **NEEDS_CONTEXT** → supply the missing context and re-dispatch.
+- **BLOCKED** → change something, never just retry: more context; a smaller slice of the task; or,
+  if the plan itself is wrong, B5.
+- A crashed child or a reply beginning `BRIDGE-FAILED` → retry once, then **BLOCKED**, quoting the
+  `log=` path.
+
+### B4.3 Review the task
+
+Never skip the task review and never accept a review missing either verdict. Implementer
+self-review does not replace it.
+
+1. Build the review package as a file. `github`:
+   `bash "${SUPER_PLUGIN_ROOT}/scripts/superbuild.sh" package <leaf plan> "$BASE" HEAD` — always
+   the base you recorded, never `HEAD~1`, which drops all but the last commit of a multi-commit
+   task. `none`: snapshot again, `workspace-state.py compare` the two manifests, and write the
+   compare result plus a content diff of each changed file to `<dir>/review-task-<N>.diff`.
+2. Dispatch TASK_REVIEWER with the brief, the report, the package, the Global Constraints and the
+   acceptance rows. Add no open-ended directive ("check all uses") without a task-specific reason,
+   and **never pre-judge**: do not tell a reviewer to ignore or downgrade something. A finding you
+   believe is a false positive is raised and then adjudicated.
+3. **Filter by confidence** (the profile's `SUPER_REVIEW_CONFIDENCE_FILTER=controller`): act on
+   high-confidence findings. Ledger every other finding as
+   `Task <N>: deferred (<severity>, <confidence>): <one-liner>` for the final review to triage —
+   never drop one silently.
+4. Resolve each `⚠️ Cannot verify from diff` item yourself — you hold the cross-task context. A
+   confirmed gap is a failed spec review.
+5. Ledger high-confidence Minor findings as `Task <N>: minor (deferred): <one-liner>`; they never
+   enter the fix loop.
+
+The fix loop triggers on spec ❌, any high-confidence Critical or Important finding, or a confirmed
+⚠️ gap. A finding that is labeled **plan-mandated**, or that collides with what the plan text
+requires, goes to **B5** first — never dismiss it because the plan mandates it, and never dispatch
+a fix that contradicts the plan.
+
+### B4.4 The fix loop — five rounds maximum per task
+
+A round is one fix dispatch plus one scoped re-review.
+
+- **Rounds 1–3.** Send the open findings verbatim to the original implementer if your harness can
+  continue a finished subagent and wait for it synchronously; otherwise dispatch a fresh
+  FIX_APPLIER with the brief, the report file and the findings. The report file is the persistent
+  memory either way.
+- **Rounds 4–5.** Three failed rounds usually mean the fixer cannot see its own problem. Dispatch
+  FIX_PLANNER, read-only, with the brief, the report file, the open findings and the latest review
+  package: *"A prior implementer attempted this [R-1] times. Diagnose why the fixes are not
+  landing and write a concrete fix plan — files, changes, covering tests — to
+  `<dir>/task-<N>-fixplan-<R>.md`. Change nothing. Reply with the path and one line."* Then
+  dispatch a fresh FIX_APPLIER with that plan.
+- **Every round.** The fixer re-runs the tests covering the amended code and appends a fix report.
+  Confirm the report names the covering tests, the command and the output (or the CI run and
+  conclusion) before re-reviewing. Build the package over `FIX_BASE..HEAD` — FIX_BASE is the head
+  the previous review saw — and dispatch RE_REVIEWER with the findings list. New high-confidence
+  Critical/Important breakage in the fix diff joins the open findings; out-of-scope observations
+  go to the ledger as deferred.
+- After each round, ledger:
+  `Task <N>: fix round <R>/5 (<X> addressed, <Y> open — <one-liners>; <base7>..<head7>)`.
+
+**The breaker.** If round 5 leaves findings open, stop dispatching and adjudicate each one under
+**B5**. Adjudicate only at the cap — ending a loop early by adjudication is pre-judging under
+another name.
+
+### B4.5 Complete the task
+
+When the review is clean, or every open finding is parked with a ruling at the cap, append
+`Task <N>: complete (<base7>..<head7>, review clean | <K> parked)` and move on. Never start the next
+task while a Critical or Important finding is neither fixed nor parked with a ruling.
+
+## B5 — Conflicts: rule on the minor, block on the load-bearing
+
+A conflict is anything the plan does not settle or settles two ways: a pre-flight contradiction, a
+plan-mandated finding, an ambiguity an implementer raises, a finding still open at the breaker.
+Classify each one by what depends on it.
+
+**Load-bearing → BLOCKED.** A conflict is load-bearing when any of these holds:
+
+- a later task, another stage, or a consumer of a produced contract builds on the disputed point;
+- resolving it would change the plan's Global Constraints, an approved acceptance row, a contract
+  ID or revision, or the stage's scope — acceptance is never silently widened or weakened;
+- it shows the plan is wrong against its own spec or source agreement, rather than merely silent;
+- it is a real defect, open at the breaker, that later work depends on;
+- the resolution needs an irreversible, destructive, or security-sensitive action, or a side
+  effect outside the execution workspace that Step 3a does not already authorize;
+- you cannot tell whether it is load-bearing.
+
+Stop the loop. Ledger `BLOCKED: <conflict> — <the plan text it collides with>` and return a BLOCKED
+outcome to superrun carrying the finding, the colliding plan text, the tasks completed so far, and
+the ledger path. Leave the workspace and ledger in place. The caller — a `superagent` loop's
+escalation ladder, or the human running superrun — decides; never ask the user from inside the
+loop. For an upfront stage, a broken source, stage, predecessor, or contract assumption is
+`REPLAN-REQUIRED` as superrun Step 1 defines it, never an in-place ruling.
+
+**Everything else → rule and continue.** A local ambiguity nothing downstream consumes, a
+contestable reviewer point, a real but isolated defect at the breaker: decide it, with the spec as
+the binding authority and the plan as its argument, and ledger
+`Ruling: <what you decided> — <why> — <what it costs if wrong>` (at the breaker,
+`Task <N>: parked — <finding> — Ruling: …`). Carry the ruling into the dispatches it affects. A
+silent discard is forbidden: every decision you take is a ledger line and reaches the Final Report.
+
+## B6 — Final review
+
+1. Build the whole-change package: `github`,
+   `superbuild.sh package <leaf plan> <MERGE_BASE> HEAD` with MERGE_BASE the commit the branch
+   started from; `none`, the compare of the Step 2 pre-task manifest against a fresh snapshot.
+2. Dispatch BRANCH_REVIEWER with the package, the plan path, the full acceptance agreement and
+   this leaf's assigned IDs, and every `deferred`, `minor (deferred)` and `parked` ledger line.
+   Ledger `Final review: dispatched`.
+3. Filter by confidence as in B4.3. If high-confidence Critical or Important findings remain, or a
+   deferred item is marked must-fix: dispatch **ONE** FIX_APPLIER with the complete list — not one
+   fixer per finding — then exactly one RE_REVIEWER over the fix range. There is no second fix
+   wave: adjudicate residuals under B5 (a residual load-bearing finding is BLOCKED).
+4. Ledger `Final review: clean | <K> parked`.
+
+## B7 — Hand back to superrun
+
+Return to superrun Step 3 with:
+
+- the outcome — complete, or BLOCKED with the B5 packet;
+- **every** ledger line containing `Ruling:`, in the order made, each with what it costs if wrong —
+  this list is exhaustive and is the only place decisions taken on the user's behalf reach them;
+- the deferred and parked items the final review left standing;
+- the review range (`<MERGE_BASE>..<HEAD>`, or the manifests in `none`).
+
+Leave the scratch directory in place: a BLOCKED recovery or a post-CI resume in a fresh process
+reads the rulings and progress from the ledger. superrun Step 5 removes it once the leaf is
+integrated and closed out.
+
+| Thought | Reality |
+|---|---|
+| "I'll fix this one-liner myself" | NO. Controller fixes skip review and pollute your context. Dispatch the fixer. |
+| "The fix was small, skip the re-review" | NO. Every round ends with a scoped re-review. |
+| "This finding is obviously wrong, I'll drop it" | NO. Adjudicate only at the cap, and ledger the ruling. |
+| "One more round will converge" | NO. Past five rounds the failure is structural — adjudicate under B5. |
+| "A later task depends on this, but I'm fairly sure of the answer" | NO. Load-bearing is BLOCKED; your confidence is not the test. |
+| "It's only an ambiguity — I'll stop and report to be safe" | NO. A minor conflict nothing consumes gets a ledgered ruling; a parked loop costs a tick. |
+| "Ledger bookkeeping is overhead" | NO. It is what survives compaction and a CI-PENDING resume. |
+
+---
+
+The task loop is adapted from the superpowers plugin's `subagent-driven-development` skill
+(MIT, Copyright (c) 2025 Jesse Vincent).
