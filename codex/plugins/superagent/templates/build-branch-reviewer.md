@@ -33,6 +33,14 @@ Items the task loop deferred or parked, for you to triage — say for each wheth
 before integration:
 [DEFERRED_AND_PARKED]
 
+Tasks that had NO task-level review (brief, implementer report, commit range) — "none" if every
+task was reviewed:
+[UNREVIEWED_TASKS]
+
+You are the first and only reviewer of those tasks. For each one, read its brief and check its
+part of the diff for spec compliance — missing, extra, or misunderstood requirements — exactly as a
+task reviewer would, and treat its report as unverified claims.
+
 [WORKSPACE_RULES]
 
 This review is read-only: do not change the working tree, index, HEAD, or branch state.
@@ -71,6 +79,9 @@ filters. Not everything is Critical; be specific, with file:line, never vague.
 #### Important
 #### Minor
 For each: file:line — what is wrong — why it matters — fix if not obvious — confidence.
+
+### Unreviewed tasks
+For each task listed above: ✅ spec compliant | ❌ issues (also listed under Issues), with file:line.
 
 ### Deferred and parked items
 For each item you were given: must fix before integration | may stay deferred — why.

@@ -99,6 +99,9 @@ SUPER_CI_RUNNERS=1                      # >1 = queue independent long pushes bac
 SUPER_BRANCH_STYLE=flat                 # flat = no slashes in branch names
 
 # ── Review protocol ───────────────────────────────────────────────
+SUPER_REVIEW_DEPTH=risk                 # risk = the executor (SUPER_MODEL_EXECUTOR) classifies each task:
+                                        # risky tasks get their own review, mechanical isolated ones only
+                                        # the whole-branch review. full = every task gets its own review.
 SUPER_REVIEW_CONFIDENCE_FILTER=controller  # reviewers report ALL findings with severity+confidence;
                                            # the controller filters. Never push the filter into the
                                            # reviewer prompt (Claude 5 reviewers silently drop findings).

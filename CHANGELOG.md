@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 — 2026-10-04
+
+- **Task review scales with risk.** New `.superenv` key `SUPER_REVIEW_DEPTH` (default `risk`).
+  Before executing a leaf, the executor — on `SUPER_MODEL_EXECUTOR`, Opus by default — classifies
+  each task and records the review plan in the ledger. A task gets its own review when a later task
+  builds on it, when it touches security-, data- or contract-sensitive code, when it is written
+  from prose or spans several files, or when it cannot be classified. A mechanical, isolated task
+  is reviewed only in the whole-branch review, which always runs and now checks each such task
+  against its brief. A branch-only task is upgraded to its own review if its implementer raises
+  concerns, needs a re-dispatch, or changes files outside its brief; a classification is never
+  lowered. `SUPER_REVIEW_DEPTH=full` restores a review for every task. superrun's Final Report
+  gains a **Review depth** line.
+
 ## 0.11.0 — 2026-10-04
 
 - **The superpowers plugin is no longer required.** `superrun` now executes leaf plans with the

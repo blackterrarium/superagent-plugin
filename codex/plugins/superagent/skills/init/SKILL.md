@@ -175,7 +175,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
    `SUPER_PLANNING_MODE` ∈ upfront|incremental;
    `SUPER_MERGE_METHOD` ∈ squash|merge|rebase; `SUPER_BRANCH_STYLE` ∈ flat|slashed;
    `SUPER_PANEL_AGENT_TYPE` ∈ general-purpose|Explore;
-   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_PI_SUBAGENTS` ∈ required.
+   `SUPER_REVIEW_CONFIDENCE_FILTER` ∈ controller; `SUPER_REVIEW_DEPTH` ∈ risk|full; `SUPER_PI_SUBAGENTS` ∈ required.
    On Pi, normalize legacy `recommended` to `required` for this run and report
    "SUPER_PI_SUBAGENTS=recommended is deprecated; enforcing required" without editing the
    user's environment or .superenv. `off` (or any other value) is a migration error:

@@ -539,6 +539,7 @@ coding-loop skills, never by the tick.
 | SUPER_CI_ONE_FLAG_PER_PUSH | `true` | Exactly one CI flag per push. Sharding means more pushes, never more flags on one push. |
 | SUPER_CI_RUNNERS | `1` | When above 1, queue independent long CI pushes back-to-back instead of serializing them. |
 | SUPER_BRANCH_STYLE | `flat` | No slashes in generated branch names (a slashed name can miss some CI branch-name globs). |
+| SUPER_REVIEW_DEPTH | `risk` | `risk`: the executor (on `SUPER_MODEL_EXECUTOR`, Opus by default) classifies each task before execution — tasks a later task builds on, security- or data-sensitive tasks, and anything it cannot classify get their own review; mechanical, isolated tasks are reviewed only in the whole-branch review. `full`: every task gets its own review, as before 0.12.0. |
 | SUPER_REVIEW_CONFIDENCE_FILTER | `controller` | Reviewers report every finding with severity and confidence; the controller filters. Never push the filter into the reviewer prompt (Claude 5 reviewers silently drop findings). |
 | SUPER_MERGE_METHOD | `squash` | PR merge method wherever a skill merges its own PR. |
 | SUPER_PROTECTED_MAIN | `true` | All changes go through a feature branch plus PR, even docs-only ones. |
