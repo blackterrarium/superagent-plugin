@@ -253,10 +253,10 @@ SUPERENV
   for b in $(gh api "repos/$REPO_SLUG/branches" -q '.[].name' 2>/dev/null | grep -vx main || true); do
     gh api -X DELETE "repos/$REPO_SLUG/git/refs/heads/$b" >/dev/null 2>&1 && report_note "- deleted stale branch \`$b\`" || true
   done
-  for n in $(gh pr list -R "$REPO_SLUG" --state open --json number -q '.[].number' 2>/dev/null || true); do
+  for n in $(gh pr list -R "$REPO_SLUG" --state open --limit 1000 --json number -q '.[].number' 2>/dev/null || true); do
     gh pr close -R "$REPO_SLUG" "$n" >/dev/null 2>&1 && report_note "- closed stale PR #$n" || true
   done
-  PR_BASE="$(gh pr list -R "$REPO_SLUG" --state merged --json number -q 'length' 2>/dev/null || echo 0)"
+  PR_BASE="$(gh pr list -R "$REPO_SLUG" --state merged --limit 1000 --json number -q 'length' 2>/dev/null || echo 0)"
   report_note "- merged PRs before this run: $PR_BASE"
   report_pass "clean main at orphan commit; .superenv: SUPER_HARNESS=pi, interval $INTERVAL, notify → events.log"
 }
@@ -298,7 +298,7 @@ phase_goal() {
   local plans; plans="$(ls "$CLONE"/vault/*/master-plans/*.md 2>/dev/null || true)"
   [[ -n "$plans" && "$(printf '%s\n' "$plans" | wc -l | tr -d ' ')" == 1 ]] || { report_fail "expected exactly one vault/*/master-plans/*.md on main, found: ${plans:-none}"; return 1; }
   PLAN="$plans"
-  local merged; merged="$(gh pr list -R "$REPO_SLUG" --state merged --json number -q 'length')"
+  local merged; merged="$(gh pr list -R "$REPO_SLUG" --state merged --limit 1000 --json number -q 'length')"
   [[ "$merged" -gt "$PR_BASE" ]] || { report_fail "supergoal merged no PR (merged=$merged base=$PR_BASE)"; return 1; }
   report_pass "root plan ${PLAN#$CLONE/}; merged PRs so far: $((merged - PR_BASE))"
 }
@@ -368,8 +368,8 @@ phase_assert() {
   [[ "$ticks" -ge 2 ]] || { report_fail "only $ticks tick(s) in $TICK_LOG — the scheduler never fired on its own"; return 1; }
   ( cd "$CLONE" && git checkout -q main && git pull -q --ff-only origin main ) || { report_fail "git pull main"; return 1; }
   why="$(e2e_assert_deliverables "$CLONE")" || { report_fail "deliverables: $why"; ( cd "$CLONE" && ls -R scripts 2>/dev/null | head -20 ) >>"$REPORT"; return 1; }
-  merged="$(gh pr list -R "$REPO_SLUG" --state merged --json number -q 'length')"
-  open="$(gh pr list -R "$REPO_SLUG" --state open --json number -q 'length')"
+  merged="$(gh pr list -R "$REPO_SLUG" --state merged --limit 1000 --json number -q 'length')"
+  open="$(gh pr list -R "$REPO_SLUG" --state open --limit 1000 --json number -q 'length')"
   [[ $(( merged - PR_BASE )) -ge 3 && "$open" == 0 ]] || { report_fail "PRs this run: merged=$(( merged - PR_BASE )) open=$open (want ≥3 merged, 0 open)"; return 1; }
   local i timer=active
   for i in $(seq 1 24); do   # the self-disarm is the tick's final act; allow up to 2 min after DONE
@@ -379,7 +379,7 @@ phase_assert() {
   done
   [[ "$timer" != active ]] || { report_fail "timer still active 2 min after DONE (SUPER_AUTO_DISARM_ON_DONE)"; return 1; }
   grep -qx done "$RUN_DIR/events.log" 2>/dev/null || { report_fail "no 'done' event in $RUN_DIR/events.log (SUPER_NOTIFY_CMD)"; return 1; }
-  gh pr list -R "$REPO_SLUG" --state merged --json number,title -q '.[] | "- #\(.number) \(.title)"' | head -n $(( merged - PR_BASE )) >>"$REPORT"
+  gh pr list -R "$REPO_SLUG" --state merged --limit 1000 --json number,title -q '.[] | "- #\(.number) \(.title)"' | head -n $(( merged - PR_BASE )) >>"$REPORT"
   report_pass "ticks=$ticks merged=$(( merged - PR_BASE )) open=0 deliverables ok, timer disarmed, notify=done"
 }
 
