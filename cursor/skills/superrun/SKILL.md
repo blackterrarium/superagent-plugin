@@ -52,6 +52,10 @@ one whole-branch review). No other plugin is required. Never degrade code work t
 execution. A verified evidence-only discovery takes its explicit earlier branch and does not run
 the task loop.
 
+A plan authored before 0.11.0 carries a header naming `superpowers:subagent-driven-development` as
+its required sub-skill. Read that line as `superagent:superbuild`: execute the plan with the native
+task loop and never look for, or wait on, the superpowers plugin.
+
 **One leaf plan per invocation.** superrun finds the single highest-priority incomplete leaf,
 executes it, closes it out, reports, and exits. To run the next plan, invoke superrun again on the
 same root.
