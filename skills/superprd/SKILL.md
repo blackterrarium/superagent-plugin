@@ -234,7 +234,7 @@ The PRD reviewer gets no `.pi/agents/` definition. Run one blocking
 from `SUPER_MODEL_PRD_REVIEWER` / `SUPER_EFFORT_PRD_REVIEWER`; a native role uses `--harness pi`
 (and `inherit` resolves to Pi). This fresh CLI receives only the review prompt below, without
 conversation history. Wait for completion and report a failed dispatch; never grade it yourself.
-The required `pi-subagents` extension is used by the inner loop's SDD roles.
+The required `pi-subagents` extension is used by the inner loop's task-loop roles.
 pi-only:end -->
 The prompt contains **only** the three scratch files
 verbatim and these three questions:

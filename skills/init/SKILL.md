@@ -107,20 +107,16 @@ answer; init or a configuration edit does not provide that authorization.
    init from a subdirectory (of either the primary checkout or a worktree) would silently
    read the wrong file, or none, and fall through to plugin defaults instead of the
    repo's actual config.
-2. The `superpowers` plugin is resolvable (its skills, e.g. `superpowers:writing-plans`,
-   appear in the available-skills list). If not: WARN with install instructions
-   (`/plugin marketplace add obra/superpowers-marketplace`, `/plugin install superpowers`)
-   — planning skills (`supergoal`, `superplan`) work without it, but `superrun` requires
-   `superpowers:subagent-driven-development` to execute a plan and will refuse.
+2. No other plugin is required: plan execution runs on this plugin's own task loop
+   (`superagent:superbuild`). The superpowers plugin is neither needed nor checked for.
 <!-- pi-only:start
-   On Pi, superpowers is a Pi package: `pi list` must show `superpowers` (install:
-   `pi install git:github.com/obra/superpowers`). `pi-subagents` ≥ 0.58.0 is also required.
+   On Pi, `pi-subagents` ≥ 0.58.0 is required.
    Read the active installation's version from `pi list` and its package.json (the usual paths
    are `~/.pi/agent/npm/node_modules/pi-subagents/package.json` and
    `.pi/npm/node_modules/pi-subagents/package.json`). Missing, unreadable, or `< 0.58.0` → ABORT:
    "superagent requires pi-subagents >= 0.58.0; install: `pi install npm:pi-subagents`".
    Record the verified version in the summary. The package must expose the `subagent` tool
-   in the Pi sessions that execute SDD; superrun checks tool availability before execution.
+   in the Pi sessions that execute task-loop; superrun checks tool availability before execution.
 pi-only:end -->
 3. In `github`, `gh auth status` succeeds — else WARN (PR-based flows need it; planning artifacts are
    drafted either way, but `superauthor`'s A7 commit-and-merge step and every CI/PR
@@ -191,7 +187,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
    WARN once if it is set to anything.
 pi-only:end -->
 3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
-   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
+   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF` (retired — accepted and ignored),
    `SUPER_GH_DISABLE_SANDBOX`.
 4. **Numerics** (positive integer, else WARN + template default):
    `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.
@@ -299,7 +295,7 @@ codex-only:end -->
 Fifteen `SUPER_MODEL_*` role keys dispatch through subagents — all but `SUPER_MODEL_SUPERVISOR`,
 which the external tick passes straight to `pi --model`. On Pi the supervisor's OWN dispatches
 (planner, plan-refiner, replanner, executor, panel) are bridge processes that take the pins as CLI flags and need no
-definition; only superrun's SDD roles (implementer, fix-applier, task-reviewer, re-reviewer,
+definition; only superrun's task-loop roles (implementer, fix-applier, task-reviewer, re-reviewer,
 branch-reviewer, fix-planner) dispatch through the `pi-subagents` `subagent` tool, and THOSE ride
 generated `.pi/agents/super-<role>.md` definitions. Step 1 must have verified
 `pi-subagents` ≥ 0.58.0 and Step 2 must have resolved `SUPER_PI_SUBAGENTS` to `required` before
@@ -339,7 +335,7 @@ when that skill lands.
 They follow the harness-specific generate/skip/conflict rules below.
 
 <!-- pi-only:start
-On Pi the listed path is `.pi/agents/super-<role>.md` only for the six SDD roles, including
+On Pi the listed path is `.pi/agents/super-<role>.md` only for the six task-loop roles, including
 roles whose pins both inherit. Planner/plan-refiner/replanner/executor/panel and the four coding-loop roles never
 get a file. This Pi rule overrides the table's generated paths.
 pi-only:end -->
@@ -431,12 +427,12 @@ cursor-only:end -->
   stale.
 codex-only:end -->
 <!-- pi-only:start
-- **SDD role, native (`pi:` or inherit) — always generate:** render `${CLAUDE_PLUGIN_ROOT}/templates/super-role-pi-agent.md` to
+- **task-loop role, native (`pi:` or inherit) — always generate:** render `${CLAUDE_PLUGIN_ROOT}/templates/super-role-pi-agent.md` to
   `.pi/agents/super-<role>.md` (create `.pi/agents/` if needed), substituting `<role>`, `<KEY>`,
   `<model>` (prefix stripped; drop the `model:` line when `inherit`) and `<effort>` (drop the
   `thinking:` line when `inherit`). When both keys are `inherit`, keep the named definition
   with neither field: pi-subagents still requires an `agent` name for dispatch.
-- **SDD role, bridged (harness ≠ pi):** render
+- **task-loop role, bridged (harness ≠ pi):** render
   `${CLAUDE_PLUGIN_ROOT}/templates/super-role-pi-bridge-agent.md` to the same path, substituting
   `<role>`, `<KEY>`, `<harness>`, `<model>` (prefix stripped), `<effort>` (`inherit` when
   unset/invalid), `<relay-model>` = `SUPER_BRIDGE_RELAY_MODEL` (drop the `model:` line when
@@ -446,7 +442,7 @@ codex-only:end -->
   and `dispatch=pending (Stage 3)` for the diagnoser.
 - Ownership rules are the Claude build's: files carry the `generated-by: superagent:init` marker;
   rewrite marked files whose pins drifted; never touch an unmarked file (report `conflict`);
-  delete marked files for roles no longer generated (`removed (stale)`), but keep all six SDD
+  delete marked files for roles no longer generated (`removed (stale)`), but keep all six task-loop
   definitions even when their pins inherit. A prerequisite failure stops init
   before this step, leaving existing definitions untouched.
 - A leftover `.claude/agents/super-*.md` from a Claude Code init of the same repo belongs to that

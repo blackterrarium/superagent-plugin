@@ -37,7 +37,7 @@ license: MIT
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -119,11 +119,8 @@ answer; init or a configuration edit does not provide that authorization.
    init from a subdirectory (of either the primary checkout or a worktree) would silently
    read the wrong file, or none, and fall through to plugin defaults instead of the
    repo's actual config.
-2. The `superpowers` plugin is resolvable (its skills, e.g. `superpowers:writing-plans`,
-   appear in the available-skills list). If not: WARN with install instructions
-   (`/plugin marketplace add obra/superpowers-marketplace`, `/plugin install superpowers`)
-   — planning skills (`supergoal`, `superplan`) work without it, but `superrun` requires
-   `superpowers:subagent-driven-development` to execute a plan and will refuse.
+2. No other plugin is required: plan execution runs on this plugin's own task loop
+   (`superagent:superbuild`). The superpowers plugin is neither needed nor checked for.
 3. In `github`, `gh auth status` succeeds — else WARN (PR-based flows need it; planning artifacts are
    drafted either way, but `superauthor`'s A7 commit-and-merge step and every CI/PR
    operation in `superplan`/`superrun` need it). On a macOS host, a sandboxed `gh auth
@@ -185,7 +182,7 @@ a `SUPER_GOAL_ROOT` that resolves to `$HOME` or `/` (item 7), or on Pi a
    ABORT with "set SUPER_PI_SUBAGENTS=required in the overriding environment or .superenv;
    pi-subagents >= 0.58.0 is mandatory". No value permits a sequential fallback.
 3. **Booleans** (∈ true|false, else WARN + template default): `SUPER_PROTECTED_MAIN`,
-   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF`,
+   `SUPER_ADMIN_MERGE`, `SUPER_CI_ONE_FLAG_PER_PUSH`, `SUPER_SKIP_FINISHING_HANDOFF` (retired — accepted and ignored),
    `SUPER_GH_DISABLE_SANDBOX`.
 4. **Numerics** (positive integer, else WARN + template default):
    `SUPER_HEAVY_STEP_LIMIT`, `SUPER_LOCK_STEAL_MIN`, `SUPER_CI_RUNNERS`.

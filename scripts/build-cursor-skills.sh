@@ -104,7 +104,7 @@ cat >"$banner_file" <<'EOF'
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
 > - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
->   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
+>   from this plugin, `superagent:superbuild` means `superbuild`,
 >   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
 >   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
 >   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never
@@ -177,10 +177,12 @@ cp "$ROOT/templates/super-role-bridge-agent.md" "$TMP/templates/"
 cp "$ROOT/templates/relay-preamble.md" "$TMP/templates/"
 cp "$ROOT/templates/vault-root.md" "$TMP/templates/"
 cp "$ROOT/templates/coding-loop-diagnosis.md" "$TMP/templates/"
+cp "$ROOT/templates/build-implementer.md" "$ROOT/templates/build-task-reviewer.md" "$ROOT/templates/build-re-reviewer.md" "$ROOT/templates/build-branch-reviewer.md" "$TMP/templates/"
 mkdir -p "$TMP/scripts"
 cp "$ROOT/scripts/_coding_loop_state.py" "$ROOT/scripts/_coding_loop_evidence.py" "$TMP/scripts/"
 cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" \
-  "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/workspace-state.py" "$TMP/scripts/"
+  "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" "$ROOT/scripts/workspace-state.py" \
+  "$ROOT/scripts/superbuild.sh" "$TMP/scripts/"
 chmod +x "$TMP/scripts/role-bridge.sh"
 
 # superenv.default: same seds as skills, then Cursor-specific header + model defaults.
@@ -307,8 +309,8 @@ marketplace (the root `.cursor-plugin/marketplace.json` points at this directory
   generated banner maps this. `disable-model-invocation` skills (the `superagent` supervisor) are
   invisible to model-driven lookup, which is fine: the external tick drives it by a file-read
   prompt, never by name.
-- The superpowers plugin's skills load under Cursor (unprefixed, e.g.
-  `subagent-driven-development`) on a host with it configured — `superrun`'s dependency resolves.
+- No other plugin is required: `superrun` executes plans with this build's own `superbuild`
+  task loop.
 
 ## Driving a loop with the Cursor CLI
 

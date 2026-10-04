@@ -26,7 +26,7 @@ related skills: superauthor, superplan, supertraverse
 >   containing `skills/` and `templates/`, two levels above this SKILL.md). Substitute its absolute
 >   path wherever it appears.
 > - Skill names are **unprefixed** on Cursor: `superagent:superplan` means the `superplan` skill
->   from this plugin, `superpowers:subagent-driven-development` means `subagent-driven-development`,
+>   from this plugin, `superagent:superbuild` means `superbuild`,
 >   and so on — strip the `<plugin>:` prefix when looking a skill up. The `superagent` supervisor
 >   skill itself carries `disable-model-invocation` and is invisible to model-driven skill lookup —
 >   it is driven by reading its SKILL.md directly (the external tick's file-read prompt), never

@@ -37,7 +37,7 @@ related skills: superstage, superauthor, supertraverse, superreplan
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -75,7 +75,7 @@ Before drafting, require all of the following:
   explicitly maps that predecessor to this successor with `resume-existing`, preserves the old
   PR/branch/worktree and task history, and leaves the successor without its own execution attempt.
   Verify the mapping and identities from tracked evidence; a row label alone is insufficient.
-  Existing execution of the active identity continues through SDD/CI recovery instead of
+  Existing execution of the active identity continues through task-loop/CI recovery instead of
   preparation. Never overwrite predecessor task history or treat its CI as successor evidence.
 - Each declared prerequisite has S3's verified delivery evidence for the contract revision consumed:
   integrated code/delivery receipt and tracked closeout, or the stated verified non-code discovery

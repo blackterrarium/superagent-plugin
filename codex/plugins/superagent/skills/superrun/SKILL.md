@@ -2,7 +2,7 @@
 name: superrun
 description: Use when asked to execute the next ready implementation plan in a goal's plan tree from its root seed/master plan — finds the highest-priority written-but-unexecuted leaf plan, executes it, and closes it out.
 license: MIT
-related skills: supertraverse, superfinish, superplan
+related skills: supertraverse, superbuild, superfinish, superplan
 ---
 
 <!-- GENERATED FILE — Codex build. Do not edit by hand: edit the canonical skill under skills/
@@ -37,7 +37,7 @@ related skills: supertraverse, superfinish, superplan
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -56,31 +56,35 @@ to `superfinish`.
 
 Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
-## Prerequisite — superpowers
+## Execution engine — `superagent:superbuild`
 
-This skill executes implementation and code-changing discovery plans via
-`superpowers:subagent-driven-development`. If the selected stage needs that path and the skill is
-not resolvable in this session, ABORT with: "superrun requires the superpowers plugin —
-install it (e.g. `/plugin marketplace add obra/superpowers-marketplace`, then
-`/plugin install superpowers`) and retry." Never degrade code work to inline execution. A verified
-evidence-only discovery takes its explicit earlier branch and does not require SDD.
+This skill executes implementation and code-changing discovery plans through this plugin's own
+task loop, `superagent:superbuild` (a fresh implementer per task, a task review, a capped fix loop,
+one whole-branch review). No other plugin is required. Never degrade code work to inline
+execution. A verified evidence-only discovery takes its explicit earlier branch and does not run
+the task loop.
+
+A plan authored before 0.11.0 carries a header naming `superpowers:subagent-driven-development` as
+its required sub-skill. Read that line as `superagent:superbuild`: execute the plan with the native
+task loop and never look for, or wait on, the superpowers plugin.
 
 **One leaf plan per invocation.** superrun finds the single highest-priority incomplete leaf,
 executes it, closes it out, reports, and exits. To run the next plan, invoke superrun again on the
 same root.
 
 Unlike superplan/superfinish (which are docs-only), superrun **does** change source code — but
-**only via the delegated skills**. Code implementation is owned by SDD and closeout by superfinish.
+**only via the delegated skills**. Code implementation is owned by superbuild and closeout by superfinish.
 The explicit evidence-only discovery branch below runs the stage's specified experiment and publishes
-its evidence/decision docs through A7 without changing source; it is the sole non-SDD execution path.
+its evidence/decision docs through A7 without changing source; it is the sole non-superbuild execution path.
 
 | Thought | Reality |
 |---------|---------|
 | "I'll just detect the target plan myself by reading the tree" | NO. Invoke `superagent:supertraverse` DESCENT in **execution mode** — it is the only place tree navigation is defined. |
-| "I'll implement the plan's tasks directly / dispatch my own subagents" | NO. You **MUST** use `superpowers:subagent-driven-development` to execute the plan. |
+| "I'll implement the plan's tasks directly / dispatch my own subagents" | NO. You **MUST** use `superagent:superbuild` to execute the plan. |
 | "I'll write the findings/closeout report and update the tree myself" | NO. You **MUST** use `superagent:superfinish` for closeout. |
-| "No worktree needed — I'll edit in the primary checkout" | In `github`, NO: enter a worktree. In `none`, the recorded project plus inherited writer lock is the required workspace; suppress SDD's git/worktree stage. |
-| "I'll pause before each CI push to confirm" | NO. Run fully autonomously — let subagent-driven-development run end-to-end per its no-check-in-between-tasks rule. |
+| "No worktree needed — I'll edit in the primary checkout" | In `github`, NO: enter a worktree. In `none`, the recorded project plus inherited writer lock is the required workspace; superbuild runs its `none` branch and no git stage. |
+| "I'll pause before each CI push to confirm" | NO. Run fully autonomously — superbuild runs end-to-end and never checks in between tasks. |
+| "The plan is ambiguous here — I'll ask the user" | NO. superbuild B5 routes it: a load-bearing conflict is a BLOCKED report, anything else is a ledgered ruling that reaches the Final Report. Never ask from inside the loop. |
 | "I found the target, I'll execute the next one too while I'm here" | NO. One leaf per invocation. After closeout, report and exit. |
 | "A long CI push is queued — I'll wait for it to finish before pushing the next one" | NO. If `SUPER_CI_RUNNERS > 1`, queue every independent long push back-to-back (**CI scheduling**, Step 3) — the next free runner picks up the next job; serialize only across a named procedural gate. If `SUPER_CI_RUNNERS=1`, there is no runner contention to exploit, but a shardable batch's pushes still queue together and wait together. |
 | "I'll wait for CI with `gh run watch` / a backgrounded sleep-poll loop" | NO. The wait is **parked** (Step 3a): standalone → report the queued run ids and end the turn (resume later via **Resume entry — post-CI**); under superagent → return a CI-PENDING report and stop. Poll loops burn context for nothing. |
@@ -104,7 +108,7 @@ Invoke the `superagent:supertraverse` skill (Skill tool) and run its **DESCENT i
 - **BLOCKED** — report the row and reason; exit without execution.
 - **`NEEDS-REFINEMENT`** — this is an upfront-v1 leaf with its exact root, stage ID/path, and
   receipt/revalidation evidence. Report `NEEDS-REFINEMENT` with those exact values and exit. Do not
-  invoke superrefine, superplan, SDD, or a child process under EXECUTOR; the controller must schedule
+  invoke superrefine, superplan, superbuild, or a child process under EXECUTOR; the controller must schedule
   PLAN_REFINER as a separate planning operation. Incremental and unmarked roots do not use this
   outcome and retain their existing manual execution behavior.
 - **`REPLAN-REQUIRED`** — report the root, stage ID/path, and broken source/stage/predecessor/
@@ -136,7 +140,7 @@ use only the tracked receipt, the exact historical vault blob/commit, and verifi
 missing or conflicting identity is BLOCKED. Never derive a past execution identity from the current
 plan after closeout or replanning has edited it.
 
-Before dispatching SDD, reconcile evidence that the selected identity already ran. A verified merged
+Before invoking superbuild, reconcile evidence that the selected identity already ran. A verified merged
 PR/direct integration with no complete closeout means **closeout recovery**: do not implement again;
 invoke superfinish with the execution snapshot and actual integration evidence. A verified already
 published delivery receipt is also handed to superfinish for idempotent reconciliation rather than
@@ -152,7 +156,7 @@ Read `Stage kind` before entering the code-worktree path. If the selected upfron
 
 1. Run the stage's specified experiment exactly as approved, using its distinguishing inputs and
    evidence method. Temporary experiment output stays outside tracked source unless the stage names a
-   vault evidence artifact. Do not create a code branch, code worktree, code PR, or SDD task loop.
+   vault evidence artifact. Do not create a code branch, code worktree, code PR, or superbuild task loop.
 2. Review the observed result in a separate pass against the stage's evidence requirements, decision
    criteria, acceptance IDs, assumptions it may invalidate, and produced discovery contracts. Missing,
    ambiguous or contradictory evidence is BLOCKED; do not invent a decision.
@@ -197,30 +201,30 @@ owner, then capture the pre-task manifest with `workspace-state.py snapshot`. Co
 If `SUPER_GIT_MODE=github`, use the worktree procedure below unchanged.
 
 Before any code work, enter a git worktree via the native `EnterWorktree` tool. This is a
-precondition of `subagent-driven-development`, required regardless of any host-repo policy on the
+precondition of the task loop, required regardless of any host-repo policy on the
 question. Keep multi-batch execution isolated from the primary checkout. The native tool can be
 unavailable in subagent/headless contexts (a pinned cwd it cannot change) — when it is, fall back to
 plain `git worktree add <path> <branch>` with absolute-path operations from there on, which
 preserves the same isolation in substance.
 
-## Step 3 — Execute the plan (invoke `superpowers:subagent-driven-development`)
+## Step 3 — Execute the plan (invoke `superagent:superbuild`)
 
 **For an implementation stage or code-changing discovery, you MUST use
-`superpowers:subagent-driven-development` to execute the target leaf plan. Do not execute code work any
-other way.** Invoke it via the Skill tool and follow it exactly, **subject to the
-repo profile below**.
+`superagent:superbuild` to execute the target leaf plan. Do not execute code work any
+other way.** Invoke it via the Skill tool and follow it exactly, supplying the
+**execution profile** below.
 
-In `SUPER_GIT_MODE=none`, prepend this binding override to the SDD controller and every implementer,
-reviewer, fix, and final-review prompt:
+In `SUPER_GIT_MODE=none`, this binding local-mode override governs the controller and every
+implementer, reviewer, fix, and final-review prompt (superbuild B3 carries it into each dispatch):
 
 > Git mode: none. Work in the recorded project under inherited workspace ownership. Do not invoke
 > worktree, commit, PR, merge, or finishing-branch operations. Use before/after manifests and file
 > content diffs for review context. Retain task reviews, final review, local tests, and acceptance
 > verification. Publish local closeout only after those gates pass.
 
-> **You must be the top-level agent of your process.** SDD's task loop dispatches subagents and
+> **You must be the top-level agent of your process.** superbuild's task loop dispatches subagents and
 > foreground-waits on each one; a subagent cannot foreground-wait on its own children (superloop
-> L7's depth-1 constraint), so if superrun itself were a subagent, every SDD child would background
+> L7's depth-1 constraint), so if superrun itself were a subagent, every task-loop child would background
 > and yield instead of returning, and the loop would decay into `SendMessage` nudges and a
 > two-writer worktree race (issue #25). A `superagent` loop therefore runs superrun in its own
 > headless CLI process (`role-bridge.sh --tools executor`); a human runs it as the session's task.
@@ -229,13 +233,16 @@ reviewer, fix, and final-review prompt:
 > **Subagent dispatch**." Never nudge backgrounded children along by hand.
 
 
-- **Read the target leaf plan yourself** and extract its **full task list** plus scene-setting
-  context. subagent-driven-development expects you to hand each implementer the **full task text**
-  (it does not make the subagent read the plan file). Provide the context about where each task fits.
+- **Read the target leaf plan yourself** for its task list and scene-setting context. superbuild
+  hands each implementer its **full task text** as a brief file (the subagent never reads the plan
+  file); you provide the context about where each task fits.
 - Run the plan **end-to-end, fully autonomously** — do **not** pause for confirmation between tasks
   or before CI pushes.
-- Honor the skill's two-stage review (spec compliance, then code quality) per task; never skip a
-  review or proceed with unfixed issues.
+- Honor the per-task review (spec compliance and code quality); never skip a review or proceed
+  with unfixed issues.
+- superbuild returns either **complete** — with its exhaustive list of rulings and the deferred and
+  parked items — or **BLOCKED** (B5: a load-bearing conflict). On BLOCKED, do not integrate: go to
+  the Final Report's blocked path. Carry every ruling into the Final Report.
 - When the tasks are done, superrun integrates the code PR **itself**, autonomously, per **Step 3a**
   below. Capture the resulting **code PR** URL for the Final Report.
 
@@ -265,23 +272,24 @@ existing escalation path; never silently expand or weaken acceptance scope. Ordi
 code-quality review still applies. Legacy plans without a checklist retain their explicit written
 requirements: verify those directly, do not invent an approval or impose a new checklist gate.
 
-### Repo profile — apply these overrides to subagent-driven-development
+### Execution profile — this repo's `.superenv` settings for the task loop
 
-This block is the single, consolidated statement of where this repo's `.superenv` deviates from the
-skill's defaults. Carry it into every dispatch the skill's task loop makes:
+This block is the single, consolidated statement of how this repo's `.superenv` configures
+superbuild. Carry it into every dispatch the task loop makes:
 
 1. **Test evidence is keyed by `SUPER_TEST_EVIDENCE`.** If `SUPER_TEST_EVIDENCE=ci`: implementers
    never run tests or builds locally — no test runners, no build scripts. A task's test
-   evidence is the CI push its plan step specifies: the run id and conclusion. The skill's TDD
-   RED/GREEN local-output contract does not apply; reviewers judge the code plus the reported CI
+   evidence is the CI push its plan step specifies: the run id and conclusion. The local
+   RED/GREEN output contract does not apply; reviewers judge the code plus the reported CI
    results and never execute anything themselves. If `SUPER_TEST_EVIDENCE=local` (the shipped
-   default): the SDD skill's native RED/GREEN contract applies unchanged.
-2. **Unattended conflict routing.** Every "ask your human partner" branch in the skill — the
-   pre-flight plan-conflict scan, plan-mandated findings, the fix-loop breaker's load-bearing
-   escalation — becomes: **report BLOCKED** with the finding and the plan text it collides with,
-   then stop. The caller (a `superagent` loop's escalation ladder, or a human running superrun
-   directly) decides. Never call `AskUserQuestion` from the SDD controller.
-3. **Model policy** (supersedes the skill's Model Selection section): dispatch each SDD role on its
+   default): superbuild's local RED/GREEN contract applies (B3).
+2. **Conflict routing is split by consequence** (superbuild B5). A **load-bearing** conflict — a
+   later task or stage builds on it, it would change acceptance or constraints, it shows the plan
+   is wrong, or it cannot be classified — is a **BLOCKED** report carrying the finding and the plan
+   text it collides with; the caller (a `superagent` loop's escalation ladder, or a human running
+   superrun directly) decides. Anything else is ruled on, ledgered, and listed in the Final Report.
+   Never call `AskUserQuestion` from the controller.
+3. **Model policy**: dispatch each task-loop role on its
    `.superenv` model key — implementer: `SUPER_MODEL_IMPLEMENTER`, fix-applier:
    `SUPER_MODEL_FIX_APPLIER`, task reviewer: `SUPER_MODEL_TASK_REVIEWER`, re-reviewer:
    `SUPER_MODEL_RE_REVIEWER`, final whole-branch reviewer: `SUPER_MODEL_BRANCH_REVIEWER`, fix rounds
@@ -300,7 +308,7 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    is dispatched with `subagent_type: super-<role>` and no `model:`, exactly like a full-ID pin;
    the definition `superagent:init` generated is a relay that runs the foreign CLI and returns its
    result verbatim. A reply beginning `BRIDGE-FAILED` is a failed subagent: treat it as you would an
-   implementer/reviewer that crashed (retry once, then the skill's normal escalation), and quote the
+   implementer/reviewer that crashed (retry once, then BLOCKED), and quote the
    `log=` path in the BLOCKED report. Missing definition = hard error (re-run `superagent:init`).
    **Effort policy:** each role also has a `SUPER_EFFORT_<ROLE>` key (same names as the
    model keys). `inherit` = no override.
@@ -317,12 +325,9 @@ skill's defaults. Carry it into every dispatch the skill's task loop makes:
    confidence label**; the controller filters to high-confidence findings before acting on or
    surfacing them. Never instruct a reviewer to report only high-confidence issues — Claude
    5-family reviewers apply that filter silently and drop real findings.
-5. **Finishing handoff is keyed by `SUPER_SKIP_FINISHING_HANDOFF`.** If `true`: skip
-   `superpowers:finishing-a-development-branch` entirely — its interactive completion menu cannot be
-   answered by an unattended caller, it leaves the code PR open for a manual merge, and it runs tests
-   on the host. Integration is owned by **Step 3a**. If `false` (the shipped default) and a human is
-   driving, the finishing skill's menu is available; unattended callers always use Step 3a regardless
-   of this key.
+5. **Integration is owned by Step 3a**, for attended and unattended callers alike — there is no
+   interactive completion menu. (`SUPER_SKIP_FINISHING_HANDOFF` is retired: the key is accepted and
+   ignored.)
 6. **Repo notes.** If `SUPER_REPO_NOTES` is set, read that file before starting the task loop and
    treat it as standing repo policy.
 
@@ -353,20 +358,14 @@ it just gets no benefit from parallel pickup. If the plan text stages pushes ser
 procedural gate under `SUPER_CI_RUNNERS > 1` (a leftover of single-runner-era authoring), queue them
 concurrently anyway and note the deviation in the Final Report.
 
-## Step 3a — Autonomous code-PR integration (keyed by `SUPER_SKIP_FINISHING_HANDOFF`)
+## Step 3a — Autonomous code-PR integration
 
-If `SUPER_GIT_MODE=none`, suppress this entire integration stage and
-`superpowers:finishing-a-development-branch`. Capture the resulting snapshot, compare it to the
+If `SUPER_GIT_MODE=none`, suppress this entire integration stage. Capture the resulting snapshot, compare it to the
 pre-task manifest, rerun final workspace acceptance checks, and retain the exact command results,
 review outcomes, and evidence paths for Step 4. Do not reinterpret CI-only acceptance; the resolver
 has already rejected `SUPER_TEST_EVIDENCE=ci`. Continue directly to Step 4.
 
-If `SUPER_SKIP_FINISHING_HANDOFF=true`, or the caller is unattended (a `superagent` loop), Step 3a
-owns integration end-to-end with no interactive prompt. If `false` and a human is driving,
-`superpowers:finishing-a-development-branch`'s menu may take over integration; Step 3a governs only
-when it does not.
-
-When Step 3a governs (per the keying above), integrate the code PR with **no interactive prompt**,
+Step 3a owns integration end-to-end, whoever the caller is. Integrate the code PR with **no interactive prompt**,
 merging only when the CI-green gate below — or its review-green fallback — is satisfied. This
 integration step is itself keyed by `SUPER_PROTECTED_MAIN` — the CI-gate keying in item 2 below still
 governs whether to wait for CI **first**, in both branches; only the merge mechanism at the end (item
@@ -501,7 +500,9 @@ run's terminal conclusion — first require its complete execution snapshot. Ent
 (it was left in place), verify the actual branch/PR head and each conclusion with one `gh run view <id>`
 per run (trust but verify — the packet may be stale), then run Step 3a's integration-authority gate
 against the current authoritative root, C8 record, and disposition. A packet queued before a batch
-request is recovery evidence, never merge authority.
+request is recovery evidence, never merge authority. Re-read the superbuild ledger left in the
+worktree (`superbuild.sh workspace <leaf plan>` → `progress.md`) for the rulings and deferred items
+the Final Report must carry; the queuing process's memory is gone.
 
 Only when the active identity is unchanged (including an explicitly retained same-identity stage
 validated in the new generation) may this terminal handler avoid re-running Steps 1–3, merge after both
@@ -528,12 +529,16 @@ superfinish. Absence of source-code work is not a waiver of the stage's evidence
 ## Step 5 — Worktree lifecycle
 
 In `SUPER_GIT_MODE=none`, there is no worktree lifecycle. Reopen the completed-local receipt and
-reported artifacts, then return the Final Report without git cleanup.
+reported artifacts, remove this leaf's superbuild scratch directory
+(`<REPO>/.superagent-runtime/build/<plan-slug>/`) once its rulings are in the Final Report, then
+return the Final Report without git cleanup.
 
 After `superfinish` reports the work merged, exit the worktree via `ExitWorktree`
 (worktree is kept only while a PR stays open). When that tool is unavailable (a headless process
 whose allowlist lacks it — the `superagent` dispatch path), do the equivalent by hand from the
 primary checkout: `git worktree remove <path>` (the branch is already merged and deleted remotely).
+Before removing the worktree, delete this leaf's superbuild scratch directory inside it
+(`<worktree>/.superagent-runtime/`) — its rulings must already be in the Final Report.
 If the **code PR** was left open in Step 3a (CI red /
 BLOCKED, not merged), leave the worktree in place and note that in the Final Report.
 
@@ -554,11 +559,12 @@ you did not confirm landed), say so explicitly rather than reporting it done:
     **Closeout PR:** <url> (merged)            ← from superfinish
 
     **Findings:** <summary>                    (or: none — superfinish recorded none)
+    **Rulings:** <every superbuild ruling, in order: decision — why — cost if wrong>   (or: none)
 
     ⚠️ **Critical:** <only when a finding or blocked task needs attention>
 
-If execution was **blocked** (subagent-driven-development could not complete a task — plan wrong,
-task too large, missing context — or the Step 3a CI-green gate was red), do **not** fabricate
+If execution was **blocked** (superbuild returned BLOCKED — a load-bearing conflict, a plan that is
+wrong, a task too large, missing context — or the Step 3a CI-green gate was red), do **not** fabricate
 completion and **do not merge** the code PR: report the blocker plainly, note what was and wasn't done,
 and still run `superagent:superfinish` so the partial outcome is recorded honestly.
 

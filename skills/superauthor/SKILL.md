@@ -69,11 +69,9 @@ folder, project folder, loop-status file and lock derives from `<vault_root>`; *
 
 ## A2 — Authoring standard (REQUIRED)
 
-**Author the plan yourself, directly, to the standard below.** This standard is the distilled
-replacement for delegating *authorship* to `superpowers:writing-plans` — that skill is **no longer
-invoked to produce the plan document itself** by any superauthor-driven caller; its
-`docs/superpowers/plans/` save location and its "Execution Handoff" section do not apply here. Whether
-the produced plan's own verification steps follow that skill's local-test TDD cycle or specify CI
+**Author the plan yourself, directly, to the standard below.** This standard is self-contained:
+no other plugin's planning skill is invoked to produce the plan document. Whether
+the produced plan's own verification steps follow the local test-first cycle or specify CI
 pushes instead is governed by `SUPER_TEST_EVIDENCE` (see the **Verification-steps mode** bullet below).
 
 Write for a skilled engineer with **zero context for this codebase**. First classify the artifact's
@@ -111,8 +109,8 @@ a plan failure at every maturity.
   ```markdown
   # [Feature Name] Implementation Plan
 
-  > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development
-  > (normally reached via `superagent:superrun`) to implement this plan task-by-task. Steps use
+  > **For agentic workers:** REQUIRED: execute this plan with `superagent:superrun` (its
+  > `superagent:superbuild` task loop implements it task-by-task). Steps use
   > checkbox (`- [ ]`) syntax for tracking.
 
   **Goal:** [one sentence describing what this builds]
@@ -137,8 +135,10 @@ a plan failure at every maturity.
   and the run id + conclusion as the pass criterion — following the CI-scheduling rules the caller
   supplies (queue-all batches, monitor-parked waits); never write `pytest` / `./run.sh` / build
   commands to execute on the host, and never instruct poll-loop CI waits in plan text. If
-  `SUPER_TEST_EVIDENCE=local` (the shipped default): plan steps use the normal local test cycle per
-  `superpowers:writing-plans`.
+  `SUPER_TEST_EVIDENCE=local` (the shipped default): plan steps use the local test-first cycle —
+  for each behavior, a step that writes the failing test (real test code), a step that runs it with
+  the exact command and the expected failure, a step with the minimal implementation, a step that
+  re-runs the command with the expected pass, then a commit step.
 - **A mechanical gate belongs in a committed test, never in an unrun shell block.** If a plan step
   says "verify X before proceeding" and X is checkable by code, the plan's deliverable is **the test
   that checks X**, cited by name — not a snippet the executor is told to run and trust. A committed

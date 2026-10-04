@@ -36,7 +36,7 @@ license: MIT
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -637,7 +637,7 @@ instead.
 > subagent cannot foreground-wait on children it spawns; they background and yield instead. The
 > read-only 3-subagent panel fits within this limit; the supervisor that runs the panel **cannot
 > itself be a subagent** — it must be the top-level loop agent. The same constraint is why
-> `superagent` runs `superrun` (the SDD controller, which must wait on its own implementer/reviewer
+> `superagent` runs `superrun` (the task-loop controller, which must wait on its own implementer/reviewer
 > subagents) as the top-level agent of a separate CLI process rather than as a subagent (issue #25;
 > see superagent **Subagent dispatch**).
 

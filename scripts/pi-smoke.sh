@@ -83,13 +83,12 @@ PI_MODEL="${PI_SMOKE_MODEL:-}"            # optional: provider/id to pin; empty 
 MODEL_ARGS=(); [ -n "$PI_MODEL" ] && MODEL_ARGS=(--model "$PI_MODEL")
 SUBAGENTS_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.pi/agent/npm/node_modules/pi-subagents/package.json" 2>/dev/null | head -1)"
 echo "- pi-subagents: ${SUBAGENTS_VERSION:-absent}" >>"$REPORT"
-echo "- superpowers package: $(pi list 2>/dev/null | grep -c superpowers)" >>"$REPORT"
 
 # P1 — exit status on a failed turn (decides the bridge's 3-vs-4 mapping; informational).
 run_test "P1 exit status on bad model (informational)" "" \
   "$BIN" -p --no-session --model "nonexistent-provider/no-such-model" "Reply with exactly: NEVER"
 
-# P2 — --skill delivery + probe skill + superpowers listing.
+# P2 — --skill delivery + probe skill.
 run_test "P2 --skill delivery (probe skill)" "PROBE-BEGIN" \
   bash -c "cd '$NEUTRAL' && echo 'Run the pi smoke probe skill (pi-smoke-probe) and output its report. If you cannot find any such skill, output exactly: NO-SUCH-SKILL' | '$BIN' -p --no-session --approve --skill '$ROOT/pi/skills' ${MODEL_ARGS[*]:-}"
 

@@ -36,7 +36,7 @@ license: MIT
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -242,8 +242,8 @@ knows:
    batch when `SUPER_CI_RUNNERS > 1` (see **CI Scheduling in Authored Plans** above), any serial push
    ordering names its procedural gate, commit flags follow `SUPER_CI_FLAG_TEMPLATE` /
    `SUPER_CI_ONE_FLAG_PER_PUSH`, and every CI wait is monitor-parked (no `gh run watch` / sleep /
-   re-poll loops in plan text); if `local` (default), steps use the normal local test cycle per
-   `superpowers:writing-plans` instead of CI pushes. Fix violations inline.
+   re-poll loops in plan text); if `local` (default), steps use the local test-first cycle
+   (superauthor A2) instead of CI pushes. Fix violations inline.
 
 If you find issues, fix them inline — no need to re-review the whole plan.
 

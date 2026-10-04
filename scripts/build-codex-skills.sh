@@ -121,7 +121,7 @@ cat >"$banner_file" <<'EOF'
 >   not packaged inside the plugin — they live in the plugin source repository. Read
 >   `${SUPER_PLUGIN_ROOT}/scripts/` as that repository's `scripts/` directory for nonpackaged
 >   helpers, including assignments to `SUPERAGENT_SCRIPTS`. The coding-loop helpers
->   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
+>   (`prd-lint.sh`, `supereval.sh`, `workspace-state.py`, `superbuild.sh`, `_evalspec.sh`, `_common.sh`) and `role-bridge.sh` ARE
 >   packaged at `${SUPER_PLUGIN_ROOT}/scripts/`; use their installed paths.
 > - Skill lookup: this plugin installs via the Codex plugin marketplace; skills resolve by name
 >   (e.g. `superplan`). The `superagent` supervisor skill is driven by reading its SKILL.md
@@ -198,10 +198,11 @@ cp "$ROOT/templates/super-role-bridge-agent.md" "$TMP/plugins/superagent/templat
 cp "$ROOT/templates/relay-preamble.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/vault-root.md" "$TMP/plugins/superagent/templates/"
 cp "$ROOT/templates/coding-loop-diagnosis.md" "$TMP/plugins/superagent/templates/"
+cp "$ROOT/templates/build-implementer.md" "$ROOT/templates/build-task-reviewer.md" "$ROOT/templates/build-re-reviewer.md" "$ROOT/templates/build-branch-reviewer.md" "$TMP/plugins/superagent/templates/"
 mkdir -p "$TMP/plugins/superagent/scripts"
 cp "$ROOT/scripts/_coding_loop_state.py" "$ROOT/scripts/_coding_loop_evidence.py" "$TMP/plugins/superagent/scripts/"
 cp "$ROOT/scripts/role-bridge.sh" "$ROOT/scripts/prd-lint.sh" "$ROOT/scripts/supereval.sh" \
-  "$ROOT/scripts/workspace-state.py" "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/plugins/superagent/scripts/"
+  "$ROOT/scripts/workspace-state.py" "$ROOT/scripts/superbuild.sh" "$ROOT/scripts/_common.sh" "$ROOT/scripts/_evalspec.sh" "$TMP/plugins/superagent/scripts/"
 chmod +x "$TMP/plugins/superagent/scripts/role-bridge.sh"
 
 # superenv.default: same seds as skills, then Codex-specific header + model defaults.
