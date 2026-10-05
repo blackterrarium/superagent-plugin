@@ -12,7 +12,7 @@ The task loop `superrun` Step 3 runs to turn a leaf plan into reviewed code. You
 ledger. You write no source code and fix no finding yourself — controller edits skip review and
 fill the context you need for coordination.
 
-superbuild owns B1–B7 below and nothing else. The caller (`superrun`) owns target selection, the
+superbuild owns B1–B7 (including B2a) below and nothing else. The caller (`superrun`) owns target selection, the
 workspace (Step 2), the execution profile (role models and efforts, test-evidence mode, CI
 scheduling, repo notes, the acceptance agreement), integration (Step 3a), and closeout. Where a
 clause says *per the profile*, read it from superrun's **Execution profile**.
@@ -59,6 +59,45 @@ once and write the result to the ledger as a table, not a verdict:
 
 Route every conflict the scan finds through **B5** before execution begins. A clean scan proceeds
 without comment. The review loop remains the net for conflicts that only emerge in implementation.
+
+## B2a — Review plan: scale task review to risk (keyed by `SUPER_REVIEW_DEPTH`)
+
+The whole-branch review (B6) always runs. What varies is whether a task also gets its own review
+(B4.3) before the next task starts. Decide this once, before dispatching Task 1 (skip on resume if
+the ledger already holds the review plan), and write it to the ledger.
+
+- **`SUPER_REVIEW_DEPTH=full`** — every task gets its own review. Ledger
+  `Review plan: full (SUPER_REVIEW_DEPTH=full)` and continue.
+- **`SUPER_REVIEW_DEPTH=risk`** (the shipped default) — **you classify each task.** The
+  determination is the controller's: it runs on the model the profile pins for the executor
+  (`SUPER_MODEL_EXECUTOR`), never on an implementer or reviewer tier, and is never delegated to a
+  subagent. Write a table — task, depth, reason — where depth is `task` (its own review) or
+  `branch` (reviewed only as part of the whole-branch review).
+
+A task is **`task`** depth when any of these holds:
+
+- a later task consumes what it produces (a row in the B2 table) — a defect here would be built on;
+- it touches security-sensitive code, authentication or secrets, destructive or irreversible
+  operations, data migration, concurrency or locking, or a public or cross-stage contract;
+- it is written from a prose description rather than complete code in the plan, or it coordinates
+  changes across several files;
+- you cannot tell.
+
+A task is **`branch`** depth only when **all** of these hold: nothing later consumes it (or it is
+the last task); it is mechanical — transcription of code the plan gives in full, configuration,
+scaffolding, documentation, or verification that changes no tracked file; and none of the `task`
+criteria apply. A **single-task leaf** is `branch` unless a `task` criterion other than the first
+applies: its task review and its whole-branch review would read the identical diff.
+
+Each reason cites the criterion that decided it. Classification is a judgment about risk, not a
+way to shorten the run: "small" or "simple" alone is not a reason, and the batch rule in B3 does
+not change a batch's depth — a batch takes the highest depth of its members.
+
+**A `branch` task is upgraded to `task`, never the reverse.** Upgrade it, and ledger
+`Task <N>: review upgraded to task — <reason>`, when its implementer reports DONE_WITH_CONCERNS
+about correctness or scope, when the task needed a re-dispatch (NEEDS_CONTEXT, BLOCKED, or a
+crashed child), or when its change touches files its brief does not list. A `task` classification
+is never lowered once written.
 
 ## B3 — Roles and dispatch
 
@@ -131,8 +170,14 @@ For each task without a completion line, in plan order:
 
 ### B4.3 Review the task
 
-Never skip the task review and never accept a review missing either verdict. Implementer
-self-review does not replace it.
+This step runs for every task whose depth in the review plan (B2a) is `task` — which is every task
+under `SUPER_REVIEW_DEPTH=full`. Never skip it for such a task and never accept a review missing
+either verdict. Implementer self-review does not replace it.
+
+For a `branch`-depth task, first check the B2a upgrade conditions. If none applies, do not dispatch
+a task reviewer: confirm the report file exists and carries the test evidence the profile requires
+(send it back to the implementer if not), build the review package as in step 1 so the range is
+recorded, and go to B4.5.
 
 1. Build the review package as a file. `github`:
    `bash "${CLAUDE_PLUGIN_ROOT}/scripts/superbuild.sh" package <leaf plan> "$BASE" HEAD` — always
@@ -187,21 +232,26 @@ another name.
 ### B4.5 Complete the task
 
 When the review is clean, or every open finding is parked with a ruling at the cap, append
-`Task <N>: complete (<base7>..<head7>, review clean | <K> parked)` and move on. Never start the next
+`Task <N>: complete (<base7>..<head7>, review clean | <K> parked)` and move on. For a
+`branch`-depth task append
+`Task <N>: complete (<base7>..<head7>, review: branch)`. Never start the next
 task while a Critical or Important finding is neither fixed nor parked with a ruling.
 
 ## B5 — Conflicts: rule on the minor, block on the load-bearing
 
 A conflict is anything the plan does not settle or settles two ways: a pre-flight contradiction, a
 plan-mandated finding, an ambiguity an implementer raises, a finding still open at the breaker.
-Classify each one by what depends on it.
+Classify each one by what depends on it. Check the body-against-commitments rule below
+first: a conflict it covers is fixed under a ruling even when a later task builds on the same code.
 
 **Load-bearing → BLOCKED.** A conflict is load-bearing when any of these holds:
 
 - a later task, another stage, or a consumer of a produced contract builds on the disputed point;
 - resolving it would change the plan's Global Constraints, an approved acceptance row, a contract
   ID or revision, or the stage's scope — acceptance is never silently widened or weakened;
-- it shows the plan is wrong against its own spec or source agreement, rather than merely silent;
+- the plan's **commitments** themselves are wrong or contradict each other — its acceptance rows,
+  Global Constraints, contracts, or scope against its spec or source agreement — so that no
+  implementation could satisfy them all;
 - it is a real defect, open at the breaker, that later work depends on;
 - the resolution needs an irreversible, destructive, or security-sensitive action, or a side
   effect outside the execution workspace that Step 3a does not already authorize;
@@ -213,6 +263,16 @@ the ledger path. Leave the workspace and ledger in place. The caller — a `supe
 escalation ladder, or the human running superrun — decides; never ask the user from inside the
 loop. For an upfront stage, a broken source, stage, predecessor, or contract assumption is
 `REPLAN-REQUIRED` as superrun Step 1 defines it, never an in-place ruling.
+
+**The plan's body against the plan's own commitments → fix under a ruling.** When code or steps
+the plan prescribes — even "exactly this content" — fail an approved acceptance row, a Global
+Constraint, or a contract that the same plan commits to, the commitments win and the body is the
+defect. This is not load-bearing: nothing the plan promised changes. Dispatch the fix through the
+normal fix loop (or the final fix wave), smallest change that satisfies the commitment, and ledger
+`Ruling: depart from the plan body at <where> — <which commitment it failed> — <what it costs if
+wrong>`. It becomes BLOCKED only if the fix is not determinable from the commitments, would itself
+change one of them, or is still failing when the fix loop's cap or the single final fix wave is
+spent.
 
 **Everything else → rule and continue.** A local ambiguity nothing downstream consumes, a
 contestable reviewer point, a real but isolated defect at the breaker: decide it, with the spec as
@@ -227,8 +287,10 @@ silent discard is forbidden: every decision you take is a ledger line and reache
    `superbuild.sh package <leaf plan> <MERGE_BASE> HEAD` with MERGE_BASE the commit the branch
    started from; `none`, the compare of the Step 2 pre-task manifest against a fresh snapshot.
 2. Dispatch BRANCH_REVIEWER with the package, the plan path, the full acceptance agreement and
-   this leaf's assigned IDs, and every `deferred`, `minor (deferred)` and `parked` ledger line.
-   Ledger `Final review: dispatched`.
+   this leaf's assigned IDs, every `deferred`, `minor (deferred)` and `parked` ledger line, and —
+   as `[UNREVIEWED_TASKS]` — each `review: branch` task with its brief path, report path and
+   commit range. Those tasks have had no reviewer: the branch reviewer checks each against its
+   brief. Ledger `Final review: dispatched`.
 3. Filter by confidence as in B4.3. If high-confidence Critical or Important findings remain, or a
    deferred item is marked must-fix: dispatch **ONE** FIX_APPLIER with the complete list — not one
    fixer per finding — then exactly one RE_REVIEWER over the fix range. There is no second fix
@@ -243,6 +305,8 @@ Return to superrun Step 3 with:
 - **every** ledger line containing `Ruling:`, in the order made, each with what it costs if wrong —
   this list is exhaustive and is the only place decisions taken on the user's behalf reach them;
 - the deferred and parked items the final review left standing;
+- the review depth actually applied: how many tasks had their own review, how many were reviewed at
+  branch level only, and any upgrades;
 - the review range (`<MERGE_BASE>..<HEAD>`, or the manifests in `none`).
 
 Leave the scratch directory in place: a BLOCKED recovery or a post-CI resume in a fresh process
@@ -256,7 +320,10 @@ integrated and closed out.
 | "This finding is obviously wrong, I'll drop it" | NO. Adjudicate only at the cap, and ledger the ruling. |
 | "One more round will converge" | NO. Past five rounds the failure is structural — adjudicate under B5. |
 | "A later task depends on this, but I'm fairly sure of the answer" | NO. Load-bearing is BLOCKED; your confidence is not the test. |
+| "The plan says 'exactly this content', and that content fails acceptance — BLOCKED" | NO. Acceptance is the authority; the body is the defect. Fix it under a ruling. BLOCKED is for commitments that must change. |
 | "It's only an ambiguity — I'll stop and report to be safe" | NO. A minor conflict nothing consumes gets a ledgered ruling; a parked loop costs a tick. |
+| "This task is small, I'll mark it `branch`" | NO. Size is not a criterion. If a later task consumes it, or you cannot tell, it is `task`. |
+| "The review plan said `task`, but the diff turned out trivial — skip it" | NO. A `task` classification is never lowered. |
 | "Ledger bookkeeping is overhead" | NO. It is what survives compaction and a CI-PENDING resume. |
 
 ---

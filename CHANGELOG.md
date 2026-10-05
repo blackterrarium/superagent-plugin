@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.12.1 — 2026-10-04
+
+- **A plan body that fails the plan's own acceptance is fixed in-loop, not BLOCKED.** superbuild B5
+  now separates a plan's commitments (acceptance rows, Global Constraints, contracts, scope) from
+  its body (prescribed code and steps). When the body fails a commitment, the executor dispatches
+  the smallest fix through the normal fix loop and records a ruling; BLOCKED is kept for conflicts
+  where a commitment itself would have to change, where the fix cannot be determined, or where the
+  fix still fails at the cap. Live runs had handled this case both ways — one fixed it and finished
+  in 51 minutes, another re-planned twice and did not finish.
+- **e2e benches count PRs past `gh`'s 30-row default**, so a reused test remote with more than 30
+  merged PRs no longer fails the outcome assertion.
+
+## 0.12.0 — 2026-10-04
+
+- **Task review scales with risk.** New `.superenv` key `SUPER_REVIEW_DEPTH` (default `risk`).
+  Before executing a leaf, the executor — on `SUPER_MODEL_EXECUTOR`, Opus by default — classifies
+  each task and records the review plan in the ledger. A task gets its own review when a later task
+  builds on it, when it touches security-, data- or contract-sensitive code, when it is written
+  from prose or spans several files, or when it cannot be classified. A mechanical, isolated task
+  is reviewed only in the whole-branch review, which always runs and now checks each such task
+  against its brief. A branch-only task is upgraded to its own review if its implementer raises
+  concerns, needs a re-dispatch, or changes files outside its brief; a classification is never
+  lowered. `SUPER_REVIEW_DEPTH=full` restores a review for every task. superrun's Final Report
+  gains a **Review depth** line.
+
 ## 0.11.0 — 2026-10-04
 
 - **The superpowers plugin is no longer required.** `superrun` now executes leaf plans with the

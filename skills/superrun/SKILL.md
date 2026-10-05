@@ -218,8 +218,9 @@ pi-only:end -->
   file); you provide the context about where each task fits.
 - Run the plan **end-to-end, fully autonomously** — do **not** pause for confirmation between tasks
   or before CI pushes.
-- Honor the per-task review (spec compliance and code quality); never skip a review or proceed
-  with unfixed issues.
+- Honor the review plan (superbuild B2a): every task classified `task` gets its spec + quality
+  review, and the whole-branch review always runs; never skip a planned review or proceed with
+  unfixed issues.
 - superbuild returns either **complete** — with its exhaustive list of rulings and the deferred and
   parked items — or **BLOCKED** (B5: a load-bearing conflict). On BLOCKED, do not integrate: go to
   the Final Report's blocked path. Carry every ruling into the Final Report.
@@ -264,10 +265,12 @@ superbuild. Carry it into every dispatch the task loop makes:
    results and never execute anything themselves. If `SUPER_TEST_EVIDENCE=local` (the shipped
    default): superbuild's local RED/GREEN contract applies (B3).
 2. **Conflict routing is split by consequence** (superbuild B5). A **load-bearing** conflict — a
-   later task or stage builds on it, it would change acceptance or constraints, it shows the plan
-   is wrong, or it cannot be classified — is a **BLOCKED** report carrying the finding and the plan
+   later task or stage builds on it, it would change acceptance, constraints, contracts or scope,
+   those commitments contradict each other, or it cannot be classified — is a **BLOCKED** report carrying the finding and the plan
    text it collides with; the caller (a `superagent` loop's escalation ladder, or a human running
-   superrun directly) decides. Anything else is ruled on, ledgered, and listed in the Final Report.
+   superrun directly) decides. A plan **body** that fails the plan's own commitments is not
+   load-bearing: it is fixed in-loop under a ruling. Anything else is ruled on, ledgered, and
+   listed in the Final Report.
    Never call `AskUserQuestion` from the controller.
 3. **Model policy**: dispatch each task-loop role on its
    `.superenv` model key — implementer: `SUPER_MODEL_IMPLEMENTER`, fix-applier:
@@ -331,6 +334,10 @@ pi-only:end -->
    confidence label**; the controller filters to high-confidence findings before acting on or
    surfacing them. Never instruct a reviewer to report only high-confidence issues — Claude
    5-family reviewers apply that filter silently and drop real findings.
+   **Review depth is keyed by `SUPER_REVIEW_DEPTH`** (superbuild B2a). `risk` (the shipped
+   default): the controller — on `SUPER_MODEL_EXECUTOR` — classifies each task before execution;
+   risky tasks get their own review, mechanical isolated ones are reviewed only in the whole-branch
+   review. `full`: every task gets its own review. The whole-branch review always runs.
 5. **Integration is owned by Step 3a**, for attended and unattended callers alike — there is no
    interactive completion menu. (`SUPER_SKIP_FINISHING_HANDOFF` is retired: the key is accepted and
    ignored.)
@@ -588,6 +595,7 @@ you did not confirm landed), say so explicitly rather than reporting it done:
 
     **Findings:** <summary>                    (or: none — superfinish recorded none)
     **Rulings:** <every superbuild ruling, in order: decision — why — cost if wrong>   (or: none)
+    **Review depth:** <N> task-reviewed, <M> branch-only (<SUPER_REVIEW_DEPTH>); upgrades: <list or none>
 
     ⚠️ **Critical:** <only when a finding or blocked task needs attention>
 
