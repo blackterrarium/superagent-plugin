@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.2 — 2026-10-05
+
+- **Git-free projects no longer get a `.gitignore` from the task loop.** `superbuild.sh` wrote a
+  self-ignoring `.superagent-runtime/build/.gitignore` in every mode; under `SUPER_GIT_MODE=none`
+  (`SUPERBUILD_ROOT` set) it now writes none, matching the mode's rule that no git metadata or
+  ignore file is created. Found by the live git-free run on Codex.
+
 ## 0.12.1 — 2026-10-04
 
 - **A plan body that fails the plan's own acceptance is fixed in-loop, not BLOCKED.** superbuild B5
