@@ -73,5 +73,6 @@ wl="$(cd "$T" && PATH="$L/bin:$PATH" SUPERBUILD_ROOT="$L" bash "$SB" workspace "
 [ "$wl" = "$L/.superagent-runtime/build/plan" ] || fail "none-mode workspace path: $wl"
 (cd "$T" && PATH="$L/bin:$PATH" SUPERBUILD_ROOT="$L" bash "$SB" brief "$L/plan.md" 2 >/dev/null) || fail "none-mode brief ran git"
 grep -q 'step two' "$wl/task-2-brief.md" || fail "none-mode brief content"
+[ -z "$(find "$L" -name .gitignore)" ] || fail "none-mode workspace wrote a .gitignore"
 
 echo 'superbuild: PASS'

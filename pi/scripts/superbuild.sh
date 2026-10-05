@@ -13,9 +13,9 @@
 # ledger (progress.md), task briefs, implementer reports and review packages. <root> is
 # $SUPERBUILD_ROOT when set, else the git toplevel of the current directory (the execution
 # worktree). SUPER_GIT_MODE=none callers MUST set SUPERBUILD_ROOT to the recorded project root:
-# `workspace` and `brief` then run no git command, and `.superagent-runtime` is already excluded
-# from workspace-state.py manifests. `package` is git-only; in `none` the controller builds the
-# review package from the manifest compare instead.
+# `workspace` and `brief` then run no git command and write no .gitignore, and
+# `.superagent-runtime` is already excluded from workspace-state.py manifests. `package` is
+# git-only; in `none` the controller builds the review package from the manifest compare instead.
 #
 # Two plans can share a basename (a/plan.md vs b/plan.md), so each workspace records its owning
 # plan in a `plan-path` marker; a directory owned by a different plan is skipped and the slug is
@@ -79,7 +79,8 @@ workspace_dir() {
   fi
 
   # Self-ignoring: keeps the scratch out of `git status` without touching a tracked file.
-  printf '*\n' >"$base/.gitignore"
+  # Not under SUPERBUILD_ROOT: a SUPER_GIT_MODE=none project never gets a .gitignore.
+  [ -n "${SUPERBUILD_ROOT:-}" ] || printf '*\n' >"$base/.gitignore"
   (CDPATH= cd -- "$dir" && pwd)
 }
 
