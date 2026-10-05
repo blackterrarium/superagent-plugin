@@ -273,10 +273,12 @@ superbuild. Carry it into every dispatch the task loop makes:
    results and never execute anything themselves. If `SUPER_TEST_EVIDENCE=local` (the shipped
    default): superbuild's local RED/GREEN contract applies (B3).
 2. **Conflict routing is split by consequence** (superbuild B5). A **load-bearing** conflict — a
-   later task or stage builds on it, it would change acceptance or constraints, it shows the plan
-   is wrong, or it cannot be classified — is a **BLOCKED** report carrying the finding and the plan
+   later task or stage builds on it, it would change acceptance, constraints, contracts or scope,
+   those commitments contradict each other, or it cannot be classified — is a **BLOCKED** report carrying the finding and the plan
    text it collides with; the caller (a `superagent` loop's escalation ladder, or a human running
-   superrun directly) decides. Anything else is ruled on, ledgered, and listed in the Final Report.
+   superrun directly) decides. A plan **body** that fails the plan's own commitments is not
+   load-bearing: it is fixed in-loop under a ruling. Anything else is ruled on, ledgered, and
+   listed in the Final Report.
    Never call `AskUserQuestion` from the controller.
 3. **Model policy**: dispatch each task-loop role on its
    `.superenv` model key — implementer: `SUPER_MODEL_IMPLEMENTER`, fix-applier:

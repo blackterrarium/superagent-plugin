@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.1 — 2026-10-04
+
+- **A plan body that fails the plan's own acceptance is fixed in-loop, not BLOCKED.** superbuild B5
+  now separates a plan's commitments (acceptance rows, Global Constraints, contracts, scope) from
+  its body (prescribed code and steps). When the body fails a commitment, the executor dispatches
+  the smallest fix through the normal fix loop and records a ruling; BLOCKED is kept for conflicts
+  where a commitment itself would have to change, where the fix cannot be determined, or where the
+  fix still fails at the cap. Live runs had handled this case both ways — one fixed it and finished
+  in 51 minutes, another re-planned twice and did not finish.
+- **e2e benches count PRs past `gh`'s 30-row default**, so a reused test remote with more than 30
+  merged PRs no longer fails the outcome assertion.
+
 ## 0.12.0 — 2026-10-04
 
 - **Task review scales with risk.** New `.superenv` key `SUPER_REVIEW_DEPTH` (default `risk`).

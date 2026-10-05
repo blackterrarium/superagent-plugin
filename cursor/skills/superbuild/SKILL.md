@@ -267,14 +267,17 @@ task while a Critical or Important finding is neither fixed nor parked with a ru
 
 A conflict is anything the plan does not settle or settles two ways: a pre-flight contradiction, a
 plan-mandated finding, an ambiguity an implementer raises, a finding still open at the breaker.
-Classify each one by what depends on it.
+Classify each one by what depends on it. Check the body-against-commitments rule below
+first: a conflict it covers is fixed under a ruling even when a later task builds on the same code.
 
 **Load-bearing → BLOCKED.** A conflict is load-bearing when any of these holds:
 
 - a later task, another stage, or a consumer of a produced contract builds on the disputed point;
 - resolving it would change the plan's Global Constraints, an approved acceptance row, a contract
   ID or revision, or the stage's scope — acceptance is never silently widened or weakened;
-- it shows the plan is wrong against its own spec or source agreement, rather than merely silent;
+- the plan's **commitments** themselves are wrong or contradict each other — its acceptance rows,
+  Global Constraints, contracts, or scope against its spec or source agreement — so that no
+  implementation could satisfy them all;
 - it is a real defect, open at the breaker, that later work depends on;
 - the resolution needs an irreversible, destructive, or security-sensitive action, or a side
   effect outside the execution workspace that Step 3a does not already authorize;
@@ -286,6 +289,16 @@ the ledger path. Leave the workspace and ledger in place. The caller — a `supe
 escalation ladder, or the human running superrun — decides; never ask the user from inside the
 loop. For an upfront stage, a broken source, stage, predecessor, or contract assumption is
 `REPLAN-REQUIRED` as superrun Step 1 defines it, never an in-place ruling.
+
+**The plan's body against the plan's own commitments → fix under a ruling.** When code or steps
+the plan prescribes — even "exactly this content" — fail an approved acceptance row, a Global
+Constraint, or a contract that the same plan commits to, the commitments win and the body is the
+defect. This is not load-bearing: nothing the plan promised changes. Dispatch the fix through the
+normal fix loop (or the final fix wave), smallest change that satisfies the commitment, and ledger
+`Ruling: depart from the plan body at <where> — <which commitment it failed> — <what it costs if
+wrong>`. It becomes BLOCKED only if the fix is not determinable from the commitments, would itself
+change one of them, or is still failing when the fix loop's cap or the single final fix wave is
+spent.
 
 **Everything else → rule and continue.** A local ambiguity nothing downstream consumes, a
 contestable reviewer point, a real but isolated defect at the breaker: decide it, with the spec as
@@ -333,6 +346,7 @@ integrated and closed out.
 | "This finding is obviously wrong, I'll drop it" | NO. Adjudicate only at the cap, and ledger the ruling. |
 | "One more round will converge" | NO. Past five rounds the failure is structural — adjudicate under B5. |
 | "A later task depends on this, but I'm fairly sure of the answer" | NO. Load-bearing is BLOCKED; your confidence is not the test. |
+| "The plan says 'exactly this content', and that content fails acceptance — BLOCKED" | NO. Acceptance is the authority; the body is the defect. Fix it under a ruling. BLOCKED is for commitments that must change. |
 | "It's only an ambiguity — I'll stop and report to be safe" | NO. A minor conflict nothing consumes gets a ledgered ruling; a parked loop costs a tick. |
 | "This task is small, I'll mark it `branch`" | NO. Size is not a criterion. If a later task consumes it, or you cannot tell, it is `task`. |
 | "The review plan said `task`, but the diff turned out trivial — skip it" | NO. A `task` classification is never lowered. |
