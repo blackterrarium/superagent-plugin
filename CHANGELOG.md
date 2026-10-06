@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0 — 2026-10-06
+
+- **Cursor support is deprecated.** The Cursor harness and its generated `cursor/` build are frozen:
+  no new features, no further testing, and removal in a future release. Nothing is removed yet —
+  `SUPER_HARNESS=cursor` and `cursor:` role pins still work. `superagent-tick.sh`, `launch.sh`,
+  `install-timer.sh` and `role-bridge.sh` now print a deprecation warning to stderr when they run
+  the Cursor harness, `init` warns when the configuration names it, and the README, the generated
+  Cursor README and skill banner, and the Cursor marketplace manifest are marked deprecated. Move
+  Cursor loops to Claude Code, Codex or Pi.
+
 ## 0.12.2 — 2026-10-05
 
 - **Git-free projects no longer get a `.gitignore` from the task loop.** `superbuild.sh` wrote a

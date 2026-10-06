@@ -134,6 +134,9 @@ answer; init or a configuration edit does not provide that authorization.
    [scripts/README.md](../../scripts/README.md#cron-fallback-instead-of-systemd)). Run
    `uname -s` and say which scheduler this host would use — planning-only usage
    (`supergoal`/`superplan`) is host-independent.
+   **Cursor is deprecated (0.13.0).** If `SUPER_HARNESS=cursor`, or any `SUPER_MODEL_*` key names
+   the `cursor` harness, WARN once: "Cursor support is deprecated as of 0.13.0 and will be removed
+   in a future release — move to claude, codex or pi." Continue; it is not an error yet.
 5. **Bridge targets.** For every harness that appears as a *bridged* role harness in the resolved
    config (item 5 of the validation below): its CLI must be on PATH — `claude`, `codex`, `agent`
    (Cursor), `pi` — else **ABORT** with an install hint (claude: `npm install -g

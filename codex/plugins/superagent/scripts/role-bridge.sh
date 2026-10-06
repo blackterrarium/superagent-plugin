@@ -60,6 +60,10 @@ done
 # value mean "this harness": resolve to SUPER_HARNESS here so no caller has to remember to.
 case "$harness" in inherit|"") harness="${SUPER_HARNESS:-claude}" ;; esac
 case "$harness" in claude|codex|cursor|pi) ;; *) echo "role-bridge: --harness must be claude|codex|cursor|pi (got '$harness')" >&2; exit 64 ;; esac
+# Cursor support is deprecated (0.13.0); this script does not source _common.sh, so warn inline.
+if [ "$harness" = cursor ] && [ -z "${SUPERAGENT_CURSOR_DEPRECATION_WARNED:-}" ]; then
+  echo "role-bridge: warning — the Cursor harness is deprecated as of 0.13.0 and will be removed in a future release; move to claude, codex or pi" >&2
+fi
 [ -d "$cwd" ] || { echo "role-bridge: --cwd '$cwd' is not a directory" >&2; exit 64; }
 [ -f "$prompt_file" ] || { echo "role-bridge: --prompt-file '$prompt_file' not found" >&2; exit 64; }
 case "$tools" in

@@ -9,6 +9,9 @@ related skills: superagent, superloop
 <!-- GENERATED FILE — Cursor build. Do not edit by hand: edit the canonical skill under skills/
      in the plugin repository and re-run scripts/build-cursor-skills.sh. -->
 
+> **DEPRECATED (0.13.0).** The Cursor build is frozen and will be removed in a future release;
+> use the Claude Code, Codex or Pi build.
+>
 > **Cursor build notes.**
 > - Only the **external** driver exists in this build. Claude Code's in-session cron driver and its
 >   `CronCreate` / `CronList` / `CronDelete` and `Monitor` tools do **not** exist on Cursor — treat

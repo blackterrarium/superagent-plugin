@@ -46,6 +46,7 @@ done
 
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
 case "$HARNESS" in claude|cursor|codex|pi) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor|codex|pi)" >&2; exit 2 ;; esac
+superagent_warn_deprecated_harness "$HARNESS" install-timer.sh
 
 # Resolve LOOP_FILE to an absolute path (its dir must already exist).
 if [[ ! -d "$(dirname "$LOOP_FILE_IN")" ]]; then
