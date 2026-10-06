@@ -107,11 +107,20 @@ ensure_claude_bin() {
 # ---------------------------------------------------------------------------
 # Harness dispatch — which agent CLI the external driver fires per tick.
 #   SUPER_HARNESS=claude (default) -> the Claude CLI (`claude`)
-#   SUPER_HARNESS=cursor           -> the Cursor CLI (`agent`, older `cursor-agent`)
+#   SUPER_HARNESS=cursor           -> the Cursor CLI (`agent`, older `cursor-agent`) — DEPRECATED
 #   SUPER_HARNESS=codex            -> the OpenAI Codex CLI (`codex`)
 #   SUPER_HARNESS=pi               -> the Pi CLI (`pi`)
 # Resolution: process env > <repo>/.superenv > plugin default (via load_superenv).
 # ---------------------------------------------------------------------------
+
+# Cursor support is deprecated (0.13.0): frozen, no longer tested, scheduled for removal.
+# superagent_warn_deprecated_harness <harness> <caller> — one stderr line per process tree.
+superagent_warn_deprecated_harness() {
+  [[ "${1:-}" == cursor ]] || return 0
+  [[ -z "${SUPERAGENT_CURSOR_DEPRECATION_WARNED:-}" ]] || return 0
+  echo "${2:-superagent}: warning — the Cursor harness is deprecated as of 0.13.0 and will be removed in a future release; move to claude, codex or pi" >&2
+  export SUPERAGENT_CURSOR_DEPRECATION_WARNED=1
+}
 
 superagent_harness() {
   local h="${SUPER_HARNESS:-claude}"

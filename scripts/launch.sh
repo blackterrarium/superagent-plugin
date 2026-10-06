@@ -49,6 +49,7 @@ while [[ $# -gt 0 ]]; do
 done
 case "$OUTPUT_FORMAT" in stream|text) ;; *) echo "bad --output '$OUTPUT_FORMAT' (want stream|text)" >&2; exit 2 ;; esac
 case "$HARNESS" in claude|cursor|codex|pi) ;; *) echo "bad --harness '$HARNESS' (want claude|cursor|codex|pi)" >&2; exit 2 ;; esac
+superagent_warn_deprecated_harness "$HARNESS" launch.sh
 case "$SUPERVISOR" in superagent|supercode) ;; *) echo "invalid supervisor: $SUPERVISOR" >&2; exit 2 ;; esac
 export SUPER_HARNESS="$HARNESS"
 if [[ "$SUPERVISOR" == supercode ]]; then

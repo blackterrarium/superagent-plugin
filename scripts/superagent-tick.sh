@@ -167,6 +167,7 @@ fi
 # Put the right binary on PATH (systemd/cron use a minimal PATH without
 # ~/.local/bin) and fail fast if it's still missing, then verify gh auth.
 HARNESS="$(superagent_harness)" || exit 6
+superagent_warn_deprecated_harness "$HARNESS" superagent-tick
 ensure_cli_bin || exit 5
 ensure_gh_auth || exit 4
 

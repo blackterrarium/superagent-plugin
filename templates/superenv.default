@@ -76,7 +76,7 @@ SUPER_MODEL_REPLANNER=claude:claude-opus-5-5
 SUPER_EFFORT_REPLANNER=high
 
 # ── Harness ───────────────────────────────────────────────────────
-SUPER_HARNESS=claude                    # claude | cursor | codex | pi — which agent CLI the external driver fires per tick
+SUPER_HARNESS=claude                    # claude | codex | pi (cursor: DEPRECATED, will be removed) — which agent CLI the external driver fires per tick
 SUPER_CODEX_SANDBOX=danger-full-access  # codex harness only: danger-full-access (no sandbox — claude-harness parity; workspace-write keeps .git/ read-only, breaking git fetch/commit) | workspace-write
 SUPER_PI_SUBAGENTS=required             # Pi requires pi-subagents >= 0.58.0 and its subagent tool; legacy recommended aliases required (reported); off is an error
 

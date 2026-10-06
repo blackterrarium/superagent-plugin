@@ -2,8 +2,8 @@
 
 **superagent** turns a goal description into a tree of self-reviewed plans, then executes that tree
 to completion without a human babysitting every step. It ships as a plugin for **Claude Code** (the
-primary harness, full feature set) with generated builds for **OpenAI Codex**, **Cursor**, and
-**Pi** that run the unattended driver.
+primary harness, full feature set) with generated builds for **OpenAI Codex** and **Pi** that run the unattended driver. A **Cursor**
+build also ships but is [deprecated](#cursor-deprecated).
 
 It has two halves:
 
@@ -19,7 +19,7 @@ It has two halves:
 - [Prerequisites](#prerequisites)
 - [Running the loop](#running-the-loop)
 - [Configuration](#configuration)
-- [Other harnesses: Codex, Cursor, Pi](#other-harnesses-codex-cursor-pi)
+- [Other harnesses: Codex, Pi, Cursor (deprecated)](#other-harnesses-codex-cursor-pi)
 - [Skill reference](#skill-reference)
 - [Design notes](#design-notes)
 - [Migrating a repo with in-tree copies](#migrating-a-repo-with-in-tree-copies)
@@ -505,7 +505,7 @@ coding-loop skills, never by the tick.
 
 | Key | Default | Meaning |
 |---|---|---|
-| SUPER_HARNESS | `claude` | `claude` \| `cursor` \| `codex` \| `pi`. Which CLI the external driver fires per tick (`claude -p` / `agent -p` / `codex exec` / `pi -p`). |
+| SUPER_HARNESS | `claude` | `claude` \| `codex` \| `pi` (`cursor` is deprecated and will be removed). Which CLI the external driver fires per tick (`claude -p` / `agent -p` / `codex exec` / `pi -p`). |
 | SUPER_CODEX_SANDBOX | `danger-full-access` | Sandbox for the Codex harness and any codex-bridged role. `danger-full-access` matches the unsandboxed claude harness. `workspace-write` keeps the repo's top-level `.git/` read-only, so git fetch/commit fail and the sync gate parks the loop. Out-of-domain values abort the tick. |
 | SUPER_PI_SUBAGENTS | `required` | Pi requires `pi-subagents` ≥ 0.58.0 and its `subagent` tool. Init aborts if the package is missing/old; superrun stops if the tool is unavailable. Legacy `recommended` is a deprecated alias of `required`, reported at runtime; `off` is an error. |
 
@@ -657,7 +657,13 @@ bundled-template access, `spawn_agent` availability, the file-read tick entry wi
 and the effort override. Remaining gap: no end-to-end multi-tick loop has been driven to `DONE`
 on Codex. Re-run with `bash scripts/codex-smoke.sh` from a clone.
 
-### Cursor (experimental)
+### Cursor (deprecated)
+
+> **Deprecated as of 0.13.0.** Cursor support is frozen: it gets no new features, is no longer
+> tested, and will be removed in a future release. Existing Cursor loops keep working for now and
+> print a deprecation warning on every tick, launch and bridged call; `init` warns when
+> `SUPER_HARNESS=cursor` or a role is pinned to `cursor:`. Move to Claude Code, Codex or Pi.
+> No end-to-end loop was ever driven to `DONE` on Cursor.
 
 > **Unverified** as a bridge target and as a supervisor for bridged roles. See
 > [Bridging a role to another harness](#bridging-a-role-to-another-harness).
