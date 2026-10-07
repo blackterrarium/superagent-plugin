@@ -65,8 +65,12 @@ whole completed task sequences. The ledger, not your recollection, is the record
 2. The ledger is `<dir>/progress.md`, first line `# superbuild ledger — plan: <leaf plan path>`.
    Create it if absent. If it exists and names this plan, **resume**: a task with a
    `Task <N>: complete` line is DONE — never re-dispatch it; a task whose last line is a fix round
-   resumes at the next round; `Final review: dispatched` means resume B6; a `Final review: clean` or
-   `Final review: <K> parked` line means the loop already finished — go straight to B7.
+   resumes at the next round; `Final review: dispatched` means resume B6; a
+   `Final review: fix wave <W>/2 started` line means that wave was interrupted — resume it as B6
+   step 5 says; a `Final review: fix wave <W>/2 (…)` line means that wave and its re-review are
+   spent — resume B6 at the decision that follows it, reading the open findings from the file the
+   line names; a `Final review: clean` or `Final review: <K> parked` line means the loop already
+   finished — go straight to B7.
    After compaction, trust the ledger and (in `github`) `git log` over your memory.
 3. Read the leaf plan once. Note its Global Constraints, its approved acceptance rows and their
    source, and track one todo per task. If the plan names a spec or source agreement, read that
@@ -296,7 +300,7 @@ defect. This is not load-bearing: nothing the plan promised changes. Dispatch th
 normal fix loop (or the final fix wave), smallest change that satisfies the commitment, and ledger
 `Ruling: depart from the plan body at <where> — <which commitment it failed> — <what it costs if
 wrong>`. It becomes BLOCKED only if the fix is not determinable from the commitments, would itself
-change one of them, or is still failing when the fix loop's cap or the single final fix wave is
+change one of them, or is still failing when the fix loop's cap or the final fix waves (B6) are
 spent.
 
 **Everything else → rule and continue.** A local ambiguity nothing downstream consumes, a
@@ -317,10 +321,40 @@ silent discard is forbidden: every decision you take is a ledger line and reache
    commit range. Those tasks have had no reviewer: the branch reviewer checks each against its
    brief. Ledger `Final review: dispatched`.
 3. Filter by confidence as in B4.3. If high-confidence Critical or Important findings remain, or a
-   deferred item is marked must-fix: dispatch **ONE** FIX_APPLIER with the complete list — not one
-   fixer per finding — then exactly one RE_REVIEWER over the fix range. There is no second fix
-   wave: adjudicate residuals under B5 (a residual load-bearing finding is BLOCKED).
-4. Ledger `Final review: clean | <K> parked`.
+   deferred item is marked must-fix, run **fix wave 1**:
+   - Write the complete list, each finding verbatim, to `<dir>/final-findings-1.md`, and ledger
+     `Final review: fix wave 1/2 started (from <base7>)` — the head the review saw (in `none`, the
+     snapshot it was built from).
+   - Dispatch **ONE** FIX_APPLIER with that file — not one fixer per finding — then exactly one
+     RE_REVIEWER over the fix range.
+   - Write what the re-review leaves open — unresolved findings, new high-confidence
+     Critical/Important breakage in the fix diff, and any must-fix deferred item still unfixed —
+     verbatim to `<dir>/final-findings-2.md` (an empty file if nothing is open), then ledger
+     `Final review: fix wave 1/2 (<X> addressed, <Y> open — <one-liners>; <base7>..<head7>; open: final-findings-2.md)`.
+4. **A second wave, once, for residuals that are only implementation defects.** If
+   `final-findings-2.md` is not empty, run one more wave only when **every** entry in it passes
+   all three tests:
+   - **No commitment moves.** Fixing it changes no approved acceptance row, Global Constraint,
+     contract ID or revision, and not the stage's scope.
+   - **The fix is determinable.** It follows from the plan's commitments without a ruling on a
+     load-bearing conflict — an ordinary defect, or the plan's body failing its own commitments
+     (B5).
+   - **The wave converged.** The first wave addressed at least one finding, and
+     `final-findings-2.md` lists strictly fewer findings than `final-findings-1.md`. A wave that fixed
+     nothing, or that left as many findings open as it was given, did not converge.
+
+   Then ledger `Final review: fix wave 2/2 started (from <base7>)`, dispatch **ONE** FIX_APPLIER
+   with `final-findings-2.md` and exactly one RE_REVIEWER over the second fix range, write what is
+   still open to `<dir>/final-findings-3.md`, and ledger `Final review: fix wave 2/2 (…)` in the
+   same form. If any entry fails a test, skip the second wave. There is no third wave: adjudicate
+   whatever is still open under B5 (a residual load-bearing finding is BLOCKED).
+5. **Resuming an interrupted wave.** When the ledger's last line is
+   `Final review: fix wave <W>/2 started (from <base7>)`, the wave is neither spent nor to be
+   started over: re-dispatch its FIX_APPLIER with `final-findings-<W>.md`, telling it that earlier
+   work on these findings may already be in the workspace and to finish what is missing; then
+   dispatch the RE_REVIEWER over `<base7>..HEAD` — the whole wave, not only the new work — and
+   write the wave's closing ledger line. An interrupted wave counts once.
+6. Ledger `Final review: clean | <K> parked`.
 
 ## B7 — Hand back to superrun
 

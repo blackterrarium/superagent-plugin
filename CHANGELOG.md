@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.1 — 2026-10-06
+
+- **The final review may run a second fix wave before a stage is BLOCKED.** superbuild B6 allowed
+  one FIX_APPLIER pass after the whole-branch review; any Important finding still open after it
+  was adjudicated under B5, and a load-bearing one stopped the stage. A second wave is now allowed
+  once, when every open finding is an implementation defect: its fix moves no acceptance row,
+  Global Constraint, contract or scope, is determinable from the plan's commitments, and the first
+  wave converged — it addressed at least one finding and left strictly fewer open than it was
+  given. Each wave writes its findings to a file in the plan's scratch directory
+  (`final-findings-<W>.md`) and brackets itself with two ledger lines
+  (`Final review: fix wave <W>/2 started …`, then the result), so a controller resuming after
+  compaction or a CI wait has the full findings, and an interrupted wave is finished and
+  re-reviewed whole rather than counted as spent or started over. A must-fix deferred item still
+  open after the first wave is eligible on the same tests. There is still no third wave,
+  and a finding that would change a commitment still goes straight to B5. A live upfront run had
+  spent a full replan generation — three ticks and four pull requests — on two fixture edits left
+  by the single wave.
+
 ## 0.13.0 — 2026-10-06
 
 - **Cursor support is deprecated.** The Cursor harness and its generated `cursor/` build are frozen:

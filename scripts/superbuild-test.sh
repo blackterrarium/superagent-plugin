@@ -75,4 +75,17 @@ wl="$(cd "$T" && PATH="$L/bin:$PATH" SUPERBUILD_ROOT="$L" bash "$SB" workspace "
 grep -q 'step two' "$wl/task-2-brief.md" || fail "none-mode brief content"
 [ -z "$(find "$L" -name .gitignore)" ] || fail "none-mode workspace wrote a .gitignore"
 
+# The final-review rules live in the skill's prose; pin the ones a rewrite must not lose.
+SK="$ROOT/skills/superbuild/SKILL.md"
+pin() { grep -qF -- "$1" "$SK" || fail "superbuild SKILL.md lost: $1"; }
+pin 'Final review: fix wave 1/2 started (from <base7>)'
+pin 'Final review: fix wave 2/2 started (from <base7>)'
+pin 'final-findings-1.md'
+pin 'lists strictly fewer findings than `final-findings-1.md`'
+pin 'The first wave addressed at least one finding'
+pin 'any must-fix deferred item still unfixed'
+pin 'There is no third wave'
+pin 'An interrupted wave counts once'
+grep -qF 'no longer than the list' "$SK" && fail "superbuild SKILL.md: convergence test must be strict"
+
 echo 'superbuild: PASS'
