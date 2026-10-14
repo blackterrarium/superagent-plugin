@@ -223,9 +223,33 @@ pi-only:end -->
 - Honor the review plan (superbuild B2a): every task classified `task` gets its spec + quality
   review, and the whole-branch review always runs; never skip a planned review or proceed with
   unfixed issues.
-- superbuild returns either **complete** — with its exhaustive list of rulings and the deferred and
-  parked items — or **BLOCKED** (B5: a load-bearing conflict). On BLOCKED, do not integrate: go to
-  the Final Report's blocked path. Carry every ruling into the Final Report.
+- superbuild returns **complete** — with its exhaustive list of rulings and the deferred and
+  parked items — **BLOCKED** (B5: a load-bearing conflict, with a cap summary when a cap ended it),
+  or **CHECKPOINT** (B4.6: the dispatch deadline is near). On BLOCKED, do not integrate: go to
+  the Final Report's blocked path. On CHECKPOINT, return a **CHECKPOINT report** (below) and stop.
+  Carry every ruling into the Final Report.
+
+#### CHECKPOINT — yield before the wall-clock limit
+
+A `superagent` dispatch runs under `SUPER_EXECUTOR_TIMEOUT_MIN`; `role-bridge.sh` exports its
+deadline as `SUPER_EXECUTOR_DEADLINE_EPOCH`. superbuild checks it at every task boundary (B4.6); the
+same check applies before you start Step 3a's triage fix, the approved-change fix or a targeted
+round; a CHECKPOINT taken there also carries the CI-PENDING fields and the triage record path, and
+names the Step 3a step as **Next**. Below the margin,
+return this as your final message instead of being killed mid-task. Nothing is lost: the worktree,
+its commits and the ledger stay in place, and the next dispatch resumes through **Resume entry —
+checkpoint**. A CHECKPOINT report is a valid yield, not a failure and not your Final Report.
+
+    ## Superrun CHECKPOINT
+    **Leaf plan:** <full path to the target leaf plan>
+    **Root:** <full path to <PLAN.md>>
+    **Worktree:** <absolute path — left in place>   (local mode: the project root)
+    **Branch:** <branch name>   (or N/A in local mode)
+    **Ledger:** <path to progress.md>
+    **Done:** <tasks complete>/<tasks total>; <final review state>
+    **Next:** <the next ledger step>
+    **Longest command:** <command — minutes, from the ledger's Long command lines, or none>
+    **Execution snapshot:** <as in CI-PENDING>
 - When the tasks are done, superrun integrates the code PR **itself**, autonomously, per **Step 3a**
   below. Capture the resulting **code PR** URL for the Final Report.
 
@@ -585,11 +609,18 @@ privileged service logs, and name what that left unread.
   (superbuild B4.4 *Every round*) — ledger `CI fix <n>/2 (<base7>..<head7>)`, push, and return to
   the CI-green gate above (under `superagent`, that is a fresh CI-PENDING report). At most **two**
   triage fixes per leaf for the same failing step; a third red run on that step is BLOCKED with every
-  triage record.
+  triage record and a cap summary in `<dir>/cap-summary-ci.md` (superbuild B5's four fields, one
+  entry per triage record).
+- **A `[planner]` constraint in the way** — a plan restriction tagged `[planner]` (a diagnostic budget,
+  a ban on rerunning a job after a fix) may be relaxed under a superbuild B5 ruling when triage shows
+  the fix needs it; ledger the ruling and proceed as above. `[source]` and `[owner]` restrictions
+  never are.
 - **Out of scope, or touching a protected surface** — BLOCKED, with the triage record and the exact
   change the fix needs (file, old value, new value) in the Final Report. Do not work around a
   protected limit inside the stage, and do not build observation tooling to strengthen a cause the
-  evidence already supports.
+  evidence already supports. When a genuinely unexplained failure needs instrumentation, it stays in
+  scratch or on a throwaway branch (superbuild: *Keep investigation out of the delivery*); push the
+  throwaway branch for a diagnostic CI run, never the stage's PR.
 - **`unknown` after reading the log** — BLOCKED with the triage record, naming what was read and the
   cheapest further read-only check.
 
@@ -617,6 +648,32 @@ old terminal packet is a redirect rather than execution evidence for that succes
 target/receipt validation, use the successor's authorized reused branch/worktree, capture its new
 execution snapshot, and run its remaining/corrective tasks, reviews, and tests through Steps 2–3 before
 any merge or closeout.
+
+### Resume entry — checkpoint (superagent-driven)
+
+When superrun is invoked with a **CHECKPOINT packet**, first require its execution snapshot. Enter the
+recorded worktree (local mode: the recorded project under the inherited lock), verify the branch head
+against the ledger's last range, and re-run the Step 1 execution-entry checks for the recorded identity
+— a changed active identity or a pending barrier is handled as there. Then re-invoke superbuild on the
+same leaf: it resumes from the ledger (B1) and runs to completion, BLOCKED or the next CHECKPOINT. When
+**Next** names a Step 3a step (a CI fix, an approved change, a targeted round), resume at that step
+with the packet's CI fields and triage record instead of re-invoking superbuild. Continue with Step 3a
+once superbuild returns complete.
+
+**Single-step guidance** (from the supervisor after repeated timeouts) may accompany this entry or
+an ordinary dispatch. Pass it to superbuild in Step 3 either way: superbuild then runs exactly one
+ledger step before yielding CHECKPOINT (B4.6).
+
+### Resume entry — targeted round (superagent-driven)
+
+When superrun is invoked with a **targeted round** — the blocked attempt's packet (leaf plan, root,
+worktree, branch, PR url, execution snapshot), the cap summary's path, and the one change the panel
+chose from it (with its Decision ID) — do not re-run Steps 1–3. Enter and verify the worktree and run
+the integration-authority gate as in **Resume entry — approved protected change** step 1. Dispatch
+one FIX_APPLIER with exactly that change as its finding, then one RE_REVIEWER over the fix range,
+and ledger `Targeted round: <finding> (<Decision ID>) (<base7>..<head7>)`. If the re-review closes
+the finding, push and return to Step 3a's CI-green gate; if not, return BLOCKED with the updated cap
+summary. One targeted round per finding: a second request for the same finding is BLOCKED.
 
 ### Resume entry — approved protected change (superagent-driven)
 
@@ -688,6 +745,7 @@ you did not confirm landed), say so explicitly rather than reporting it done:
     **Findings:** <summary>                    (or: none — superfinish recorded none)
     **Rulings:** <every superbuild ruling, in order: decision — why — cost if wrong>   (or: none)
     **Review depth:** <N> task-reviewed, <M> branch-only (<SUPER_REVIEW_DEPTH>); upgrades: <list or none>
+    **Cap summary:** <per open finding at a cap: tried — why it did not land — smallest closing change (in scope?; protected?)>   (or: none)
     **CI triage:** <per red run: class — best-supported cause (facts; not checked) — cheapest fix (files; in scope?; protected?) — applied / not applied>   (or: none)
 
     ⚠️ **Critical:** <only when a finding or blocked task needs attention>
@@ -698,6 +756,8 @@ completion and **do not merge** the code PR: report the blocker plainly, note wh
 and still run `superagent:superfinish` so the partial outcome is recorded honestly. A CI-red blocker
 always carries its **CI triage** record. A blocker whose fix needs a protected surface names the exact
 change — file, old value, new value, and the evidence in two or three lines — so the caller can ask
-for exactly that change.
+for exactly that change. A blocker issued at a cap (fix rounds, final fix waves, CI-triage fixes)
+carries the **cap summary**: for each open finding, what was tried, why it did not land, the smallest
+change that would close it, and whether that change is in scope and touches a protected surface.
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.

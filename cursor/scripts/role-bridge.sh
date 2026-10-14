@@ -103,6 +103,24 @@ echo "role-bridge: log=$log" >&2
 # consumes and clears this label; it is not proof of actual runtime identity.
 export SUPERAGENT_ROLE="$role"
 start_epoch="$(date +%s)"
+# An executor child (superrun) runs under the caller's SUPER_EXECUTOR_TIMEOUT_MIN wall-clock cap.
+# Export its deadline so superrun can yield a CHECKPOINT at a task boundary instead of being
+# killed mid-task. A deadline the caller already set wins (it started its clock first); an
+# invalid timeout exports nothing rather than a wrong deadline. When the external tick itself runs
+# under TICK_TIMEOUT, superagent-tick.sh exports SUPERAGENT_TICK_DEADLINE_EPOCH and the earlier of
+# the two deadlines applies.
+if [ "$tools" = executor ] && [ -z "${SUPER_EXECUTOR_DEADLINE_EPOCH:-}" ]; then
+  timeout_min="${SUPER_EXECUTOR_TIMEOUT_MIN:-120}"
+  if printf '%s' "$timeout_min" | grep -Eq '^[1-9][0-9]{0,6}$'; then
+    deadline="$(( start_epoch + timeout_min * 60 ))"
+    tick_deadline="${SUPERAGENT_TICK_DEADLINE_EPOCH:-}"
+    if printf '%s' "$tick_deadline" | grep -Eq '^[1-9][0-9]*$' && [ "$tick_deadline" -lt "$deadline" ]; then
+      deadline="$tick_deadline"
+    fi
+    export SUPER_EXECUTOR_TIMEOUT_MIN="$timeout_min"
+    export SUPER_EXECUTOR_DEADLINE_EPOCH="$deadline"
+  fi
+fi
 echo "role-bridge: start=$(date -u '+%Y%m%dT%H%M%SZ') harness=$harness model=$model effort=$effort tools=$tools role=$role cwd=$cwd" >>"$log"
 trailer() {  # trailer <exit-code>
   echo "role-bridge: end=$(date -u '+%Y%m%dT%H%M%SZ') exit=$1 secs=$(( $(date +%s) - start_epoch )) result_bytes=$(printf '%s' "$result" | wc -c | tr -d ' ')" >>"$log"

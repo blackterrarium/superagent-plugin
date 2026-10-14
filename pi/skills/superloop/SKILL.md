@@ -663,6 +663,19 @@ it under `## Decisions` (option + one-line rationale + "panel 2/3" or "3/3"), th
 - a **protected-change request** → the panel has chosen to ask, not to approve: go straight to Rung 2
   and write the yes/no protected-change block. Converging on it never applies the change.
 
+**Constraint origins.** A plan restriction tagged `[planner]` (superreplan's origin rule) binds the
+panel no more than it binds the executor: an adopted option may relax one, recorded under
+`## Decisions` with the reason. A `[source: …]` or `[owner: …]` restriction is never relaxed by a vote.
+Exhausting a `[planner]` budget — a diagnostic attempt count, an evidence lane — is not by itself a
+reason for Rung 2.
+
+**At a cap.** When the blocker is a cap (fix rounds, final fix waves, CI-triage fixes), the packet
+carries the executor's cap summary — for each open finding, what was tried, why it did not land, the
+smallest change that would close it, and whether that change is in scope and protected. Choose among
+one more targeted round on exactly that change (Retry, with the change as guidance — at most once per
+finding per leaf), a protected-change request when the change touches a protected surface, or a
+re-plan.
+
 ### Repeat check (before every Rung 2)
 Before writing a pending decision, compare it with the `## Decisions` history. When an earlier owner
 decision concerned the same PR and the same failing CI step or blocker, the new block must:

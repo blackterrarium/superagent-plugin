@@ -22,9 +22,15 @@ call: you wait for the child's final message. One implementing subagent at a tim
 writers in one workspace, never a background or parallel run.
 
 **Run to the end.** Do not pause between tasks, ask "should I continue?", or post progress
-summaries. Exactly two things end the loop early: a **BLOCKED** outcome under B5, or a role
+summaries. Exactly three things end the loop early: a **BLOCKED** outcome under B5, a role
 dispatch that cannot be made (missing definition, missing subagent tool — a hard error per the
-profile).
+profile), or a **CHECKPOINT** yield at a task boundary because the dispatch deadline is near (B4.6).
+
+**Keep investigation out of the delivery.** Instrumentation, probes, timing hooks or other tooling
+written to diagnose a failure never enter this branch's commits unless the plan's scope names them as
+a deliverable. Keep them uncommitted in the plan's scratch directory, or on a separate throwaway
+branch outside this worktree's branch; if a diagnostic run needs CI, push the throwaway branch, never
+the stage's PR. Their tests must never join the suite the stage delivers.
 
 ## B1 — Workspace and ledger
 
@@ -45,7 +51,9 @@ whole completed task sequences. The ledger, not your recollection, is the record
    step 5 says; a `Final review: fix wave <W>/2 (…)` line means that wave and its re-review are
    spent — resume B6 at the decision that follows it, reading the open findings from the file the
    line names; a `Final review: clean` or `Final review: <K> parked` line means the loop already
-   finished — go straight to B7.
+   finished — go straight to B7. A last line `CHECKPOINT: … — next: <step>` means an earlier
+   dispatch yielded at its deadline (B4.6): resume at the step it names, applying the rule above for
+   the ledger line before it (a spent or started fix wave, an open-findings file).
    After compaction, trust the ledger and (in `github`) `git log` over your memory.
 3. Read the leaf plan once. Note its Global Constraints, its approved acceptance rows and their
    source, and track one todo per task. If the plan names a spec or source agreement, read that
@@ -235,7 +243,8 @@ A round is one fix dispatch plus one scoped re-review.
 
 **The breaker.** If round 5 leaves findings open, stop dispatching and adjudicate each one under
 **B5**. Adjudicate only at the cap — ending a loop early by adjudication is pre-judging under
-another name.
+another name. First write a **cap summary** (B5) for the open findings to
+`<dir>/cap-summary-task-<N>.md`.
 
 ### B4.5 Complete the task
 
@@ -244,6 +253,27 @@ When the review is clean, or every open finding is parked with a ruling at the c
 `branch`-depth task append
 `Task <N>: complete (<base7>..<head7>, review: branch)`. Never start the next
 task while a Critical or Important finding is neither fixed nor parked with a ruling.
+
+**Long commands.** Whenever a single command you or a child ran took more than 10 minutes — a full
+test gate, a build, a local stress run — ledger `Long command: <command> — <minutes> min`. The
+deadline check below and a supervisor recovering from a timed-out dispatch both read these lines.
+
+### B4.6 Deadline check — yield before the wall clock
+
+A dispatched executor runs under a hard wall-clock limit. When it is passed one, the environment
+holds `SUPER_EXECUTOR_DEADLINE_EPOCH` (Unix seconds) and `SUPER_EXECUTOR_TIMEOUT_MIN`. At every task
+boundary — after a `Task <N>: complete` line, and before dispatching the final review or a final fix
+wave — compute the time left (`$(( SUPER_EXECUTOR_DEADLINE_EPOCH - $(date +%s) ))`) and the
+margin: 20% of the limit, or the longest `Long command` in the ledger, whichever is larger. If the
+time left is below the margin, do not start the next unit of work: ledger
+`CHECKPOINT: <tasks done>/<tasks total> — next: <the next ledger step>`, commit nothing extra, and
+return a **CHECKPOINT** outcome to superrun with the ledger path and the next step. Work in the
+workspace stays in place; the next dispatch resumes from the ledger (B1). With no deadline in the
+environment (a human running superrun), skip this check.
+
+When the dispatch carries **single-step guidance** (the supervisor's response to repeated timeouts),
+run exactly the next ledger step — one task with its review, or one final-review stage — then return
+CHECKPOINT regardless of the time left.
 
 ## B5 — Conflicts: rule on the minor, block on the load-bearing
 
@@ -286,6 +316,28 @@ wrong>`. It becomes BLOCKED only if the fix is not determinable from the commitm
 change one of them, or is still failing when the fix loop's cap or the final fix waves (B6) are
 spent.
 
+**Constraint origin.** A restriction in the plan may carry an origin tag: `[source: …]` (a cited
+project document or protected surface), `[owner: …]` (a cited recorded answer), or `[planner]`
+(added by a planner, refiner or replanner on its own judgment). When a constraint tagged
+`[planner]` stands in the way of the best-supported fix — a diagnostic budget, a ban on rerunning a
+job, an excluded log source — you may relax it under a ruling, without the owner:
+`Ruling: relax [planner] constraint "<text>" — <why the evidence needs it> — <what it costs if
+wrong>`. A `source` or `owner` constraint is never relaxed this way; a conflict with one is
+load-bearing. An untagged constraint is not `[planner]` for this purpose.
+
+**At a cap, report the cheapest unblock.** Whenever a cap ends work with findings still open — the
+breaker after round 5, or the final review with no wave left — write a **cap summary** before you
+adjudicate. For each open finding:
+
+- what was tried, round by round;
+- why it did not land;
+- the smallest change that would close it (files and the change itself);
+- whether that change is in this stage's scope, and whether it touches a protected surface.
+
+A BLOCKED packet issued at a cap carries the cap summary's path and content. It lets the caller
+choose between one more targeted round on exactly that change, a protected-change request, or a
+re-plan — with the information in hand instead of a bare "cap reached".
+
 **Everything else → rule and continue.** A local ambiguity nothing downstream consumes, a
 contestable reviewer point, a real but isolated defect at the breaker: decide it, with the spec as
 the binding authority and the plan as its argument, and ledger
@@ -299,7 +351,7 @@ silent discard is forbidden: every decision you take is a ledger line and reache
    `superbuild.sh package <leaf plan> <MERGE_BASE> HEAD` with MERGE_BASE the commit the branch
    started from; `none`, the compare of the Step 2 pre-task manifest against a fresh snapshot.
 2. Dispatch BRANCH_REVIEWER with the package, the plan path, the full acceptance agreement and
-   this leaf's assigned IDs, every `deferred`, `minor (deferred)` and `parked` ledger line, and —
+   this leaf's assigned IDs, `[PROTECTED_PATHS]` (as in B4.1), every `deferred`, `minor (deferred)` and `parked` ledger line, and —
    as `[UNREVIEWED_TASKS]` — each `review: branch` task with its brief path, report path and
    commit range. Those tasks have had no reviewer: the branch reviewer checks each against its
    brief. Ledger `Final review: dispatched`.
@@ -329,8 +381,9 @@ silent discard is forbidden: every decision you take is a ledger line and reache
    Then ledger `Final review: fix wave 2/2 started (from <base7>)`, dispatch **ONE** FIX_APPLIER
    with `final-findings-2.md` and exactly one RE_REVIEWER over the second fix range, write what is
    still open to `<dir>/final-findings-3.md`, and ledger `Final review: fix wave 2/2 (…)` in the
-   same form. If any entry fails a test, skip the second wave. There is no third wave: adjudicate
-   whatever is still open under B5 (a residual load-bearing finding is BLOCKED).
+   same form. If any entry fails a test, skip the second wave. There is no third wave: write a
+   **cap summary** (B5) for whatever is still open to `<dir>/cap-summary-final.md`, then adjudicate
+   it under B5 (a residual load-bearing finding is BLOCKED).
 5. **Resuming an interrupted wave.** When the ledger's last line is
    `Final review: fix wave <W>/2 started (from <base7>)`, the wave is neither spent nor to be
    started over: re-dispatch its FIX_APPLIER with `final-findings-<W>.md`, telling it that earlier
@@ -343,7 +396,8 @@ silent discard is forbidden: every decision you take is a ledger line and reache
 
 Return to superrun Step 3 with:
 
-- the outcome — complete, or BLOCKED with the B5 packet;
+- the outcome — complete, BLOCKED with the B5 packet (and the cap summary when a cap ended it), or
+  CHECKPOINT with the ledger path and the next step (B4.6);
 - **every** ledger line containing `Ruling:`, in the order made, each with what it costs if wrong —
   this list is exhaustive and is the only place decisions taken on the user's behalf reach them;
 - the deferred and parked items the final review left standing;
@@ -367,6 +421,9 @@ integrated and closed out.
 | "This task is small, I'll mark it `branch`" | NO. Size is not a criterion. If a later task consumes it, or you cannot tell, it is `task`. |
 | "The review plan said `task`, but the diff turned out trivial — skip it" | NO. A `task` classification is never lowered. |
 | "Ledger bookkeeping is overhead" | NO. It is what survives compaction and a CI-PENDING resume. |
+| "I'll commit this timing hook so CI can tell us more" | NO. Diagnostic tooling stays in scratch or on a throwaway branch; the stage's PR carries only what its scope names. |
+| "The cap is reached — report BLOCKED and stop" | Write the cap summary first: what was tried, why it did not land, the smallest change that would close it. |
+| "Only 15 minutes left, but this task is small — start it" | NO. Below the margin, return CHECKPOINT. A killed dispatch loses the work; a checkpoint keeps it. |
 
 ---
 

@@ -41,7 +41,10 @@ Work from: [DIRECTORY]
 Follow the file structure the plan defines and the codebase's established patterns. Do not
 restructure code outside your task. Never change a protected file ([PROTECTED_PATHS]) or a value
 the project's instructions pin unless your brief or Context names that exact change as approved;
-if the task or a fix needs one, report BLOCKED naming the file, the old value and the new value. If a file is growing beyond the plan's intent, do not split it
+if the task or a fix needs one, report BLOCKED naming the file, the old value and the new value.
+Tooling you write only to diagnose a failure — probes, timing hooks, extra logging — stays
+uncommitted or on a separate throwaway branch; commit it only when your brief names it as part of
+the task. If a file is growing beyond the plan's intent, do not split it
 on your own — report DONE_WITH_CONCERNS.
 
 [TEST_EVIDENCE_RULES]

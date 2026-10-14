@@ -37,6 +37,32 @@ records. Never manufacture a request from an informal prompt. An authorized sour
 change remains bound to its adopting authority; replanning cannot silently weaken or reinterpret the
 approved agreement.
 
+## Label every constraint by origin
+
+Guarding acceptance against weakening is half the rule; the other half is not inventing authority.
+Every restriction a successor or replacement stage states — a ban, a budget, a required order, an
+excluded evidence source — carries one origin tag where it is written:
+
+- `[source: <cited project document or protected surface>]`;
+- `[owner: <Decision ID or recorded answer>]`;
+- `[planner]` — added by this replan, or by an earlier planner, refiner or replanner, on its own
+  judgment.
+
+Re-derive the tag for every restriction you carry forward. One you cannot trace to a cited source or a
+recorded owner answer is `[planner]`, whatever an earlier generation called it. Then:
+
+- Never carry a `[planner]` constraint forward as if it were `[owner]`, and never describe it as a
+  limit only the owner can lift.
+- Never add a constraint that forbids the fix the request's own evidence points to. If the evidence
+  quotes a step hitting a configured timeout, the successor addresses that limit — or, when the limit
+  is a protected surface, says so and leaves the owner question to the ladder — and never bans
+  raising it.
+- Diagnostic budgets (attempt counts, evidence lanes, observation passes) are always `[planner]`.
+  Exhausting one produces a cap summary (superbuild B5), not an owner pause.
+- A `[planner]` constraint may later be relaxed by an executor B5 ruling or by the L7 panel without
+  the owner, ledgered with its reason. `[source]` and `[owner]` constraints cannot be relaxed that
+  way.
+
 Reconcile before drafting:
 
 - A pending record with one unique scratch batch resumes those paths and the same stable Decision ID.
@@ -132,6 +158,8 @@ explicit path map. Require all of the following before publication:
 4. The new whole-tree review passes and S2 validates every candidate path, ID, edge, contract, and
    active obligation. Revalidate request baselines immediately before publication; relevant drift
    returns to assessment.
+5. Every restriction in a revised stage carries an origin tag; none tagged `[planner]` is presented
+   as owner authority; and none forbids the fix the request's evidence points to.
 
 A candidate failure stays in scratch/pending state. Do not publish a partial batch, clear the barrier,
 or claim readiness.

@@ -124,7 +124,10 @@ PLAN` / `WAITING FOR RUN`; transient = `PLANNING` / `RUNNING`; plus `WAITING FOR
 the `plan_exhausted` frontmatter field (its queue-exhaustion hint, never completion proof), optional
 recovery hints `planning_operation: refine|replan|none`, `planning_target`, `planning_generation`,
 and `planning_record`, and, while parked, a `ci_wait:` block (see
-**CI wait — monitor-parked**).
+**CI wait — monitor-parked**). It also keeps two executor-yield fields: a `checkpoint:` block while a
+`superrun` CHECKPOINT awaits its resume, and `executor_timeouts:` (`leaf:` + `count:`), the number of
+consecutive `superrun` dispatches on one leaf that hit the wall-clock limit (see **Executor
+checkpoints and timeouts**).
 
 ### Status vocabulary
 
@@ -206,19 +209,24 @@ isolated differently, and the executor distinction is load-bearing:
      from the **primary checkout root** (`superrun` makes its own worktree), with Bash-tool
      `timeout` set to `$(superagent_executor_timeout_ms)` milliseconds
      on the Bash call:
-     `"${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools executor --cwd "<primary root>" --prompt-file "$f" --role executor`
+     `SUPER_EXECUTOR_TIMEOUT_MIN="$SUPER_EXECUTOR_TIMEOUT_MIN" "${SUPERAGENT_BRIDGE:-${SUPER_PLUGIN_ROOT}/scripts/role-bridge.sh}" --harness <h> --model "<m>" --effort "<e>" --tools executor --cwd "<primary root>" --prompt-file "$f" --role executor`
+     (pass the resolved timeout explicitly — the bridge derives the child's deadline from it, and a
+     value loaded in another shell would not reach it)
      `--tools executor` gives the child the tick's own allowlist (`Read,Edit,Write,Bash,Grep,Glob,Task,Skill`),
      so inside that process `superrun`'s task-loop subagents are depth 1 and the synchronous wait holds —
      exactly as it does for this tick's own dispatches. The bridge also lifts the print-mode
      background-wait ceiling (issue #15) for the child.
-  3. Exit 0 → stdout **is** `superrun`'s final message (Final Report or CI-PENDING report); parse and
-     relay it exactly as before. Non-zero → the bridge prints `role-bridge: log=<path>` on stderr;
+  3. Exit 0 → stdout **is** `superrun`'s final message (Final Report, CI-PENDING report or
+     CHECKPOINT report); parse and relay it exactly as before. Non-zero → the bridge prints `role-bridge: log=<path>` on stderr;
      treat it as a crashed dispatch (escalation ladder, quoting the log path) — never retry blindly.
 
   **Preflight (once per tick, before the first `superrun` dispatch):** calculate
   `executor_timeout_ms="$(superagent_executor_timeout_ms)"` after loading `.superenv`;
-  invalid `SUPER_EXECUTOR_TIMEOUT_MIN` is a configuration error. `superrun` runs 20–60 min and
-  the Bash tool kills anything past its cap. `scripts/superagent-tick.sh` defaults
+  invalid `SUPER_EXECUTOR_TIMEOUT_MIN` is a configuration error. A `superrun` dispatch may run up
+  to `SUPER_EXECUTOR_TIMEOUT_MIN` (default 120 min) — a leaf with fix rounds and a long local test
+  gate needs most of it — and the Bash tool kills anything past its cap. `role-bridge.sh` exports
+  the dispatch deadline to the child as `SUPER_EXECUTOR_DEADLINE_EPOCH`, so `superrun` yields a
+  CHECKPOINT report at a task boundary before the cap rather than being killed mid-task. `scripts/superagent-tick.sh` defaults
   `BASH_MAX_TIMEOUT_MS` to the configured timeout for every external tick; an attended `cron`
   session must be launched with `BASH_DEFAULT_TIMEOUT_MS=3600000` and
   `BASH_MAX_TIMEOUT_MS` at least the configured timeout. Check
@@ -238,9 +246,10 @@ Either way, instruct the selected child to:
    execution (plus the per-branch CI-resume packet where applicable), and
 2. **return that skill's complete Final Report verbatim as its final message** — the subagent's final
    message is what superagent receives as the tool result, and the verbatim report is exactly what the
-   per-branch step-5 parsing consumes. (One sanctioned exception: a `superrun` process that queued
-   long CI returns a **CI-PENDING report** instead and exits — that is a valid yield, not a failure;
-   a fresh process resumes it later; see **CI wait — monitor-parked**.)
+   per-branch step-5 parsing consumes. (Two sanctioned yields: a `superrun` process that queued
+   long CI returns a **CI-PENDING report** instead and exits — see **CI wait — monitor-parked** — and
+   one near its wall-clock limit returns a **CHECKPOINT report** — see **Executor checkpoints and
+   timeouts**. Each is a valid yield, not a failure; a fresh process resumes it later.)
 
 **Model resolution — every heavy-skill dispatch site passes its selected role's independent
 `.superenv` model and effort key.** `superplan` uses PLANNER, `superrefine` uses PLAN_REFINER,
@@ -464,6 +473,19 @@ reset the transient status to its ready state, `release_lock()`, and end the tic
 report so the next tick retries. Never end the tick asking what to do, and never leave
 `PLANNING`/`RUNNING` persisted on a normal exit.
 
+### Executor checkpoints and timeouts
+A `superrun` dispatch killed at `SUPER_EXECUTOR_TIMEOUT_MIN` (the Bash call timed out, or the bridge
+reported the child killed) is an in-flight interruption, handled as above. In addition, identify
+the leaf — from the `checkpoint:` or `ci_wait:` block when one names it, else the target of
+supertraverse execution-mode descent over the synchronized root — increment
+`executor_timeouts.count` for it (reset it to 1 when the leaf differs from `executor_timeouts.leaf`),
+and name in this tick's `Findings & issues` the longest command the leaf's ledger records (its
+`Long command:` lines, read from `superbuild.sh workspace <leaf>` in its worktree, or `unknown` if
+none is readable). From the second consecutive timeout on, every dispatch for that leaf carries
+single-step guidance (`WAITING FOR RUN` step 3). This never escalates to the owner: a timeout is an infrastructure limit, not a decision. If
+single-step dispatches still time out, report the longest command and suggest raising
+`SUPER_EXECUTOR_TIMEOUT_MIN` in `Findings & issues`, and keep dispatching.
+
 ### `WAITING FOR CI` (parked — the cheap branch)
 The loop is parked on the run ids in `ci_wait.runs` (see **CI wait — monitor-parked**).
 First synchronize authoritative code/vault state and reconcile C8 against the packet's execution
@@ -567,8 +589,12 @@ second successor after a crash.
    The prompt instructs it to invoke the `superagent:superrun` skill (Skill tool) with
    `<PLAN.md> = master_plan` (the root) and to **return superrun's complete Final Report verbatim as its
    final message** (step 5 parses that report) — or, if it queues long CI, its **CI-PENDING report**
-   (step 5's park case; a fresh process resumes it). superagent never invokes `superrun` inline in its
-   own context, and never as a subagent (issue #25).
+   (step 5's park case; a fresh process resumes it), or its **CHECKPOINT report** (step 4). superagent
+   never invokes `superrun` inline in its own context, and never as a subagent (issue #25).
+   If the loop file holds a `checkpoint:` block, the prompt instead instructs `superrun` to take its
+   **Resume entry — checkpoint** with that packet. Whenever `executor_timeouts.count` is 2 or more
+   for the target leaf, either prompt also carries **single-step guidance**: run only the next ledger
+   step, then return CHECKPOINT.
    In local mode, prepend superrun's exact local-mode override, the physical project root, and the
    inherited workspace identity. The executor must capture before/result manifests and return a
    verified `completed-local` receipt; it must retain all local test, task-review, final-review, and
@@ -576,7 +602,12 @@ second successor after a crash.
 4. **Classify before delivery-specific be-sure.** Retain `superrun`'s verbatim report for relay (it is
    reproduced in this tick's **Final Report — per tick**) and note every issue it surfaces. A
    **CI-PENDING report** takes the Parking flow immediately; nothing merged, so the post-sync/be-sure
-   runs on the resume tick instead. For every other report, run the mode-selected L5 post gate,
+   runs on the resume tick instead. A **CHECKPOINT report** is a yield too: write its fields into a
+   `checkpoint:` block, set `status: WAITING FOR RUN`, and end result handling — the next tick's
+   dispatch resumes it. A CHECKPOINT returned without single-step guidance resets
+   `executor_timeouts.count` to 0; one returned under single-step guidance keeps the count, so the
+   leaf stays on single steps until it finishes. Any other `superrun` report clears the
+   `checkpoint:` block and resets `executor_timeouts`. For every other report, run the mode-selected L5 post gate,
    classify the report, and reconcile any artifacts it actually names. Before
    applying any delivery-specific be-sure requirement, route no-execution outcomes:
 
@@ -682,7 +713,12 @@ CI-red Final Report, failed completion audit, or unreconciled repair. superagent
   `WAITING FOR PLAN`. Logging the vote alone does not implement this outcome.
 - **Retry:** only retry a still-eligible execution target or an explicit supported resume packet.
   If closeout already removed the leaf from descent, use C8 to author a successor containing
-  the retry/integration guidance; a blind root superrun retry would return none again.
+  the retry/integration guidance; a blind root superrun retry would return none again. A retry after
+  a cap whose blocked attempt left an open PR does not need C8: dispatch `superrun` (as in
+  `WAITING FOR RUN` step 3) with the blocked attempt's packet and the cap summary's smallest change
+  via its **Resume entry — targeted round**. At most one targeted round per open finding per leaf;
+  a finding still open after it goes to a protected-change request or a re-plan. A retry may relax a
+  `[planner]` constraint the panel recorded as relaxed.
 - **Decline/defer:** record adopted authority, rationale and PR disposition in tracked findings
   and the target row; mark outstanding repair records resolved with that adopted disposition
   and reconcile ancestors. This is an intentional
@@ -725,7 +761,7 @@ tick, even one the loop already resolved itself.
 
     **Goal:** <master_plan path>
     **Loop file:** <loop-file path>
-    **This tick:** <superplan | superrefine | superreplan | superrun | park (CI wait) | ci-resume | guard | resume | escalation> — <one-line result>
+    **This tick:** <superplan | superrefine | superreplan | superrun | superrun (checkpoint) | park (CI wait) | ci-resume | guard | resume | escalation> — <one-line result>
     **Status:** <new status>   (driver: <cron|external>, <scheduled / stopped / paused / parked on CI>)
 
     **PRs this tick:** <plan/code/closeout PR urls, or none>

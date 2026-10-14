@@ -54,4 +54,23 @@ pin superloop 'every option asks for more authority, evidence, attempts or budge
 pin superloop 'no panel vote can approve them or weaken acceptance'
 pin superagent '**Request approval for one specific protected change:**'
 
+# 0.15.0: constraint origins, cap summaries, investigation outside the delivery, CHECKPOINT.
+pin superreplan '## Label every constraint by origin'
+pin superreplan 'Never add a constraint that forbids the fix the request'
+pin superreplan 'Diagnostic budgets (attempt counts, evidence lanes, observation passes) are always `[planner]`.'
+pin superrefine 'carries the origin tag `[planner]`'
+pin superbuild '**Constraint origin.**'
+pin superbuild 'An untagged constraint is not `[planner]` for this purpose.'
+pin superbuild '**At a cap, report the cheapest unblock.**'
+pin superbuild '**Keep investigation out of the delivery.**'
+pin superbuild '### B4.6 Deadline check — yield before the wall clock'
+pin superrun '#### CHECKPOINT — yield before the wall-clock limit'
+pin superrun '### Resume entry — checkpoint (superagent-driven)'
+pin superrun '**Cap summary:**'
+pin superloop '**Constraint origins.**'
+pin superagent '### Executor checkpoints and timeouts'
+pin superrun '### Resume entry — targeted round (superagent-driven)'
+pin superagent 'At most one targeted round per open finding per leaf'
+pin superagent 'This never escalates to the owner'
+
 echo 'escalation-test: PASS'

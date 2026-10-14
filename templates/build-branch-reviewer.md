@@ -57,6 +57,10 @@ Do all of it yourself — never dispatch a subagent or a second reviewer.
 - **Code quality** — separation of concerns, error handling, edge cases, type safety
 - **Tests** — verify real behavior; edge cases and integration paths covered
 - **Readiness** — security, backward compatibility, migrations, obvious bugs
+- **Scope** — diagnostic instrumentation, probes or timing hooks that the plan's scope does not name
+  as a deliverable are an Important finding: they belong in scratch or on a throwaway branch, not in
+  this change; so is any edit to a protected file ([PROTECTED_PATHS]) the plan does not cite
+  authority for
 
 Where the plan is silent, judge by what a reasonable user of this software would expect: silence
 is not permission. If the problem is in the plan rather than the implementation, say so.

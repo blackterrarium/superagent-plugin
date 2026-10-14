@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.15.0 — 2026-10-14
+
+- **Every constraint a replan adds says where it came from.** superreplan and superrefine tag each
+  restriction they state `[source: …]` (a cited project document or protected surface),
+  `[owner: …]` (a cited recorded answer) or `[planner]` (their own judgment), and re-derive the tag
+  for every restriction carried forward: one that traces to no source or owner answer is
+  `[planner]`, whatever an earlier generation called it. A replan may not present a `[planner]`
+  constraint as owner authority, and may not add one that forbids the fix its own evidence points
+  to. Diagnostic budgets are always `[planner]`. An executor B5 ruling or the L7 panel may relax a
+  `[planner]` constraint without the owner, ledgered with its reason; `[source]` and `[owner]`
+  constraints are never relaxed that way, and an untagged one is not treated as `[planner]`.
+- **A cap reports the cheapest unblock.** When superbuild's five fix rounds or its final fix waves
+  end with findings open, it writes a cap summary first: for each finding, what was tried, why it
+  did not land, the smallest change that would close it, and whether that change is in scope and
+  protected. The BLOCKED report carries it, and the panel chooses between one more targeted round
+  on exactly that change, a protected-change request, or a re-plan. A targeted round runs on the
+  blocked attempt's open PR through a new superrun resume entry, at most once per finding per leaf,
+  without a replan generation. A third red run on the same CI step writes a CI cap summary too. Exhausting a `[planner]` budget
+  is no longer a reason to ask the owner by itself.
+- **Diagnosis stays out of the delivery PR.** Instrumentation and probes written to investigate a
+  failure stay in the scratch directory or on a throwaway branch, which is what a diagnostic CI run
+  pushes; they reach the stage's PR only when its scope names them. The implementer prompt says so,
+  and the whole-branch reviewer flags such tooling, and any unauthorized edit to a protected file, as
+  Important.
+- **The executor yields before its wall-clock limit.** `role-bridge.sh` exports
+  `SUPER_EXECUTOR_DEADLINE_EPOCH` and `SUPER_EXECUTOR_TIMEOUT_MIN` to an executor child. At each
+  task boundary superbuild compares the time left with a margin (20% of the limit or the longest
+  ledgered command, whichever is larger) and returns CHECKPOINT; superrun turns that into a
+  CHECKPOINT report, the supervisor stores it in a `checkpoint:` block, and the next dispatch resumes
+  through a new superrun resume entry. The supervisor counts consecutive timeouts per leaf in
+  `executor_timeouts:`; from the second on, it dispatches one ledger step at a time until the leaf
+  finishes and names the longest command in the tick report. When an external tick runs under
+  `TICK_TIMEOUT`, the wrapper exports that deadline too and the bridge uses the earlier of the two. A timeout never escalates to the owner. superagent's
+  "superrun runs 20–60 min" statement is corrected.
+
+The same live run that motivated 0.14.0 hit the 120-minute executor limit seven times, twice back
+to back on one stage, with a single local test gate taking about 45 minutes; each kill lost the
+dispatch. Its replanner had added diagnostic budgets, a ban on raising the deadline and a ban on
+reading raw logs, which two generations later were quoted as limits only the owner could lift. Its
+observation tooling grew the delivery PR to about 110 files, and two of those tools' tests then
+failed in CI.
+
 ## 0.14.0 — 2026-10-14
 
 - **A red CI run is triaged before it becomes a blocker.** superrun now classifies every red,

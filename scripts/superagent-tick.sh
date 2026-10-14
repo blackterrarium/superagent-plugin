@@ -45,6 +45,9 @@ if [[ "$TICK_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
   elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_CMD=(gtimeout "$TICK_TIMEOUT")
   else echo "superagent: warning — TICK_TIMEOUT=$TICK_TIMEOUT ignored: no timeout/gtimeout on PATH (install coreutils)" >&2
   fi
+  # The whole tick dies at this cap, so an executor dispatched inside it must yield before it too:
+  # role-bridge.sh takes the earlier of this and its own SUPER_EXECUTOR_TIMEOUT_MIN deadline.
+  (( ${#TIMEOUT_CMD[@]} )) && export SUPERAGENT_TICK_DEADLINE_EPOCH="$(( $(date +%s) + TICK_TIMEOUT ))"
 fi
 LOG_FILE="${LOG_FILE:-/tmp/superagent-$(basename "$LOOP_FILE" .md).log}"
 # Output format: stream (default) = live incremental console output; text = final only.
