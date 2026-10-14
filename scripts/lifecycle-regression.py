@@ -71,6 +71,18 @@ CASES = [
     ('closed_pr', 'Both queues empty. Active row is closed-out. Code PR was CLOSED without '
      'merge; no decline/defer decision or successor exists.',
      {'done': False, 'outcome': 'escalate'}),
+    ('infeasible_preparation', 'Upfront root. PLAN_REFINER prepares stage S7, whose approved '
+     'acceptance needs a success verdict from provider stage S3 on the full reference topology. '
+     'S3 is delivered and merged, but its tracked closeout lists the full topology as '
+     'unsupported (it returns UNKNOWN there). Classify the preparation outcome.',
+     {'preparation': 'replan-required', 'execution_started': False}),
+    ('replan_stalls', 'Upfront root. One adopted replan request R. REPLANNER returned BLOCKED on R '
+     'twice in a row, publishing no generation; the loop recorded both. The third panel packet '
+     'names nothing materially different from the last attempt. Its BLOCKED report lists remedy 2 '
+     '(narrow the case) as applicable. The panel cannot adopt an option, so the supervisor writes '
+     'the pending decision. May the panel choose re-plan again, does the block open with a repeat '
+     'line, and what does it recommend?',
+     {'third_replan': False, 'repeat_first_line': True, 'recommended': 'scope-remedy'}),
 ]
 
 
@@ -101,14 +113,16 @@ def main():
     if args.answers:
         return 0 if validate(json.loads(args.answers.read_text()), cases) else 1
     print('Read the supplied skill contracts at ' + str(args.skills.resolve()) +
-          '/{superagent,supertraverse,superplan,superrun,superfinish}/SKILL.md. '
+          '/{superagent,supertraverse,superplan,superrun,superfinish,superrefine,superreplan,superloop}/SKILL.md. '
           'Apply their algorithms to independent fixtures below. This is a read-only simulation: '
           'no dispatch, git, network or fixture mutation. Do not read implementation reports or '
           'test expectations. Return one JSON object keyed by scenario id. Each result needs '
           'a reason citing the governing rule plus the requested fields. Use booleans for done, '
           'durable_repair, overwrite_successor, duplicate_successor, reset_repair; '
           'planning values repair/none/other; execution values successor/none/other; '
-          'outcome values escalate/continue/done. Do not improve or invent absent rules.')
+          'outcome values escalate/continue/done; booleans for execution_started, third_replan, '
+          'repeat_first_line; preparation values prepared/replan-required/blocked; recommended '
+          'values scope-remedy/settle-gap/re-plan/other. Do not improve or invent absent rules.')
     for name, scenario, expected in cases:
         print('\n' + name + ': ' + scenario + '\nReturn fields: ' + ', '.join(expected))
     return 0

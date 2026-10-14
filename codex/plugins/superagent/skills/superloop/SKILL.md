@@ -669,7 +669,8 @@ Wait for all three children's results before proceeding; never
 fire-and-forget the panel).
 **The packet states facts and pointers, not conclusions.** Give each panelist: the blocker as the
 delegated skill reported it (verbatim, including any CI triage record), the relevant plan + report
-excerpt, every earlier `## Decisions` entry on the same PR, step or blocker, the concrete options,
+excerpt, every earlier `## Decisions` entry on the same PR, step, blocker or replan request, the
+concrete options,
 and pointers — PR, CI run ids, worktree, ledger, vault paths. Do not assert what the evidence has
 not established: "the cause is unknown" and "the budget is spent" are claims for the panel to test,
 not framing to hand it. Agreement among panelists who were told the answer measures the packet, not
@@ -684,8 +685,11 @@ such as privileged service logs; the ordinary CI job log and junit output are no
 *"Before voting, make the strongest case for the simplest explanation consistent with the evidence
 and the cheapest fix that would unblock the work. Your verdict is still your own judgment."* The
 other two prompts stay identical, so the remaining diversity comes from independent reasoning.
-A choice between readings the project's sources do not settle is not a cheapest fix: it is a
-specification gap, and it goes to the owner.
+A choice between readings the project's sources do not settle is a specification gap **when the
+stage's acceptance depends on it**, and then it goes to the owner. When it does not — when a
+test-scoped substitute, a narrowed case or a postponed case (superreplan's remedies 1–3) avoids it —
+it is a scope question, and the cheapest scope remedy goes first. A remedy avoids the gap only if
+the stage still meets its stated goal without that case.
 
 **A repeat may not converge on an unchanged retry.** When an earlier `## Decisions` entry concerned
 the same PR and failing step or blocker, say so in the packet. A retry adopted for that failure must
@@ -719,6 +723,25 @@ it under `## Decisions` (option + one-line rationale + "panel 2/3" or "3/3"), th
 - a **protected-change request** → the panel has chosen to ask, not to approve: go straight to Rung 2
   and write the yes/no protected-change block. Converging on it never applies the change.
 
+**Re-plan guidance is bounded.** Guidance carried with an adopted re-plan is the chosen option, the
+facts behind it and, where relevant, the superreplan remedy (1–5) it recommends. It may not add
+deliverables, analyses, proofs or artifacts outside the stage's acceptance and scope: a verdict whose
+guidance does is malformed and counts as no verdict. Any directive the guidance does give reaches the
+replanner tagged `[planner]`, so the replanner may set it aside with a recorded reason.
+
+**Replans that publish nothing converge.** The caller counts consecutive replanner `BLOCKED`
+outcomes for one originating stage — each published nothing but at most a record-only checkpoint
+(superagent: `replan_stalls`). A replanner that returns BLOCKED **recommending remedy 2 or 3**
+(narrow or postpone the case) goes to Rung 2 as that yes/no question at once; a BLOCKED naming a
+genuine specification gap with candidate values likewise goes to Rung 2 at once, as a choice among
+those values. Re-planning instead needs a named material difference. From the **second** stall on, the panel may not choose re-plan
+again unless the packet names what is materially different from the last attempt. An owner `yes` to
+narrowing or postponing, or a test-scoped substitute the replanner has not already rejected, counts
+as that difference. Otherwise the options are superreplan's scope remedies — narrowing or postponing
+the case as a yes/no owner question — or decline/defer. Prefer the scope remedy: decline/defer only
+when none of remedies 1–3 applies. An owner's answer — a `yes`, or a chosen candidate value — is
+carried into the re-plan as `[owner]` authority for exactly that answer.
+
 **Constraint origins.** A plan restriction tagged `[planner]` (superreplan's origin rule) binds the
 panel no more than it binds the executor: an adopted option may relax one, recorded under
 `## Decisions` with the reason. A `[source: …]` or `[owner: …]` restriction is never relaxed by a vote.
@@ -733,13 +756,17 @@ finding per leaf), a protected-change request when the change touches a protecte
 re-plan.
 
 ### Repeat check (before every Rung 2)
-Before writing a pending decision, compare it with the `## Decisions` history. When an earlier owner
-decision concerned the same PR and the same failing CI step or blocker, the new block must:
+Before writing a pending decision, compare it with the `## Decisions` history. Earlier decisions
+include owner answers **and** earlier re-plans of the same request that published nothing. When an
+earlier decision concerned the same PR and the same failing CI step or blocker, or the same replan
+request, the new block must:
 
 - say so in its first line — `Repeat: same failure as <earlier Decision IDs>`;
 - summarise what each earlier answer authorised and why that did not resolve it;
 - lead, as its recommendation, with a **different kind** of option than last time: a concrete fix, a
-  protected-change request, or decline/defer. A protected-change request for the same surface with a
+  protected-change request, a scope remedy (narrow or postpone the case), or decline/defer. For a
+  replan-stall repeat, lead with the replanner's recommended scope remedy; lead with decline/defer
+  only when none of remedies 1–3 applies. A protected-change request for the same surface with a
   new value counts as different when the block says why the approved value did not suffice.
 
 No option in a repeat block may ask for more evidence, more diagnostic attempts, more budget, or an
@@ -748,7 +775,9 @@ unchanged retry on the same failure.
 ### Rung 2 — Escalate to the user (last resort)
 If the panel cannot converge (split, still without usable verdicts after the re-run, or every
 verdict an `insufficient-info` whose missing fact is not obtainable read-only — typically a fact only
-the owner can supply), or it converged on a protected-change request:
+the owner can supply), it converged on a protected-change request, or a replanner recommended
+narrowing or postponing an acceptance case or returned a genuine gap with candidate values
+(*Replans that publish nothing converge*):
 1. Write a `## Pending decision` block in the **required shape** below. Save the current `status`
    into `prior_status`; set `status: WAITING FOR INPUT`.
 2. **Interactive session** (a person is present — typically `cron`/attended): call `AskUserQuestion`
@@ -801,9 +830,18 @@ Record the approved change verbatim under `## Decisions` (files, old → new, th
 it is authority for that change only, and the next dispatch receives it as guidance. `no` routes as
 the block states.
 
+**A specification gap needs a necessity test.** Before a block asks the owner to settle a gap the
+sources leave open, it states which acceptance case depends on the gap and whether a superreplan
+remedy 1–3 avoids it — that is, whether the stage still meets its stated goal without that case. When one does, the **recommended** option is that remedy as a yes/no question,
+and settling the gap is listed as the alternative. When the owner must settle the gap, the block
+offers named candidate values with a recommendation — never a request to author domain semantics,
+policy or specification text.
+
 A block is **invalid**, and must be rewritten before it is saved, when:
 
 - every option asks for more authority, evidence, attempts or budget;
 - it states no likely cause, unless it says which read-only checks were tried and what each returned;
 - answering it requires the owner to write the disposition text — a single word or short phrase must
-  always be a valid answer.
+  always be a valid answer;
+- it asks the owner to settle a specification gap without the necessity test above, or asks for
+  free-text policy instead of offering named candidate values.

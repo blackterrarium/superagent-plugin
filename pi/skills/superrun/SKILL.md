@@ -100,7 +100,9 @@ Invoke the `superagent:supertraverse` skill (Skill tool) and run its **DESCENT i
   PLAN_REFINER as a separate planning operation. Incremental and unmarked roots do not use this
   outcome and retain their existing manual execution behavior.
 - **`REPLAN-REQUIRED`** — report the root, stage ID/path, and broken source/stage/predecessor/
-  contract/finding assumption. Exit without execution so the existing decision and REPLANNER path can
+  contract/finding assumption. When an acceptance case cannot be met as written, also report the case
+  and superreplan's remedies 1–5 (*Prefer the smallest unblocking change*) with which appear to apply;
+  the same applies to a REPLAN-REQUIRED that superbuild returns mid-execution. Exit without execution so the existing decision and REPLANNER path can
   adopt or reject the structural change. Never turn that evidence into an in-place execution ruling.
 - **`none`** — no execution target exists; invoke **supertraverse C9 completion audit** before
   reporting. **complete**: report none with integration/disposition evidence. **incomplete**:

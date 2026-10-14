@@ -121,7 +121,8 @@ and `planning_record`, and, while parked, a `ci_wait:` block (see
 **CI wait — monitor-parked**). It also keeps two executor-yield fields: a `checkpoint:` block while a
 `superrun` CHECKPOINT awaits its resume, and `executor_timeouts:` (`leaf:` + `count:`), the number of
 consecutive `superrun` dispatches on one leaf that hit the wall-clock limit (see **Executor
-checkpoints and timeouts**).
+checkpoints and timeouts**). `replan_stalls:` (`stage:` + `count:`) counts consecutive `superreplan`
+BLOCKED outcomes for one originating stage (see `WAITING FOR PLAN` step 5).
 
 ### Status vocabulary
 
@@ -428,7 +429,8 @@ the panel chose to ask. Read the `## Pending decision` block.
   block described it, and never ask the owner to restate it as disposition text. For a
   protected-change request, `yes` approves exactly the change in the block, `yes <value>` the same
   change with that value, and `no` takes the block's no path; record the approved change verbatim
-  (files, old → new, the answer as written).
+  (files, old → new, the answer as written). A `yes` to narrowing or postponing an acceptance case is
+  recorded the same way and carried into the re-plan as `[owner]` authority for that change only.
 - **No answer yet** → branch on context:
   - **Interactive (a person is at the session — typically `cron`/attended):** `AskUserQuestion`. On an
     answer, proceed as above. If it genuinely can't be answered, **pause** (`stop_driver()`),
@@ -438,8 +440,9 @@ the panel chose to ask. Read the `## Pending decision` block.
     there is no TTY to answer, so it would stall the one-shot session). Ensure `## Pending decision`
     is in superloop L7's **required shape** — what failed, most likely cause, recommended option
     first, other options, and an explicit *"write your choice as `answer: <option>` under this
-    block"* instruction, with identifiers in the trailing reference list — then `release_lock()`, and
-    exit.
+    block"* instruction, with identifiers in the trailing reference list. A block about a
+    specification gap also states which acceptance case depends on it and recommends a scope remedy
+    when one avoids it. Then `release_lock()`, and exit.
     The scheduler keeps firing, but for loops driven by the shipped `scripts/` wrapper the fire is
     **free while unanswered**: `superagent-tick.sh` reads the loop file in bash and exits without a
     session until an `answer:` line exists under `## Pending decision` (`SUPER_INPUT_GATE`, default
@@ -565,7 +568,18 @@ second successor after a crash.
    parent rows, and any A7 artifacts, then relay the complete Final Report. PREPARED moves to
    `WAITING FOR RUN`; a published/finished replan or a legacy repaired successor moves to
    `WAITING FOR PLAN`; REPLAN-REQUIRED, BLOCKED, contradictory evidence, and bridge failure use the
-   existing decision ladder. For ordinary legacy superplan, parse and persist every successful result
+   existing decision ladder. For `superreplan`, a **BLOCKED** outcome — whether or not it published a
+   record-only checkpoint — increments `replan_stalls.count` for its originating stage (reset to 1
+   for a different stage; a superseding request record for the same stage keeps the count) and is
+   recorded under `## Decisions` as `replan stall <n> · <stage> · <record> — <one-line reason>`, so
+   superloop L7's repeat check sees it. PUBLISHED or ALREADY-PUBLISHED resets the counter;
+   REFINEMENT-ONLY leaves it unchanged. Pass the replanner's **Remedies considered** line into the
+   ladder's packet. A BLOCKED whose Remedies considered recommends remedy 2 or 3 (narrow or postpone
+   an acceptance case) goes to Rung 2 as that yes/no question, and a BLOCKED naming a genuine
+   specification gap with candidate values goes to Rung 2 as a choice among those values — each with
+   the record path in the block's reference list. Re-plan on that stage then needs a named material
+   difference even at the first stall. The owner's answer is applied as Re-plan, carried as `[owner]`
+   authority for exactly that answer. For ordinary legacy superplan, parse and persist every successful result
    explicitly: a published **implementation plan** sets `status: WAITING FOR RUN` and
    `plan_exhausted: false`; a published **seed/master or sub-master plan** sets `status: WAITING FOR
    PLAN` and `plan_exhausted: false`; `No available task to plan — every step is completed or already
@@ -705,7 +719,14 @@ escalation via `WAITING FOR INPUT` / `AskUserQuestion` / durable `answer:` polli
 CI-red Final Report, failed completion audit, or unreconciled repair. superagent's **option-set**:
 
 - **Re-plan:** apply **supertraverse C8** and verify the durable request before routing to
-  `WAITING FOR PLAN`. Logging the vote alone does not implement this outcome.
+  `WAITING FOR PLAN`. Logging the vote alone does not implement this outcome. The guidance it carries
+  is bounded (superloop L7 *Re-plan guidance is bounded*) and reaches the replanner tagged
+  `[planner]`. When `replan_stalls.count` is 2 or more for the request, re-plan is available only if
+  the packet names what is materially different from the last attempt; otherwise the options are
+  the replanner's scope remedies (narrowing or postponing the case as a yes/no owner question) and
+  decline/defer — prefer the scope remedy, and decline/defer only when none of remedies 1–3 applies.
+  A test-scoped substitute the replanner has not already rejected, or an owner `yes` to narrowing or
+  postponing, is applied as Re-plan and counts as the material difference.
 - **Retry:** only retry a still-eligible execution target or an explicit supported resume packet.
   If closeout already removed the leaf from descent, use C8 to author a successor containing
   the retry/integration guidance; a blind root superrun retry would return none again. A retry after
@@ -724,13 +745,16 @@ CI-red Final Report, failed completion audit, or unreconciled repair. superagent
   option but never approves the change: selecting it writes the yes/no protected-change block
   (superloop L7 Rung 2) naming the files, old and new value, the evidence in two or three lines, and
   what happens on yes and on no, and its reference list carries the blocked attempt's resume packet
-  (leaf, root, worktree, branch, PR, execution snapshot). On `yes` / `yes <value>`, record the
+  (leaf, root, worktree, branch, PR, execution snapshot) — or, for a replanner's narrow/postpone
+  recommendation, the request record path. On `yes` / `yes <value>`, record the
   approved change verbatim under `## Decisions`, set `status: RUNNING`, and dispatch a fresh
   `superrun` process exactly as in `WAITING FOR RUN` step 3 with that packet and the approved change
   via its **Resume entry — approved protected change** — not as Retry, because the blocked leaf is
   no longer an eligible target and the change belongs on its open PR. Handle its report like any
   other `superrun` report (a CI-PENDING report parks). The approval is authority for that change
-  only. On `no`, take the route the block named (decline/defer or re-plan).
+  only. When the approved change narrows or postpones an acceptance case (superreplan remedies 2–3),
+  apply it as **Re-plan** instead, carrying the approval as `[owner]` authority for exactly that
+  change. On `no`, take the route the block named (decline/defer or re-plan).
 
 Apply the same transitions for a converged panel and a resumed human answer. Persist and verify
 plan-tree changes under A7 before the ready-state loop write; recovery is C8's idempotent replay.

@@ -62,6 +62,44 @@ recorded owner answer is `[planner]`, whatever an earlier generation called it. 
 - A `[planner]` constraint may later be relaxed by an executor B5 ruling or by the L7 panel without
   the owner, ledgered with its reason. `[source]` and `[owner]` constraints cannot be relaxed that
   way.
+- A directive that arrives with the request from the L7 panel — an analysis to run, an artifact to
+  build, an approach to take — is `[planner]`, not owner authority. You may set it aside with a
+  recorded reason, and you must when it adds deliverables, analyses or proofs outside the stage's
+  acceptance and scope.
+
+## Prefer the smallest unblocking change
+
+"Cannot silently weaken" means **ask**, not **avoid**. When a stage cannot meet an acceptance case as
+written, list these remedies in this order in the request record and in your report, and state for
+each why it does or does not apply:
+
+1. **Test-scoped substitute** inside the stage's own test seams — a fixture, a stub, a test-registered
+   provider result. It applies only when the case's acceptance text does not itself require the real
+   provider or an end-to-end path; when it does, a substitute changes acceptance and is remedy 2. No
+   owner approval is needed unless a `[source]` or `[owner]` rule forbids it. A
+   rule against caller-supplied results on a public interface protects production callers; it does
+   not by itself forbid a test-registered result, but say so explicitly when you rely on that reading.
+   It lives only in tests: never in a production path, never through a public interface that refuses
+   caller-supplied results. The successor records it as a **limitation** that the stage's closeout
+   must carry, and it is never end-to-end evidence.
+2. **Narrow the case** to inputs the delivered providers support. This changes acceptance, so it is a
+   yes/no owner question (superloop L7 protected-change shape, with the recommendation first).
+3. **Postpone the case** to a named later stage or goal that owns the missing capability. Also a
+   yes/no owner question. (Distinct from declining or deferring the whole step, which is the
+   escalation ladder's decline/defer option.)
+4. **Change an upstream provider** — a new or corrective stage, never work inside this stage.
+5. **New research or proof work** — only when 1–4 are each shown not to apply.
+
+**A genuine gap is not a remedy 4–5 problem.** When the case turns on a reading the sources leave open
+and remedies 1–3 do not apply, return **BLOCKED** naming the gap, the acceptance case that depends on
+it, and two to four candidate values with a recommendation. Never take remedy 4 or 5 to settle a
+specification gap.
+
+Take the first remedy that applies. When it is remedy 1, publish the successor with the substitute
+and its limitation. When it is 2 (narrow) or 3 (postpone), do not choose a costlier route to avoid asking: return
+**BLOCKED** with that remedy named as the recommended owner question, and the remedies list attached
+so the ladder can put it to the owner as a yes/no question. A replan that ends BLOCKED for any reason
+includes the list.
 
 Reconcile before drafting:
 
@@ -160,6 +198,9 @@ explicit path map. Require all of the following before publication:
    returns to assessment.
 5. Every restriction in a revised stage carries an origin tag; none tagged `[planner]` is presented
    as owner authority; and none forbids the fix the request's evidence points to.
+6. When an acceptance case could not be met as written, the remedies list is present, the first
+   applicable remedy was taken or named, no remedy 4–5 work was added while 1–3 applied, and a
+   genuine specification gap was returned with candidate values rather than worked around.
 
 A candidate failure stays in scratch/pending state. Do not publish a partial batch, clear the barrier,
 or claim readiness.
@@ -229,4 +270,5 @@ Return exactly this shape, using `none` for absent values and listing every file
 **Integration:** <merged docs PR, authoritative vault commit, or none>
 **Publication marker:** <Decision ID or none>
 **Resolved publication evidence:** <PR/commit or pending marker reconciliation>
+**Remedies considered:** <for each acceptance case not met as written: remedy 1–5 — applies / does not (why); the one taken or recommended; for a genuine gap, the candidate values and the recommendation — or none>
 ```

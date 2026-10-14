@@ -230,6 +230,10 @@ named `reports/YYYY-MM-DD-hh_mm-<topic>.md` (today's date and the current UTC ho
   historical failed/open observation when the attempt later succeeds.
 - **Repair/integration history** — every predecessor PR and its verified reuse/replacement/closure or
   adopted disposition, plus the active successor relationship when applicable.
+- **Limitations** — every acceptance case met by a test-scoped substitute rather than end-to-end
+  evidence, and every case narrowed or postponed by an owner decision, each with its reason and (for a
+  postponement) the stage or goal that owns it. A substitute is never reported as end-to-end evidence;
+  carry these into any release dossier the project keeps.
 - **CI duration** — when CI is test evidence, the longest CI step on the final run: its name, its
   duration (`gh run view <id> --json jobs`), and the limit it runs under when one is configured
   (a job `timeout-minutes`, a test-runner timeout, a `subprocess` deadline) with where it is set. A
