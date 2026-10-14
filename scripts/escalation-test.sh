@@ -83,4 +83,25 @@ bash -c ". '$ROOT/scripts/_common.sh'" || fail "_common.sh refused bash"
 pin superloop '**Keep the loop file small — every tick reads it.**'
 pin superfinish '**CI duration**'
 
+# 0.16.0: second incident — feasibility at preparation, smallest unblocking change, bounded panel
+# guidance, replan stalls, necessity test for specification gaps.
+pin superrefine '**Check feasibility against what providers actually deliver.**'
+pin superrefine '**Provider results each acceptance case depends on:**'
+pin superreplan '## Prefer the smallest unblocking change'
+pin superreplan '"Cannot silently weaken" means **ask**, not **avoid**.'
+pin superreplan '**Remedies considered:**'
+pin superloop '**Re-plan guidance is bounded.**'
+pin superloop '**Replans that publish nothing converge.**'
+pin superloop '**A specification gap needs a necessity test.**'
+pin superloop 'stage'"'"'s acceptance depends on it**'
+pin superagent '`replan_stalls:`'
+pin superfinish '**Limitations**'
+pin superreplan 'Never take remedy 4 or 5 to settle a'
+pin superloop 'Prefer the scope remedy: decline/defer only'
+pin superreplan 'does not itself require the real'
+pin superloop 'A remedy avoids the gap only if'
+pin superloop 'For a'
+pin superagent 'even at the first stall'
+grep -qF 'is not a cheapest fix: it is a' "$ROOT/skills/superloop/SKILL.md" && fail "superloop still sends every unsettled reading to the owner"
+
 echo 'escalation-test: PASS'

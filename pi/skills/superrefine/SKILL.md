@@ -92,6 +92,14 @@ clarifies the implementation, distinguishing test details, and verification tied
 evidence. It must be executable without another architecture or requirements decision. Do not invent
 unobserved predecessor facts to make it look detailed.
 
+**Check feasibility against what providers actually deliver.** For each acceptance case that needs
+a specific result from a provider — a success, a complete verdict, a supported scope — cite the
+provider evidence that it returns that result on the case's input: a delivered test, a closeout row,
+or the code path. A provider closeout limitation that excludes the input, or no such evidence at all,
+makes the outcome **REPLAN-REQUIRED** now, before execution: the finding names the case, the provider
+and the limitation, and lists superreplan's remedies (*Prefer the smallest unblocking change*) with
+which apply. Delivered is not the same as able to deliver what this stage needs.
+
 Any restriction the prepared leaf adds beyond the approved stage — a budget, a ban, a required order,
 an excluded evidence source — carries the origin tag `[planner]`; one carried from the stage keeps its
 `[source: …]` or `[owner: …]` tag (superreplan's origin rule). Never add a restriction that forbids
@@ -103,7 +111,8 @@ Classify the observed change with superstage S4 before publication:
   ownership, and shared contract semantics all remain unchanged. A content amendment increments
   `Stage revision`; attaching a first receipt with no plan-body change does not.
 - **REPLAN-REQUIRED** when evidence would change any of those commitments, including an acceptance or
-  source change, scope expansion, topology change, or contract behavior/revision. Preserve the
+  source change, scope expansion, topology change, or contract behavior/revision — or when an
+  acceptance case needs a provider result the feasibility check cannot cite. Preserve the
   approved leaf, write a precise finding with evidence and affected contracts/stages, and do not mark
   any row ready.
 - **BLOCKED** when the needed evidence cannot support either classification. Do not guess, publish a
@@ -122,6 +131,7 @@ and an explicit amendment classification:
 **Amendment kind:** none | content-amendment | compatible-baseline-revalidation
 **Content amendments:** none | <evidence-grounded summary>
 **Baseline revalidation:** none | <prior receipt and focused comparison>
+**Provider results each acceptance case depends on:** none | <case → provider → evidence>
 ```
 
 Use `content-amendment` only for a plan-body detail change and list it. Use

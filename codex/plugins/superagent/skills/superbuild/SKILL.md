@@ -342,7 +342,12 @@ outcome to superrun carrying the finding, the colliding plan text, the tasks com
 the ledger path. Leave the workspace and ledger in place. The caller — a `superagent` loop's
 escalation ladder, or the human running superrun — decides; never ask the user from inside the
 loop. For an upfront stage, a broken source, stage, predecessor, or contract assumption is
-`REPLAN-REQUIRED` as superrun Step 1 defines it, never an in-place ruling.
+`REPLAN-REQUIRED` as superrun Step 1 defines it, never an in-place ruling. That includes a provider
+that cannot return a result an acceptance case needs (a success, a complete verdict, a supported
+input): never fake the result in a production path or through an interface that refuses
+caller-supplied results. The REPLAN-REQUIRED packet names the case, the provider and its limitation,
+and lists superreplan's remedies 1–5 (*Prefer the smallest unblocking change*) with which appear to
+apply.
 
 **The plan's body against the plan's own commitments → fix under a ruling.** When code or steps
 the plan prescribes — even "exactly this content" — fail an approved acceptance row, a Global

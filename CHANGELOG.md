@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.16.0 — 2026-10-14
+
+- **Preparation checks that providers can deliver what the stage needs.** superrefine now cites,
+  for each acceptance case that needs a specific provider result (a success, a complete verdict, a
+  supported input), the delivered test, closeout row or code path that returns it. A provider
+  limitation that excludes the input, or no evidence at all, makes the stage REPLAN-REQUIRED before
+  execution starts. The preparation report gains a "Provider results each acceptance case depends
+  on" line.
+- **Replans take the smallest unblocking change.** When a stage cannot meet an acceptance case as
+  written, superreplan lists five remedies in order and says why each does or does not apply: a
+  test-scoped substitute, narrowing the case, postponing it to a named stage or goal, changing an
+  upstream provider, and new research. It takes the first that applies. A test-scoped substitute
+  needs no owner approval unless a `[source]` or `[owner]` rule forbids it, and applies only when the
+  case's acceptance text does not itself require the real provider; it lives only in tests and is
+  always recorded as a limitation, never as end-to-end evidence. Narrowing or postponing is a yes/no
+  owner question with that remedy recommended, and a replanner that recommends one goes to the owner
+  at once rather than through another replan. When none of the first three applies and the case
+  turns on an open reading of the sources, the replanner returns the gap with candidate values,
+  which also goes straight to the owner as a choice among them; upstream or research work never
+  settles a specification gap. "Cannot silently weaken" now reads as *ask*,
+  not *avoid*. The executor's REPLAN-REQUIRED report and the replanner's report carry the list, and
+  superfinish's closeout lists every substituted, narrowed or postponed case under **Limitations**.
+- **Panel re-plan guidance is bounded.** It names the chosen option, the facts and the recommended
+  remedy, and may not add deliverables, analyses or proofs outside the stage's acceptance and scope;
+  guidance that does is a malformed verdict. Any directive reaches the replanner tagged
+  `[planner]`, so it can be set aside with a reason.
+- **Replans that publish nothing converge.** The supervisor counts consecutive replanner BLOCKED
+  outcomes for one originating stage (`replan_stalls:` in the loop file) and records each under
+  `## Decisions`. From the second, the panel may re-plan again only by naming what is materially
+  different; otherwise it chooses a scope remedy or decline/defer. The repeat check now counts these
+  stalls alongside owner answers, and a stall repeat leads with the replanner's recommended scope
+  remedy.
+- **A specification gap is escalated only when the stage needs it filled.** An unsettled reading is
+  a specification gap when acceptance depends on it; otherwise it is a scope question and the
+  cheapest scope remedy goes first. A pending block about a gap must say which acceptance case
+  depends on it and whether a scope remedy avoids it, recommends that remedy when one does, and
+  offers named candidate values otherwise. It never asks the owner to write policy or specification
+  text.
+- `lifecycle-regression.py` gains the replay scenarios `infeasible_preparation` and `replan_stalls`.
+
+A second stop in the same live goal ran four ticks on 0.13.1. A stage's positive control needed a
+success the delivered upstream verifier never returns for the full topology, a limitation its
+closeout already recorded. Preparation passed anyway. Three replans published nothing while the
+panel's guidance grew into a transducer, an abstraction map and simulation proofs. The loop then
+asked the owner to author protocol lifecycle policy. Cheaper routes were never stated: a
+test-registered result, narrowing the case, or postponing it.
+
 ## 0.15.1 — 2026-10-14
 
 - **`_common.sh` refuses zsh and sh up front.** Sourced outside bash it used to fail part-way on

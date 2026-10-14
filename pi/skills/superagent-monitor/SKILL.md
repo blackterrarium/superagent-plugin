@@ -116,7 +116,10 @@ leads with what failed, the most likely cause and the recommended option; identi
 panel's analysis sit in its trailing reference list. A protected-change request is a yes/no question:
 `yes` approves exactly the change it names, `yes <value>` the same change with a different value, and
 `no` takes the path the block states. A block that offers only requests for more evidence, authority
-or budget, or that names no likely cause, is malformed (superloop L7 Rung 2) — say so to the user.
+or budget, or that names no likely cause, is malformed (superloop L7 Rung 2) — say so to the user. So
+is a block that asks the user to write specification or policy text, or to settle a specification gap
+without saying which acceptance case depends on it and whether narrowing or postponing that case would
+avoid it.
 Then choose a path. **Prefer the attended tick** — it is
 race-free (runs under the L3 lock and applies + continues in one step).
 
