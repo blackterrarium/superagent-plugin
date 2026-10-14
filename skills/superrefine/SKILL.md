@@ -67,6 +67,11 @@ clarifies the implementation, distinguishing test details, and verification tied
 evidence. It must be executable without another architecture or requirements decision. Do not invent
 unobserved predecessor facts to make it look detailed.
 
+Any restriction the prepared leaf adds beyond the approved stage — a budget, a ban, a required order,
+an excluded evidence source — carries the origin tag `[planner]`; one carried from the stage keeps its
+`[source: …]` or `[owner: …]` tag (superreplan's origin rule). Never add a restriction that forbids
+the fix current evidence points to.
+
 Classify the observed change with superstage S4 before publication:
 
 - **PREPARED** only when acceptance, scope boundaries, chosen approach, dependency edges, provider
@@ -110,6 +115,7 @@ stage, not merely against prose intent:
 3. The sole Preparation pointer is the only omitted digest line; every other plan byte is bound.
 4. S1/S2 and S5 pass in candidate context through the explicit intended-vault-path-to-scratch-path
    map, including report readability. Candidate validity authorizes atomic publication only.
+5. Every restriction the leaf adds is tagged `[planner]`, and none is presented as owner authority.
 
 If preservation review finds a commitment mismatch, return **REPLAN-REQUIRED** with a finding; it
 never becomes a local refiner ruling. Correct a candidate-only digest/path/detail mistake and rerun

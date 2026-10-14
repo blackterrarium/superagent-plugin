@@ -438,6 +438,11 @@ that at 120 s by default and refuses anything above 600 s unless `BASH_DEFAULT_T
   For an attended run, launch
   Claude with `BASH_MAX_TIMEOUT_MS` at least that many minutes in milliseconds. The supervisor
   refuses to dispatch `superrun` when that maximum is below the configured timeout.
+- `role-bridge.sh` passes the executor its deadline as `SUPER_EXECUTOR_DEADLINE_EPOCH`. At each task
+  boundary `superrun` compares the time left with a margin — 20% of the limit, or the longest
+  command it has run, whichever is larger — and returns a CHECKPOINT report rather than being killed
+  mid-task; the next tick resumes from its ledger. After two consecutive timeouts on one leaf, the
+  supervisor dispatches one ledger step at a time and names the longest command in the tick report.
 
 **Cursor is unverified as a bridge target and as a supervisor for bridged roles.** The `agent` CLI
 is absent on the build host, so bridge smoke T3 skips. The relay definition's `tools:` key and tool
