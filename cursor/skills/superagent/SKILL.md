@@ -99,7 +99,7 @@ and **exit**. Do not guess a plan from the working directory.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` under bash (it refuses zsh and other shells — wrap the call in `bash -c '…'` when your shell is not bash) and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -258,7 +258,7 @@ Resolve each key environment > repo `.superenv` > harness default. Equal pins ar
 not couple roles.
 
 *`superrun` (process dispatch):* the bridge takes the CLI's native model string directly, so no
-agent definition is involved. In Bash, `. "${SUPER_PLUGIN_ROOT}/scripts/_common.sh"` and pass
+agent definition is involved. In Bash, `. "${SUPER_PLUGIN_ROOT}/scripts/_common.sh"` (under bash, never zsh) and pass
 `--harness "$(superagent_role_harness "$SUPER_MODEL_EXECUTOR")"` (an `inherit` harness → `SUPER_HARNESS`),
 `--model "$(superagent_role_model "$SUPER_MODEL_EXECUTOR")"` (a tier, a full `claude-*` ID, or a
 foreign harness's model — all pass through unchanged; `inherit` omits the flag) and
@@ -649,7 +649,7 @@ second successor after a crash.
      code PR) → `status: WAITING FOR PLAN`,
      `plan_exhausted: false` (more may remain to plan/run).
 6. Append an iteration-log entry (skill, result, and `github` PR URLs or `none` receipt/snapshot
-   paths). Go to **Step 2**.
+   paths) of at most three lines (superloop L1: *Keep the loop file small*). Go to **Step 2**.
 
 ---
 

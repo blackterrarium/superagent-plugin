@@ -50,7 +50,7 @@ work-model-specific specifics.
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` under bash (it refuses zsh and other shells — wrap the call in `bash -c '…'` when your shell is not bash) and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -178,6 +178,14 @@ session_skill_count: 0            # heavy skills run in the CURRENT cron session
 ## Iteration log
 - (one entry appended per tick: iteration #, skill invoked, result, PR URLs, status transition)
 ```
+
+**Keep the loop file small — every tick reads it.** An iteration-log entry is at most three lines:
+iteration, skill, one-line result, PR/receipt links, status transition. Hashes, execution identities,
+budget accounting and verbatim reports belong in the tick's own report (the tick log the driver
+writes, and the delegated skill's report and ledger), never in the loop file. A tick reads the
+frontmatter, `## Pending decision`, `## Decisions` and the **last five** iteration-log entries — for
+example `awk` up to `## Iteration log` plus `tail` of the rest — not the whole file; older entries
+are history it never needs.
 
 The baseline fields (`master_plan`, `status`, `prior_status`, `driver`, `cron_id`, `created`,
 `iteration`, `session_skill_count`) are owned by superloop. `plan_exhausted` is **caller-specific** —

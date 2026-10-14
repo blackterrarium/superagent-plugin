@@ -100,7 +100,7 @@ If the input is a seed/master/sub-master plan, **report the error and exit**:
 
 ## Repo configuration (.superenv)
 
-Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
+Resolve project context before any workflow action by sourcing `${SUPER_PLUGIN_ROOT}/scripts/_common.sh` under bash (it refuses zsh and other shells — wrap the call in `bash -c '…'` when your shell is not bash) and calling `superagent_load_context "$PWD" run` (lifecycle control commands first load the registered `SUPERAGENT_PROJECT_ROOT`). Use its exported physical `REPO` and validated `SUPER_GIT_MODE`. Resolution is process environment > nearest/explicit project `.superenv` > packaged default; missing mode means `github`. In `none`, never run git, gh, GitHub API, credential discovery, worktree, commit, push, PR, merge, sync, or CI-poll operations. An existing `.git` directory does not change this rule.
 
 ## Vault root
 
@@ -239,6 +239,11 @@ named `reports/YYYY-MM-DD-hh_mm-<topic>.md` (today's date and the current UTC ho
   historical failed/open observation when the attempt later succeeds.
 - **Repair/integration history** — every predecessor PR and its verified reuse/replacement/closure or
   adopted disposition, plus the active successor relationship when applicable.
+- **CI duration** — when CI is test evidence, the longest CI step on the final run: its name, its
+  duration (`gh run view <id> --json jobs`), and the limit it runs under when one is configured
+  (a job `timeout-minutes`, a test-runner timeout, a `subprocess` deadline) with where it is set. A
+  step above about 80% of a known limit is also recorded as a finding (step 1): it will turn into a
+  red run before long, and the fix is cheaper now than after a timeout.
 
 Open with the standard header block (`# Title`, `**Date:**`, `**Type:** Sub-PR closeout`,
 `**Status:**`, `**Related:**`). When CI evidence exists, cite the source CI run id(s) and verify the

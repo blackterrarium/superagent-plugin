@@ -9,6 +9,13 @@
 # must ensure GH_TOKEN is exported before invoking the CLI — the child
 # inherits it.
 
+# This file uses bash-only builtins (compgen, read -a, [[ ]], BASH_REMATCH). Sourced under zsh
+# or sh it fails part-way with confusing errors, so refuse up front.
+if [ -z "${BASH_VERSION:-}" ] || case ":${SHELLOPTS:-}:" in *:posix:*) true ;; *) false ;; esac; then
+  echo "_common.sh: source this file under bash (e.g. bash -c '. .../_common.sh; <function>'), not ${ZSH_VERSION:+zsh }${ZSH_VERSION:-sh or another shell}" >&2
+  return 1 2>/dev/null || exit 1
+fi
+
 # Populate GH_TOKEN into the environment if not already set. Preference order:
 #   1. an existing GH_TOKEN (e.g. sourced from .env — the canonical, repo-policy path)
 #   2. GITHUB_TOKEN

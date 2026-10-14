@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.15.1 — 2026-10-14
+
+- **`_common.sh` refuses zsh and sh up front.** Sourced outside bash it used to fail part-way on
+  `compgen` and `read -a`; it now prints "source this file under bash" and returns 1 before doing
+  anything. Every skill that tells the agent to source it now says "under bash", with `bash -c '…'`
+  as the wrapper when the agent's shell is zsh. The live Codex run logged `compgen` errors on at least
+  three ticks before re-sourcing under bash.
+- **A model-capacity or rate-limit refusal is retried once.** `role-bridge.sh` re-runs the CLI once,
+  after `SUPERAGENT_BRIDGE_RETRY_SECS` (default 30; 0 disables), when a failed run's log shows a
+  capacity, overload, rate-limit or 429 error, and logs the retry. Any other failure is still
+  returned at once. One "Selected model is at capacity" refusal had cost the live run a whole
+  dispatch.
+- **The loop file stays small.** An iteration-log entry is capped at three lines; hashes, identities
+  and budget accounting go in the tick's own report. A tick reads the frontmatter, the pending
+  decision, the decisions and the last five log entries rather than the whole file. The live run's
+  loop file had passed 140 KB, read in full on every tick.
+- **CI duration is tracked at closeout.** When CI is test evidence, superfinish records the longest
+  CI step's duration and the limit it runs under, and records a finding when the step is above about
+  80% of that limit — before it becomes a red run. The live run's first CI run after the timeout
+  was raised to 3600 s took 2928 s.
+
 ## 0.15.0 — 2026-10-14
 
 - **Every constraint a replan adds says where it came from.** superreplan and superrefine tag each
