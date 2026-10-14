@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.14.0 — 2026-10-14
+
+- **A red CI run is triaged before it becomes a blocker.** superrun now classifies every red,
+  cancelled or timed-out run before declaring BLOCKED: the failing job and step and its duration;
+  the class (`timeout`, `test-failure`, `setup/infra`, `unknown`); failing test IDs and assertion
+  lines from the job log or junit output; for a timeout, the limit, where it is configured, and the
+  same step's duration on the last green default-branch run; whether each failing test belongs to
+  the branch; and the best-supported cause with the cheapest fix. The evidence bar is the
+  best-supported explanation, not proof: a duration that matches a configured limit is sufficient
+  evidence of a timeout, with no observed kill record required. An in-scope, unprotected fix is
+  applied through the fix loop and pushed again within the dispatch, at most twice per failing
+  step; everything else returns BLOCKED with the triage record in the Final Report. Red CI still
+  never merges.
+- **New `.superenv` key `SUPER_PROTECTED_PATHS`** (empty by default): comma-separated path globs the
+  loop may not change on its own, checked with `superagent_protected_match` in `_common.sh`. No
+  executor ruling, fix round, final fix wave, CI-triage fix or panel applies a change to a matching
+  file. `init` validates the globs and offers to populate the key from the project's agent
+  instructions.
+- **The escalation ladder can ask for one protected change.** superloop L7 and the superagent
+  option set gain a fourth outcome beside retry, re-plan and decline: a yes/no request naming the
+  file, the old and new value, the evidence, and what happens on each answer. A bare `yes` approves
+  exactly that change, `yes <value>` substitutes the value, and `no` takes the stated route. The
+  approval is recorded verbatim under `## Decisions` and authorizes that change only; the panel may
+  choose to ask but never approves. A `yes` resumes the blocked attempt on its open PR through a new
+  superrun resume entry, which applies exactly that change and waits for CI; no replan generation.
+- **Pending decisions have a required shape.** What failed, the most likely cause with its
+  supporting facts and what was not checked, the recommended option first with what the loop will
+  do, the other options with their cost, and how to answer, where a single word is always a valid
+  answer. Identifiers, hashes and budgets move to a trailing reference list. A block whose options
+  all ask for more authority, evidence or budget, or that names no likely cause, is invalid.
+- **The panel investigates instead of echoing its packet.** The packet carries facts and pointers,
+  not conclusions; panelists run read-only checks themselves; one panelist is briefed to argue for
+  the simplest explanation and cheapest fix. `insufficient-info` must name the missing fact and how
+  to get it. When a fact is obtainable read-only, the supervisor fetches it and re-runs the panel
+  once before escalating, and a panel of bare verdicts is re-run rather than escalated.
+- **A repeated escalation is detected.** Before writing a pending decision, the supervisor compares
+  it with earlier decisions on the same PR and failing step. A repeat says so in its first line,
+  summarises what each earlier answer authorised, and leads with a different kind of option; a
+  repeat block may not offer more evidence, attempts, budget or an unchanged retry, and the panel
+  may not converge on an unchanged retry for a failure it has already seen.
+
+A live upfront run on Codex paused for its owner six times in nine days. Two pauses were genuine
+specification gaps, and the loop still stops for those. The other four came from a test suite that
+outgrew a fixed 1800-second CI timeout and a container image missing one `COPY` line; they cost
+about 119 hours of owner wait. The loop quoted the timeout in its first finding, then refused to
+name it as the cause without a kill record that could not exist, asked three more times for
+diagnostic authority around the protected file, and never asked to change it.
+
 ## 0.13.1 — 2026-10-06
 
 - **The final review may run a second fix wave before a stage is BLOCKED.** superbuild B6 allowed

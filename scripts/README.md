@@ -349,6 +349,11 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `bridge-test.sh` — offline tests for `role-bridge.sh` and the `_common.sh` role-grammar parser,
   using `PATH` shims in place of the real CLIs (no network, no live CLI needed); prints `bridge-test:
   N failure(s)` and exits 1 on any failure.
+- `escalation-test.sh` — offline tests for the `SUPER_PROTECTED_PATHS` helpers in `_common.sh`
+  (`superagent_protected_globs`, `superagent_protected_match`: comma splitting, glob matching,
+  stdin input, empty-key behaviour) plus pins on the skill prose of the escalation contract (CI
+  triage, protected-change requests, the panel packet, the repeat check, the pending-decision
+  shape). Bash 3.2, no network; exit 1 on any failure.
 - `_evalspec.sh` — sourced markdown-table parser shared by `prd-lint.sh` and `supereval.sh`
   (single source of truth for the `trim`/`strip_ticks`/`section_body`/`table_rows`/`cell` helpers
   and the `US`/`RS` separators). Adds two readers over an `evaluation.md`: `evalspec_env` prints

@@ -162,12 +162,14 @@ session_skill_count: 0            # heavy skills run in the CURRENT cron session
 ---
 
 ## Pending decision
-<!-- present only while status == WAITING FOR INPUT: the question, the panel's option analysis,
-     and how to answer. Cleared once resolved. -->
+<!-- present only while status == WAITING FOR INPUT, in L7 Rung 2's required shape: what failed,
+     most likely cause, recommended option, other options, how to answer, then a reference list.
+     Cleared once resolved. -->
 
 ## Decisions
 <!-- append-only: each escalated decision, the panel verdict (or "user-resolved"), the chosen
-     option, and one-line rationale. -->
+     option, and one-line rationale. Every entry names what it concerned — `PR #N · <job/step>` or
+     the stage and blocker — so L7's repeat check can match it. -->
 
 ## Iteration log
 - (one entry appended per tick: iteration #, skill invoked, result, PR URLs, status transition)
@@ -583,6 +585,12 @@ BLOCKED / CI-red outcome, or any place a skill surfaces a clarification rather t
 Standing posture: if a delegated skill would otherwise ask the user inline, resolve it via this ladder
 instead.
 
+**Protected surfaces.** A file matching `SUPER_PROTECTED_PATHS` (`superagent_protected_match` in
+`scripts/_common.sh`), an approved acceptance row, or a value the project's own instructions pin is a
+protected surface. When the best-supported fix needs one, the ladder asks the owner for **exactly that
+change** — the **protected-change request** in Rung 2 — instead of asking for more evidence or more
+authority around it. The panel may choose to ask; it never approves the change itself.
+
 > **Depth-1 subagent constraint.** Subagents cannot spawn subagents (depth-1) — more precisely, a
 > subagent cannot foreground-wait on children it spawns; they background and yield instead. The
 > read-only 3-subagent panel fits within this limit; the supervisor that runs the panel **cannot
@@ -594,22 +602,54 @@ instead.
 ### Rung 1 — Subagent panel (resolve autonomously)
 Dispatch **3 panelists in one blocking `bash` call** to the fan-out script — this harness has no
 blocking parallel subagent tool, and the supervisor never uses a subagent tool at all. Write the
-identical packet to three temp files (`mktemp "${TMPDIR:-/tmp}/super-panel.XXXXXX"` ×3, quoted
-heredocs), resolve the panel's harness/model/effort from `SUPER_MODEL_PANEL` / `SUPER_EFFORT_PANEL`
+packet to three temp files (`mktemp "${TMPDIR:-/tmp}/super-panel.XXXXXX"` ×3, quoted
+heredocs; the first carries the simplest-explanation brief below), resolve the panel's harness/model/effort from `SUPER_MODEL_PANEL` / `SUPER_EFFORT_PANEL`
 (`. "${SUPER_PLUGIN_ROOT}/scripts/_common.sh"`; `superagent_role_harness`, an `inherit` harness →
 `pi`; `superagent_role_model`), then run with the largest `timeout` the `bash` tool accepts:
 `"${SUPERAGENT_FANOUT:-${SUPER_PLUGIN_ROOT}/scripts/bridge-fanout.sh}" --harness <h> --model "<m>" --effort "<e>" --tools role --cwd "$PWD" --role panelist --timeout 1800 --prompt-file "$f1" --prompt-file "$f2" --prompt-file "$f3"`
 stdout carries the three verdicts framed `=== PANELIST <n> exit=<rc> === … === END <n> ===`; a
 block whose body begins `BRIDGE-FAILED` (bridge error or the 1800 s timeout) is that panelist
-returning `insufficient-info`. `SUPER_PANEL_AGENT_TYPE` is ignored on Pi. The call blocks until
+returning no verdict. `SUPER_PANEL_AGENT_TYPE` is ignored on Pi. The call blocks until
 all three return — never launch panelists as background `pi-subagents` runs and poll them.
-Give each the **same packet**: the decision/blocker statement, the relevant plan +
-report excerpt, and pointers to the code/vault context. Keep the prompts identical so diversity comes
-from independent reasoning, not framing. Require each to return a structured verdict —
-`{chosen_option, rationale, confidence}` over the concrete options (or `insufficient-info`).
+**The packet states facts and pointers, not conclusions.** Give each panelist: the blocker as the
+delegated skill reported it (verbatim, including any CI triage record), the relevant plan + report
+excerpt, every earlier `## Decisions` entry on the same PR, step or blocker, the concrete options,
+and pointers — PR, CI run ids, worktree, ledger, vault paths. Do not assert what the evidence has
+not established: "the cause is unknown" and "the budget is spent" are claims for the panel to test,
+not framing to hand it. Agreement among panelists who were told the answer measures the packet, not
+the problem.
+
+**Panelists investigate.** Each panelist may — and should — run read-only checks itself: CI logs
+(`gh run view <id> --log-failed`), run artifacts and history, the diff, the ledger, the plan tree. No
+writes, pushes, reruns or comments. Honour any project rule that excludes a specific sensitive source,
+such as privileged service logs; the ordinary CI job log and junit output are not in that category.
+
+**One panelist argues for the simple answer.** Append this to the first panelist's prompt only:
+*"Before voting, make the strongest case for the simplest explanation consistent with the evidence
+and the cheapest fix that would unblock the work. Your verdict is still your own judgment."* The
+other two prompts stay identical, so the remaining diversity comes from independent reasoning.
+A choice between readings the project's sources do not settle is not a cheapest fix: it is a
+specification gap, and it goes to the owner.
+
+**A repeat may not converge on an unchanged retry.** When an earlier `## Decisions` entry concerned
+the same PR and failing step or blocker, say so in the packet. A retry adopted for that failure must
+carry a change the earlier attempt did not have; otherwise the panel chooses another option.
+
+Require each to return a structured verdict over the concrete options —
+`{chosen_option, likely_cause, rationale, confidence}` — or
+`{insufficient-info, missing_fact, cheapest_way_to_obtain, read_only: yes|no}`. An
+`insufficient-info` must name the specific missing fact and the cheapest way to get it; a bare one is
+malformed and counts as no verdict.
 A reply that begins `BRIDGE-FAILED` is a bridged panelist whose foreign CLI never produced a
-verdict: count it as that panelist returning `insufficient-info` (never as a vote, and never as a
-reason to abandon the rung), and note the bridge failure in the `## Decisions` entry.
+verdict: count it as no verdict (never as a vote, and never as a reason to abandon the rung), and
+note the bridge failure in the `## Decisions` entry.
+
+**Fetch, then re-run once.** If any panelist names a missing fact obtainable by a read-only action,
+the supervisor obtains it itself, adds it to the packet, and re-runs the panel **once** before Rung 2.
+Three verdicts with no usable content — bare `insufficient-info`, malformed or `BRIDGE-FAILED` — are a
+malformed panel result, not a reason to escalate: re-run the panel once, restating that a verdict must
+name an option or a missing fact. Only a second malformed result goes to Rung 2, and its block then
+lists the read-only checks the supervisor and panel ran and what each returned.
 
 **Converge.** If **≥2 of 3** agree on the same option with non-low confidence → **adopt it.** Record
 it under `## Decisions` (option + one-line rationale + "panel 2/3" or "3/3"), then **apply** the
@@ -620,14 +660,30 @@ it under `## Decisions` (option + one-line rationale + "panel 2/3" or "3/3"), th
 - a BLOCKED execution → apply whichever option the panel chose from the caller-supplied set (superagent:
   retry `superrun` with the unblock guidance, **or** route to the ready-to-plan state for a re-plan,
   **or** mark the step declined).
+- a **protected-change request** → the panel has chosen to ask, not to approve: go straight to Rung 2
+  and write the yes/no protected-change block. Converging on it never applies the change.
+
+### Repeat check (before every Rung 2)
+Before writing a pending decision, compare it with the `## Decisions` history. When an earlier owner
+decision concerned the same PR and the same failing CI step or blocker, the new block must:
+
+- say so in its first line — `Repeat: same failure as <earlier Decision IDs>`;
+- summarise what each earlier answer authorised and why that did not resolve it;
+- lead, as its recommendation, with a **different kind** of option than last time: a concrete fix, a
+  protected-change request, or decline/defer. A protected-change request for the same surface with a
+  new value counts as different when the block says why the approved value did not suffice.
+
+No option in a repeat block may ask for more evidence, more diagnostic attempts, more budget, or an
+unchanged retry on the same failure.
 
 ### Rung 2 — Escalate to the user (last resort)
-If the panel cannot converge (split, or all `insufficient-info`):
-1. Write a `## Pending decision` block: the question, the panel's per-option analysis, what each
-   option implies, and how to answer. Save the current `status` into `prior_status`; set
-   `status: WAITING FOR INPUT`.
+If the panel cannot converge (split, still without usable verdicts after the re-run, or every
+verdict an `insufficient-info` whose missing fact is not obtainable read-only — typically a fact only
+the owner can supply), or it converged on a protected-change request:
+1. Write a `## Pending decision` block in the **required shape** below. Save the current `status`
+   into `prior_status`; set `status: WAITING FOR INPUT`.
 2. **Interactive session** (a person is present — typically `cron`/attended): call `AskUserQuestion`
-   now (present the panel's options + its leaning). On an answer → record under `## Decisions`
+   now (the recommended option first, then the others). On an answer → record under `## Decisions`
    ("user-resolved"), clear the pending block, restore `prior_status`, apply, and **continue this
    tick** — the driver keeps firing, so the loop never breaks.
 3. **Scheduled / unattended tick** (external Desktop/headless, or a `cron` tick with no one present):
@@ -642,3 +698,43 @@ If the panel cannot converge (split, or all `insufficient-info`):
    once on parking — `SUPER_NOTIFY_CMD`.)
    In `cron` mode, if you'd rather not burn ticks re-polling, `stop_driver()`
    to pause; the next `/<consumer> <bootstrap-input>` re-arms and resumes. `release_lock()` and end the tick.
+
+**Required shape of a pending decision.** Plain language a person outside the loop understands, in
+this order; Decision IDs, hashes, run ids, budget accounting and the panel's per-option analysis go
+in the trailing reference list, never in the body:
+
+```markdown
+## Pending decision
+<Repeat: same failure as <IDs> — <what each earlier answer authorised; why it did not resolve it>>   ← only when the repeat check fired
+**What failed:** <one sentence>
+**Most likely cause:** <one sentence> — because <two or three facts>. Not checked: <what was not checked>.
+**Recommended:** `<option>` — if chosen, the loop will <what it does next>.
+**Other options:**
+- `<option>` — <one line, with its cost>
+**How to answer:** write `answer: <option>` under this block (or `answer.sh <slug> "<option>"`). The
+option name alone is a complete answer.
+**Reference:** <Decision ID, PR, run ids, plan/ledger paths, panel verdicts, budgets>
+```
+
+A **protected-change request** is a yes/no question in the same shape. In place of the
+Recommended / Other options lines it carries:
+
+```markdown
+**Approve this change?** In `<file>`: `<old value>` → `<new value>` — protected because <the glob it matches, or the project rule that pins it>.
+**On yes:** <what the loop does — e.g. applies exactly this change on PR #N, pushes, waits for CI>.
+**On no:** <the route it takes — decline/defer the step, or re-plan — and what that costs>.
+**How to answer:** `answer: yes` approves exactly this change; `answer: yes <value>` approves the same
+change with a different value; `answer: no` takes the no path.
+```
+
+`yes` approves exactly the change described and nothing wider; `yes <value>` substitutes the value.
+Record the approved change verbatim under `## Decisions` (files, old → new, the answer as written);
+it is authority for that change only, and the next dispatch receives it as guidance. `no` routes as
+the block states.
+
+A block is **invalid**, and must be rewritten before it is saved, when:
+
+- every option asks for more authority, evidence, attempts or budget;
+- it states no likely cause, unless it says which read-only checks were tried and what each returned;
+- answering it requires the owner to write the disposition text — a single word or short phrase must
+  always be a valid answer.
