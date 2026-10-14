@@ -73,4 +73,14 @@ pin superrun '### Resume entry — targeted round (superagent-driven)'
 pin superagent 'At most one targeted round per open finding per leaf'
 pin superagent 'This never escalates to the owner'
 
+# 0.15.1: _common.sh refuses a non-bash shell up front instead of failing on compgen part-way.
+if command -v zsh >/dev/null 2>&1; then
+  if zsh -c ". '$ROOT/scripts/_common.sh'" 2>"${TMPDIR:-/tmp}/esc-zsh.err"; then fail "_common.sh sourced under zsh"; fi
+  grep -q 'source this file under bash' "${TMPDIR:-/tmp}/esc-zsh.err" || fail "zsh guard message"
+fi
+if sh -c ". '$ROOT/scripts/_common.sh'" 2>/dev/null; then fail "_common.sh sourced under sh"; fi
+bash -c ". '$ROOT/scripts/_common.sh'" || fail "_common.sh refused bash"
+pin superloop '**Keep the loop file small — every tick reads it.**'
+pin superfinish '**CI duration**'
+
 echo 'escalation-test: PASS'

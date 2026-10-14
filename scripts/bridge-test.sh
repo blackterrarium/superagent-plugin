@@ -25,8 +25,10 @@ mkshim() {
 printf '%s\n' "\$@" >"$T/$name.argv"
 cat >"$T/$name.stdin"
 printf '%s\n' "\${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-unset}" >"$T/$name.env"
+echo call >>"$T/$name.calls"
 case "\${SHIM_MODE:-ok}" in
   fail) echo "boom" >&2; exit 9 ;;
+  capacity) if [ ! -f "$T/$name.cap" ]; then : >"$T/$name.cap"; echo "Selected model is at capacity. Please try again." >&2; exit 1; fi ;;
   empty) exit 0 ;;
   slow) sleep 30; echo "RESULT-$name"; exit 0 ;;
 esac
@@ -40,6 +42,19 @@ EOF
 for b in claude codex agent pi; do mkshim "$b"; done
 printf 'hello prompt\nline two\n' >"$T/prompt.txt"
 argv() { cat "$T/$1.argv" | tr '\n' ' '; }
+
+# ── capacity / rate-limit retry ──
+rm -f "$T/claude.calls" "$T/claude.cap"
+out="$(SHIM_MODE=capacity SUPERAGENT_BRIDGE_RETRY_SECS=1 "$BRIDGE" --harness claude --cwd "$T/cwd" --prompt-file "$T/prompt.txt" 2>"$T/err")"; rc=$?
+check "capacity: retried once, then succeeded" bash -c "[ $rc -eq 0 ] && [ '$out' = RESULT-claude ] && [ \"\$(wc -l <'$T/claude.calls' | tr -d ' ')\" = 2 ]"
+check "capacity: retry announced on stderr" grep -q 'capacity/rate error from claude — retrying once' "$T/err"
+rm -f "$T/claude.calls"
+SHIM_MODE=fail SUPERAGENT_BRIDGE_RETRY_SECS=1 "$BRIDGE" --harness claude --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
+check "capacity: other failures are not retried" bash -c "[ $rc -eq 3 ] && [ \"\$(wc -l <'$T/claude.calls' | tr -d ' ')\" = 1 ]"
+rm -f "$T/claude.calls" "$T/claude.cap"
+SHIM_MODE=capacity SUPERAGENT_BRIDGE_RETRY_SECS=0 "$BRIDGE" --harness claude --cwd "$T/cwd" --prompt-file "$T/prompt.txt" >/dev/null 2>&1; rc=$?
+check "capacity: SUPERAGENT_BRIDGE_RETRY_SECS=0 disables the retry" bash -c "[ $rc -eq 3 ] && [ \"\$(wc -l <'$T/claude.calls' | tr -d ' ')\" = 1 ]"
+rm -f "$T/claude.cap"
 
 # ── claude ──
 out="$(SUPER_CODEX_SANDBOX= "$BRIDGE" --harness claude --model sonnet --effort high --cwd "$T/cwd" --prompt-file "$T/prompt.txt" --role implementer 2>"$T/err")"; rc=$?

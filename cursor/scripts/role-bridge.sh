@@ -126,60 +126,78 @@ trailer() {  # trailer <exit-code>
   echo "role-bridge: end=$(date -u '+%Y%m%dT%H%M%SZ') exit=$1 secs=$(( $(date +%s) - start_epoch )) result_bytes=$(printf '%s' "$result" | wc -c | tr -d ' ')" >>"$log"
 }
 
-result=""; rc=0
-case "$harness" in
-  claude)
-    args=(-p)
-    [ "$model"  != inherit ] && args+=(--model "$model")
-    [ "$effort" != inherit ] && args+=(--effort "$effort")
-    args+=(--allowedTools "$allowed")
-    envargs=(-u CLAUDE_CODE_EFFORT_LEVEL "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-0}")
-    [ "$BRIDGE_UNSET_CLAUDECODE" = true ] && envargs+=(-u CLAUDECODE)
-    result="$(cd "$cwd" && env "${envargs[@]}" claude "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
-    ;;
-  codex)
-    args=(exec)
-    if [ "${SUPER_CODEX_SANDBOX:-danger-full-access}" = workspace-write ]; then
-      args+=(--sandbox workspace-write -c sandbox_workspace_write.network_access=true)
-    else
-      args+=(--dangerously-bypass-approvals-and-sandbox)
-    fi
-    out="$logdir/${role_safe}-${stamp}.last"
-    args+=(--skip-git-repo-check -C "$cwd")
-    [ "$model"  != inherit ] && args+=(-m "$model")
-    [ "$effort" != inherit ] && args+=(-c "model_reasoning_effort=$effort")
-    args+=(-o "$out" -)
-    (cd "$cwd" && codex "${args[@]}" <"$prompt_file" >>"$log" 2>&1) || rc=$?
-    [ -f "$out" ] && result="$(cat "$out")"
-    ;;
-  cursor)
-    args=(-p "$(cat "$prompt_file")" --trust --force)
-    [ "$model" != inherit ] && args+=(--model "$model")
-    args+=(--output-format text)
-    # </dev/null: the prompt rides argv, and an inherited open stdin makes the CLI wait on it.
-    result="$(cd "$cwd" && agent "${args[@]}" </dev/null 2>>"$log")" || rc=$?
-    ;;
-  pi)
-    args=(-p --approve --no-session)
-    [ -n "${SUPERAGENT_PI_SKILLS:-}" ] && args+=(--skill "$SUPERAGENT_PI_SKILLS")
-    # pi carries the thinking level as a ":<level>" suffix on the model string. With no model
-    # the CLI's --thinking flag carries it instead. An explicit level already on the model
-    # ("openai/gpt-5:high") wins — never suffix twice.
-    m="$model"
-    if [ "$effort" != inherit ]; then
-      if [ "$model" = inherit ]; then
-        args+=(--thinking "$effort")
-      elif printf '%s' "$m" | grep -q ':[A-Za-z0-9_-]*$'; then
-        echo "role-bridge: warning — --model '$m' already pins a level; ignoring --effort '$effort'" >&2
+# run_cli — one run of the selected CLI; sets result and rc.
+run_cli() {
+  result=""; rc=0
+  case "$harness" in
+    claude)
+      args=(-p)
+      [ "$model"  != inherit ] && args+=(--model "$model")
+      [ "$effort" != inherit ] && args+=(--effort "$effort")
+      args+=(--allowedTools "$allowed")
+      envargs=(-u CLAUDE_CODE_EFFORT_LEVEL "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:-0}")
+      [ "$BRIDGE_UNSET_CLAUDECODE" = true ] && envargs+=(-u CLAUDECODE)
+      result="$(cd "$cwd" && env "${envargs[@]}" claude "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
+      ;;
+    codex)
+      args=(exec)
+      if [ "${SUPER_CODEX_SANDBOX:-danger-full-access}" = workspace-write ]; then
+        args+=(--sandbox workspace-write -c sandbox_workspace_write.network_access=true)
       else
-        m="${m}:${effort}"
+        args+=(--dangerously-bypass-approvals-and-sandbox)
       fi
-    fi
-    [ "$model" != inherit ] && args+=(--model "$m")
-    [ -n "$pi_allowed" ] && args+=(--tools "$pi_allowed")
-    result="$(cd "$cwd" && pi "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
-    ;;
-esac
+      out="$logdir/${role_safe}-${stamp}.last"
+      args+=(--skip-git-repo-check -C "$cwd")
+      [ "$model"  != inherit ] && args+=(-m "$model")
+      [ "$effort" != inherit ] && args+=(-c "model_reasoning_effort=$effort")
+      args+=(-o "$out" -)
+      (cd "$cwd" && codex "${args[@]}" <"$prompt_file" >>"$log" 2>&1) || rc=$?
+      [ -f "$out" ] && result="$(cat "$out")"
+      ;;
+    cursor)
+      args=(-p "$(cat "$prompt_file")" --trust --force)
+      [ "$model" != inherit ] && args+=(--model "$model")
+      args+=(--output-format text)
+      # </dev/null: the prompt rides argv, and an inherited open stdin makes the CLI wait on it.
+      result="$(cd "$cwd" && agent "${args[@]}" </dev/null 2>>"$log")" || rc=$?
+      ;;
+    pi)
+      args=(-p --approve --no-session)
+      [ -n "${SUPERAGENT_PI_SKILLS:-}" ] && args+=(--skill "$SUPERAGENT_PI_SKILLS")
+      # pi carries the thinking level as a ":<level>" suffix on the model string. With no model
+      # the CLI's --thinking flag carries it instead. An explicit level already on the model
+      # ("openai/gpt-5:high") wins — never suffix twice.
+      m="$model"
+      if [ "$effort" != inherit ]; then
+        if [ "$model" = inherit ]; then
+          args+=(--thinking "$effort")
+        elif printf '%s' "$m" | grep -q ':[A-Za-z0-9_-]*$'; then
+          echo "role-bridge: warning — --model '$m' already pins a level; ignoring --effort '$effort'" >&2
+        else
+          m="${m}:${effort}"
+        fi
+      fi
+      [ "$model" != inherit ] && args+=(--model "$m")
+      [ -n "$pi_allowed" ] && args+=(--tools "$pi_allowed")
+      result="$(cd "$cwd" && pi "${args[@]}" <"$prompt_file" 2>>"$log")" || rc=$?
+      ;;
+  esac
+}
+
+# A model-capacity or rate-limit refusal is transient: retry once after a short wait, inside this
+# bridge call, before the caller maps the failure to an interruption (one lost dispatch otherwise).
+# SUPERAGENT_BRIDGE_RETRY_SECS (default 30) sets the wait; 0 disables the retry.
+CAPACITY_RE='at capacity|overloaded|rate[ _-]?limit|too many requests|(^|[^0-9])429([^0-9]|$)|resource[ _]exhausted'
+retry_secs="${SUPERAGENT_BRIDGE_RETRY_SECS:-30}"
+case "$retry_secs" in ''|*[!0-9]*) retry_secs=30 ;; esac
+log_mark="$(wc -c <"$log" | tr -d ' ')"
+run_cli
+if [ "$rc" -ne 0 ] && [ "$retry_secs" -gt 0 ] \
+   && tail -c "+$(( log_mark + 1 ))" "$log" | grep -Eiq "$CAPACITY_RE"; then
+  echo "role-bridge: capacity/rate error from $bin — retrying once in ${retry_secs}s" | tee -a "$log" >&2
+  sleep "$retry_secs"
+  run_cli
+fi
 
 if [ "$rc" -ne 0 ]; then trailer 3; echo "role-bridge: $bin exited $rc (see $log)" >&2; exit 3; fi
 if [ -z "$result" ]; then trailer 4; echo "role-bridge: $bin returned an empty result (see $log)" >&2; exit 4; fi
