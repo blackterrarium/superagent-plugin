@@ -88,7 +88,10 @@ once and write the result to the ledger as a table, not a verdict:
 - one row per pair of tasks that share a file or an interface — what one produces against what the
   other consumes, and what you found;
 - one row per task — whether its own text agrees with itself (its tests against its code, the files
-  it creates against the files it later touches) and with the Global Constraints.
+  it creates against the files it later touches) and with the Global Constraints;
+- one row per task whose files match `SUPER_PROTECTED_PATHS` (`superagent_protected_match`), with
+  the authority the plan cites for changing them — a source document or a recorded owner answer.
+  A protected file with no cited authority is a conflict for B5.
 
 Route every conflict the scan finds through **B5** before execution begins. A clean scan proceeds
 without comment. The review loop remains the net for conflicts that only emerge in implementation.
@@ -187,7 +190,8 @@ For each task without a completion line, in plan order:
    `<dir>/task-<N>-brief.md`. Exact values appear only in the brief.
 3. Fill `build-implementer.md`: the brief path, the Global Constraints verbatim, the task's
    approved acceptance rows verbatim, the context only you hold, the report path
-   `<dir>/task-<N>-report.md`, and the two blocks. Dispatch as IMPLEMENTER and keep the child's
+   `<dir>/task-<N>-report.md`, `[PROTECTED_PATHS]` (the `SUPER_PROTECTED_PATHS` globs, or `none`),
+   and the two blocks. Dispatch as IMPLEMENTER and keep the child's
    identity for the fix loop.
 
 ### B4.2 Handle the report
@@ -288,6 +292,10 @@ first: a conflict it covers is fixed under a ruling even when a later task build
 - it is a real defect, open at the breaker, that later work depends on;
 - the resolution needs an irreversible, destructive, or security-sensitive action, or a side
   effect outside the execution workspace that Step 3a does not already authorize;
+- the resolution would change a **protected surface** (superrun's Execution profile item 7): a file
+  matching `SUPER_PROTECTED_PATHS`, or a value the project's own instructions pin. Name the exact
+  change — file, old value, new value, and the evidence — in the BLOCKED packet so the caller can
+  ask for exactly that; an owner approval passed in as guidance authorizes that change only;
 - you cannot tell whether it is load-bearing.
 
 Stop the loop. Ledger `BLOCKED: <conflict> — <the plan text it collides with>` and return a BLOCKED

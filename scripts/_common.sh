@@ -328,6 +328,47 @@ superagent_executor_timeout_ms() {
   printf '%s\n' "$ms"
 }
 
+# Protected surfaces. SUPER_PROTECTED_PATHS is a comma-separated list of repo-relative
+# path globs, empty by default. A fix whose diff touches a match is never applied by an
+# executor ruling, the fix loop or the panel; it goes to the owner as a protected-change
+# request (superloop L7). Globs use bash pattern matching, so `*` also matches `/`
+# (`tests/gate/**` and `tests/gate/*` both cover the whole tree); a trailing `/` means
+# everything under that directory.
+# superagent_protected_globs — print each configured glob on its own line (nothing if unset).
+superagent_protected_globs() {
+  local -a globs=()
+  local g
+  IFS=, read -r -a globs <<<"${SUPER_PROTECTED_PATHS-}"
+  for g in ${globs[@]+"${globs[@]}"}; do
+    g="${g#"${g%%[![:space:]]*}"}"; g="${g%"${g##*[![:space:]]}"}"
+    [[ -n "$g" ]] && printf '%s\n' "$g"
+  done
+  return 0
+}
+
+# superagent_protected_match [PATH...] — print each repo-relative PATH (args, else one per
+# line on stdin) that matches a protected glob. Exit 0 when at least one matched, 1 when none
+# did (including when SUPER_PROTECTED_PATHS is empty). Typical use, from the worktree:
+#   git diff --name-only "$BASE"..HEAD | superagent_protected_match
+superagent_protected_match() {
+  local -a globs=() paths=()
+  local g p hit=1
+  while IFS= read -r g; do globs+=("$g"); done < <(superagent_protected_globs)
+  if (( $# )); then paths=("$@"); else while IFS= read -r p; do paths+=("$p"); done; fi
+  (( ${#globs[@]} )) || return 1
+  for p in ${paths[@]+"${paths[@]}"}; do
+    p="${p#./}"
+    [[ -n "$p" ]] || continue
+    for g in "${globs[@]}"; do
+      g="${g#./}"
+      [[ "$g" == */ ]] && g="${g}*"
+      # shellcheck disable=SC2053  # unquoted on purpose: $g is a glob
+      if [[ "$p" == $g ]]; then printf '%s\n' "$p"; hit=0; break; fi
+    done
+  done
+  return "$hit"
+}
+
 # Validate the effective workflow integration mode. Missing means the shipped,
 # backward-compatible GitHub workflow; an explicitly empty value is invalid.
 superagent_validate_git_mode() {

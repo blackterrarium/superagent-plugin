@@ -547,6 +547,7 @@ coding-loop skills, never by the tick.
 | SUPER_SKIP_FINISHING_HANDOFF | `false` | Retired: accepted and ignored. `superrun` Step 3a always integrates the code PR itself. |
 | SUPER_GH_DISABLE_SANDBOX | `false` | `true` on hosts (e.g. macOS) where `gh` needs keychain access the tool sandbox blocks. |
 | SUPER_REPO_NOTES | *(empty)* | Optional path to a repo doc the task-loop executor reads before the task loop, treated as standing repo policy. |
+| SUPER_PROTECTED_PATHS | *(empty)* | Comma-separated repo-relative path globs the loop may not change on its own, e.g. `tests/gate/**,tools/release_check.py` (`*` also matches `/`). No executor ruling, fix loop or panel applies a change to a matching file; the loop asks the owner a yes/no protected-change question instead (superloop L7). A pinned value inside an otherwise editable file stays prose in the project's own instructions; point those instructions at this key rather than restating the list. Empty means no path is protected. |
 
 ### Coding loop
 

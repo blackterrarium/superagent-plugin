@@ -115,13 +115,19 @@ For live following, either re-run Step 1 on request, or arm the watcher (event-g
 
 ## Step 2 — Answer a `WAITING FOR INPUT` loop
 
-Drill in first (`status.sh <slug>`) and show the user the `## Pending decision` block verbatim (the
-question + the panel's per-option analysis). Then choose a path. **Prefer the attended tick** — it is
+Drill in first (`status.sh <slug>`) and show the user the `## Pending decision` block verbatim. It
+leads with what failed, the most likely cause and the recommended option; identifiers and the
+panel's analysis sit in its trailing reference list. A protected-change request is a yes/no question:
+`yes` approves exactly the change it names, `yes <value>` the same change with a different value, and
+`no` takes the path the block states. A block that offers only requests for more evidence, authority
+or budget, or that names no likely cause, is malformed (superloop L7 Rung 2) — say so to the user.
+Then choose a path. **Prefer the attended tick** — it is
 race-free (runs under the L3 lock and applies + continues in one step).
 
 Read the loop's `LOOP_FILE` from `~/.config/superagent/<slug>.env`.
 
-**Path A — `answer.sh` (preferred).** Present the decision options to the user with `AskQuestion`, then
+**Path A — `answer.sh` (preferred).** Present the decision options to the user with `AskQuestion` (the
+block's recommended option first), then
 record the answer and resume the loop in one step — it takes the loop's L3 lock (refuses if a tick is
 mid-flight: retry), writes `answer: <option>` under `## Pending decision`, and kicks one tick
 immediately so the loop resumes now rather than after the interval (the wrapper's `SUPER_INPUT_GATE`

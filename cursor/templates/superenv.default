@@ -111,6 +111,7 @@ SUPER_GH_DISABLE_SANDBOX=false          # true on macOS hosts where gh needs key
 
 # ── Escape hatch ──────────────────────────────────────────────────
 SUPER_REPO_NOTES=                       # optional path to a repo doc the executor reads pre-run
+SUPER_PROTECTED_PATHS=                  # comma-separated repo-relative path globs the loop may not change on its own (`*` also matches `/`), e.g. tests/gate/**,tools/release_check.py; a fix touching one needs the owner's yes (superloop L7 protected-change request); empty = none
 
 # ── Coding loop (supercode) ───────────────────────────────────────
 # Stage 3 ships in 0.9.0 with full multi-harness live scheduler acceptance still pending. These

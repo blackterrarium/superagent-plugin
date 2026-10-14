@@ -73,6 +73,8 @@ its evidence/decision docs through A7 without changing source; it is the sole no
 | "I'll pause before each CI push to confirm" | NO. Run fully autonomously — superbuild runs end-to-end and never checks in between tasks. |
 | "The plan is ambiguous here — I'll ask the user" | NO. superbuild B5 routes it: a load-bearing conflict is a BLOCKED report, anything else is a ledgered ruling that reaches the Final Report. Never ask from inside the loop. |
 | "I found the target, I'll execute the next one too while I'm here" | NO. One leaf per invocation. After closeout, report and exit. |
+| "CI is red — declare BLOCKED and let the supervisor sort it out" | NO. Run **CI-failure triage** (Step 3a) first: read the failing step's log, classify it, name the best-supported cause and the cheapest fix. Apply an in-scope, unprotected fix yourself; only the rest is BLOCKED, with the triage record attached. |
+| "The step's duration matches the timeout, but I never saw the kill — cause unproven" | NO. A duration that matches a configured limit is sufficient evidence of a timeout. A runner or `subprocess` timeout kills the child internally and leaves no separate kill record; do not demand one. |
 | "A long CI push is queued — I'll wait for it to finish before pushing the next one" | NO. If `SUPER_CI_RUNNERS > 1`, queue every independent long push back-to-back (**CI scheduling**, Step 3) — the next free runner picks up the next job; serialize only across a named procedural gate. If `SUPER_CI_RUNNERS=1`, there is no runner contention to exploit, but a shardable batch's pushes still queue together and wait together. |
 
 ## Input — `<PLAN.md>` (Gate 1)
@@ -335,6 +337,14 @@ superbuild. Carry it into every dispatch the task loop makes:
    ignored.)
 6. **Repo notes.** If `SUPER_REPO_NOTES` is set, read that file before starting the task loop and
    treat it as standing repo policy.
+7. **Protected surfaces — keyed by `SUPER_PROTECTED_PATHS`** (empty by default). A path matching
+   one of its globs (`superagent_protected_match` in `scripts/_common.sh`; source it under bash),
+   an approved acceptance row, or a value the project's own instructions pin is a protected
+   surface. No executor ruling, fix round, final fix wave or CI-triage fix may change one
+   (superbuild B5). When the fix needs one, the outcome is BLOCKED with the exact change named
+   (file, old value, new value, evidence), so the supervisor can ask the owner a yes/no
+   protected-change question (superloop L7). An owner approval recorded under the loop's
+   `## Decisions` and passed to you as guidance authorizes exactly that change and nothing wider.
 
 ### CI scheduling — queue all shards (keyed by `SUPER_CI_RUNNERS`)
 
@@ -456,10 +466,15 @@ primary_root="$REPO"
      `SUPER_ADMIN_MERGE=true` permits it; see item 3) — then
      `git -C "$primary_root" pull --ff-only`. When `SUPER_PROTECTED_MAIN=false`,
      integrate via item 3's direct-merge recipe instead — no PR, no `gh`.
-   - **ANY run RED / cancelled / timed_out, or `SUPER_TEST_EVIDENCE=ci` expected a run and found
-     none** → **do NOT merge.** Leave the PR open, capture the failing run URL(s), and declare the
-     step **BLOCKED** in the Final Report. (When a `superagent` loop drives superrun, its escalation
-     ladder decides what happens next; a human caller sees the blocker plainly.)
+   - **ANY run RED / cancelled / timed_out** → **do NOT merge.** Leave the PR open, capture the
+     failing run URL(s), and run **CI-failure triage** (below) before anything else. If triage's
+     cheapest fix is in scope and touches no protected surface, apply it and push again within this
+     dispatch; otherwise declare the step **BLOCKED** in the Final Report with the triage record.
+   - **`SUPER_TEST_EVIDENCE=ci` expected a run and found none** → **do NOT merge.** Declare the step
+     **BLOCKED** in the Final Report; there is no run to triage.
+
+   (When a `superagent` loop drives superrun, its escalation ladder decides what happens after
+   BLOCKED; a human caller sees the blocker plainly.)
 3. **If `SUPER_PROTECTED_MAIN=true` (the shipped default): merge per `SUPER_MERGE_METHOD` (default
    `squash`). Pass `gh pr merge --admin` only if `SUPER_ADMIN_MERGE=true` — otherwise never.**
    Reaching for `--admin` when the key is unset or `false` buys nothing on a repo whose branch
@@ -492,6 +507,60 @@ primary_root="$REPO"
    default), run `gh` normally. Do **not** add Anthropic/Claude attribution or `Co-Authored-By`
    trailers (repo policy).
 
+### CI-failure triage — before BLOCKED
+
+A red run is not yet a blocker. A timeout, a failing test and a broken runner need different fixes,
+and only the executor holds the worktree, the logs and the plan context at once. Spend a few
+minutes on ordinary triage before you report anything, and write the result to the superbuild
+ledger as `CI triage <n>: <run id> — <class> — <cause> — <fix>`, with the full record in
+`<dir>/ci-triage-<n>.md`.
+
+1. **Where it failed.** The failing job and step, and the step's duration (`gh run view <id>
+   --json jobs`).
+2. **Class:** `timeout`, `test-failure`, `setup/infra`, or `unknown`.
+3. **For `test-failure`:** the failing test IDs and the assertion line, from the job log
+   (`gh run view <id> --log-failed`) or the run's junit/test-report output.
+4. **For `timeout`:** the limit that was hit and where it is configured (file and line), plus the
+   same step's duration on the last green run of the default branch (`gh run list --branch
+   <default> --workflow <workflow> --status success -L 1`). When several runs are at hand, note the
+   spread of durations.
+5. **For `setup/infra`:** what never became ready and why, from the job log and any container or
+   service exit state the standard job output shows (an import error at startup, a missing file in
+   an image, a dependency that failed to install).
+6. **Ownership.** Whether each failing test is in a file this branch added or changed.
+7. **The best-supported cause**, in one sentence, with the two or three facts that support it and
+   what you did not check. Then the **cheapest fix**: the files it touches, whether it is in this
+   stage's scope, and whether it touches a protected surface (Execution profile item 7 — run
+   `superagent_protected_match` over its file list, and check value pins the project's instructions
+   name).
+
+**The evidence bar is the best-supported explanation, not proof.** A step whose duration matches a
+configured limit — within a few seconds, or with the limit quoted in the log — timed out; that is
+sufficient evidence. Do not require a directly observed kill record: a runner or `subprocess`
+timeout kills the child internally and leaves none. Classify `unknown` only after reading the
+failing step's log, and say in the record what you read. Read the ordinary CI job log and
+junit output by default; honour any project rule that excludes a specific sensitive source, such as
+privileged service logs, and name what that left unread.
+
+**Act on it.**
+
+- **In scope and unprotected** — a failing test or code the branch added, an image or workflow line
+  the stage owns, a test this branch made slow: apply the fix through superbuild's fix mechanics —
+  one FIX_APPLIER with the triage record as its finding, then one RE_REVIEWER over the fix range
+  (superbuild B4.4 *Every round*) — ledger `CI fix <n>/2 (<base7>..<head7>)`, push, and return to
+  the CI-green gate above (under `superagent`, that is a fresh CI-PENDING report). At most **two**
+  triage fixes per leaf for the same failing step; a third red run on that step is BLOCKED with every
+  triage record.
+- **Out of scope, or touching a protected surface** — BLOCKED, with the triage record and the exact
+  change the fix needs (file, old value, new value) in the Final Report. Do not work around a
+  protected limit inside the stage, and do not build observation tooling to strengthen a cause the
+  evidence already supports.
+- **`unknown` after reading the log** — BLOCKED with the triage record, naming what was read and the
+  cheapest further read-only check.
+
+Triage never replaces the rules around it: red CI still never merges, and rerunning the same commit
+unchanged is not a fix. Act on the best-supported cause; do not retry until green.
+
 ### Resume entry — post-CI (superagent-driven)
 
 When superrun is invoked with a **CI-terminal
@@ -501,8 +570,10 @@ run's terminal conclusion — first require its complete execution snapshot. Ent
 per run (trust but verify — the packet may be stale), then run Step 3a's integration-authority gate
 against the current authoritative root, C8 record, and disposition. A packet queued before a batch
 request is recovery evidence, never merge authority. Re-read the superbuild ledger left in the
-worktree (`superbuild.sh workspace <leaf plan>` → `progress.md`) for the rulings and deferred items
-the Final Report must carry; the queuing process's memory is gone.
+worktree (`superbuild.sh workspace <leaf plan>` → `progress.md`) for the rulings, deferred items,
+and earlier `CI triage` / `CI fix` lines the Final Report must carry; the queuing process's memory
+is gone. If any conclusion is not `success`, this resume process runs **CI-failure triage** (Step
+3a) — it holds the worktree — and counts the ledger's earlier `CI fix` lines toward the cap.
 
 Only when the active identity is unchanged (including an explicitly retained same-identity stage
 validated in the new generation) may this terminal handler avoid re-running Steps 1–3, merge after both
@@ -511,6 +582,27 @@ old terminal packet is a redirect rather than execution evidence for that succes
 target/receipt validation, use the successor's authorized reused branch/worktree, capture its new
 execution snapshot, and run its remaining/corrective tasks, reviews, and tests through Steps 2–3 before
 any merge or closeout.
+
+### Resume entry — approved protected change (superagent-driven)
+
+When superrun is invoked with an **approved protected change** — the blocked attempt's packet (leaf
+plan, root, worktree, branch, PR url, execution snapshot) plus the change exactly as recorded under
+the loop's `## Decisions` (files, old value → approved value, Decision ID) — do not re-run Steps 1–3
+and do not apply anything wider than that change:
+
+1. Enter the recorded worktree, verify the branch and that the PR is open at the recorded head, and
+   run Step 3a's integration-authority gate against the current root, C8 record and disposition. A
+   failed check is BLOCKED with what did not match.
+2. Apply exactly the approved change through superbuild's fix mechanics: one FIX_APPLIER whose
+   Context names the change as approved, with the Decision ID, then one RE_REVIEWER over the fix
+   range. Ledger `Approved change: <file> <old> → <new> (<Decision ID>) (<base7>..<head7>)`. The
+   approval covers that change only; any other edit it turns out to need is BLOCKED with a new
+   triage record.
+3. Push and return to the CI-green gate (Step 3a) — under `superagent`, a fresh CI-PENDING report.
+   A later red run on the same step is triaged as usual, and the ledger's `CI fix` lines still count
+   toward the cap.
+4. Once merged, Step 4 runs superfinish, which reconciles the earlier partial closeout into the
+   delivered one; Step 5 follows.
 
 ## Step 4 — Close out the plan (invoke `superagent:superfinish`)
 
@@ -561,12 +653,16 @@ you did not confirm landed), say so explicitly rather than reporting it done:
     **Findings:** <summary>                    (or: none — superfinish recorded none)
     **Rulings:** <every superbuild ruling, in order: decision — why — cost if wrong>   (or: none)
     **Review depth:** <N> task-reviewed, <M> branch-only (<SUPER_REVIEW_DEPTH>); upgrades: <list or none>
+    **CI triage:** <per red run: class — best-supported cause (facts; not checked) — cheapest fix (files; in scope?; protected?) — applied / not applied>   (or: none)
 
     ⚠️ **Critical:** <only when a finding or blocked task needs attention>
 
 If execution was **blocked** (superbuild returned BLOCKED — a load-bearing conflict, a plan that is
 wrong, a task too large, missing context — or the Step 3a CI-green gate was red), do **not** fabricate
 completion and **do not merge** the code PR: report the blocker plainly, note what was and wasn't done,
-and still run `superagent:superfinish` so the partial outcome is recorded honestly.
+and still run `superagent:superfinish` so the partial outcome is recorded honestly. A CI-red blocker
+always carries its **CI triage** record. A blocker whose fix needs a protected surface names the exact
+change — file, old value, new value, and the evidence in two or three lines — so the caller can ask
+for exactly that change.
 
 After printing the report, the skill is done: take no further action and ask no follow-up question.

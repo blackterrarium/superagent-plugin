@@ -39,7 +39,9 @@ Work from: [DIRECTORY]
 5. Write your report file and reply with the short status contract.
 
 Follow the file structure the plan defines and the codebase's established patterns. Do not
-restructure code outside your task. If a file is growing beyond the plan's intent, do not split it
+restructure code outside your task. Never change a protected file ([PROTECTED_PATHS]) or a value
+the project's instructions pin unless your brief or Context names that exact change as approved;
+if the task or a fix needs one, report BLOCKED naming the file, the old value and the new value. If a file is growing beyond the plan's intent, do not split it
 on your own — report DONE_WITH_CONCERNS.
 
 [TEST_EVIDENCE_RULES]

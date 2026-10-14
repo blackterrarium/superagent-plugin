@@ -416,12 +416,16 @@ external loops: the tick wrapper self-disarms the scheduler entry after this ses
 `uninstall-timer.sh` from inside the session; see superloop L2/`stop_driver()`.)
 
 ### `WAITING FOR INPUT`
-A prior iteration escalated a decision the panel could not resolve. Read the `## Pending decision`
-block.
+A prior iteration escalated a decision the panel could not resolve, or a protected-change request
+the panel chose to ask. Read the `## Pending decision` block.
 - **Answer supplied** (recorded under `## Pending decision`, or given in the re-invoking
   `/superagent` prompt) → append it to `## Decisions`, clear the pending block, restore `status` from
   `prior_status`, and **fall through** to that branch this tick, applying the decision as guidance to
-  the next skill invocation.
+  the next skill invocation. A one-word answer naming an option is complete: apply that option as the
+  block described it, and never ask the owner to restate it as disposition text. For a
+  protected-change request, `yes` approves exactly the change in the block, `yes <value>` the same
+  change with that value, and `no` takes the block's no path; record the approved change verbatim
+  (files, old → new, the answer as written).
 - **No answer yet** → branch on context:
   - **Interactive (a person is at the session — typically `cron`/attended):** `AskUserQuestion`. On an
     answer, proceed as above. If it genuinely can't be answered, **pause** (`stop_driver()`),
@@ -429,8 +433,10 @@ block.
   - **Non-interactive scheduled tick (external Desktop/headless CLI, fresh session — no one to
     prompt):** do **not** block on `AskUserQuestion` (in a headless `codex exec` tick
     there is no TTY to answer, so it would stall the one-shot session). Ensure `## Pending decision`
-    holds the question + an explicit *"write your choice as `answer: <option>` under this block"*
-    instruction, `release_lock()`, and exit.
+    is in superloop L7's **required shape** — what failed, most likely cause, recommended option
+    first, other options, and an explicit *"write your choice as `answer: <option>` under this
+    block"* instruction, with identifiers in the trailing reference list — then `release_lock()`, and
+    exit.
     The scheduler keeps firing, but for loops driven by the shipped `scripts/` wrapper the fire is
     **free while unanswered**: `superagent-tick.sh` reads the loop file in bash and exits without a
     session until an `answer:` line exists under `## Pending decision` (`SUPER_INPUT_GATE`, default
@@ -687,6 +693,19 @@ CI-red Final Report, failed completion audit, or unreconciled repair. superagent
   and the target row; mark outstanding repair records resolved with that adopted disposition
   and reconcile ancestors. This is an intentional
   scope disposition, not a claim of code integration. Clear `plan_exhausted` and re-audit later.
+- **Request approval for one specific protected change:** when `superrun`'s CI triage or blocker,
+  or the panel, names a fix that touches a protected surface (a `SUPER_PROTECTED_PATHS` match, an
+  approved acceptance row, or a value the project's instructions pin). The panel may select this
+  option but never approves the change: selecting it writes the yes/no protected-change block
+  (superloop L7 Rung 2) naming the files, old and new value, the evidence in two or three lines, and
+  what happens on yes and on no, and its reference list carries the blocked attempt's resume packet
+  (leaf, root, worktree, branch, PR, execution snapshot). On `yes` / `yes <value>`, record the
+  approved change verbatim under `## Decisions`, set `status: RUNNING`, and dispatch a fresh
+  `superrun` process exactly as in `WAITING FOR RUN` step 3 with that packet and the approved change
+  via its **Resume entry — approved protected change** — not as Retry, because the blocked leaf is
+  no longer an eligible target and the change belongs on its open PR. Handle its report like any
+  other `superrun` report (a CI-PENDING report parks). The approval is authority for that change
+  only. On `no`, take the route the block named (decline/defer or re-plan).
 
 Apply the same transitions for a converged panel and a resumed human answer. Persist and verify
 plan-tree changes under A7 before the ready-state loop write; recovery is C8's idempotent replay.
@@ -728,8 +747,9 @@ tick, even one the loop already resolved itself.
     named in "This tick"). For a tick that dispatched no heavy skill — guard / resume /
     crash-recovery / escalation-only — write: none (no skill dispatched this tick)>
 
-    ⚠️ **Needs you:** <only when status == WAITING FOR INPUT — the pending question + how to answer
-    (interactive prompt, or `answer.sh <slug> "<option>"` for a scheduled loop)>
+    ⚠️ **Needs you:** <only when status == WAITING FOR INPUT — the block's What failed, Most likely
+    cause and Recommended lines + how to answer (interactive prompt, or `answer.sh <slug> "<option>"`
+    for a scheduled loop)>
 
 On **DONE**, replace the body with the C9 completion evidence: active steps integrated (`github`) or
 validated completed-local receipts with snapshot/command/review/acceptance evidence (`none`), PRs

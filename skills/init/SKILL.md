@@ -262,6 +262,30 @@ pi-only:end -->
    exist yet cannot be `$HOME` or `/`, so this check cannot fire on a fresh external vault; Step 4
    creates it. `SUPER_PROJECT_DIRNAME` and
    `SUPER_LOOP_STATUS_DIRNAME` must be a single path segment (no `/`) — else WARN + default.
+   Each comma-separated glob in `SUPER_PROTECTED_PATHS` must be repo-relative: a glob that starts
+   with `/` or `~`, or contains a `..` segment, → WARN "protected glob is not repo-relative
+   (ignored by the loop's check)". An empty value is valid and is the default.
+
+### Protected surfaces (`SUPER_PROTECTED_PATHS`)
+
+The loop never changes a file matching `SUPER_PROTECTED_PATHS` on its own: a fix that needs one
+becomes a yes/no question for the owner (superloop L7 protected-change request). Offer to populate
+the key when it is empty:
+
+1. Read the project's agent instructions files (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/`, the
+   `SUPER_REPO_NOTES` file) for files described as frozen, protected, owner-approved-only, or
+   changeable only by a dedicated maintenance PR.
+2. If any are found, propose a value — the paths as repo-relative globs, comma-separated — and show
+   which instruction lines each comes from. When a person is present, ask before writing it into
+   `.superenv`; otherwise report the proposed line in the summary and leave `.superenv` untouched.
+   Never overwrite a non-empty value.
+3. Advise the project to point its instructions at the key (for example "the protected files are
+   listed in `SUPER_PROTECTED_PATHS` in `.superenv`") rather than restating the list, so the two
+   cannot drift apart. A pinned value inside an otherwise editable file stays prose in the
+   instructions; the key lists paths only.
+
+Report the outcome as one summary row: `protected paths — <N> configured | proposed: <value> |
+none found`.
 
 ## Step 3 — Role agents (model/effort pins)
 
