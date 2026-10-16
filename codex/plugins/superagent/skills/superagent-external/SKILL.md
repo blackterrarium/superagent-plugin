@@ -131,4 +131,5 @@ the flag — let `launch.sh` apply its defaults.
   stop/drain a loop, use the `superagent:superagent-monitor` skill (or the
   `${SUPER_PLUGIN_ROOT}/scripts/*` helpers directly). You are notified once when that
   happens (SUPER_NOTIFY_CMD, else a desktop notification); answer + resume with
-  `$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"`.
+  `$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"`, where `<slug>` is the registered slug
+  `status.sh` lists (a loop-file path or basename is also accepted and resolved to it).

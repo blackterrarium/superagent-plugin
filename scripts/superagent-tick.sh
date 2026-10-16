@@ -68,6 +68,13 @@ SUPERVISOR="$(superagent_supervisor "$LOOP_FILE" "${SUPERAGENT_SUPERVISOR:-super
 if [[ -n "${SUPERAGENT_SLUG:-}" ]]; then
   superagent_check_registration "$SUPERAGENT_SLUG" "$LOOP_FILE" "$SUPERVISOR" || exit 2
 fi
+# The registered slug, for every operator-facing command (answer.sh/status.sh)
+# and notification. It need not equal the loop file's basename (issue #92), so
+# look the loop file up in the registry when the scheduler did not pass it.
+LOOP_SLUG="${SUPERAGENT_SLUG:-}"
+if [[ -z "$LOOP_SLUG" ]]; then
+  LOOP_SLUG="$(superagent_resolve_slug "$LOOP_FILE" 2>/dev/null)" || LOOP_SLUG=""
+fi
 # --- L3 lock safety net (issue #15) -----------------------------------------
 # The overlap lock is acquired/released by the AGENT inside the session
 # (superloop L3). If the CLI kills the session mid-flight (background-wait
@@ -124,7 +131,7 @@ if [[ "$SUPERVISOR" == supercode ]]; then
       gate_result="$(python3 "$SCRIPT_DIR/_coding_loop_state.py" "${gate_args[@]}" --slug "$inner_slug" --armed "$inner_armed" --active "$inner_active" --write)" || exit 2
     fi
     if [[ "${gate_result%%$'\n'*}" == INPUT ]]; then
-      superagent_notify waiting-for-input "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+      superagent_notify waiting-for-input "${LOOP_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
     fi
     echo "=== $(ts) supercode BUILDING gate: $gate_result ===" >>"$LOG_FILE"
     exit 0
@@ -144,7 +151,7 @@ fi
 if [[ "${SUPER_INPUT_GATE:-true}" == true && \
       "$(superagent_loop_status "$LOOP_FILE")" == "WAITING FOR INPUT" ]] && \
    ! superagent_pending_answer "$LOOP_FILE" >/dev/null; then
-  echo "=== $(ts) superagent-tick: loop is WAITING FOR INPUT with no answer — skipping the session (SUPER_INPUT_GATE). Answer + resume now: $SCRIPT_DIR/answer.sh ${SUPERAGENT_SLUG:-<slug>} \"<option>\" ===" >>"$LOG_FILE"
+  echo "=== $(ts) superagent-tick: loop is WAITING FOR INPUT with no answer — skipping the session (SUPER_INPUT_GATE). Answer + resume now: $SCRIPT_DIR/answer.sh ${LOOP_SLUG:-<slug>} \"<option>\" ===" >>"$LOG_FILE"
   exit 0
 fi
 
@@ -224,7 +231,7 @@ if superagent_uses_git && [[ "${SUPER_CI_GATE:-true}" == true && \
         ci_stale_marker="$(dirname "$LOOP_FILE")/.$(basename "$LOOP_FILE").ci-stale"
         if [[ "$(cat "$ci_stale_marker" 2>/dev/null || true)" != "$ci_since" ]]; then
           printf '%s\n' "$ci_since" >"$ci_stale_marker" 2>/dev/null || true
-          superagent_notify ci-stale "${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
+          superagent_notify ci-stale "${LOOP_SLUG:-$(basename "$LOOP_FILE" .md)}" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true
         fi
       else
         echo "=== $(ts) superagent-tick: WAITING FOR CI — ${ci_running}/${ci_total} run(s) still running — skipping the session (SUPER_CI_GATE) ===" >>"$LOG_FILE"
@@ -380,7 +387,12 @@ else
   [[ "$HARNESS" == codex ]] && SUPERVISOR_SKILL="$SKILLS_ROOT/plugins/superagent/skills/${SUPERVISOR}/SKILL.md"
   PROMPT="Read ${SUPERVISOR_SKILL} and execute exactly ONE --tick on loop file ${LOOP_FILE}, in unattended/non-interactive mode: NEVER ask the user a question in chat, and NEVER end the session with a question as your final message — no one can answer a headless session. If a decision needs the user, write the ## Pending decision block, set status to WAITING FOR INPUT, and exit per the skill; if your dispatch is interrupted mid-flight, restore the transient status to its ready state per the skill's crash-recovery mapping, release the lock, and exit — never leave status PLANNING, RUNNING, META-PLANNING, EVALUATING or DIAGNOSING at exit. Then stop."
 fi
-PROMPT="Git mode: ${SUPER_GIT_MODE}. Recorded project root: ${REPO}. Workspace ownership token: ${SUPER_WORKSPACE_TOKEN:-N/A}. ${PROMPT}"
+if [[ -n "$LOOP_SLUG" ]]; then
+  SLUG_NOTE="Registered loop slug: ${LOOP_SLUG} — use exactly this as <slug> in any answer.sh/status.sh command you write, never the loop file's basename."
+else
+  SLUG_NOTE="Registered loop slug: none — in a How to answer line give only the answer: line, no answer.sh command."
+fi
+PROMPT="Git mode: ${SUPER_GIT_MODE}. Recorded project root: ${REPO}. Workspace ownership token: ${SUPER_WORKSPACE_TOKEN:-N/A}. ${SLUG_NOTE} ${PROMPT}"
 
 
 echo "=== $(ts) superagent-tick harness=${HARNESS} model=${TICK_MODEL:-default} effort=${TICK_EFFORT:-default} sandbox=${SUPER_CODEX_SANDBOX:-n/a} output=${TICK_OUTPUT_FORMAT} loop=${LOOP_FILE} timeout=${TICK_TIMEOUT:-none} ===" >>"$LOG_FILE"
@@ -535,7 +547,7 @@ echo "=== $(ts) superagent-tick exit=${rc} ===" >>"$LOG_FILE"
 # SUPER_NOTIFY_CMD or the desktop notifier; see superagent_notify.
 status_after="$(superagent_loop_status "$LOOP_FILE")"
 pending_after="$(superagent_pending_section "$LOOP_FILE")"
-notify_slug="${SUPERAGENT_SLUG:-$(basename "$LOOP_FILE" .md)}"
+notify_slug="${LOOP_SLUG:-$(basename "$LOOP_FILE" .md)}"
 if [[ "$status_after" == "WAITING FOR INPUT" ]] && \
    { [[ "$status_before" != "$status_after" ]] || [[ "$pending_before" != "$pending_after" ]]; }; then
   superagent_notify waiting-for-input "$notify_slug" "$LOOP_FILE" >>"$LOG_FILE" 2>&1 || true

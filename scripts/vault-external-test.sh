@@ -66,6 +66,16 @@ printf 'REPO=%s\nLOOP_FILE=%s\nSUPERAGENT_SLUG=custom-slug\n' "$T/code" "$LOOPD/
 check "stop: absolute master_plan matched to its registered slug" bash -c "cd '$T/code' && '$ROOT/scripts/stop.sh' '$PLAN_EXT' --dry-run 2>&1 | grep -q 'goal slug:   custom-slug'"
 check "force-stop: absolute master_plan matched to its registered slug" bash -c "cd '$T/code' && '$ROOT/scripts/force-stop.sh' '$PLAN_EXT' 2>&1 | grep -q 'loop file:   $LOOPD/2026-09-06-demo.md'"
 
+# answer.sh / status.sh: the slug need not equal the loop file's basename (issue #92). The
+# basename, the .md name and the full path all resolve to the registered slug.
+printf -- '---\nmaster_plan: %s\nstatus: WAITING FOR INPUT\ndriver: external\n---\n\n## Pending decision\n**What failed:** x\n' "$PLAN_EXT" >"$LOOPD/2026-09-06-demo.md"
+check "resolve_slug: slug, basename, .md name and path all → custom-slug" bash -c ". '$ROOT/scripts/_common.sh'; for a in custom-slug 2026-09-06-demo 2026-09-06-demo.md '$LOOPD/2026-09-06-demo.md'; do [ \"\$(superagent_resolve_slug \"\$a\")\" = custom-slug ] || exit 1; done"
+check "resolve_slug: unknown name → rc 1" bash -c ". '$ROOT/scripts/_common.sh'; superagent_resolve_slug nope; [ \$? = 1 ]"
+check "status.sh: loop-file basename resolves to the registered slug" bash -c "'$ROOT/scripts/status.sh' 2026-09-06-demo 2>&1 | grep -q '^Loop: *custom-slug'"
+check "answer.sh: loop-file basename records the answer (#92)" bash -c "'$ROOT/scripts/answer.sh' --no-kick 2026-09-06-demo 'Option A' >'$T/ans.out' 2>&1 && grep -q \"resolves to registered loop 'custom-slug'\" '$T/ans.out' && grep -qx 'answer: Option A' '$LOOPD/2026-09-06-demo.md'"
+check "answer.sh: unknown name still exits 1" bash -c "'$ROOT/scripts/answer.sh' --no-kick no-such-loop x >/dev/null 2>&1; [ \$? = 1 ]"
+check "skills define <slug> as the tick prompt's registered slug" bash -c "grep -q 'Registered loop slug:' '$ROOT/skills/superloop/SKILL.md' && grep -q 'Registered loop slug:' '$ROOT/skills/superagent/SKILL.md'"
+
 # ---- 3. init ignore-entry routing rules (the shell the skill text prescribes) ------------------
 # append_ignore <file> <line> — Step 5's rule: newline guard, then append unless an identical
 # line is present. The skill text in skills/init/SKILL.md must match this function.

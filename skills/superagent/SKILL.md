@@ -534,7 +534,8 @@ the panel chose to ask. Read the `## Pending decision` block.
     session until an `answer:` line exists under `## Pending decision` (`SUPER_INPUT_GATE`, default
     on); it also notifies the operator once on the transition (`SUPER_NOTIFY_CMD`, else a desktop
     notification). A human answers **and resumes immediately** with
-    `$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"` (writes the line under the lock, kicks a tick),
+    `$SUPERAGENT_SCRIPTS/answer.sh <slug> "<option>"` (writes the line under the lock, kicks a tick;
+    `<slug>` is the tick prompt's `Registered loop slug:` value, never the loop file's basename),
     from `superagent:superagent-monitor`, or by editing the loop file directly (next scheduled fire
     resumes).
 
@@ -949,7 +950,7 @@ tick, even one the loop already resolved itself.
 
     ⚠️ **Needs you:** <only when status == WAITING FOR INPUT — the block's What failed, Most likely
     cause and Recommended lines + how to answer (interactive prompt, or `answer.sh <slug> "<option>"`
-    for a scheduled loop)>
+    for a scheduled loop, with `<slug>` = the tick prompt's `Registered loop slug:`)>
 
 On **DONE**, replace the body with the C9 completion evidence: active steps integrated (`github`) or
 validated completed-local receipts with snapshot/command/review/acceptance evidence (`none`), PRs
