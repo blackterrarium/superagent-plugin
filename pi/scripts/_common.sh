@@ -796,6 +796,34 @@ superagent_registration_field() {
   awk -v key="$key" 'index($0,key "=")==1 {n++; value=substr($0,length(key)+2)} END {if(n==1) print value; else if(n>1) exit 2}' "$file"
 }
 
+# superagent_resolve_slug <slug|loop-file|loop-file-basename> — print the
+# registered slug (the env file's name under ~/.config/superagent/). A loop
+# file path or its basename (with or without .md) is matched against each
+# registration's LOOP_FILE, because the slug need not equal the loop file's
+# basename (issue #92). Exit 1 no match · 2 several registrations match.
+superagent_resolve_slug() {
+  local arg="${1:-}" conf="${XDG_CONFIG_HOME:-$HOME/.config}/superagent" envf lf want="" found="" n=0
+  [[ -n "$arg" ]] || return 1
+  if [[ "$arg" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ && -f "$conf/$arg.env" ]]; then
+    printf '%s\n' "$arg"; return 0
+  fi
+  [[ -f "$arg" ]] && want="$(cd "$(dirname "$arg")" && pwd -P)/$(basename "$arg")"
+  for envf in "$conf"/*.env; do
+    [[ -f "$envf" ]] || continue
+    lf="$(superagent_registration_field "$envf" LOOP_FILE 2>/dev/null)" || continue
+    [[ -n "$lf" ]] || continue
+    if [[ -n "$want" ]]; then
+      [[ -f "$lf" && "$(cd "$(dirname "$lf")" && pwd -P)/$(basename "$lf")" == "$want" ]] || continue
+    else
+      [[ "$(basename "$lf" .md)" == "$(basename "$arg" .md)" ]] || continue
+    fi
+    found="$(basename "$envf" .env)"; n=$((n + 1))
+  done
+  [[ $n -le 1 ]] || { echo "several registered loops match '$arg' — pass the slug (see status.sh)" >&2; return 2; }
+  [[ -n "$found" ]] || return 1
+  printf '%s\n' "$found"
+}
+
 superagent_check_registration() {
   local slug="${1:?slug}" loop="${2:?loop}" supervisor="${3:?supervisor}"
   local file="${XDG_CONFIG_HOME:-$HOME/.config}/superagent/$slug.env" registered

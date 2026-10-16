@@ -126,6 +126,8 @@ _collect() {
 shopt -s nullglob
 slugs=()
 if [[ -n "$ONE" ]]; then
+  # A loop-file path or basename resolves to its registered slug (issue #92).
+  if resolved="$(superagent_resolve_slug "$ONE")"; then ONE="$resolved"; elif [[ $? -eq 2 ]]; then exit 1; fi
   [[ -f "$CONF_DIR/$ONE.env" ]] || { echo "no such loop: $ONE (looked in $CONF_DIR/$ONE.env)" >&2; exit 1; }
   slugs=("$ONE")
 else

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.16.1 — 2026-10-16
+
+- **A parked loop's "How to answer" command names the registered slug** (#92). The skills told the
+  tick session to write `answer.sh <slug> "<option>"` without saying where `<slug>` comes from, so
+  the session used the loop file's basename (`2026-10-05-<name>`), which is not the registered
+  slug, and the printed command failed with "no registered loop". The tick now puts
+  `Registered loop slug: <slug>` in the session prompt (from `SUPERAGENT_SLUG`, or found by matching
+  the loop file in `~/.config/superagent/*.env`), and superloop/superagent tell the session to use
+  that value and never the loop file's basename. The tick's own notifications and log hints use the
+  same lookup instead of falling back to the basename.
+- **`answer.sh` and `status.sh <slug>` accept a loop file path or basename.** Either resolves to the
+  registered slug whose `LOOP_FILE` matches, so a command copied from an older park, or a hand-typed
+  name, still works. More than one match is refused.
+
 ## 0.16.0 — 2026-10-14
 
 - **Preparation checks that providers can deliver what the stage needs.** superrefine now cites,

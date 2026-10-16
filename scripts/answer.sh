@@ -56,6 +56,14 @@ ANSWER="${ARGS[*]:-}"
 [[ -n "$SLUG" && -n "$ANSWER" ]] || usage
 
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/superagent"
+# Accept a loop-file path or basename too and map it to the registered slug
+# (issue #92: the slug need not equal the loop file's basename).
+if resolved="$(superagent_resolve_slug "$SLUG")"; then
+  [[ "$resolved" == "$SLUG" ]] || echo "answer: '$SLUG' resolves to registered loop '$resolved'" >&2
+  SLUG="$resolved"
+elif [[ $? -eq 2 ]]; then
+  exit 1
+fi
 ENV_FILE="$CONF_DIR/$SLUG.env"
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "answer: no registered loop '$SLUG' ($ENV_FILE missing) — see status.sh for registered slugs" >&2

@@ -308,7 +308,8 @@ $SUPERAGENT_SCRIPTS/uninstall-timer.sh <goal-slug>          # add --purge to als
 - `answer.sh [--no-kick] [--replace] <slug> <answer…>` — answer a `WAITING FOR INPUT` loop: writes
   `answer: <text>` under `## Pending decision` (holding the L3 lock) and kicks one tick so the loop
   resumes now. Both flags are accepted in any position: `--no-kick` records only, `--replace`
-  overwrites an answer already recorded in the block. Exit codes: 2 usage · 1 unknown slug / missing
+  overwrites an answer already recorded in the block. `<slug>` may also be the loop file's path or
+  basename; it resolves to the registered slug. Exit codes: 2 usage · 1 unknown slug / missing
   loop file · 3 not `WAITING FOR INPUT` · 4 lock held · 5 no `## Pending decision` heading.
 - `status.sh [--json] [<slug>]` — enumerate **all** registered loops (from `~/.config/superagent/*.env`)
   with their live status/timer/tick/lock/input state; drill into one with `<slug>`.

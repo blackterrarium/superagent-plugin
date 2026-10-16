@@ -415,7 +415,7 @@ interval, each in a **fresh session = clean context**.
   loop file, tail the driver log, `gh pr/run`) and to **answer** a `WAITING FOR INPUT` decision — either
   by running one attended `--tick` (a person is present, so the L7 Rung-2 branch uses `AskQuestion` and
   applies the answer under the L3 lock) or by writing `answer: <option>` into the loop file
-  (`scripts/answer.sh <slug> "<option>"` does this under the lock and kicks a tick at once; a hand edit is
+  (`scripts/answer.sh <slug> "<option>"`, with the registered slug — not the loop file's basename — does this under the lock and kicks a tick at once; a hand edit is
   picked up on the next scheduled fire). Because all state is in the loop file, this console can be started and stopped
   at will without affecting driver progress (only the driver process should use `--resume`-free fresh
   ticks; an interactive console may `--resume` freely).
@@ -813,6 +813,11 @@ in the trailing reference list, never in the body:
 option name alone is a complete answer.
 **Reference:** <Decision ID, PR, run ids, plan/ledger paths, panel verdicts, budgets>
 ```
+
+`<slug>` is the **registered slug** from the tick prompt's `Registered loop slug:` line (the name of
+the loop's `~/.config/superagent/<slug>.env`). It often differs from the loop file's basename, so never
+derive it from the loop file name; when the prompt says `none` (or there is no tick prompt), drop the
+`answer.sh` clause and give only the `answer:` line.
 
 A **protected-change request** is a yes/no question in the same shape. In place of the
 Recommended / Other options lines it carries:
